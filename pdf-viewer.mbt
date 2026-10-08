@@ -39,6 +39,9 @@ pub(all) struct PdfTextItem {
   quad : PdfQuad
   font : String
   font_size : Double
+  rendering_mode : Int
+  fill_color : String
+  stroke_color : String
   fill_alpha : Double
   blend_mode : String
   clip_path : String?
@@ -1070,6 +1073,13 @@ fn pdf_items_of_page(
               quad: pdf_quad_of_box(entry.bounding_box),
               font: state.font,
               font_size: state.font_size,
+              rendering_mode: state.rendering_mode,
+              fill_color: pdf_colour_hex(
+                collected.state.path_state.colour_non_stroke,
+              ),
+              stroke_color: pdf_colour_hex(
+                collected.state.path_state.colour_stroke,
+              ),
               fill_alpha: paint.fill_alpha,
               blend_mode: paint.blend_mode,
               clip_path,

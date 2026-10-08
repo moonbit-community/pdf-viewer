@@ -87,6 +87,9 @@ test "adjacent soft-masked paint items share one compositor group" {
     },
     font: "Helvetica",
     font_size: 10.0,
+    rendering_mode: 0,
+    fill_color: "#000000",
+    stroke_color: "#000000",
     fill_alpha: 1.0,
     blend_mode: "normal",
     clip_path: None,
@@ -135,6 +138,9 @@ test "rotated text uses its source quadrilateral" {
     },
     font: "Helvetica",
     font_size: 10.0,
+    rendering_mode: 0,
+    fill_color: "#000000",
+    stroke_color: "#000000",
     fill_alpha: 1.0,
     blend_mode: "normal",
     clip_path: None,
@@ -275,6 +281,9 @@ test "svg preserves paint opacity and blend mode" {
     },
     font: "Helvetica",
     font_size: 10.0,
+    rendering_mode: 0,
+    fill_color: "#000000",
+    stroke_color: "#000000",
     fill_alpha: 0.5,
     blend_mode: "multiply",
     clip_path: None,
@@ -297,6 +306,47 @@ test "svg preserves paint opacity and blend mode" {
   let svg = output.to_string()
   assert_true(svg.contains("fill-opacity=\"0.5\""))
   assert_true(svg.contains("mix-blend-mode:multiply"))
+}
+
+///|
+test "svg maps stroked PDF text rendering mode" {
+  let item : PdfTextItem = {
+    index: 0,
+    text: "A",
+    bounds: { min_x: 0.0, min_y: 20.0, max_x: 10.0, max_y: 30.0, },
+    quad: {
+      p0: { x: 0.0, y: 20.0, },
+      p1: { x: 10.0, y: 20.0, },
+      p2: { x: 10.0, y: 30.0, },
+      p3: { x: 0.0, y: 30.0, },
+    },
+    font: "Helvetica",
+    font_size: 10.0,
+    rendering_mode: 1,
+    fill_color: "#123456",
+    stroke_color: "#ABCDEF",
+    fill_alpha: 1.0,
+    blend_mode: "normal",
+    clip_path: None,
+    soft_mask: None,
+  }
+  let page : PdfPageModel = {
+    number: 1,
+    origin_x: 0.0,
+    origin_y: 0.0,
+    width: 100.0,
+    height: 100.0,
+    rotation: 0,
+    fonts: [],
+    items: [],
+    annotations: [],
+    text: "A",
+  }
+  let output = StringBuilder()
+  pdf_svg_text(output, page, [item], 1.0)
+  let svg = output.to_string()
+  assert_true(svg.contains("fill=\"none\""))
+  assert_true(svg.contains("stroke=\"#ABCDEF\""))
 }
 
 ///|
@@ -362,6 +412,9 @@ test "svg places clipping definitions before painted elements" {
     },
     font: "Helvetica",
     font_size: 10.0,
+    rendering_mode: 0,
+    fill_color: "#000000",
+    stroke_color: "#000000",
     fill_alpha: 1.0,
     blend_mode: "normal",
     clip_path: Some("M 0 0 L 10 0 L 10 10 L 0 10 Z"),

@@ -204,6 +204,9 @@ fn pdf_svg_text_can_join(previous : PdfTextItem, current : PdfTextItem) -> Bool 
   let current_angle = pdf_text_angle(current)
   (previous.bounds.max_y - current.bounds.max_y).abs() <= line_threshold &&
   previous.font == current.font &&
+  previous.rendering_mode == current.rendering_mode &&
+  previous.fill_color == current.fill_color &&
+  previous.stroke_color == current.stroke_color &&
   (previous_angle - current_angle).abs() <= 0.01 &&
   previous.clip_path == current.clip_path &&
   previous.soft_mask == current.soft_mask
@@ -264,6 +267,17 @@ fn pdf_svg_text(
   } else {
     "normal"
   }
+  let fill = if pdf_text_mode_fills(first.rendering_mode) {
+    first.fill_color
+  } else {
+    "none"
+  }
+  let stroke = if pdf_text_mode_strokes(first.rendering_mode) {
+    first.stroke_color
+  } else {
+    "none"
+  }
+  let stroke_width = if stroke == "none" { 0.0 } else { first.font_size * 0.04 }
   pdf_svg_clip_defs(output, first.index, first.clip_path)
   pdf_svg_soft_mask_defs(output, first.index, page, first.soft_mask, scale)
   pdf_svg_soft_mask_open(output, first.index, first.soft_mask)
@@ -283,6 +297,12 @@ fn pdf_svg_text(
     weight +
     "\" font-style=\"" +
     style +
+    "\" fill=\"" +
+    pdf_escape_xml(fill) +
+    "\" stroke=\"" +
+    pdf_escape_xml(stroke) +
+    "\" stroke-width=\"" +
+    stroke_width.to_string() +
     "\" fill-opacity=\"" +
     first.fill_alpha.to_string() +
     "\"" +
@@ -293,6 +313,18 @@ fn pdf_svg_text(
   )
   pdf_svg_clip_close(output, first.index, first.clip_path)
   pdf_svg_soft_mask_close(output, first.index, first.soft_mask)
+}
+
+///|
+/// PDF text rendering modes 0, 2, 4 and 6 paint glyph interiors.
+fn pdf_text_mode_fills(mode : Int) -> Bool {
+  mode == 0 || mode == 2 || mode == 4 || mode == 6
+}
+
+///|
+/// PDF text rendering modes 1, 2, 5 and 6 paint glyph outlines.
+fn pdf_text_mode_strokes(mode : Int) -> Bool {
+  mode == 1 || mode == 2 || mode == 5 || mode == 6
 }
 
 ///|

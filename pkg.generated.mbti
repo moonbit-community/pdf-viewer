@@ -270,6 +270,9 @@ pub(all) struct PdfTextItem {
   quad : PdfQuad
   font : String
   font_size : Double
+  rendering_mode : Int
+  fill_color : String
+  stroke_color : String
   fill_alpha : Double
   blend_mode : String
   clip_path : String?
