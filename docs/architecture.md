@@ -42,15 +42,17 @@ relative transform after subtracting the page origin from display-list
 coordinates, so the public viewport matrix and rendered page stay in the same
 coordinate convention.
 
-The current renderer has two small but concrete compatibility improvements: it emits the
-pdf.js-style full viewport matrix, and it lowers path-only coloured tiling patterns to SVG
-`pattern` definitions. Explicit clipping paths are serialized as nested clip paths so each
-additional path narrows the previous clip instead of becoming a union. The pattern adapter
-does not yet apply `/Matrix`, uncolored pattern colour operands, or every resource kind.
+The current renderer has several concrete compatibility improvements: it emits the pdf.js-style
+full viewport matrix, lowers path-only coloured tiling patterns to SVG `pattern` definitions,
+and applies a retained `/Matrix` at the paint site. Explicit clipping paths are serialized as
+nested clip paths so each additional path narrows the previous clip instead of becoming a union.
+PDF ImageMask resources are decoded into browser-ready mask images; a nested SVG applies the
+mask before the outer affine image transform, which avoids a Chromium clipping edge case.
+Uncolored pattern colour operands, soft masks, and every pattern resource kind are still open.
 
 The remaining implementation stages are ordered by the visible compatibility gap:
 
-1. CTM-preserving path/image geometry, soft masks, pattern matrices, and mesh shading;
+1. CTM-preserving path/image geometry, ImageMask variants, soft masks, and mesh shading;
 2. embedded fonts and font metrics with a system-font fallback policy;
 3. complete annotation appearance and form/widget layers;
 4. Canvas/WebGL output and incremental page loading for large documents.

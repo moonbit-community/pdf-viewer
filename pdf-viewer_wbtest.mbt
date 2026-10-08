@@ -50,6 +50,52 @@ test "rotated text uses its source quadrilateral" {
 }
 
 ///|
+test "visual quads become affine SVG image transforms" {
+  let page : PdfPageModel = {
+    number: 1,
+    origin_x: 10.0,
+    origin_y: 20.0,
+    width: 100.0,
+    height: 80.0,
+    rotation: 0,
+    fonts: [],
+    items: [],
+    annotations: [],
+    text: "",
+  }
+  let item : PdfVisualItem = {
+    index: 0,
+    bounds: { min_x: 10.0, min_y: 20.0, max_x: 30.0, max_y: 50.0, },
+    quad: {
+      p0: { x: 10.0, y: 20.0, },
+      p1: { x: 10.0, y: 50.0, },
+      p2: { x: 30.0, y: 50.0, },
+      p3: { x: 30.0, y: 20.0, },
+    },
+    name: "Im0",
+    resource: Some({
+      name: "Im0",
+      mime_type: "image/png",
+      data_uri: Some("data:image/png;base64,AA=="),
+      mask_data_uri: None,
+      width: Some(1),
+      height: Some(1),
+    }),
+    shading: None,
+    fill_color: "#000000",
+    fill_alpha: 1.0,
+    stroke_alpha: 1.0,
+    blend_mode: "normal",
+    clip_path: None,
+  }
+  let output = StringBuilder()
+  pdf_svg_image(output, page, item, 1.0)
+  assert_true(
+    output.to_string().contains("transform=\"matrix(20 0 0 30 0 50)\""),
+  )
+}
+
+///|
 test "viewport matrix follows pdfjs for a nonzero media box" {
   let page : PdfPageModel = {
     number: 1,
@@ -164,6 +210,7 @@ test "svg paints a path pattern through a reusable definition" {
       bbox: { min_x: 0.0, min_y: 0.0, max_x: 2.0, max_y: 2.0, },
       x_step: 2.0,
       y_step: 2.0,
+      matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
       tile_svg: "<path d=\"M 0 0 L 1 1\" fill=\"none\"/>",
     }),
     blend_mode: "normal",
@@ -185,6 +232,7 @@ test "svg paints a path pattern through a reusable definition" {
   pdf_svg_path(output, page, item, 1.0)
   let svg = output.to_string()
   assert_true(svg.contains("<pattern id=\"pdf-pattern-3\""))
+  assert_true(svg.contains("patternTransform=\"matrix(1 0 0 -1 0 100)\""))
   assert_true(svg.contains("fill=\"url(#pdf-pattern-3)\""))
 }
 
@@ -222,7 +270,7 @@ test "svg places clipping definitions before painted elements" {
   pdf_svg_text(output, page, [item], 1.0)
   let svg = output.to_string()
   assert_true(svg.has_prefix("<defs><clipPath"))
-  assert_true(svg.contains("</defs><text clip-path=\"url(#pdf-clip-7)\""))
+  assert_true(svg.contains("</defs><g clip-path=\"url(#pdf-clip-7)\"><text"))
   assert_true(!svg.contains("<text<defs>"))
 }
 
@@ -261,4 +309,77 @@ test "inline raw pixels become a browser resource" {
   assert_eq(resource.mime_type, "image/png")
   guard resource.data_uri is Some(uri) else { fail("PNG data URI missing") }
   assert_true(uri.has_prefix("data:image/png;base64,"))
+}
+
+///|
+test "inline ImageMask keeps a browser mask resource" {
+  let font = @pdflite.PdfFontStandard({
+    font: @pdflite.PdfHelvetica,
+    encoding: @pdflite.PdfWinAnsiEncoding,
+  })
+  let pack = @pdflite.pdf_fontpack_of_standard_font(font)
+  let paper = @geometry.paper_size_make(@geometry.PdfPoint, 20.0, 20.0)
+  let document = @pdflite.pdf_texttopdf_typeset(
+    pack,
+    8.0,
+    paper,
+    @utf8.encode("test"),
+  )
+  let name = fn(text : String) -> @core.PdfName {
+    @core.pdf_name_of_bytes(@utf8.encode(text))
+  }
+  let dictionary : @syntax.PdfObject = @syntax.PdfDictionary([
+    (name("/W"), @syntax.PdfInteger(8)),
+    (name("/H"), @syntax.PdfInteger(1)),
+    (name("/IM"), @syntax.PdfBoolean(true)),
+  ])
+  let data = try! @core.pdf_bytes_of_int_array([0b1010_0000])
+  let resource = pdf_inline_image_resource_of(
+    document,
+    @syntax.PdfDictionary([]),
+    "inline-mask",
+    dictionary,
+    data,
+  )
+  guard resource is Some(resource) else {
+    fail("inline ImageMask should decode")
+  }
+  assert_eq(resource.mime_type, "image/mask")
+  guard resource.mask_data_uri is Some(mask) else {
+    fail("inline ImageMask data URI missing")
+  }
+  assert_true(mask.has_prefix("data:image/png;base64,"))
+  let item : PdfVisualItem = {
+    index: 4,
+    bounds: { min_x: 0.0, min_y: 0.0, max_x: 8.0, max_y: 1.0, },
+    quad: {
+      p0: { x: 0.0, y: 0.0, },
+      p1: { x: 0.0, y: 1.0, },
+      p2: { x: 8.0, y: 1.0, },
+      p3: { x: 8.0, y: 0.0, },
+    },
+    name: "inline-mask",
+    resource: Some(resource),
+    shading: None,
+    fill_color: "#0033CC",
+    fill_alpha: 1.0,
+    stroke_alpha: 1.0,
+    blend_mode: "normal",
+    clip_path: None,
+  }
+  let page : PdfPageModel = {
+    number: 1,
+    origin_x: 0.0,
+    origin_y: 0.0,
+    width: 20.0,
+    height: 20.0,
+    rotation: 0,
+    fonts: [],
+    items: [],
+    annotations: [],
+    text: "",
+  }
+  let output = StringBuilder()
+  pdf_svg_image(output, page, item, 1.0)
+  assert_true(output.to_string().contains("data:image/svg+xml;base64,"))
 }

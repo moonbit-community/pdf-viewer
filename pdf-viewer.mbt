@@ -68,6 +68,7 @@ pub(all) struct PdfPatternResource {
   bbox : PdfBounds
   x_step : Double
   y_step : Double
+  matrix : Array[Double]
   tile_svg : String
 } derive(Eq, Debug, ToJson)
 
@@ -107,6 +108,7 @@ pub(all) struct PdfImageResource {
   name : String
   mime_type : String
   data_uri : String?
+  mask_data_uri : String?
   width : Int?
   height : Int?
 } derive(Eq, Debug, ToJson)
@@ -124,6 +126,7 @@ pub(all) struct PdfShadingResource {
   name : String
   kind : String
   coords : Array[Double]
+  matrix : Array[Double]
   stops : Array[PdfGradientStop]
   extend_start : Bool
   extend_end : Bool
@@ -134,9 +137,11 @@ pub(all) struct PdfShadingResource {
 pub(all) struct PdfVisualItem {
   index : Int
   bounds : PdfBounds
+  quad : PdfQuad
   name : String
   resource : PdfImageResource?
   shading : PdfShadingResource?
+  fill_color : String
   fill_alpha : Double
   stroke_alpha : Double
   blend_mode : String
@@ -798,6 +803,176 @@ fn pdf_bytes_start_with(data : Bytes, prefix : ArrayView[Int]) -> Bool {
 }
 
 ///|
+/// One content entry together with the interpreter state and resource scope
+/// that produced it. `PdfContentJsonEntry` intentionally omits the CTM, which
+/// is enough for text bounds but loses rotations and Form-XObject placement for
+/// paths and images.
+priv struct PdfCollectedEntry {
+  entry : @pdflite.PdfContentJsonEntry
+  state : @pdflite.PdfContentOperatorState
+  resources : @syntax.PdfObject
+  inline_image : (@syntax.PdfObject, @core.PdfBytes)?
+  clip_paths : Array[@shape.PdfPath]
+}
+
+///|
+fn pdf_collected_entries_of_page(
+  document : @pdflite.PdfDocument,
+  page : @page.PdfPage,
+) -> Array[PdfCollectedEntry] raise @core.PdfError {
+  let rectangle = document.parse_rectangle(page.mediabox)
+  let initial = @pdflite.pdf_content_initial_operator_state(
+    rectangle.min_x,
+    rectangle.min_y,
+    rectangle.max_x,
+    rectangle.max_y,
+  )
+  let ops = document.parse_content_ops_with_resources(
+    page.resources,
+    page.content,
+  )
+  pdf_collected_entries_of_ops(
+    document,
+    initial,
+    page.resources,
+    ops,
+    initial.clipping_path,
+  )
+}
+
+///|
+/// Recursive content walk that mirrors pdflite's entry collector while
+/// retaining the active CTM and resource dictionary for every emitted item.
+fn pdf_collected_entries_of_ops(
+  document : @pdflite.PdfDocument,
+  initial : @pdflite.PdfContentOperatorState,
+  resources : @syntax.PdfObject,
+  ops : ArrayView[@content.PdfContentOp],
+  initial_clip_paths : ArrayView[@shape.PdfPath],
+) -> Array[PdfCollectedEntry] raise @core.PdfError {
+  let mut state = initial
+  let mut clip_paths : Array[@shape.PdfPath] = [
+    for path in initial_clip_paths => path
+  ]
+  let mut clip_stack : Array[Array[@shape.PdfPath]] = []
+  let output : Array[PdfCollectedEntry] = []
+  for op in ops {
+    match op {
+      @content.Op_Do(name) =>
+        match document.content_form_xobject_ops(resources, name) {
+          Some(form_ops) =>
+            match
+              (
+                document.content_form_xobject_enter_state(
+                  state, resources, name,
+                ),
+                document.content_form_xobject_resources(resources, name),
+              ) {
+              (Some(form_state), Some(form_resources)) => {
+                let form_clip_paths = if form_state.clipping_path.length() >
+                  state.clipping_path.length() {
+                  [
+                    form_state.clipping_path[0].transform(form_state.ctm),
+                    ..clip_paths,
+                  ]
+                } else {
+                  [
+                    for path in clip_paths => path
+                  ]
+                }
+                output.append(
+                  pdf_collected_entries_of_ops(
+                    document, form_state, form_resources, form_ops, form_clip_paths,
+                  ),
+                )
+              }
+              _ => ()
+            }
+          None => {
+            let result = document.content_apply_resource_op(
+              state, resources, op,
+            )
+            for entry in result.entries {
+              output.push({
+                entry,
+                state: result.state,
+                resources,
+                inline_image: None,
+                clip_paths: [
+                  for path in clip_paths => path
+                ],
+              })
+            }
+            state = result.state
+          }
+        }
+      @content.Op_InlineImage(dictionary, _, data) => {
+        let result = document.content_apply_resource_op(state, resources, op)
+        for entry in result.entries {
+          output.push({
+            entry,
+            state: result.state,
+            resources,
+            inline_image: Some((dictionary, data)),
+            clip_paths: [
+              for path in clip_paths => path
+            ],
+          })
+        }
+        state = result.state
+      }
+      @content.Op_gs(name) =>
+        state = pdf_apply_extgstate_for_viewer(document, state, resources, name)
+      @content.Op_q => {
+        clip_stack.push([ for path in clip_paths => path ])
+        let result = document.content_apply_resource_op(state, resources, op)
+        state = result.state
+      }
+      @content.Op_Q => {
+        let result = document.content_apply_resource_op(state, resources, op)
+        state = result.state
+        match clip_stack.last() {
+          Some(previous) => {
+            clip_paths.clear()
+            clip_paths.append(previous)
+            let stack_length = clip_stack.length()
+            clip_stack = [
+              for index in 0..<(stack_length - 1) => clip_stack[index]
+            ]
+          }
+          None => ()
+        }
+      }
+      @content.Op_W | @content.Op_Wstar => {
+        let previous_length = state.clipping_path.length()
+        let result = document.content_apply_resource_op(state, resources, op)
+        if result.state.clipping_path.length() > previous_length {
+          let clipped = result.state.clipping_path[0].transform(state.ctm)
+          clip_paths = [clipped, ..clip_paths]
+        }
+        state = result.state
+      }
+      _ => {
+        let result = document.content_apply_resource_op(state, resources, op)
+        for entry in result.entries {
+          output.push({
+            entry,
+            state: result.state,
+            resources,
+            inline_image: None,
+            clip_paths: [
+              for path in clip_paths => path
+            ],
+          })
+        }
+        state = result.state
+      }
+    }
+  }
+  output
+}
+
+///|
 fn pdf_items_of_page(
   document : @pdflite.PdfDocument,
   page : @page.PdfPage,
@@ -805,16 +980,15 @@ fn pdf_items_of_page(
   origin_y : Double,
   height : Double,
 ) -> Array[PdfPageItem] raise @core.PdfError {
-  let entries = document.content_entries_of_page(page)
-  let paint_attributes = pdf_paint_attributes_of_page(document, page)
-  let inline_images = pdf_inline_image_payloads_of_page(document, page)
-  let items : Array[PdfPageItem] = Array(capacity=entries.length())
+  let collected_entries = pdf_collected_entries_of_page(document, page)
+  let items : Array[PdfPageItem] = Array(capacity=collected_entries.length())
   let mut inline_index = 0
-  for index, entry in entries {
+  for index, collected in collected_entries {
+    let entry = collected.entry
     let bounds = pdf_bounds_of_quad(entry.bounding_box)
-    let paint = pdf_paint_attributes_at(paint_attributes, index)
-    let clip_path = pdf_clip_path_of_entry_state(
-      entry.state,
+    let paint = pdf_paint_attributes_of_state(collected.state)
+    let clip_path = pdf_clip_path_of_paths(
+      collected.clip_paths,
       origin_x,
       origin_y,
       height,
@@ -874,7 +1048,14 @@ fn pdf_items_of_page(
             }
             let pattern = match pattern_name {
               Some(name) =>
-                pdf_pattern_resource_of(document, page.resources, name)
+                match
+                  pdf_pattern_resource_of(document, collected.resources, name) {
+                  Some(value) =>
+                    Some(
+                      pdf_pattern_resource_with_ctm(value, collected.state.ctm),
+                    )
+                  None => None
+                }
               None => None
             }
             (
@@ -894,12 +1075,11 @@ fn pdf_items_of_page(
           PdfPageItem::Path({
             index,
             bounds,
-            svg_path: pdf_svg_path_of_shape_with_quad(
-              drawn.path,
+            svg_path: pdf_svg_path_of_shape_direct(
+              drawn.path.transform(collected.state.ctm),
               origin_x,
               origin_y,
               height,
-              pdf_quad_of_box(entry.bounding_box),
             ),
             filled: drawn.filled,
             stroked: drawn.stroked,
@@ -919,14 +1099,22 @@ fn pdf_items_of_page(
         )
       }
       @pdflite.PdfContentImageObject(name) => {
-        let resource = pdf_image_resource_of(document, page, name)
+        let resource = pdf_image_resource_of_resources(
+          document,
+          collected.resources,
+          name,
+        )
         items.push(
           PdfPageItem::Image({
             index,
             bounds,
+            quad: pdf_quad_of_box(entry.bounding_box),
             name,
             resource,
             shading: None,
+            fill_color: pdf_colour_hex(
+              collected.state.path_state.colour_non_stroke,
+            ),
             fill_alpha: paint.fill_alpha,
             stroke_alpha: paint.stroke_alpha,
             blend_mode: paint.blend_mode,
@@ -936,24 +1124,29 @@ fn pdf_items_of_page(
       }
       @pdflite.PdfContentInlineImageObject => {
         let name = "inline-image-" + inline_index.to_string()
-        let resource = if inline_index < inline_images.length() {
-          match inline_images[inline_index] {
-            (dictionary, data, resources) =>
-              pdf_inline_image_resource_of(
-                document, resources, name, dictionary, data,
-              )
-          }
-        } else {
-          None
+        let resource = match collected.inline_image {
+          Some((dictionary, data)) =>
+            pdf_inline_image_resource_of(
+              document,
+              collected.resources,
+              name,
+              dictionary,
+              data,
+            )
+          None => None
         }
         inline_index += 1
         items.push(
           PdfPageItem::Image({
             index,
             bounds,
+            quad: pdf_quad_of_box(entry.bounding_box),
             name,
             resource,
             shading: None,
+            fill_color: pdf_colour_hex(
+              collected.state.path_state.colour_non_stroke,
+            ),
             fill_alpha: paint.fill_alpha,
             stroke_alpha: paint.stroke_alpha,
             blend_mode: paint.blend_mode,
@@ -962,14 +1155,21 @@ fn pdf_items_of_page(
         )
       }
       @pdflite.PdfContentShadingObject(name) => {
-        let shading = pdf_shading_resource_of(document, page, name)
+        let shading = match
+          pdf_shading_resource_of_resources(document, collected.resources, name) {
+          Some(value) =>
+            Some(pdf_shading_resource_with_ctm(value, collected.state.ctm))
+          None => None
+        }
         items.push(
           PdfPageItem::Shading({
             index,
             bounds,
+            quad: pdf_quad_of_box(entry.bounding_box),
             name,
             resource: None,
             shading,
+            fill_color: "#000000",
             fill_alpha: paint.fill_alpha,
             stroke_alpha: paint.stroke_alpha,
             blend_mode: paint.blend_mode,
@@ -988,17 +1188,12 @@ fn pdf_items_of_page(
 /// installed by the PDF interpreter is the final path. The browser's SVG
 /// viewport already supplies that clip, so only explicit additional clips are
 /// serialized.
-fn pdf_clip_path_of_entry_state(
-  state : @pdflite.PdfContentState,
+fn pdf_clip_path_of_paths(
+  paths : ArrayView[@shape.PdfPath],
   origin_x : Double,
   origin_y : Double,
   height : Double,
 ) -> String? {
-  let paths = match state {
-    @pdflite.PdfContentStateGlyph(value) => value.clipping_path
-    @pdflite.PdfContentStatePath(value) => value.clipping_path
-    @pdflite.PdfContentStateClipping(value) => value.clipping_path
-  }
   if paths.length() <= 1 {
     None
   } else {
@@ -1015,98 +1210,6 @@ priv struct PdfPaintAttributes {
   fill_alpha : Double
   stroke_alpha : Double
   blend_mode : String
-}
-
-///|
-fn pdf_paint_attributes_default() -> PdfPaintAttributes {
-  { fill_alpha: 1.0, stroke_alpha: 1.0, blend_mode: "normal", }
-}
-
-///|
-fn pdf_paint_attributes_at(
-  attributes : ArrayView[PdfPaintAttributes],
-  index : Int,
-) -> PdfPaintAttributes {
-  if index < attributes.length() {
-    attributes[index]
-  } else {
-    pdf_paint_attributes_default()
-  }
-}
-
-///|
-/// Collect paint state in the same order as pdflite's recursive content
-/// entries. The public entry model does not include ExtGState alpha or blend
-/// mode, so this small parallel walk keeps that renderer state in the viewer.
-fn pdf_paint_attributes_of_page(
-  document : @pdflite.PdfDocument,
-  page : @page.PdfPage,
-) -> Array[PdfPaintAttributes] raise @core.PdfError {
-  let rectangle = document.parse_rectangle(page.mediabox)
-  let initial = @pdflite.pdf_content_initial_operator_state(
-    rectangle.min_x,
-    rectangle.min_y,
-    rectangle.max_x,
-    rectangle.max_y,
-  )
-  let ops = document.parse_content_ops_with_resources(
-    page.resources,
-    page.content,
-  )
-  pdf_paint_attributes_of_ops(document, initial, page.resources, ops)
-}
-
-///|
-fn pdf_paint_attributes_of_ops(
-  document : @pdflite.PdfDocument,
-  initial : @pdflite.PdfContentOperatorState,
-  resources : @syntax.PdfObject,
-  ops : ArrayView[@content.PdfContentOp],
-) -> Array[PdfPaintAttributes] raise @core.PdfError {
-  let output : Array[PdfPaintAttributes] = []
-  let mut state = initial
-  for op in ops {
-    match op {
-      @content.Op_Do(name) =>
-        match document.content_form_xobject_ops(resources, name) {
-          Some(form_ops) =>
-            match
-              (
-                document.content_form_xobject_enter_state(
-                  state, resources, name,
-                ),
-                document.content_form_xobject_resources(resources, name),
-              ) {
-              (Some(form_state), Some(form_resources)) =>
-                output.append(
-                  pdf_paint_attributes_of_ops(
-                    document, form_state, form_resources, form_ops,
-                  ),
-                )
-              _ => ()
-            }
-          None => output.push(pdf_paint_attributes_of_state(state))
-        }
-      @content.Op_InlineImage(_, _, _) =>
-        output.push(pdf_paint_attributes_of_state(state))
-      @content.Op_sh(name) =>
-        match
-          document.content_shading_entry_from_resources(state, resources, name) {
-          Some(_) => output.push(pdf_paint_attributes_of_state(state))
-          None => ()
-        }
-      @content.Op_gs(name) =>
-        state = pdf_apply_extgstate_for_viewer(document, state, resources, name)
-      _ => {
-        let result = document.content_apply_resource_op(state, resources, op)
-        for _ in result.entries {
-          output.push(pdf_paint_attributes_of_state(result.state))
-        }
-        state = result.state
-      }
-    }
-  }
-  output
 }
 
 ///|
@@ -1185,60 +1288,15 @@ fn pdf_svg_blend_mode(value : @syntax.PdfObject) -> String {
 }
 
 ///|
-/// Collect inline image payloads in the same recursive paint order used by
-/// `content_entries_of_page`. Form XObjects are entered with their merged
-/// resource dictionary; image XObjects have no inline payload to collect.
-fn pdf_inline_image_payloads_of_page(
-  document : @pdflite.PdfDocument,
-  page : @page.PdfPage,
-) -> Array[(@syntax.PdfObject, Bytes, @syntax.PdfObject)] raise @core.PdfError {
-  let ops = document.parse_content_ops_with_resources(
-    page.resources,
-    page.content,
-  )
-  pdf_inline_image_payloads_of_ops(document, page.resources, ops)
-}
-
-///|
-fn pdf_inline_image_payloads_of_ops(
+/// Resolve a shading in the resource dictionary active at the paint site.
+fn pdf_shading_resource_of_resources(
   document : @pdflite.PdfDocument,
   resources : @syntax.PdfObject,
-  ops : ArrayView[@content.PdfContentOp],
-) -> Array[(@syntax.PdfObject, Bytes, @syntax.PdfObject)] raise @core.PdfError {
-  let output : Array[(@syntax.PdfObject, Bytes, @syntax.PdfObject)] = []
-  for op in ops {
-    match op {
-      @content.Op_InlineImage(dictionary, _, data) =>
-        output.push((dictionary, data, resources))
-      @content.Op_Do(name) =>
-        match document.content_form_xobject_ops(resources, name) {
-          Some(form_ops) =>
-            match document.content_form_xobject_resources(resources, name) {
-              Some(form_resources) =>
-                output.append(
-                  pdf_inline_image_payloads_of_ops(
-                    document, form_resources, form_ops,
-                  ),
-                )
-              None => ()
-            }
-          None => ()
-        }
-      _ => ()
-    }
-  }
-  output
-}
-
-///|
-fn pdf_shading_resource_of(
-  document : @pdflite.PdfDocument,
-  page : @page.PdfPage,
   name : String,
 ) -> PdfShadingResource? {
   let shading_dictionary_name = pdf_image_name("/Shading")
   let shading_name = pdf_image_name(name)
-  match document.lookup_direct(shading_dictionary_name, page.resources) {
+  match document.lookup_direct(shading_dictionary_name, resources) {
     Some(shadings) =>
       match document.lookup_direct(shading_name, shadings) {
         Some(shading) =>
@@ -1274,6 +1332,7 @@ fn pdf_shading_resource_of_object(
         name,
         kind: "axial",
         coords: [x0, y0, x1, y1],
+        matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
         stops: pdf_shading_stops(
           axial.axialshading_function,
           domain_min,
@@ -1291,6 +1350,7 @@ fn pdf_shading_resource_of_object(
         name,
         kind: "radial",
         coords: [x0, y0, r0, x1, y1, r1],
+        matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
         stops: pdf_shading_stops(
           radial.radialshading_function,
           domain_min,
@@ -1309,6 +1369,7 @@ fn pdf_shading_resource_of_object(
         name,
         kind: "function",
         coords: [],
+        matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
         stops: pdf_shading_stops(
           [function.funshading_function],
           domain_min,
@@ -1324,6 +1385,7 @@ fn pdf_shading_resource_of_object(
         name,
         kind: "mesh",
         coords: [],
+        matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
         stops: [],
         extend_start: true,
         extend_end: true,
@@ -1333,6 +1395,7 @@ fn pdf_shading_resource_of_object(
         name,
         kind: "mesh",
         coords: [],
+        matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
         stops: [],
         extend_start: true,
         extend_end: true,
@@ -1342,6 +1405,7 @@ fn pdf_shading_resource_of_object(
         name,
         kind: "mesh",
         coords: [],
+        matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
         stops: [],
         extend_start: true,
         extend_end: true,
@@ -1351,11 +1415,23 @@ fn pdf_shading_resource_of_object(
         name,
         kind: "mesh",
         coords: [],
+        matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
         stops: [],
         extend_start: true,
         extend_end: true,
       }
   }
+}
+
+///|
+/// Shading coordinates live in the current user space rather than image
+/// unit-square space. Retain the full CTM on the resource so SVG can apply it
+/// to both axial and radial gradients without approximating a sheared circle.
+fn pdf_shading_resource_with_ctm(
+  shading : PdfShadingResource,
+  ctm : @geometry.TransformMatrix,
+) -> PdfShadingResource {
+  { ..shading, matrix: [ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f], }
 }
 
 ///|

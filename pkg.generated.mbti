@@ -83,6 +83,7 @@ pub(all) struct PdfImageResource {
   name : String
   mime_type : String
   data_uri : String?
+  mask_data_uri : String?
   width : Int?
   height : Int?
 } derive(Eq, ToJson, @debug.Debug)
@@ -167,6 +168,7 @@ pub(all) struct PdfPatternResource {
   bbox : PdfBounds
   x_step : Double
   y_step : Double
+  matrix : Array[Double]
   tile_svg : String
 } derive(Eq, ToJson, @debug.Debug)
 #deprecated
@@ -225,6 +227,7 @@ pub(all) struct PdfShadingResource {
   name : String
   kind : String
   coords : Array[Double]
+  matrix : Array[Double]
   stops : Array[PdfGradientStop]
   extend_start : Bool
   extend_end : Bool
@@ -310,9 +313,11 @@ pub fn PdfViewport::to_repr(Self) -> @debug.Repr
 pub(all) struct PdfVisualItem {
   index : Int
   bounds : PdfBounds
+  quad : PdfQuad
   name : String
   resource : PdfImageResource?
   shading : PdfShadingResource?
+  fill_color : String
   fill_alpha : Double
   stroke_alpha : Double
   blend_mode : String

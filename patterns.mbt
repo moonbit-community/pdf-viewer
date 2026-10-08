@@ -60,6 +60,7 @@ fn pdf_pattern_resource_of_object(
       if x_step <= 0.0 || y_step <= 0.0 {
         return None
       }
+      let matrix = pdf_pattern_matrix_or_identity(document, pattern)
       let pattern_resources = match
         document.lookup_direct(pdf_image_name("/Resources"), pattern) {
         Some(value) => value
@@ -97,11 +98,44 @@ fn pdf_pattern_resource_of_object(
         },
         x_step,
         y_step,
+        matrix,
         tile_svg,
       })
     }
     _ => None
   }
+}
+
+///|
+fn pdf_pattern_matrix_or_identity(
+  document : @pdflite.PdfDocument,
+  pattern : @syntax.PdfObject,
+) -> Array[Double] {
+  try document.parse_matrix(pdf_image_name("/Matrix"), pattern) catch {
+    _ => [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+  } noraise {
+    matrix => [matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f]
+  }
+}
+
+///|
+/// Compose the pattern's own matrix with the CTM active at its paint site.
+fn pdf_pattern_resource_with_ctm(
+  pattern : PdfPatternResource,
+  ctm : @geometry.TransformMatrix,
+) -> PdfPatternResource {
+  let pattern_matrix = if pattern.matrix.length() >= 6 {
+    pattern.matrix
+  } else {
+    [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+  }
+  let a = ctm.a * pattern_matrix[0] + ctm.c * pattern_matrix[1]
+  let b = ctm.b * pattern_matrix[0] + ctm.d * pattern_matrix[1]
+  let c = ctm.a * pattern_matrix[2] + ctm.c * pattern_matrix[3]
+  let d = ctm.b * pattern_matrix[2] + ctm.d * pattern_matrix[3]
+  let e = ctm.a * pattern_matrix[4] + ctm.c * pattern_matrix[5] + ctm.e
+  let f = ctm.b * pattern_matrix[4] + ctm.d * pattern_matrix[5] + ctm.f
+  { ..pattern, matrix: [a, b, c, d, e, f], }
 }
 
 ///|

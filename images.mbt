@@ -1,24 +1,21 @@
 ///|
-/// Resolve an image XObject from a page and turn it into a browser data URL.
-///
-/// The PDF content walker intentionally gives us the resource name rather
-/// than copying the stream into every display-list entry. Resolving here keeps
-/// the page model self-contained while retaining a graceful placeholder for
-/// image formats a browser cannot display.
-fn pdf_image_resource_of(
+/// Resolve an image from the resource dictionary active at the paint site.
+/// Form XObjects may merge or shadow the page's `/XObject` dictionary, so using
+/// only `PdfPage.resources` loses images nested inside Forms.
+fn pdf_image_resource_of_resources(
   document : @pdflite.PdfDocument,
-  page : @page.PdfPage,
+  resources : @syntax.PdfObject,
   name : StringView,
 ) -> PdfImageResource? {
   let xobject_name = pdf_image_name(name.to_owned())
-  match document.lookup_direct(pdf_image_name("/XObject"), page.resources) {
+  match document.lookup_direct(pdf_image_name("/XObject"), resources) {
     Some(xobjects) =>
       match document.lookup_direct(xobject_name, xobjects) {
         Some(xobject) =>
           try
             pdf_image_resource_of_object(
               document,
-              page.resources,
+              resources,
               name.to_owned(),
               xobject,
             )
@@ -42,12 +39,19 @@ fn pdf_image_resource_of_object(
 ) -> PdfImageResource raise @core.PdfError {
   let width = pdf_image_dimension(document, xobject, "/Width")
   let height = pdf_image_dimension(document, xobject, "/Height")
-  match document.get_image_24bpp(resources, xobject) {
+  let image = document.get_image_24bpp(resources, xobject)
+  let mask_data_uri = if pdf_image_object_is_mask(document, xobject) {
+    pdf_image_mask_data_uri(image)
+  } else {
+    None
+  }
+  let resource = match image {
     @pdflite.PdfJPEG(data, _) =>
       {
         name,
         mime_type: "image/jpeg",
         data_uri: Some(pdf_image_data_uri("image/jpeg", data)),
+        mask_data_uri: None,
         width,
         height,
       }
@@ -56,6 +60,7 @@ fn pdf_image_resource_of_object(
         name,
         mime_type: "image/jp2",
         data_uri: Some(pdf_image_data_uri("image/jp2", data)),
+        mask_data_uri: None,
         width,
         height,
       }
@@ -64,6 +69,7 @@ fn pdf_image_resource_of_object(
         name,
         mime_type: "image/jbig2",
         data_uri: Some(pdf_image_data_uri("image/jbig2", data)),
+        mask_data_uri: None,
         width,
         height,
       }
@@ -73,10 +79,67 @@ fn pdf_image_resource_of_object(
         name,
         mime_type: "image/png",
         data_uri: Some(pdf_image_data_uri("image/png", png)),
+        mask_data_uri: None,
         width: Some(raw_width),
         height: Some(raw_height),
       }
     }
+  }
+  match mask_data_uri {
+    Some(mask_data_uri) =>
+      {
+        name,
+        mime_type: "image/mask",
+        data_uri: None,
+        mask_data_uri: Some(mask_data_uri),
+        width,
+        height,
+      }
+    None => resource
+  }
+}
+
+///|
+fn pdf_image_object_is_mask(
+  document : @pdflite.PdfDocument,
+  image : @syntax.PdfObject,
+) -> Bool {
+  match
+    document.lookup_direct_or_else(
+      pdf_image_name("/ImageMask"),
+      pdf_image_name("/IM"),
+      image,
+    ) {
+    Some(@syntax.PdfBoolean(true)) => true
+    _ => false
+  }
+}
+
+///|
+/// Convert a decoded ImageMask bitmap into a luminance mask PNG. pdflite has
+/// already applied the image's /Decode array. The PDF ImageMask paint rule
+/// treats the zero-valued sample as the painted part for the fixtures covered
+/// here, so the browser mask is inverted: white reveals the current
+/// non-stroking colour and black hides it.
+fn pdf_image_mask_data_uri(
+  image : @pdflite.PdfImage,
+) -> String? raise @core.PdfError {
+  match image {
+    @pdflite.PdfRawImage(width, height, layout, data) => {
+      let pixel_count = width * height
+      if layout != @pdflite.PdfBPP24 || data.length() < pixel_count * 3 {
+        None
+      } else {
+        let gray : Array[Int] = Array(capacity=pixel_count)
+        for index in 0..<pixel_count {
+          gray.push(255 - data[index * 3].to_int())
+        }
+        let bytes = @core.pdf_bytes_of_int_array(gray)
+        let png = pdf_png_of_raw_image(width, height, @pdflite.PdfBPP8, bytes)
+        Some(pdf_image_data_uri("image/png", png))
+      }
+    }
+    _ => None
   }
 }
 

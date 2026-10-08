@@ -20,9 +20,12 @@
 - 暴露基础 annotation layer（link、highlight、underline、strikeout、text、widget 等）
   以及 URI、颜色、边框和内容；
 - 跟踪 ExtGState 的填充/描边透明度和 SVG 可表达的 blend mode；
-- 对常见的彩色、路径型 tiling pattern 生成 SVG `<pattern>`，并把多段显式 clipping
-  以嵌套 clipPath 表达；pattern matrix、uncolored pattern、复杂 Form 资源和 soft mask
-  仍未覆盖；
+- 对常见的彩色、路径型 tiling pattern 生成 SVG `<pattern>`，应用 pattern matrix，并把
+  多段显式 clipping 以浏览器可工作的嵌套 clipPath 表达；uncolored pattern、复杂 Form
+  资源和 soft mask 仍未覆盖；
+- 初步支持 PDF ImageMask，包括当前非描边颜色、`/Decode` 后的 1-bit 图像和 Form 内的
+  affine placement；浏览器不支持的 inline CCITT mask、普通 `/Mask` color-key、`/SMask`
+  和 transparency group 仍会保留为占位或未绘制项；
 - 提供 native CLI，方便用真实 PDF 调试，而不需要先接入浏览器。
 
 ## 本地运行
@@ -66,11 +69,11 @@ moon run --target native cmd/main -- ./sample.pdf /tmp/page-3.svg 3
 | `PDFPageProxy.getOperatorList()` | `PdfViewerDocument::operator_list(n)` |
 | `PDFPageProxy.render(...)` | `PdfViewerDocument::render_svg(n, scale~)` / `render_svg_with_rotation(...)` |
 
-这不是声称已经达到 pdf.js 的覆盖率。字体 metrics 和 fallback、soft mask、pattern
-matrix、uncolored/复杂 tiling pattern、mesh shading、完整 annotation appearance/form
-行为仍是后续工作；当前 API 会先把这些内容的页面位置和类型留在 display list 中，避免
-宿主丢失结构化信息。现阶段 SVG 输出适合调试和建立回归基线，不能当作 pdf.js 的像素级
-替代品。
+这不是声称已经达到 pdf.js 的覆盖率。字体 metrics 和 fallback、soft mask、普通
+`/Mask` color-key、uncolored/复杂 tiling pattern、mesh shading、完整 annotation
+appearance/form 行为仍是后续工作；当前 API 会先把这些内容的页面位置和类型留在
+display list 中，避免宿主丢失结构化信息。现阶段 SVG 输出适合调试和建立回归基线，不能
+当作 pdf.js 的像素级替代品。
 
 旋转参数按 pdf.js 规则只接受 `0/90/180/270`（允许等价的负数和大于 360 的整数）；
 SVG 渲染遇到其它角度会返回 `PageRotationExpected`，不会静默近似成另一个角度。

@@ -152,12 +152,10 @@ fn pdf_svg_text(
   } else {
     "normal"
   }
-  let clip_attribute = pdf_svg_clip_attribute(first.index, first.clip_path)
   pdf_svg_clip_defs(output, first.index, first.clip_path)
+  pdf_svg_clip_open(output, first.index, first.clip_path)
   output.write_string(
-    "<text" +
-    clip_attribute +
-    " x=\"" +
+    "<text x=\"" +
     x +
     "\" y=\"" +
     y.to_string() +
@@ -179,6 +177,7 @@ fn pdf_svg_text(
     pdf_escape_xml(value.to_string()) +
     "</text>",
   )
+  pdf_svg_clip_close(output, first.index, first.clip_path)
 }
 
 ///|
@@ -274,13 +273,11 @@ fn pdf_svg_path(
     (path.dash_phase * scale).to_string() +
     "\""
   }
-  let clip_attribute = pdf_svg_clip_attribute(path.index, path.clip_path)
   pdf_svg_clip_defs(output, path.index, path.clip_path)
-  pdf_svg_pattern_defs(output, path)
+  pdf_svg_pattern_defs(output, page, path, scale)
+  pdf_svg_clip_open(output, path.index, path.clip_path)
   output.write_string(
-    "<path" +
-    clip_attribute +
-    " d=\"" +
+    "<path d=\"" +
     transformed +
     "\" transform=\"scale(" +
     scale.to_string() +
@@ -312,10 +309,16 @@ fn pdf_svg_path(
     dash +
     "/>",
   )
+  pdf_svg_clip_close(output, path.index, path.clip_path)
 }
 
 ///|
-fn pdf_svg_pattern_defs(output : StringBuilder, path : PdfPathItem) -> Unit {
+fn pdf_svg_pattern_defs(
+  output : StringBuilder,
+  page : PdfPageModel,
+  path : PdfPathItem,
+  scale : Double,
+) -> Unit {
   match path.pattern {
     Some(pattern) => {
       let id = "pdf-pattern-" + path.index.to_string()
@@ -326,6 +329,8 @@ fn pdf_svg_pattern_defs(output : StringBuilder, path : PdfPathItem) -> Unit {
         pattern.x_step.to_string() +
         "\" height=\"" +
         pattern.y_step.to_string() +
+        "\" patternTransform=\"" +
+        pdf_svg_shading_transform(page, pattern.matrix, scale) +
         "\">" +
         pattern.tile_svg +
         "</pattern></defs>",
@@ -376,43 +381,112 @@ fn pdf_svg_image(
 ) -> Unit {
   match item.resource {
     Some(resource) =>
-      match resource.data_uri {
-        Some(data_uri) => {
-          let x = (item.bounds.min_x - page.origin_x) * scale
-          let y = (page.origin_y + page.height - item.bounds.max_y) * scale
-          let width = (item.bounds.max_x - item.bounds.min_x) * scale
-          let height = (item.bounds.max_y - item.bounds.min_y) * scale
-          let clip_attribute = pdf_svg_clip_attribute(
-            item.index,
-            item.clip_path,
-          )
-          pdf_svg_clip_defs(output, item.index, item.clip_path)
-          output.write_string(
-            "<image" +
-            clip_attribute +
-            " data-pdf-name=\"" +
-            pdf_escape_xml(item.name) +
-            "\" x=\"" +
-            x.to_string() +
-            "\" y=\"" +
-            y.to_string() +
-            "\" width=\"" +
-            width.to_string() +
-            "\" height=\"" +
-            height.to_string() +
-            "\" preserveAspectRatio=\"none\" href=\"" +
-            data_uri +
-            "\" opacity=\"" +
-            item.fill_alpha.to_string() +
-            "\"" +
-            pdf_svg_blend_style(item.blend_mode) +
-            "/>",
-          )
-        }
-        None => pdf_svg_placeholder(output, page, item, scale, "image")
+      match resource.mask_data_uri {
+        Some(mask_data_uri) =>
+          pdf_svg_masked_image(output, page, item, scale, mask_data_uri)
+        None =>
+          match resource.data_uri {
+            Some(data_uri) => {
+              pdf_svg_clip_defs(output, item.index, item.clip_path)
+              pdf_svg_clip_open(output, item.index, item.clip_path)
+              output.write_string(
+                "<image data-pdf-name=\"" +
+                pdf_escape_xml(item.name) +
+                "\" x=\"0\" y=\"0\" width=\"1\" height=\"1\" transform=\"" +
+                pdf_svg_visual_transform(page, item.quad, scale) +
+                "\" preserveAspectRatio=\"none\" href=\"" +
+                data_uri +
+                "\" opacity=\"" +
+                item.fill_alpha.to_string() +
+                "\"" +
+                pdf_svg_blend_style(item.blend_mode) +
+                "/>",
+              )
+              pdf_svg_clip_close(output, item.index, item.clip_path)
+            }
+            None => pdf_svg_placeholder(output, page, item, scale, "image")
+          }
       }
     None => pdf_svg_placeholder(output, page, item, scale, "image")
   }
+}
+
+///|
+/// Paint an ImageMask as a coloured rectangle controlled by a luminance mask.
+/// The mask and the rectangle share the source image quad, so rotations and
+/// Form-XObject placement remain affine rather than falling back to a box.
+fn pdf_svg_masked_image(
+  output : StringBuilder,
+  page : PdfPageModel,
+  item : PdfVisualItem,
+  scale : Double,
+  mask_data_uri : String,
+) -> Unit {
+  let mask_data_uri = pdf_svg_colored_mask_data_uri(item, mask_data_uri)
+  pdf_svg_clip_defs(output, item.index, item.clip_path)
+  pdf_svg_clip_open(output, item.index, item.clip_path)
+  output.write_string(
+    "<image data-pdf-name=\"" +
+    pdf_escape_xml(item.name) +
+    "\" x=\"0\" y=\"0\" width=\"1\" height=\"1\" transform=\"" +
+    pdf_svg_visual_transform(page, item.quad, scale) +
+    "\" preserveAspectRatio=\"none\" href=\"" +
+    mask_data_uri +
+    "\" opacity=\"" +
+    item.fill_alpha.to_string() +
+    "\"" +
+    pdf_svg_blend_style(item.blend_mode) +
+    "/>",
+  )
+  pdf_svg_clip_close(output, item.index, item.clip_path)
+}
+
+///|
+/// Build a self-contained SVG image for an ImageMask. Chromium handles the
+/// mask correctly while the image is in its own coordinate system, then the
+/// outer viewer image applies the PDF quad transform. Applying the same
+/// transform directly to an outer `<mask>` makes some browser versions treat
+/// the mask as a solid rectangle.
+fn pdf_svg_colored_mask_data_uri(
+  item : PdfVisualItem,
+  mask_data_uri : String,
+) -> String {
+  let (width, height) = match item.resource {
+    Some(resource) =>
+      (resource.width.unwrap_or(1).max(1), resource.height.unwrap_or(1).max(1))
+    None => (1, 1)
+  }
+  let mask_id = "pdf-image-mask-inner-" + item.index.to_string()
+  let inner = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 " +
+    width.to_string() +
+    " " +
+    height.to_string() +
+    "\" width=\"" +
+    width.to_string() +
+    "\" height=\"" +
+    height.to_string() +
+    "\"><defs><mask id=\"" +
+    mask_id +
+    "\" mask-type=\"luminance\" maskUnits=\"userSpaceOnUse\" maskContentUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" width=\"" +
+    width.to_string() +
+    "\" height=\"" +
+    height.to_string() +
+    "\"><image x=\"0\" y=\"0\" width=\"" +
+    width.to_string() +
+    "\" height=\"" +
+    height.to_string() +
+    "\" preserveAspectRatio=\"none\" href=\"" +
+    mask_data_uri +
+    "\"/></mask></defs><rect x=\"0\" y=\"0\" width=\"" +
+    width.to_string() +
+    "\" height=\"" +
+    height.to_string() +
+    "\" fill=\"" +
+    pdf_escape_xml(item.fill_color) +
+    "\" mask=\"url(#" +
+    mask_id +
+    ")\"/></svg>"
+  "data:image/svg+xml;base64," + @base64.encode(@utf8.encode(inner))
 }
 
 ///|
@@ -428,25 +502,23 @@ fn pdf_svg_shading(
         item.index.to_string() +
         "-" +
         item.name.replace(old="/", new="-")
-      let x = (item.bounds.min_x - page.origin_x) * scale
-      let y = (page.origin_y + page.height - item.bounds.max_y) * scale
-      let width = (item.bounds.max_x - item.bounds.min_x) * scale
-      let height = (item.bounds.max_y - item.bounds.min_y) * scale
-      let clip_attribute = pdf_svg_clip_attribute(item.index, item.clip_path)
       pdf_svg_clip_defs(output, item.index, item.clip_path)
+      pdf_svg_clip_open(output, item.index, item.clip_path)
       output.write_string("<defs>")
       if shading.kind == "axial" && shading.coords.length() >= 4 {
         output.write_string(
           "<linearGradient id=\"" +
           pdf_escape_xml(gradient_id) +
-          "\" gradientUnits=\"userSpaceOnUse\" x1=\"" +
-          pdf_svg_shading_x(page, shading.coords[0], scale).to_string() +
+          "\" gradientUnits=\"userSpaceOnUse\" gradientTransform=\"" +
+          pdf_svg_shading_transform(page, shading.matrix, scale) +
+          "\" x1=\"" +
+          shading.coords[0].to_string() +
           "\" y1=\"" +
-          pdf_svg_shading_y(page, shading.coords[1], scale).to_string() +
+          shading.coords[1].to_string() +
           "\" x2=\"" +
-          pdf_svg_shading_x(page, shading.coords[2], scale).to_string() +
+          shading.coords[2].to_string() +
           "\" y2=\"" +
-          pdf_svg_shading_y(page, shading.coords[3], scale).to_string() +
+          shading.coords[3].to_string() +
           "\" spreadMethod=\"pad\">",
         )
         pdf_svg_gradient_stops(output, shading.stops)
@@ -455,18 +527,20 @@ fn pdf_svg_shading(
         output.write_string(
           "<radialGradient id=\"" +
           pdf_escape_xml(gradient_id) +
-          "\" gradientUnits=\"userSpaceOnUse\" cx=\"" +
-          pdf_svg_shading_x(page, shading.coords[3], scale).to_string() +
+          "\" gradientUnits=\"userSpaceOnUse\" gradientTransform=\"" +
+          pdf_svg_shading_transform(page, shading.matrix, scale) +
+          "\" cx=\"" +
+          shading.coords[3].to_string() +
           "\" cy=\"" +
-          pdf_svg_shading_y(page, shading.coords[4], scale).to_string() +
+          shading.coords[4].to_string() +
           "\" r=\"" +
-          (shading.coords[5].abs() * scale).to_string() +
+          shading.coords[5].abs().to_string() +
           "\" fx=\"" +
-          pdf_svg_shading_x(page, shading.coords[0], scale).to_string() +
+          shading.coords[0].to_string() +
           "\" fy=\"" +
-          pdf_svg_shading_y(page, shading.coords[1], scale).to_string() +
+          shading.coords[1].to_string() +
           "\" fr=\"" +
-          (shading.coords[2].abs() * scale).to_string() +
+          shading.coords[2].abs().to_string() +
           "\" spreadMethod=\"pad\">",
         )
         pdf_svg_gradient_stops(output, shading.stops)
@@ -483,17 +557,12 @@ fn pdf_svg_shading(
       output.write_string(
         "</defs>" +
         "<rect" +
-        clip_attribute +
         " data-pdf-kind=\"shading\" data-pdf-name=\"" +
         pdf_escape_xml(item.name) +
-        "\" x=\"" +
-        x.to_string() +
-        "\" y=\"" +
-        y.to_string() +
-        "\" width=\"" +
-        width.to_string() +
+        "\" x=\"0\" y=\"0\" width=\"" +
+        (page.width * scale).to_string() +
         "\" height=\"" +
-        height.to_string() +
+        (page.height * scale).to_string() +
         "\" fill-opacity=\"" +
         item.fill_alpha.to_string() +
         "\"" +
@@ -502,6 +571,7 @@ fn pdf_svg_shading(
         pdf_escape_xml(gradient_id) +
         ")\"/>",
       )
+      pdf_svg_clip_close(output, item.index, item.clip_path)
     }
     _ => pdf_svg_placeholder(output, page, item, scale, "shading")
   }
@@ -533,21 +603,71 @@ fn pdf_svg_blend_style(blend_mode : String) -> String {
 }
 
 ///|
-fn pdf_svg_shading_x(
+fn pdf_svg_shading_transform(
   page : PdfPageModel,
-  value : Double,
+  matrix : ArrayView[Double],
   scale : Double,
-) -> Double {
-  (value - page.origin_x) * scale
+) -> String {
+  let m = if matrix.length() >= 6 {
+    matrix
+  } else {
+    [1.0, 0.0, 0.0, 1.0, 0.0, 0.0][:]
+  }
+  "matrix(" +
+  (m[0] * scale).to_string() +
+  " " +
+  (-m[1] * scale).to_string() +
+  " " +
+  (m[2] * scale).to_string() +
+  " " +
+  (-m[3] * scale).to_string() +
+  " " +
+  ((m[4] - page.origin_x) * scale).to_string() +
+  " " +
+  ((page.origin_y + page.height - m[5]) * scale).to_string() +
+  ")"
 }
 
 ///|
-fn pdf_svg_shading_y(
+/// Convert the PDF unit-square quad for an image or shading into an SVG
+/// affine transform. `pdflite` emits the unit square in PDF order (lower-left,
+/// upper-left, upper-right, lower-right), while an SVG image's local origin
+/// is its top-left corner. The page group's rotation is applied by the caller
+/// after this page-space transform.
+fn pdf_svg_visual_transform(
   page : PdfPageModel,
-  value : Double,
+  quad : PdfQuad,
   scale : Double,
-) -> Double {
-  (page.origin_y + page.height - value) * scale
+) -> String {
+  let top_left = {
+    x: (quad.p1.x - page.origin_x) * scale,
+    y: (page.origin_y + page.height - quad.p1.y) * scale,
+  }
+  let top_right = {
+    x: (quad.p2.x - page.origin_x) * scale,
+    y: (page.origin_y + page.height - quad.p2.y) * scale,
+  }
+  let bottom_left = {
+    x: (quad.p0.x - page.origin_x) * scale,
+    y: (page.origin_y + page.height - quad.p0.y) * scale,
+  }
+  let a = top_right.x - top_left.x
+  let b = top_right.y - top_left.y
+  let c = bottom_left.x - top_left.x
+  let d = bottom_left.y - top_left.y
+  "matrix(" +
+  a.to_string() +
+  " " +
+  b.to_string() +
+  " " +
+  c.to_string() +
+  " " +
+  d.to_string() +
+  " " +
+  top_left.x.to_string() +
+  " " +
+  top_left.y.to_string() +
+  ")"
 }
 
 ///|
@@ -558,32 +678,21 @@ fn pdf_svg_placeholder(
   scale : Double,
   kind : String,
 ) -> Unit {
-  let x = (item.bounds.min_x - page.origin_x) * scale
-  let y = (page.origin_y + page.height - item.bounds.max_y) * scale
-  let width = (item.bounds.max_x - item.bounds.min_x) * scale
-  let height = (item.bounds.max_y - item.bounds.min_y) * scale
-  let clip_attribute = pdf_svg_clip_attribute(item.index, item.clip_path)
   pdf_svg_clip_defs(output, item.index, item.clip_path)
+  pdf_svg_clip_open(output, item.index, item.clip_path)
   output.write_string(
-    "<g" +
-    clip_attribute +
-    " data-pdf-kind=\"" +
+    "<g data-pdf-kind=\"" +
     kind +
     "\" data-pdf-name=\"" +
     pdf_escape_xml(item.name) +
-    "\"><rect x=\"" +
-    x.to_string() +
-    "\" y=\"" +
-    y.to_string() +
-    "\" width=\"" +
-    width.to_string() +
-    "\" height=\"" +
-    height.to_string() +
+    "\"><rect x=\"0\" y=\"0\" width=\"1\" height=\"1\" transform=\"" +
+    pdf_svg_visual_transform(page, item.quad, scale) +
     "\" fill=\"#eef1f5\" stroke=\"#9aa4b2\" stroke-dasharray=\"3 2\"/>" +
     "<title>" +
     pdf_escape_xml(kind + ": " + item.name) +
     "</title></g>",
   )
+  pdf_svg_clip_close(output, item.index, item.clip_path)
 }
 
 ///|
@@ -842,20 +951,9 @@ fn pdf_svg_clip_defs(
       output.write_string("<defs>")
       for part_index, part in parts {
         let id = pdf_svg_clip_id(base, parts.length(), part_index)
-        output.write_string("<clipPath id=\"" + id + "\">")
-        if part_index == 0 {
-          output.write_string("<path d=\"" + part + "\"/>")
-        } else {
-          let previous = pdf_svg_clip_id(base, parts.length(), part_index - 1)
-          output.write_string(
-            "<g clip-path=\"url(#" +
-            previous +
-            ")\"><path d=\"" +
-            part +
-            "\"/></g>",
-          )
-        }
-        output.write_string("</clipPath>")
+        output.write_string(
+          "<clipPath id=\"" + id + "\"><path d=\"" + part + "\"/></clipPath>",
+        )
       }
       output.write_string("</defs>")
     }
@@ -864,7 +962,11 @@ fn pdf_svg_clip_defs(
 }
 
 ///|
-fn pdf_svg_clip_attribute(index : Int, clip_path : String?) -> String {
+fn pdf_svg_clip_open(
+  output : StringBuilder,
+  index : Int,
+  clip_path : String?,
+) -> Unit {
   match clip_path {
     Some(path) => {
       let mut count = 0
@@ -872,9 +974,36 @@ fn pdf_svg_clip_attribute(index : Int, clip_path : String?) -> String {
         count += 1
       }
       let base = "pdf-clip-" + index.to_string()
-      " clip-path=\"url(#" + pdf_svg_clip_id(base, count, count - 1) + ")\""
+      for part_index in 0..<count {
+        output.write_string(
+          "<g clip-path=\"url(#" +
+          pdf_svg_clip_id(base, count, part_index) +
+          ")\">",
+        )
+      }
     }
-    None => ""
+    None => ()
+  }
+}
+
+///|
+fn pdf_svg_clip_close(
+  output : StringBuilder,
+  index : Int,
+  clip_path : String?,
+) -> Unit {
+  match clip_path {
+    Some(path) => {
+      let mut count = 0
+      for _ in path.split("||") {
+        count += 1
+      }
+      ignore(index)
+      for _ in 0..<count {
+        output.write_string("</g>")
+      }
+    }
+    None => ()
   }
 }
 
@@ -901,6 +1030,28 @@ fn pdf_svg_path_of_shape(
     p2: { x: target_bounds.max_x, y: target_bounds.max_y, },
     p3: { x: target_bounds.max_x, y: target_bounds.min_y, },
   })
+}
+
+///|
+/// Serialize path coordinates directly after the caller has applied the PDF
+/// current transformation matrix. This is used for page paths because a
+/// bounding box cannot represent rotation, shear, or a translated Form XObject.
+fn pdf_svg_path_of_shape_direct(
+  path : @shape.PdfPath,
+  origin_x : Double,
+  origin_y : Double,
+  page_height : Double,
+) -> String {
+  match pdf_shape_bounds(path) {
+    Some(bounds) =>
+      pdf_svg_path_of_shape_with_quad(path, origin_x, origin_y, page_height, {
+        p0: { x: bounds.min_x, y: bounds.min_y, },
+        p1: { x: bounds.min_x, y: bounds.max_y, },
+        p2: { x: bounds.max_x, y: bounds.max_y, },
+        p3: { x: bounds.max_x, y: bounds.min_y, },
+      })
+    None => ""
+  }
 }
 
 ///|
