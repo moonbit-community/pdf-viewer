@@ -36,6 +36,11 @@ axis-aligned bounds. This lets SVG preserve a glyph run's direction while the
 bounds remain convenient for cursor selection. Path items likewise carry the
 PDF line cap, line join, and dash state needed by an SVG host.
 
+Text paint mode and source fill/stroke colours are retained as part of each
+text item. Path line widths and dash spacing are scaled by the affine paint
+CTM before serialization; this is exact for uniform transforms and uses the
+mean basis-vector scale for shears and non-uniform transforms.
+
 `PdfPageModel::viewport` follows pdf.js' `PageViewport` affine matrix,
 including nonzero media-box origins. The SVG renderer uses the equivalent
 relative transform after subtracting the page origin from display-list

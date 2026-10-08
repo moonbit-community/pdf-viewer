@@ -350,6 +350,19 @@ test "svg maps stroked PDF text rendering mode" {
 }
 
 ///|
+test "stroke widths include the paint CTM scale" {
+  let ctm : @geometry.TransformMatrix = {
+    a: 2.0,
+    b: 0.0,
+    c: 0.0,
+    d: 2.0,
+    e: 0.0,
+    f: 0.0,
+  }
+  assert_true((pdf_ctm_stroke_scale(ctm) - 2.0).abs() < 0.000001)
+}
+
+///|
 test "svg paints a path pattern through a reusable definition" {
   let item : PdfPathItem = {
     index: 3,

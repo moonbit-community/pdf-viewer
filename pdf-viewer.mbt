@@ -1100,6 +1100,7 @@ fn pdf_items_of_page(
           pattern,
         ) = match entry.state {
           @pdflite.PdfContentStatePath(state) => {
+            let stroke_scale = pdf_ctm_stroke_scale(collected.state.ctm)
             // pdflite 0.2.2 currently records `scn` in the stroke colour
             // slot and `SCN` in the non-stroke slot. Look in both slots so a
             // named tiling fill remains visible until that dependency is
@@ -1127,11 +1128,13 @@ fn pdf_items_of_page(
             (
               pdf_colour_hex(state.colour_non_stroke),
               pdf_colour_hex(state.colour_stroke),
-              state.line_width,
+              state.line_width * stroke_scale,
               state.line_cap,
               state.line_join,
-              state.dash_pattern.array,
-              state.dash_pattern.phase,
+              [
+                for value in state.dash_pattern.array => value * stroke_scale
+              ],
+              state.dash_pattern.phase * stroke_scale,
               pattern,
             )
           }
@@ -1335,6 +1338,22 @@ fn pdf_paint_attributes_of_state(
     fill_alpha: state.alpha_constant_non_stroke,
     stroke_alpha: state.alpha_constant_stroke,
     blend_mode: pdf_svg_blend_mode(state.blend_mode),
+  }
+}
+
+///|
+/// Approximate the PDF stroke scale for a general affine CTM. A uniform CTM
+/// is exact; for a shear or non-uniform scale the mean lengths of the two
+/// transformed basis vectors keep line width and dash spacing stable without
+/// losing the page-space path geometry already retained by the viewer.
+fn pdf_ctm_stroke_scale(ctm : @geometry.TransformMatrix) -> Double {
+  let x_scale = (ctm.a * ctm.a + ctm.b * ctm.b).sqrt()
+  let y_scale = (ctm.c * ctm.c + ctm.d * ctm.d).sqrt()
+  let scale = (x_scale + y_scale) / 2.0
+  if scale > 0.0 {
+    scale
+  } else {
+    1.0
   }
 }
 

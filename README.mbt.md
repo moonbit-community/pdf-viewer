@@ -15,6 +15,8 @@
   在浏览器中显示取决于宿主解码器；暂不支持的 mesh shading 会保留可见占位层；
 - 保留文字原始四边形，遇到旋转文字时按 glyph 方向生成 SVG transform；路径 display
   list 保留线帽、连接方式和虚线参数；
+- 保留 PDF text rendering mode、填充/描边颜色，并按 paint-site CTM 缩放路径线宽和虚线
+  间距；文字 clipping mode 和非均匀 CTM 的椭圆笔画仍需要更底层的 glyph/path renderer；
 - 按 PDF 用户空间矩形返回文本、边界和源 display-list item 索引，供上层做
   cursor/框选和 Agent 上下文压缩；
 - 暴露基础 annotation layer（link、highlight、underline、strikeout、text、widget 等）
