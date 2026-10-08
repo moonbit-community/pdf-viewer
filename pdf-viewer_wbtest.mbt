@@ -94,6 +94,7 @@ test "adjacent soft-masked paint items share one compositor group" {
     blend_mode: "normal",
     clip_path: None,
     soft_mask: Some(mask),
+    group: None,
   }
   let text_b : PdfTextItem = {
     ..text_a,
@@ -125,6 +126,53 @@ test "adjacent soft-masked paint items share one compositor group" {
 }
 
 ///|
+test "svg preserves transparency group metadata and isolation" {
+  let group : PdfTransparencyGroup = {
+    id: "/Fm0",
+    isolated: true,
+    knockout: false,
+  }
+  let item : PdfTextItem = {
+    index: 0,
+    text: "A",
+    bounds: { min_x: 10.0, min_y: 70.0, max_x: 20.0, max_y: 80.0, },
+    quad: {
+      p0: { x: 10.0, y: 70.0, },
+      p1: { x: 20.0, y: 70.0, },
+      p2: { x: 20.0, y: 80.0, },
+      p3: { x: 10.0, y: 80.0, },
+    },
+    font: "Helvetica",
+    font_size: 10.0,
+    rendering_mode: 0,
+    fill_color: "#000000",
+    stroke_color: "#000000",
+    fill_alpha: 1.0,
+    blend_mode: "normal",
+    clip_path: None,
+    soft_mask: None,
+    group: Some(group),
+  }
+  let page : PdfPageModel = {
+    number: 1,
+    origin_x: 0.0,
+    origin_y: 0.0,
+    width: 100.0,
+    height: 100.0,
+    rotation: 0,
+    fonts: [],
+    items: [PdfPageItem::Text(item)],
+    annotations: [],
+    text: "A",
+  }
+  let svg = try! pdf_render_page_svg(page, 1.0, 0)
+  assert_true(
+    svg.contains("data-pdf-group-id=\"/Fm0\" data-pdf-group-isolated=\"true\""),
+  )
+  assert_true(svg.contains("style=\"isolation:isolate\""))
+}
+
+///|
 test "rotated text uses its source quadrilateral" {
   let item : PdfTextItem = {
     index: 0,
@@ -145,6 +193,7 @@ test "rotated text uses its source quadrilateral" {
     blend_mode: "normal",
     clip_path: None,
     soft_mask: None,
+    group: None,
   }
   let page : PdfPageModel = {
     number: 1,
@@ -203,6 +252,7 @@ test "visual quads become affine SVG image transforms" {
     blend_mode: "normal",
     clip_path: None,
     soft_mask: None,
+    group: None,
   }
   let output = StringBuilder()
   pdf_svg_image(output, page, item, 1.0)
@@ -288,6 +338,7 @@ test "svg preserves paint opacity and blend mode" {
     blend_mode: "multiply",
     clip_path: None,
     soft_mask: None,
+    group: None,
   }
   let page : PdfPageModel = {
     number: 1,
@@ -329,6 +380,7 @@ test "svg maps stroked PDF text rendering mode" {
     blend_mode: "normal",
     clip_path: None,
     soft_mask: None,
+    group: None,
   }
   let page : PdfPageModel = {
     number: 1,
@@ -390,6 +442,7 @@ test "svg paints a path pattern through a reusable definition" {
     blend_mode: "normal",
     clip_path: None,
     soft_mask: None,
+    group: None,
   }
   let page : PdfPageModel = {
     number: 1,
@@ -432,6 +485,7 @@ test "svg places clipping definitions before painted elements" {
     blend_mode: "normal",
     clip_path: Some("M 0 0 L 10 0 L 10 10 L 0 10 Z"),
     soft_mask: None,
+    group: None,
   }
   let page : PdfPageModel = {
     number: 1,
@@ -546,6 +600,7 @@ test "inline ImageMask keeps a browser mask resource" {
     blend_mode: "normal",
     clip_path: None,
     soft_mask: None,
+    group: None,
   }
   let page : PdfPageModel = {
     number: 1,

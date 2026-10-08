@@ -55,9 +55,11 @@ PDF ImageMask, colour-key `/Mask`, image `/SMask`, and common Form soft-mask res
 to browser-ready mask images. A nested SVG applies image masks before the outer affine transform,
 while page-space soft-mask definitions retain their `/BBox`, backdrop sample, and transfer-map
 output. Adjacent items with the same soft mask are now emitted inside one SVG compositor group,
-so the mask is applied to the accumulated source paint. The remaining gap is preserving Form
-XObject boundaries in the display list: isolated/non-isolated transparency groups, knockout,
-and nested group blending still need a tree representation rather than the current flattening.
+so the mask is applied to the accumulated source paint. Form XObject transparency dictionaries
+are also read into each flattened item, preserving the source group id and its isolated/knockout
+flags. SVG maps isolated groups to `isolation:isolate`; a future canvas/WebGL compositor can use
+the data attributes for non-isolated backdrops and knockout. Exact nested group trees and their
+pixel compositing are still beyond the current flat display-list model.
 
 The remaining implementation stages are ordered by the visible compatibility gap:
 

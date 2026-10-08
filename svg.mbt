@@ -32,18 +32,65 @@ fn pdf_render_page_svg(
     ) +
     "\">",
   )
+  pdf_svg_render_items(output, page, page.items[:], safe_scale, true)
+  pdf_svg_annotations(output, page, safe_scale)
+  output.write_string("</g>")
+  output.write_string("</svg>")
+  output.to_string()
+}
+
+///|
+/// Serialize a page-item slice in source paint order. Keeping this traversal
+/// separate from the page wrapper lets a Form transparency group reuse the
+/// exact same text-run, soft-mask, and image/path handling as the page root.
+fn pdf_svg_render_items(
+  output : StringBuilder,
+  page : PdfPageModel,
+  items : ArrayView[PdfPageItem],
+  scale : Double,
+  honor_groups : Bool,
+) -> Unit {
   let text_run : Array[PdfTextItem] = []
   let mut item_index = 0
-  while item_index < page.items.length() {
-    let item = page.items[item_index]
+  while item_index < items.length() {
+    let item = items[item_index]
+    if honor_groups {
+      match pdf_transparency_group_of_page_item(item) {
+        Some(group) => {
+          let first = item_index
+          item_index += 1
+          while item_index < items.length() {
+            let same_group = match
+              pdf_transparency_group_of_page_item(items[item_index]) {
+              Some(candidate) => candidate == group
+              None => false
+            }
+            if same_group {
+              item_index += 1
+            } else {
+              break
+            }
+          }
+          pdf_svg_transparency_group(
+            output,
+            page,
+            group,
+            items[first:item_index],
+            scale,
+          )
+          continue
+        }
+        None => ()
+      }
+    }
     match pdf_soft_mask_of_page_item(item) {
       Some(mask) => {
-        pdf_svg_flush_text_run(output, page, text_run, safe_scale)
+        pdf_svg_flush_text_run(output, page, text_run, scale)
         text_run.clear()
         let first_index = pdf_page_item_index(item)
         let masked_items : Array[PdfPageItem] = []
-        while item_index < page.items.length() {
-          let candidate = page.items[item_index]
+        while item_index < items.length() {
+          let candidate = items[item_index]
           let same_mask = match pdf_soft_mask_of_page_item(candidate) {
             Some(value) => value == mask
             None => false
@@ -56,9 +103,8 @@ fn pdf_render_page_svg(
           }
         }
         pdf_svg_masked_item_run(
-          output, page, first_index, mask, masked_items, safe_scale,
+          output, page, first_index, mask, masked_items, scale,
         )
-        continue
       }
       None => {
         item_index += 1
@@ -68,35 +114,83 @@ fn pdf_render_page_svg(
               Some(previous) if pdf_svg_text_can_join(previous, text) =>
                 text_run.push(text)
               _ => {
-                pdf_svg_flush_text_run(output, page, text_run, safe_scale)
+                pdf_svg_flush_text_run(output, page, text_run, scale)
                 text_run.clear()
                 text_run.push(text)
               }
             }
           PdfPageItem::Path(path) => {
-            pdf_svg_flush_text_run(output, page, text_run, safe_scale)
+            pdf_svg_flush_text_run(output, page, text_run, scale)
             text_run.clear()
-            pdf_svg_path(output, page, path, safe_scale)
+            pdf_svg_path(output, page, path, scale)
           }
           PdfPageItem::Image(image) => {
-            pdf_svg_flush_text_run(output, page, text_run, safe_scale)
+            pdf_svg_flush_text_run(output, page, text_run, scale)
             text_run.clear()
-            pdf_svg_image(output, page, image, safe_scale)
+            pdf_svg_image(output, page, image, scale)
           }
           PdfPageItem::Shading(shading) => {
-            pdf_svg_flush_text_run(output, page, text_run, safe_scale)
+            pdf_svg_flush_text_run(output, page, text_run, scale)
             text_run.clear()
-            pdf_svg_shading(output, page, shading, safe_scale)
+            pdf_svg_shading(output, page, shading, scale)
           }
         }
       }
     }
   }
-  pdf_svg_flush_text_run(output, page, text_run, safe_scale)
-  pdf_svg_annotations(output, page, safe_scale)
+  pdf_svg_flush_text_run(output, page, text_run, scale)
+}
+
+///|
+fn pdf_transparency_group_of_page_item(
+  item : PdfPageItem,
+) -> PdfTransparencyGroup? {
+  match item {
+    PdfPageItem::Text(value) => value.group
+    PdfPageItem::Path(value) => value.group
+    PdfPageItem::Image(value) => value.group
+    PdfPageItem::Shading(value) => value.group
+  }
+}
+
+///|
+/// Preserve the Form boundary as an SVG compositor group. CSS can express
+/// isolation, while the explicit data attributes keep non-isolated and
+/// knockout semantics available to a future canvas/WebGL renderer.
+fn pdf_svg_transparency_group(
+  output : StringBuilder,
+  page : PdfPageModel,
+  group : PdfTransparencyGroup,
+  items : ArrayView[PdfPageItem],
+  scale : Double,
+) -> Unit {
+  let isolation = if group.isolated {
+    " style=\"isolation:isolate\""
+  } else {
+    ""
+  }
+  output.write_string(
+    "<g data-pdf-group-id=\"" +
+    pdf_escape_xml(group.id) +
+    "\" data-pdf-group-isolated=\"" +
+    pdf_svg_bool(group.isolated) +
+    "\" data-pdf-group-knockout=\"" +
+    pdf_svg_bool(group.knockout) +
+    "\"" +
+    isolation +
+    ">",
+  )
+  pdf_svg_render_items(output, page, items, scale, false)
   output.write_string("</g>")
-  output.write_string("</svg>")
-  output.to_string()
+}
+
+///|
+fn pdf_svg_bool(value : Bool) -> String {
+  if value {
+    "true"
+  } else {
+    "false"
+  }
 }
 
 ///|
@@ -114,37 +208,7 @@ fn pdf_svg_masked_item_run(
 ) -> Unit {
   pdf_svg_soft_mask_defs(output, index, page, Some(mask), scale)
   pdf_svg_soft_mask_open(output, index, Some(mask))
-  let text_run : Array[PdfTextItem] = []
-  for item in items {
-    match item {
-      PdfPageItem::Text(text) =>
-        match text_run.last() {
-          Some(previous) if pdf_svg_text_can_join(previous, text) =>
-            text_run.push(text)
-          _ => {
-            pdf_svg_flush_text_run(output, page, text_run, scale)
-            text_run.clear()
-            text_run.push(text)
-          }
-        }
-      PdfPageItem::Path(path) => {
-        pdf_svg_flush_text_run(output, page, text_run, scale)
-        text_run.clear()
-        pdf_svg_path(output, page, path, scale)
-      }
-      PdfPageItem::Image(image) => {
-        pdf_svg_flush_text_run(output, page, text_run, scale)
-        text_run.clear()
-        pdf_svg_image(output, page, image, scale)
-      }
-      PdfPageItem::Shading(shading) => {
-        pdf_svg_flush_text_run(output, page, text_run, scale)
-        text_run.clear()
-        pdf_svg_shading(output, page, shading, scale)
-      }
-    }
-  }
-  pdf_svg_flush_text_run(output, page, text_run, scale)
+  pdf_svg_render_items(output, page, items, scale, false)
   pdf_svg_soft_mask_close(output, index, Some(mask))
 }
 

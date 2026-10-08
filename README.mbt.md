@@ -22,20 +22,24 @@
 - 暴露基础 annotation layer（link、highlight、underline、strikeout、text、widget 等）
   以及 URI、颜色、边框和内容；
 - 跟踪 ExtGState 的填充/描边透明度和 SVG 可表达的 blend mode；
+- 读取 Form XObject 的 `/Group /Transparency` 边界，把 isolated/non-isolated、knockout
+  标记带入 display list；SVG 对 isolated 组使用 `isolation:isolate`，并保留 data 属性供
+  后续 Canvas/WebGL compositor 使用；
 - 对常见的彩色、路径型 tiling pattern 生成 SVG `<pattern>`，应用 pattern matrix，并把
   多段显式 clipping 以浏览器可工作的嵌套 clipPath 表达；uncolored pattern、复杂 Form
   资源和 soft mask 仍未覆盖；
 - 支持 PDF ImageMask、普通 `/Mask` color-key、图片 `/SMask`，以及常见的 Form soft
   mask；mask 会在图片的局部坐标系中合成，再交给页面 affine transform。Form mask 已处理
   `/BBox`、`/S /Alpha`、`/S /Luminosity` 和常见 `/TR` transfer function，资源字典会随
-  Form 继承。浏览器不支持的 inline CCITT mask、复杂 transparency group、backdrop
+  Form 继承。浏览器不支持的 inline CCITT mask、复杂 backdrop/knockout 合成、backdrop
   色彩空间和部分 JPEG2000/JBIG2 mask 仍保留为占位或依赖宿主解码器；
 - 提供 native CLI，方便用真实 PDF 调试，而不需要先接入浏览器。
 
 渲染器会把相邻且共享同一个 soft mask 的 display-list item 放进一个 SVG mask
 compositor group，再输出文字、路径和图片。这与 pdf.js 先合成 source group、再应用
-soft mask 的顺序一致；更复杂的 isolated/non-isolated、knockout 和嵌套透明组仍需要
-保留 Form XObject 的树形边界。
+soft mask 的顺序一致。Form XObject 的透明组边界也会保留下来；isolated 组可以直接
+映射到 SVG isolation，non-isolated 组和 knockout 组目前保留结构化标记，完整的
+backdrop/knockout 像素合成和嵌套组树仍需要 Canvas/WebGL compositor。
 
 ## 本地运行
 
@@ -79,7 +83,7 @@ moon run --target native cmd/main -- ./sample.pdf /tmp/page-3.svg 3
 | `PDFPageProxy.render(...)` | `PdfViewerDocument::render_svg(n, scale~)` / `render_svg_with_rotation(...)` |
 
 这不是声称已经达到 pdf.js 的覆盖率。字体 metrics 和 fallback、soft mask 的完整组
-合成语义、uncolored/复杂 tiling pattern、mesh shading、完整 annotation
+合成语义、透明组的完整 backdrop/knockout 合成、uncolored/复杂 tiling pattern、mesh shading、完整 annotation
 appearance/form 行为仍是后续工作；当前 API 会先把这些内容的页面位置和类型留在
 display list 中，避免宿主丢失结构化信息。现阶段 SVG 输出适合调试和建立回归基线，不能
 当作 pdf.js 的像素级替代品。

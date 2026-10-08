@@ -150,6 +150,30 @@ pub extend PdfVisualItem with ToJson::{to_json}
 
 ///|
 #deprecated
+pub extend PdfSoftMaskResource with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfSoftMaskResource with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfSoftMaskResource with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTransparencyGroup with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTransparencyGroup with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTransparencyGroup with ToJson::{to_json}
+
+///|
+#deprecated
 pub extend PdfPageItem with @debug.Debug::{to_repr}
 
 ///|

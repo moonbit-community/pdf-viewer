@@ -46,6 +46,7 @@ pub(all) struct PdfTextItem {
   blend_mode : String
   clip_path : String?
   soft_mask : PdfSoftMaskResource?
+  group : PdfTransparencyGroup?
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -101,6 +102,7 @@ pub(all) struct PdfPathItem {
   blend_mode : String
   clip_path : String?
   soft_mask : PdfSoftMaskResource?
+  group : PdfTransparencyGroup?
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -153,6 +155,7 @@ pub(all) struct PdfVisualItem {
   blend_mode : String
   clip_path : String?
   soft_mask : PdfSoftMaskResource?
+  group : PdfTransparencyGroup?
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -164,6 +167,16 @@ pub(all) struct PdfSoftMaskResource {
   bounds : PdfBounds
   luminosity : Bool
   background : String
+} derive(Eq, Debug, ToJson)
+
+///|
+/// Metadata for a Form XObject transparency group. Items remain in source
+/// paint order, while the renderer can use this marker to keep the group's
+/// source compositing boundary visible in SVG.
+pub(all) struct PdfTransparencyGroup {
+  id : String
+  isolated : Bool
+  knockout : Bool
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -833,6 +846,7 @@ priv struct PdfCollectedEntry {
   inline_image : (@syntax.PdfObject, @core.PdfBytes)?
   clip_paths : Array[@shape.PdfPath]
   soft_mask : PdfCollectedSoftMask?
+  group : PdfTransparencyGroup?
 }
 
 ///|
@@ -864,7 +878,84 @@ fn pdf_collected_entries_of_page(
     ops,
     initial.clipping_path,
     None,
+    None,
   )
+}
+
+///|
+fn pdf_name_key(text : String) -> @core.PdfName {
+  @core.pdf_name_of_bytes(@utf8.encode(text))
+}
+
+///|
+fn pdf_form_xobject_of_resources(
+  document : @pdflite.PdfDocument,
+  resources : @syntax.PdfObject,
+  name : @core.PdfName,
+) -> @syntax.PdfObject? {
+  match document.lookup_direct(pdf_name_key("/XObject"), resources) {
+    Some(xobjects) => document.lookup_direct(name, xobjects)
+    None => None
+  }
+}
+
+///|
+fn pdf_bool_entry(
+  document : @pdflite.PdfDocument,
+  key : @core.PdfName,
+  object : @syntax.PdfObject,
+  default : Bool,
+) -> Bool {
+  match document.lookup_direct(key, object) {
+    Some(@syntax.PdfBoolean(value)) => value
+    _ => default
+  }
+}
+
+///|
+/// Read the transparency group dictionary carried by a Form XObject. The
+/// group is metadata on the flattened display list; actual source paints are
+/// still collected by pdflite's normal content interpreter.
+fn pdf_transparency_group_of_form(
+  document : @pdflite.PdfDocument,
+  resources : @syntax.PdfObject,
+  name : @core.PdfName,
+  parent : PdfTransparencyGroup?,
+) -> PdfTransparencyGroup? {
+  match pdf_form_xobject_of_resources(document, resources, name) {
+    Some(xobject) =>
+      match document.lookup_direct(pdf_name_key("/Group"), xobject) {
+        Some(group_dictionary) =>
+          match document.lookup_direct(pdf_name_key("/S"), group_dictionary) {
+            Some(@syntax.PdfNameObject(subtype)) if subtype ==
+              pdf_name_key("/Transparency") => {
+              let name_text = pdf_annotation_name_text(name)
+              let id = match parent {
+                Some(value) => value.id + name_text
+                None => name_text
+              }
+              Some({
+                id,
+                isolated: pdf_bool_entry(
+                  document,
+                  pdf_name_key("/I"),
+                  group_dictionary,
+                  false,
+                ),
+                knockout: pdf_bool_entry(
+                  document,
+                  pdf_name_key("/K"),
+                  group_dictionary,
+                  false,
+                ),
+              })
+            }
+            _ => None
+          }
+        None => None
+      }
+    None => None
+  }
 }
 
 ///|
@@ -877,9 +968,11 @@ fn pdf_collected_entries_of_ops(
   ops : ArrayView[@content.PdfContentOp],
   initial_clip_paths : ArrayView[@shape.PdfPath],
   initial_soft_mask : PdfCollectedSoftMask?,
+  initial_group : PdfTransparencyGroup?,
 ) -> Array[PdfCollectedEntry] raise @core.PdfError {
   let mut state = initial
   let mut soft_mask = initial_soft_mask
+  let group = initial_group
   let mut clip_paths : Array[@shape.PdfPath] = [
     for path in initial_clip_paths => path
   ]
@@ -890,7 +983,14 @@ fn pdf_collected_entries_of_ops(
     match op {
       @content.Op_Do(name) =>
         match document.content_form_xobject_ops(resources, name) {
-          Some(form_ops) =>
+          Some(form_ops) => {
+            let form_group = pdf_transparency_group_of_form(
+              document, resources, name, group,
+            )
+            let child_group = match form_group {
+              Some(value) => Some(value)
+              None => group
+            }
             match
               (
                 document.content_form_xobject_enter_state(
@@ -913,12 +1013,13 @@ fn pdf_collected_entries_of_ops(
                 output.append(
                   pdf_collected_entries_of_ops(
                     document, form_state, form_resources, form_ops, form_clip_paths,
-                    soft_mask,
+                    soft_mask, child_group,
                   ),
                 )
               }
               _ => ()
             }
+          }
           None => {
             let result = document.content_apply_resource_op(
               state, resources, op,
@@ -933,6 +1034,7 @@ fn pdf_collected_entries_of_ops(
                   for path in clip_paths => path
                 ],
                 soft_mask,
+                group,
               })
             }
             state = result.state
@@ -950,6 +1052,7 @@ fn pdf_collected_entries_of_ops(
               for path in clip_paths => path
             ],
             soft_mask,
+            group,
           })
         }
         state = result.state
@@ -1012,6 +1115,7 @@ fn pdf_collected_entries_of_ops(
               for path in clip_paths => path
             ],
             soft_mask,
+            group,
           })
         }
         state = result.state
@@ -1084,6 +1188,7 @@ fn pdf_items_of_page(
               blend_mode: paint.blend_mode,
               clip_path,
               soft_mask,
+              group: collected.group,
             }),
           )
         }
@@ -1165,6 +1270,7 @@ fn pdf_items_of_page(
             blend_mode: paint.blend_mode,
             clip_path,
             soft_mask,
+            group: collected.group,
           }),
         )
       }
@@ -1190,6 +1296,7 @@ fn pdf_items_of_page(
             blend_mode: paint.blend_mode,
             clip_path,
             soft_mask,
+            group: collected.group,
           }),
         )
       }
@@ -1223,6 +1330,7 @@ fn pdf_items_of_page(
             blend_mode: paint.blend_mode,
             clip_path,
             soft_mask,
+            group: collected.group,
           }),
         )
       }
@@ -1247,6 +1355,7 @@ fn pdf_items_of_page(
             blend_mode: paint.blend_mode,
             clip_path,
             soft_mask,
+            group: collected.group,
           }),
         )
       }
