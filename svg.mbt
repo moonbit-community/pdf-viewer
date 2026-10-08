@@ -33,32 +33,62 @@ fn pdf_render_page_svg(
     "\">",
   )
   let text_run : Array[PdfTextItem] = []
-  for item in page.items {
-    match item {
-      PdfPageItem::Text(text) =>
-        match text_run.last() {
-          Some(previous) if pdf_svg_text_can_join(previous, text) =>
-            text_run.push(text)
-          _ => {
-            pdf_svg_flush_text_run(output, page, text_run, safe_scale)
-            text_run.clear()
-            text_run.push(text)
+  let mut item_index = 0
+  while item_index < page.items.length() {
+    let item = page.items[item_index]
+    match pdf_soft_mask_of_page_item(item) {
+      Some(mask) => {
+        pdf_svg_flush_text_run(output, page, text_run, safe_scale)
+        text_run.clear()
+        let first_index = pdf_page_item_index(item)
+        let masked_items : Array[PdfPageItem] = []
+        while item_index < page.items.length() {
+          let candidate = page.items[item_index]
+          let same_mask = match pdf_soft_mask_of_page_item(candidate) {
+            Some(value) => value == mask
+            None => false
+          }
+          if same_mask {
+            masked_items.push(pdf_page_item_without_soft_mask(candidate))
+            item_index += 1
+          } else {
+            break
           }
         }
-      PdfPageItem::Path(path) => {
-        pdf_svg_flush_text_run(output, page, text_run, safe_scale)
-        text_run.clear()
-        pdf_svg_path(output, page, path, safe_scale)
+        pdf_svg_masked_item_run(
+          output, page, first_index, mask, masked_items, safe_scale,
+        )
+        continue
       }
-      PdfPageItem::Image(image) => {
-        pdf_svg_flush_text_run(output, page, text_run, safe_scale)
-        text_run.clear()
-        pdf_svg_image(output, page, image, safe_scale)
-      }
-      PdfPageItem::Shading(shading) => {
-        pdf_svg_flush_text_run(output, page, text_run, safe_scale)
-        text_run.clear()
-        pdf_svg_shading(output, page, shading, safe_scale)
+      None => {
+        item_index += 1
+        match item {
+          PdfPageItem::Text(text) =>
+            match text_run.last() {
+              Some(previous) if pdf_svg_text_can_join(previous, text) =>
+                text_run.push(text)
+              _ => {
+                pdf_svg_flush_text_run(output, page, text_run, safe_scale)
+                text_run.clear()
+                text_run.push(text)
+              }
+            }
+          PdfPageItem::Path(path) => {
+            pdf_svg_flush_text_run(output, page, text_run, safe_scale)
+            text_run.clear()
+            pdf_svg_path(output, page, path, safe_scale)
+          }
+          PdfPageItem::Image(image) => {
+            pdf_svg_flush_text_run(output, page, text_run, safe_scale)
+            text_run.clear()
+            pdf_svg_image(output, page, image, safe_scale)
+          }
+          PdfPageItem::Shading(shading) => {
+            pdf_svg_flush_text_run(output, page, text_run, safe_scale)
+            text_run.clear()
+            pdf_svg_shading(output, page, shading, safe_scale)
+          }
+        }
       }
     }
   }
@@ -67,6 +97,87 @@ fn pdf_render_page_svg(
   output.write_string("</g>")
   output.write_string("</svg>")
   output.to_string()
+}
+
+///|
+/// Render adjacent paint items that share one active soft mask as a single
+/// source group. pdf.js composites the source group first and applies the mask
+/// to the accumulated result; keeping the mask outside the child elements
+/// avoids multiplying the same mask once per path or glyph.
+fn pdf_svg_masked_item_run(
+  output : StringBuilder,
+  page : PdfPageModel,
+  index : Int,
+  mask : PdfSoftMaskResource,
+  items : ArrayView[PdfPageItem],
+  scale : Double,
+) -> Unit {
+  pdf_svg_soft_mask_defs(output, index, page, Some(mask), scale)
+  pdf_svg_soft_mask_open(output, index, Some(mask))
+  let text_run : Array[PdfTextItem] = []
+  for item in items {
+    match item {
+      PdfPageItem::Text(text) =>
+        match text_run.last() {
+          Some(previous) if pdf_svg_text_can_join(previous, text) =>
+            text_run.push(text)
+          _ => {
+            pdf_svg_flush_text_run(output, page, text_run, scale)
+            text_run.clear()
+            text_run.push(text)
+          }
+        }
+      PdfPageItem::Path(path) => {
+        pdf_svg_flush_text_run(output, page, text_run, scale)
+        text_run.clear()
+        pdf_svg_path(output, page, path, scale)
+      }
+      PdfPageItem::Image(image) => {
+        pdf_svg_flush_text_run(output, page, text_run, scale)
+        text_run.clear()
+        pdf_svg_image(output, page, image, scale)
+      }
+      PdfPageItem::Shading(shading) => {
+        pdf_svg_flush_text_run(output, page, text_run, scale)
+        text_run.clear()
+        pdf_svg_shading(output, page, shading, scale)
+      }
+    }
+  }
+  pdf_svg_flush_text_run(output, page, text_run, scale)
+  pdf_svg_soft_mask_close(output, index, Some(mask))
+}
+
+///|
+fn pdf_soft_mask_of_page_item(item : PdfPageItem) -> PdfSoftMaskResource? {
+  match item {
+    PdfPageItem::Text(value) => value.soft_mask
+    PdfPageItem::Path(value) => value.soft_mask
+    PdfPageItem::Image(value) => value.soft_mask
+    PdfPageItem::Shading(value) => value.soft_mask
+  }
+}
+
+///|
+fn pdf_page_item_index(item : PdfPageItem) -> Int {
+  match item {
+    PdfPageItem::Text(value) => value.index
+    PdfPageItem::Path(value) => value.index
+    PdfPageItem::Image(value) => value.index
+    PdfPageItem::Shading(value) => value.index
+  }
+}
+
+///|
+fn pdf_page_item_without_soft_mask(item : PdfPageItem) -> PdfPageItem {
+  match item {
+    PdfPageItem::Text(value) => PdfPageItem::Text({ ..value, soft_mask: None, })
+    PdfPageItem::Path(value) => PdfPageItem::Path({ ..value, soft_mask: None, })
+    PdfPageItem::Image(value) =>
+      PdfPageItem::Image({ ..value, soft_mask: None, })
+    PdfPageItem::Shading(value) =>
+      PdfPageItem::Shading({ ..value, soft_mask: None, })
+  }
 }
 
 ///|

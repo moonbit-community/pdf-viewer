@@ -30,6 +30,11 @@
   色彩空间和部分 JPEG2000/JBIG2 mask 仍保留为占位或依赖宿主解码器；
 - 提供 native CLI，方便用真实 PDF 调试，而不需要先接入浏览器。
 
+渲染器会把相邻且共享同一个 soft mask 的 display-list item 放进一个 SVG mask
+compositor group，再输出文字、路径和图片。这与 pdf.js 先合成 source group、再应用
+soft mask 的顺序一致；更复杂的 isolated/non-isolated、knockout 和嵌套透明组仍需要
+保留 Form XObject 的树形边界。
+
 ## 本地运行
 
 先安装 MoonBit，然后在本目录执行：

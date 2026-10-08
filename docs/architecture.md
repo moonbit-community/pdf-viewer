@@ -49,9 +49,10 @@ nested clip paths so each additional path narrows the previous clip instead of b
 PDF ImageMask, colour-key `/Mask`, image `/SMask`, and common Form soft-mask resources are lowered
 to browser-ready mask images. A nested SVG applies image masks before the outer affine transform,
 while page-space soft-mask definitions retain their `/BBox`, backdrop sample, and transfer-map
-output. The remaining gap is the group compositor: items are still flattened before SVG output,
-so isolated/non-isolated transparency groups, knockout, and nested soft-mask accumulation need a
-group display-list representation.
+output. Adjacent items with the same soft mask are now emitted inside one SVG compositor group,
+so the mask is applied to the accumulated source paint. The remaining gap is preserving Form
+XObject boundaries in the display list: isolated/non-isolated transparency groups, knockout,
+and nested group blending still need a tree representation rather than the current flattening.
 
 The remaining implementation stages are ordered by the visible compatibility gap:
 

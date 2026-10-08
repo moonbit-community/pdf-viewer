@@ -68,6 +68,60 @@ test "soft mask transfer table applies to 8-bit samples" {
 }
 
 ///|
+test "adjacent soft-masked paint items share one compositor group" {
+  let mask : PdfSoftMaskResource = {
+    data_uri: "data:image/svg+xml;base64,AA==",
+    bounds: { min_x: 0.0, min_y: 0.0, max_x: 100.0, max_y: 100.0, },
+    luminosity: false,
+    background: "#000000",
+  }
+  let text_a : PdfTextItem = {
+    index: 0,
+    text: "A",
+    bounds: { min_x: 10.0, min_y: 70.0, max_x: 20.0, max_y: 80.0, },
+    quad: {
+      p0: { x: 10.0, y: 70.0, },
+      p1: { x: 20.0, y: 70.0, },
+      p2: { x: 20.0, y: 80.0, },
+      p3: { x: 10.0, y: 80.0, },
+    },
+    font: "Helvetica",
+    font_size: 10.0,
+    fill_alpha: 1.0,
+    blend_mode: "normal",
+    clip_path: None,
+    soft_mask: Some(mask),
+  }
+  let text_b : PdfTextItem = {
+    ..text_a,
+    index: 1,
+    text: "B",
+    bounds: { min_x: 25.0, min_y: 70.0, max_x: 35.0, max_y: 80.0, },
+    quad: {
+      p0: { x: 25.0, y: 70.0, },
+      p1: { x: 35.0, y: 70.0, },
+      p2: { x: 35.0, y: 80.0, },
+      p3: { x: 25.0, y: 80.0, },
+    },
+  }
+  let page : PdfPageModel = {
+    number: 1,
+    origin_x: 0.0,
+    origin_y: 0.0,
+    width: 100.0,
+    height: 100.0,
+    rotation: 0,
+    fonts: [],
+    items: [PdfPageItem::Text(text_a), PdfPageItem::Text(text_b)],
+    annotations: [],
+    text: "AB",
+  }
+  let svg = try! pdf_render_page_svg(page, 1.0, 0)
+  assert_eq(svg.split("<g mask=").length(), 2)
+  assert_eq(svg.split("data:image/svg+xml;base64,AA==").length(), 2)
+}
+
+///|
 test "rotated text uses its source quadrilateral" {
   let item : PdfTextItem = {
     index: 0,
