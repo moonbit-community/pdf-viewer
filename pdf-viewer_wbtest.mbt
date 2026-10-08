@@ -95,6 +95,7 @@ test "adjacent soft-masked paint items share one compositor group" {
     clip_path: None,
     soft_mask: Some(mask),
     group: None,
+    group_path: [],
   }
   let text_b : PdfTextItem = {
     ..text_a,
@@ -152,6 +153,7 @@ test "svg preserves transparency group metadata and isolation" {
     clip_path: None,
     soft_mask: None,
     group: Some(group),
+    group_path: [group],
   }
   let page : PdfPageModel = {
     number: 1,
@@ -194,6 +196,7 @@ test "rotated text uses its source quadrilateral" {
     clip_path: None,
     soft_mask: None,
     group: None,
+    group_path: [],
   }
   let page : PdfPageModel = {
     number: 1,
@@ -253,6 +256,7 @@ test "visual quads become affine SVG image transforms" {
     clip_path: None,
     soft_mask: None,
     group: None,
+    group_path: [],
   }
   let output = StringBuilder()
   pdf_svg_image(output, page, item, 1.0)
@@ -339,6 +343,7 @@ test "svg preserves paint opacity and blend mode" {
     clip_path: None,
     soft_mask: None,
     group: None,
+    group_path: [],
   }
   let page : PdfPageModel = {
     number: 1,
@@ -381,6 +386,7 @@ test "svg maps stroked PDF text rendering mode" {
     clip_path: None,
     soft_mask: None,
     group: None,
+    group_path: [],
   }
   let page : PdfPageModel = {
     number: 1,
@@ -443,6 +449,7 @@ test "svg paints a path pattern through a reusable definition" {
     clip_path: None,
     soft_mask: None,
     group: None,
+    group_path: [],
   }
   let page : PdfPageModel = {
     number: 1,
@@ -486,6 +493,7 @@ test "svg places clipping definitions before painted elements" {
     clip_path: Some("M 0 0 L 10 0 L 10 10 L 0 10 Z"),
     soft_mask: None,
     group: None,
+    group_path: [],
   }
   let page : PdfPageModel = {
     number: 1,
@@ -601,6 +609,7 @@ test "inline ImageMask keeps a browser mask resource" {
     clip_path: None,
     soft_mask: None,
     group: None,
+    group_path: [],
   }
   let page : PdfPageModel = {
     number: 1,

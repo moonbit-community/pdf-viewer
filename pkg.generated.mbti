@@ -156,6 +156,7 @@ pub(all) struct PdfPathItem {
   clip_path : String?
   soft_mask : PdfSoftMaskResource?
   group : PdfTransparencyGroup?
+  group_path : Array[PdfTransparencyGroup]
 } derive(Eq, ToJson, @debug.Debug)
 #deprecated
 pub fn PdfPathItem::equal(Self, Self) -> Bool
@@ -287,6 +288,7 @@ pub(all) struct PdfTextItem {
   clip_path : String?
   soft_mask : PdfSoftMaskResource?
   group : PdfTransparencyGroup?
+  group_path : Array[PdfTransparencyGroup]
 } derive(Eq, ToJson, @debug.Debug)
 #deprecated
 pub fn PdfTextItem::equal(Self, Self) -> Bool
@@ -361,6 +363,7 @@ pub(all) struct PdfVisualItem {
   clip_path : String?
   soft_mask : PdfSoftMaskResource?
   group : PdfTransparencyGroup?
+  group_path : Array[PdfTransparencyGroup]
 } derive(Eq, ToJson, @debug.Debug)
 #deprecated
 pub fn PdfVisualItem::equal(Self, Self) -> Bool

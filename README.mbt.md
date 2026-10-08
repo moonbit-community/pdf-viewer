@@ -23,8 +23,8 @@
   以及 URI、颜色、边框和内容；
 - 跟踪 ExtGState 的填充/描边透明度和 SVG 可表达的 blend mode；
 - 读取 Form XObject 的 `/Group /Transparency` 边界，把 isolated/non-isolated、knockout
-  标记带入 display list；SVG 对 isolated 组使用 `isolation:isolate`，并保留 data 属性供
-  后续 Canvas/WebGL compositor 使用；
+  标记和嵌套 `group_path` 带入 display list；SVG 对 isolated 组使用 `isolation:isolate`，
+  并保留 data 属性供后续 Canvas/WebGL compositor 使用；
 - 对常见的彩色、路径型 tiling pattern 生成 SVG `<pattern>`，应用 pattern matrix，并把
   多段显式 clipping 以浏览器可工作的嵌套 clipPath 表达；uncolored pattern、复杂 Form
   资源和 soft mask 仍未覆盖；
@@ -39,7 +39,7 @@
 compositor group，再输出文字、路径和图片。这与 pdf.js 先合成 source group、再应用
 soft mask 的顺序一致。Form XObject 的透明组边界也会保留下来；isolated 组可以直接
 映射到 SVG isolation，non-isolated 组和 knockout 组目前保留结构化标记，完整的
-backdrop/knockout 像素合成和嵌套组树仍需要 Canvas/WebGL compositor。
+backdrop/knockout 像素合成仍需要 Canvas/WebGL compositor。
 
 ## 本地运行
 

@@ -47,6 +47,7 @@ pub(all) struct PdfTextItem {
   clip_path : String?
   soft_mask : PdfSoftMaskResource?
   group : PdfTransparencyGroup?
+  group_path : Array[PdfTransparencyGroup]
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -103,6 +104,7 @@ pub(all) struct PdfPathItem {
   clip_path : String?
   soft_mask : PdfSoftMaskResource?
   group : PdfTransparencyGroup?
+  group_path : Array[PdfTransparencyGroup]
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -156,6 +158,7 @@ pub(all) struct PdfVisualItem {
   clip_path : String?
   soft_mask : PdfSoftMaskResource?
   group : PdfTransparencyGroup?
+  group_path : Array[PdfTransparencyGroup]
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -847,6 +850,7 @@ priv struct PdfCollectedEntry {
   clip_paths : Array[@shape.PdfPath]
   soft_mask : PdfCollectedSoftMask?
   group : PdfTransparencyGroup?
+  group_path : Array[PdfTransparencyGroup]
 }
 
 ///|
@@ -878,7 +882,7 @@ fn pdf_collected_entries_of_page(
     ops,
     initial.clipping_path,
     None,
-    None,
+    [],
   )
 }
 
@@ -968,11 +972,14 @@ fn pdf_collected_entries_of_ops(
   ops : ArrayView[@content.PdfContentOp],
   initial_clip_paths : ArrayView[@shape.PdfPath],
   initial_soft_mask : PdfCollectedSoftMask?,
-  initial_group : PdfTransparencyGroup?,
+  initial_group_path : ArrayView[PdfTransparencyGroup],
 ) -> Array[PdfCollectedEntry] raise @core.PdfError {
   let mut state = initial
   let mut soft_mask = initial_soft_mask
-  let group = initial_group
+  let group_path : Array[PdfTransparencyGroup] = [
+    for value in initial_group_path => value
+  ]
+  let group = group_path.last()
   let mut clip_paths : Array[@shape.PdfPath] = [
     for path in initial_clip_paths => path
   ]
@@ -987,9 +994,12 @@ fn pdf_collected_entries_of_ops(
             let form_group = pdf_transparency_group_of_form(
               document, resources, name, group,
             )
-            let child_group = match form_group {
-              Some(value) => Some(value)
-              None => group
+            let child_group_path : Array[PdfTransparencyGroup] = [
+              for value in group_path => value
+            ]
+            match form_group {
+              Some(value) => child_group_path.push(value)
+              None => ()
             }
             match
               (
@@ -1013,7 +1023,7 @@ fn pdf_collected_entries_of_ops(
                 output.append(
                   pdf_collected_entries_of_ops(
                     document, form_state, form_resources, form_ops, form_clip_paths,
-                    soft_mask, child_group,
+                    soft_mask, child_group_path,
                   ),
                 )
               }
@@ -1035,6 +1045,9 @@ fn pdf_collected_entries_of_ops(
                 ],
                 soft_mask,
                 group,
+                group_path: [
+                  for value in group_path => value
+                ],
               })
             }
             state = result.state
@@ -1053,6 +1066,9 @@ fn pdf_collected_entries_of_ops(
             ],
             soft_mask,
             group,
+            group_path: [
+              for value in group_path => value
+            ],
           })
         }
         state = result.state
@@ -1116,6 +1132,9 @@ fn pdf_collected_entries_of_ops(
             ],
             soft_mask,
             group,
+            group_path: [
+              for value in group_path => value
+            ],
           })
         }
         state = result.state
@@ -1189,6 +1208,7 @@ fn pdf_items_of_page(
               clip_path,
               soft_mask,
               group: collected.group,
+              group_path: collected.group_path,
             }),
           )
         }
@@ -1271,6 +1291,7 @@ fn pdf_items_of_page(
             clip_path,
             soft_mask,
             group: collected.group,
+            group_path: collected.group_path,
           }),
         )
       }
@@ -1297,6 +1318,7 @@ fn pdf_items_of_page(
             clip_path,
             soft_mask,
             group: collected.group,
+            group_path: collected.group_path,
           }),
         )
       }
@@ -1331,6 +1353,7 @@ fn pdf_items_of_page(
             clip_path,
             soft_mask,
             group: collected.group,
+            group_path: collected.group_path,
           }),
         )
       }
@@ -1356,6 +1379,7 @@ fn pdf_items_of_page(
             clip_path,
             soft_mask,
             group: collected.group,
+            group_path: collected.group_path,
           }),
         )
       }

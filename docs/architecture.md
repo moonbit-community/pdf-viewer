@@ -57,9 +57,10 @@ while page-space soft-mask definitions retain their `/BBox`, backdrop sample, an
 output. Adjacent items with the same soft mask are now emitted inside one SVG compositor group,
 so the mask is applied to the accumulated source paint. Form XObject transparency dictionaries
 are also read into each flattened item, preserving the source group id and its isolated/knockout
-flags. SVG maps isolated groups to `isolation:isolate`; a future canvas/WebGL compositor can use
-the data attributes for non-isolated backdrops and knockout. Exact nested group trees and their
-pixel compositing are still beyond the current flat display-list model.
+flags, including a `group_path` for nested Forms. SVG maps isolated groups to
+`isolation:isolate`; a future canvas/WebGL compositor can use the data attributes for
+non-isolated backdrops and knockout. Exact backdrop and knockout pixel compositing remains
+outside the current SVG lowering.
 
 The remaining implementation stages are ordered by the visible compatibility gap:
 

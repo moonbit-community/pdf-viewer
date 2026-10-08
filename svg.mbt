@@ -32,7 +32,7 @@ fn pdf_render_page_svg(
     ) +
     "\">",
   )
-  pdf_svg_render_items(output, page, page.items[:], safe_scale, true)
+  pdf_svg_render_items(output, page, page.items[:], safe_scale, 0)
   pdf_svg_annotations(output, page, safe_scale)
   output.write_string("</g>")
   output.write_string("</svg>")
@@ -48,20 +48,22 @@ fn pdf_svg_render_items(
   page : PdfPageModel,
   items : ArrayView[PdfPageItem],
   scale : Double,
-  honor_groups : Bool,
+  group_depth : Int,
 ) -> Unit {
   let text_run : Array[PdfTextItem] = []
   let mut item_index = 0
   while item_index < items.length() {
     let item = items[item_index]
-    if honor_groups {
-      match pdf_transparency_group_of_page_item(item) {
+    if group_depth >= 0 {
+      match pdf_transparency_group_at_depth(item, group_depth) {
         Some(group) => {
+          pdf_svg_flush_text_run(output, page, text_run, scale)
+          text_run.clear()
           let first = item_index
           item_index += 1
           while item_index < items.length() {
             let same_group = match
-              pdf_transparency_group_of_page_item(items[item_index]) {
+              pdf_transparency_group_at_depth(items[item_index], group_depth) {
               Some(candidate) => candidate == group
               None => false
             }
@@ -77,6 +79,7 @@ fn pdf_svg_render_items(
             group,
             items[first:item_index],
             scale,
+            group_depth,
           )
           continue
         }
@@ -91,10 +94,21 @@ fn pdf_svg_render_items(
         let masked_items : Array[PdfPageItem] = []
         while item_index < items.length() {
           let candidate = items[item_index]
-          let same_mask = match pdf_soft_mask_of_page_item(candidate) {
-            Some(value) => value == mask
-            None => false
+          let same_scope = match
+            (
+              pdf_transparency_group_at_depth(item, group_depth),
+              pdf_transparency_group_at_depth(candidate, group_depth),
+            ) {
+            (Some(first_group), Some(candidate_group)) =>
+              first_group == candidate_group
+            (None, None) => true
+            _ => false
           }
+          let same_mask = same_scope &&
+            (match pdf_soft_mask_of_page_item(candidate) {
+              Some(value) => value == mask
+              None => false
+            })
           if same_mask {
             masked_items.push(pdf_page_item_without_soft_mask(candidate))
             item_index += 1
@@ -103,7 +117,7 @@ fn pdf_svg_render_items(
           }
         }
         pdf_svg_masked_item_run(
-          output, page, first_index, mask, masked_items, scale,
+          output, page, first_index, mask, masked_items, scale, group_depth,
         )
       }
       None => {
@@ -142,14 +156,20 @@ fn pdf_svg_render_items(
 }
 
 ///|
-fn pdf_transparency_group_of_page_item(
+fn pdf_transparency_group_at_depth(
   item : PdfPageItem,
+  depth : Int,
 ) -> PdfTransparencyGroup? {
-  match item {
-    PdfPageItem::Text(value) => value.group
-    PdfPageItem::Path(value) => value.group
-    PdfPageItem::Image(value) => value.group
-    PdfPageItem::Shading(value) => value.group
+  if depth < 0 {
+    None
+  } else {
+    let groups = match item {
+      PdfPageItem::Text(value) => value.group_path
+      PdfPageItem::Path(value) => value.group_path
+      PdfPageItem::Image(value) => value.group_path
+      PdfPageItem::Shading(value) => value.group_path
+    }
+    groups.get(depth)
   }
 }
 
@@ -163,6 +183,7 @@ fn pdf_svg_transparency_group(
   group : PdfTransparencyGroup,
   items : ArrayView[PdfPageItem],
   scale : Double,
+  group_depth : Int,
 ) -> Unit {
   let isolation = if group.isolated {
     " style=\"isolation:isolate\""
@@ -180,7 +201,7 @@ fn pdf_svg_transparency_group(
     isolation +
     ">",
   )
-  pdf_svg_render_items(output, page, items, scale, false)
+  pdf_svg_render_items(output, page, items, scale, group_depth + 1)
   output.write_string("</g>")
 }
 
@@ -205,10 +226,11 @@ fn pdf_svg_masked_item_run(
   mask : PdfSoftMaskResource,
   items : ArrayView[PdfPageItem],
   scale : Double,
+  group_depth : Int,
 ) -> Unit {
   pdf_svg_soft_mask_defs(output, index, page, Some(mask), scale)
   pdf_svg_soft_mask_open(output, index, Some(mask))
-  pdf_svg_render_items(output, page, items, scale, false)
+  pdf_svg_render_items(output, page, items, scale, group_depth)
   pdf_svg_soft_mask_close(output, index, Some(mask))
 }
 
