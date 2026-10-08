@@ -70,7 +70,7 @@ test "viewer exposes pdfjs-style page surfaces" {
   assert_eq(viewport.height, page.width * 2.0)
   assert_eq(viewport.rotation, 90)
   assert_eq(viewport.matrix, [0.0, 2.0, 2.0, 0.0, 0.0, 0.0])
-  assert_true(viewport.transform.contains("rotate(90)"))
+  assert_true(viewport.transform.contains("matrix(0 2 2 0"))
   let content = viewer.text_content(1) catch { _ => None }
   guard content is Some(content) else { fail("text content should exist") }
   assert_eq(content.items.length(), 10)
@@ -84,4 +84,8 @@ test "viewer exposes pdfjs-style page surfaces" {
   guard rotated is Some(rotated) else { fail("rotated page should render") }
   assert_true(rotated.contains("viewBox=\"0 0 200 200\""))
   assert_true(rotated.contains("rotate(90)"))
+  let invalid = viewer.render_svg_with_rotation(1, 45, scale=1.0) catch {
+    _ => None
+  }
+  assert_eq(invalid, None)
 }

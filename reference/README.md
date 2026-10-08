@@ -10,7 +10,7 @@ corpus is large. It was cloned for feature and fixture comparison only.
 Useful comparison areas:
 
 - `src/display/api.js`: document/page/viewport contracts;
-- `src/display/display_utils.js`: viewport transforms;
+- `src/display/page_viewport.js`: viewport transforms;
 - `src/display/text_layer.js`: positioned text and selection behavior;
 - `test/pdfs/`: compatibility and regression corpus;
 - `test/unit/`: focused parser/display utility tests.

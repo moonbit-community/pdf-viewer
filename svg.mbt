@@ -3,9 +3,10 @@ fn pdf_render_page_svg(
   page : PdfPageModel,
   scale : Double,
   rotation : Int,
-) -> String {
+) -> String raise @core.PdfError {
   let safe_scale = if scale <= 0.0 { 1.0 } else { scale }
-  let viewport = page.viewport(scale=safe_scale, rotation~)
+  let normalized_rotation = pdf_normalize_rotation_strict(rotation)
+  let viewport = page.viewport(scale=safe_scale, rotation=normalized_rotation)
   let width = viewport.width
   let height = viewport.height
   let output = StringBuilder()
@@ -22,7 +23,15 @@ fn pdf_render_page_svg(
   )
   pdf_svg_fonts(output, page)
   output.write_string("<rect width=\"100%\" height=\"100%\" fill=\"white\"/>")
-  output.write_string("<g transform=\"" + viewport.transform + "\">")
+  output.write_string(
+    "<g transform=\"" +
+    pdf_svg_relative_viewport_transform(
+      page.width * safe_scale,
+      page.height * safe_scale,
+      viewport.rotation,
+    ) +
+    "\">",
+  )
   let text_run : Array[PdfTextItem] = []
   for item in page.items {
     match item {
@@ -49,11 +58,12 @@ fn pdf_render_page_svg(
       PdfPageItem::Shading(shading) => {
         pdf_svg_flush_text_run(output, page, text_run, safe_scale)
         text_run.clear()
-        pdf_svg_placeholder(output, page, shading, safe_scale, "shading")
+        pdf_svg_shading(output, page, shading, safe_scale)
       }
     }
   }
   pdf_svg_flush_text_run(output, page, text_run, safe_scale)
+  pdf_svg_annotations(output, page, safe_scale)
   output.write_string("</g>")
   output.write_string("</svg>")
   output.to_string()
@@ -83,7 +93,8 @@ fn pdf_svg_text_can_join(previous : PdfTextItem, current : PdfTextItem) -> Bool 
   let current_angle = pdf_text_angle(current)
   (previous.bounds.max_y - current.bounds.max_y).abs() <= line_threshold &&
   previous.font == current.font &&
-  (previous_angle - current_angle).abs() <= 0.01
+  (previous_angle - current_angle).abs() <= 0.01 &&
+  previous.clip_path == current.clip_path
 }
 
 ///|
@@ -141,8 +152,12 @@ fn pdf_svg_text(
   } else {
     "normal"
   }
+  let clip_attribute = pdf_svg_clip_attribute(first.index, first.clip_path)
+  pdf_svg_clip_defs(output, first.index, first.clip_path)
   output.write_string(
-    "<text x=\"" +
+    "<text" +
+    clip_attribute +
+    " x=\"" +
     x +
     "\" y=\"" +
     y.to_string() +
@@ -156,7 +171,11 @@ fn pdf_svg_text(
     weight +
     "\" font-style=\"" +
     style +
-    "\" dominant-baseline=\"hanging\">" +
+    "\" fill-opacity=\"" +
+    first.fill_alpha.to_string() +
+    "\"" +
+    pdf_svg_blend_style(first.blend_mode) +
+    " dominant-baseline=\"hanging\">" +
     pdf_escape_xml(value.to_string()) +
     "</text>",
   )
@@ -236,7 +255,14 @@ fn pdf_svg_path(
   path : PdfPathItem,
   scale : Double,
 ) -> Unit {
-  let fill = if path.filled { path.fill_color } else { "none" }
+  let fill = if path.filled {
+    match path.pattern {
+      Some(_) => "url(#pdf-pattern-" + path.index.to_string() + ")"
+      None => path.fill_color
+    }
+  } else {
+    "none"
+  }
   let stroke = if path.stroked { path.stroke_color } else { "none" }
   let transformed = pdf_transform_svg_path(path.svg_path, page.height, scale)
   let dash = if path.dash_array.length() == 0 {
@@ -248,8 +274,13 @@ fn pdf_svg_path(
     (path.dash_phase * scale).to_string() +
     "\""
   }
+  let clip_attribute = pdf_svg_clip_attribute(path.index, path.clip_path)
+  pdf_svg_clip_defs(output, path.index, path.clip_path)
+  pdf_svg_pattern_defs(output, path)
   output.write_string(
-    "<path d=\"" +
+    "<path" +
+    clip_attribute +
+    " d=\"" +
     transformed +
     "\" transform=\"scale(" +
     scale.to_string() +
@@ -277,9 +308,31 @@ fn pdf_svg_path(
     "\" stroke-linejoin=\"" +
     pdf_svg_line_join(path.line_join) +
     "\"" +
+    pdf_svg_blend_style(path.blend_mode) +
     dash +
     "/>",
   )
+}
+
+///|
+fn pdf_svg_pattern_defs(output : StringBuilder, path : PdfPathItem) -> Unit {
+  match path.pattern {
+    Some(pattern) => {
+      let id = "pdf-pattern-" + path.index.to_string()
+      output.write_string(
+        "<defs><pattern id=\"" +
+        id +
+        "\" patternUnits=\"userSpaceOnUse\" patternContentUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" width=\"" +
+        pattern.x_step.to_string() +
+        "\" height=\"" +
+        pattern.y_step.to_string() +
+        "\">" +
+        pattern.tile_svg +
+        "</pattern></defs>",
+      )
+    }
+    None => ()
+  }
 }
 
 ///|
@@ -329,8 +382,15 @@ fn pdf_svg_image(
           let y = (page.origin_y + page.height - item.bounds.max_y) * scale
           let width = (item.bounds.max_x - item.bounds.min_x) * scale
           let height = (item.bounds.max_y - item.bounds.min_y) * scale
+          let clip_attribute = pdf_svg_clip_attribute(
+            item.index,
+            item.clip_path,
+          )
+          pdf_svg_clip_defs(output, item.index, item.clip_path)
           output.write_string(
-            "<image data-pdf-name=\"" +
+            "<image" +
+            clip_attribute +
+            " data-pdf-name=\"" +
             pdf_escape_xml(item.name) +
             "\" x=\"" +
             x.to_string() +
@@ -342,13 +402,152 @@ fn pdf_svg_image(
             height.to_string() +
             "\" preserveAspectRatio=\"none\" href=\"" +
             data_uri +
-            "\"/>",
+            "\" opacity=\"" +
+            item.fill_alpha.to_string() +
+            "\"" +
+            pdf_svg_blend_style(item.blend_mode) +
+            "/>",
           )
         }
         None => pdf_svg_placeholder(output, page, item, scale, "image")
       }
     None => pdf_svg_placeholder(output, page, item, scale, "image")
   }
+}
+
+///|
+fn pdf_svg_shading(
+  output : StringBuilder,
+  page : PdfPageModel,
+  item : PdfVisualItem,
+  scale : Double,
+) -> Unit {
+  match item.shading {
+    Some(shading) if shading.stops.length() > 0 => {
+      let gradient_id = "pdf-shading-" +
+        item.index.to_string() +
+        "-" +
+        item.name.replace(old="/", new="-")
+      let x = (item.bounds.min_x - page.origin_x) * scale
+      let y = (page.origin_y + page.height - item.bounds.max_y) * scale
+      let width = (item.bounds.max_x - item.bounds.min_x) * scale
+      let height = (item.bounds.max_y - item.bounds.min_y) * scale
+      let clip_attribute = pdf_svg_clip_attribute(item.index, item.clip_path)
+      pdf_svg_clip_defs(output, item.index, item.clip_path)
+      output.write_string("<defs>")
+      if shading.kind == "axial" && shading.coords.length() >= 4 {
+        output.write_string(
+          "<linearGradient id=\"" +
+          pdf_escape_xml(gradient_id) +
+          "\" gradientUnits=\"userSpaceOnUse\" x1=\"" +
+          pdf_svg_shading_x(page, shading.coords[0], scale).to_string() +
+          "\" y1=\"" +
+          pdf_svg_shading_y(page, shading.coords[1], scale).to_string() +
+          "\" x2=\"" +
+          pdf_svg_shading_x(page, shading.coords[2], scale).to_string() +
+          "\" y2=\"" +
+          pdf_svg_shading_y(page, shading.coords[3], scale).to_string() +
+          "\" spreadMethod=\"pad\">",
+        )
+        pdf_svg_gradient_stops(output, shading.stops)
+        output.write_string("</linearGradient>")
+      } else if shading.kind == "radial" && shading.coords.length() >= 6 {
+        output.write_string(
+          "<radialGradient id=\"" +
+          pdf_escape_xml(gradient_id) +
+          "\" gradientUnits=\"userSpaceOnUse\" cx=\"" +
+          pdf_svg_shading_x(page, shading.coords[3], scale).to_string() +
+          "\" cy=\"" +
+          pdf_svg_shading_y(page, shading.coords[4], scale).to_string() +
+          "\" r=\"" +
+          (shading.coords[5].abs() * scale).to_string() +
+          "\" fx=\"" +
+          pdf_svg_shading_x(page, shading.coords[0], scale).to_string() +
+          "\" fy=\"" +
+          pdf_svg_shading_y(page, shading.coords[1], scale).to_string() +
+          "\" fr=\"" +
+          (shading.coords[2].abs() * scale).to_string() +
+          "\" spreadMethod=\"pad\">",
+        )
+        pdf_svg_gradient_stops(output, shading.stops)
+        output.write_string("</radialGradient>")
+      } else {
+        output.write_string(
+          "<linearGradient id=\"" +
+          pdf_escape_xml(gradient_id) +
+          "\" gradientUnits=\"objectBoundingBox\">",
+        )
+        pdf_svg_gradient_stops(output, shading.stops)
+        output.write_string("</linearGradient>")
+      }
+      output.write_string(
+        "</defs>" +
+        "<rect" +
+        clip_attribute +
+        " data-pdf-kind=\"shading\" data-pdf-name=\"" +
+        pdf_escape_xml(item.name) +
+        "\" x=\"" +
+        x.to_string() +
+        "\" y=\"" +
+        y.to_string() +
+        "\" width=\"" +
+        width.to_string() +
+        "\" height=\"" +
+        height.to_string() +
+        "\" fill-opacity=\"" +
+        item.fill_alpha.to_string() +
+        "\"" +
+        pdf_svg_blend_style(item.blend_mode) +
+        " fill=\"url(#" +
+        pdf_escape_xml(gradient_id) +
+        ")\"/>",
+      )
+    }
+    _ => pdf_svg_placeholder(output, page, item, scale, "shading")
+  }
+}
+
+///|
+fn pdf_svg_gradient_stops(
+  output : StringBuilder,
+  stops : ArrayView[PdfGradientStop],
+) -> Unit {
+  for stop in stops {
+    output.write_string(
+      "<stop offset=\"" +
+      (stop.offset * 100.0).to_string() +
+      "%\" stop-color=\"" +
+      pdf_escape_xml(stop.color) +
+      "\"/>",
+    )
+  }
+}
+
+///|
+fn pdf_svg_blend_style(blend_mode : String) -> String {
+  if blend_mode == "normal" || blend_mode == "" {
+    ""
+  } else {
+    " style=\"mix-blend-mode:" + pdf_escape_xml(blend_mode) + ";\""
+  }
+}
+
+///|
+fn pdf_svg_shading_x(
+  page : PdfPageModel,
+  value : Double,
+  scale : Double,
+) -> Double {
+  (value - page.origin_x) * scale
+}
+
+///|
+fn pdf_svg_shading_y(
+  page : PdfPageModel,
+  value : Double,
+  scale : Double,
+) -> Double {
+  (page.origin_y + page.height - value) * scale
 }
 
 ///|
@@ -363,8 +562,12 @@ fn pdf_svg_placeholder(
   let y = (page.origin_y + page.height - item.bounds.max_y) * scale
   let width = (item.bounds.max_x - item.bounds.min_x) * scale
   let height = (item.bounds.max_y - item.bounds.min_y) * scale
+  let clip_attribute = pdf_svg_clip_attribute(item.index, item.clip_path)
+  pdf_svg_clip_defs(output, item.index, item.clip_path)
   output.write_string(
-    "<g data-pdf-kind=\"" +
+    "<g" +
+    clip_attribute +
+    " data-pdf-kind=\"" +
     kind +
     "\" data-pdf-name=\"" +
     pdf_escape_xml(item.name) +
@@ -381,6 +584,189 @@ fn pdf_svg_placeholder(
     pdf_escape_xml(kind + ": " + item.name) +
     "</title></g>",
   )
+}
+
+///|
+fn pdf_svg_annotations(
+  output : StringBuilder,
+  page : PdfPageModel,
+  scale : Double,
+) -> Unit {
+  for annotation in page.annotations {
+    pdf_svg_annotation(output, page, annotation, scale)
+  }
+}
+
+///|
+fn pdf_svg_annotation(
+  output : StringBuilder,
+  page : PdfPageModel,
+  annotation : PdfAnnotationItem,
+  scale : Double,
+) -> Unit {
+  let x = (annotation.bounds.min_x - page.origin_x) * scale
+  let y = (page.origin_y + page.height - annotation.bounds.max_y) * scale
+  let width = (annotation.bounds.max_x - annotation.bounds.min_x) * scale
+  let height = (annotation.bounds.max_y - annotation.bounds.min_y) * scale
+  let color = match annotation.color {
+    Some(value) => value
+    None =>
+      match annotation.subtype {
+        "highlight" => "#facc15"
+        "underline" => "#2563eb"
+        "strikeout" => "#dc2626"
+        _ => "#2563eb"
+      }
+  }
+  let stroke_width = if annotation.border_width * scale < 0.5 {
+    0.5
+  } else {
+    annotation.border_width * scale
+  }
+  let dash = if annotation.border_dash.length() > 0 {
+    " stroke-dasharray=\"" +
+    pdf_svg_annotation_dash(annotation.border_dash, scale) +
+    "\""
+  } else if annotation.border_style == "dashed" {
+    " stroke-dasharray=\"4 3\""
+  } else {
+    ""
+  }
+  let name = "data-pdf-annotation-index=\"" +
+    annotation.index.to_string() +
+    "\" data-pdf-annotation-type=\"" +
+    pdf_escape_xml(annotation.subtype) +
+    "\""
+  match annotation.uri {
+    Some(uri) =>
+      output.write_string(
+        "<a href=\"" +
+        pdf_escape_xml(uri) +
+        "\" target=\"_blank\" " +
+        name +
+        ">",
+      )
+    None => ()
+  }
+  match annotation.subtype {
+    "highlight" =>
+      output.write_string(
+        "<rect " +
+        name +
+        " x=\"" +
+        x.to_string() +
+        "\" y=\"" +
+        y.to_string() +
+        "\" width=\"" +
+        width.to_string() +
+        "\" height=\"" +
+        height.to_string() +
+        "\" fill=\"" +
+        color +
+        "\" fill-opacity=\"0.35\" stroke=\"none\"/>",
+      )
+    "underline" =>
+      output.write_string(
+        "<line " +
+        name +
+        " x1=\"" +
+        x.to_string() +
+        "\" y1=\"" +
+        (y + height).to_string() +
+        "\" x2=\"" +
+        (x + width).to_string() +
+        "\" y2=\"" +
+        (y + height).to_string() +
+        "\" stroke=\"" +
+        color +
+        "\" stroke-width=\"" +
+        stroke_width.to_string() +
+        "\"/>",
+      )
+    "strikeout" =>
+      output.write_string(
+        "<line " +
+        name +
+        " x1=\"" +
+        x.to_string() +
+        "\" y1=\"" +
+        (y + height / 2.0).to_string() +
+        "\" x2=\"" +
+        (x + width).to_string() +
+        "\" y2=\"" +
+        (y + height / 2.0).to_string() +
+        "\" stroke=\"" +
+        color +
+        "\" stroke-width=\"" +
+        stroke_width.to_string() +
+        "\"/>",
+      )
+    "text" => {
+      let radius = 6.0.max(width.min(height) / 3.0)
+      output.write_string(
+        "<g " +
+        name +
+        "><circle cx=\"" +
+        (x + radius).to_string() +
+        "\" cy=\"" +
+        (y + radius).to_string() +
+        "\" r=\"" +
+        radius.to_string() +
+        "\" fill=\"" +
+        color +
+        "\" fill-opacity=\"0.9\" stroke=\"white\" stroke-width=\"1\"/>" +
+        pdf_svg_annotation_title(annotation) +
+        "</g>",
+      )
+    }
+    _ =>
+      output.write_string(
+        "<rect " +
+        name +
+        " x=\"" +
+        x.to_string() +
+        "\" y=\"" +
+        y.to_string() +
+        "\" width=\"" +
+        width.to_string() +
+        "\" height=\"" +
+        height.to_string() +
+        "\" fill=\"none\" stroke=\"" +
+        color +
+        "\" stroke-width=\"" +
+        stroke_width.to_string() +
+        "\"" +
+        dash +
+        "/>" +
+        pdf_svg_annotation_title(annotation),
+      )
+  }
+  match annotation.uri {
+    Some(_) => output.write_string("</a>")
+    None => ()
+  }
+}
+
+///|
+fn pdf_svg_annotation_title(annotation : PdfAnnotationItem) -> String {
+  match annotation.contents {
+    Some(contents) => "<title>" + pdf_escape_xml(contents) + "</title>"
+    None => ""
+  }
+}
+
+///|
+fn pdf_svg_annotation_dash(values : ArrayView[Int], scale : Double) -> String {
+  let output = StringBuilder()
+  let mut first = true
+  for value in values {
+    if !first {
+      output.write_char(' ')
+    }
+    first = false
+    output.write_string((value.to_double() * scale).to_string())
+  }
+  output.to_string()
 }
 
 ///|
@@ -407,6 +793,101 @@ fn pdf_transform_svg_path(
 }
 
 ///|
+/// Serialize explicit PDF clipping paths in page-space SVG coordinates.
+fn pdf_svg_clip_path_of_shapes(
+  paths : ArrayView[@shape.PdfPath],
+  origin_x : Double,
+  origin_y : Double,
+  page_height : Double,
+) -> String? {
+  let output = StringBuilder()
+  let mut found = false
+  for path in paths {
+    match pdf_shape_bounds(path) {
+      Some(bounds) => {
+        let value = pdf_svg_path_of_shape(
+          path, origin_x, origin_y, page_height, bounds,
+        )
+        if value != "" {
+          if found {
+            output.write_string("||")
+          }
+          found = true
+          output.write_string(value)
+        }
+      }
+      None => ()
+    }
+  }
+  if found {
+    Some(output.to_string())
+  } else {
+    None
+  }
+}
+
+///|
+fn pdf_svg_clip_defs(
+  output : StringBuilder,
+  index : Int,
+  clip_path : String?,
+) -> Unit {
+  match clip_path {
+    Some(path) => {
+      let parts : Array[String] = []
+      for part in path.split("||") {
+        parts.push(part.to_owned())
+      }
+      let base = "pdf-clip-" + index.to_string()
+      output.write_string("<defs>")
+      for part_index, part in parts {
+        let id = pdf_svg_clip_id(base, parts.length(), part_index)
+        output.write_string("<clipPath id=\"" + id + "\">")
+        if part_index == 0 {
+          output.write_string("<path d=\"" + part + "\"/>")
+        } else {
+          let previous = pdf_svg_clip_id(base, parts.length(), part_index - 1)
+          output.write_string(
+            "<g clip-path=\"url(#" +
+            previous +
+            ")\"><path d=\"" +
+            part +
+            "\"/></g>",
+          )
+        }
+        output.write_string("</clipPath>")
+      }
+      output.write_string("</defs>")
+    }
+    None => ()
+  }
+}
+
+///|
+fn pdf_svg_clip_attribute(index : Int, clip_path : String?) -> String {
+  match clip_path {
+    Some(path) => {
+      let mut count = 0
+      for _ in path.split("||") {
+        count += 1
+      }
+      let base = "pdf-clip-" + index.to_string()
+      " clip-path=\"url(#" + pdf_svg_clip_id(base, count, count - 1) + ")\""
+    }
+    None => ""
+  }
+}
+
+///|
+fn pdf_svg_clip_id(base : String, count : Int, index : Int) -> String {
+  if count == 1 {
+    base
+  } else {
+    base + "-" + index.to_string()
+  }
+}
+
+///|
 fn pdf_svg_path_of_shape(
   path : @shape.PdfPath,
   origin_x : Double,
@@ -414,28 +895,28 @@ fn pdf_svg_path_of_shape(
   page_height : Double,
   target_bounds : PdfBounds,
 ) -> String {
-  let source_bounds = pdf_shape_bounds(path)
-  let scale_x = match source_bounds {
-    Some(bounds) if bounds.max_x > bounds.min_x &&
-      target_bounds.max_x > target_bounds.min_x =>
-      (target_bounds.max_x - target_bounds.min_x) /
-      (bounds.max_x - bounds.min_x)
-    _ => 1.0
-  }
-  let scale_y = match source_bounds {
-    Some(bounds) if bounds.max_y > bounds.min_y &&
-      target_bounds.max_y > target_bounds.min_y =>
-      (target_bounds.max_y - target_bounds.min_y) /
-      (bounds.max_y - bounds.min_y)
-    _ => 1.0
-  }
-  let source_min_x = match source_bounds {
-    Some(bounds) => bounds.min_x
-    None => 0.0
-  }
-  let source_min_y = match source_bounds {
-    Some(bounds) => bounds.min_y
-    None => 0.0
+  pdf_svg_path_of_shape_with_quad(path, origin_x, origin_y, page_height, {
+    p0: { x: target_bounds.min_x, y: target_bounds.min_y, },
+    p1: { x: target_bounds.min_x, y: target_bounds.max_y, },
+    p2: { x: target_bounds.max_x, y: target_bounds.max_y, },
+    p3: { x: target_bounds.max_x, y: target_bounds.min_y, },
+  })
+}
+
+///|
+/// Serialize a path using the four-corner affine mapping emitted by pdflite.
+/// This keeps rotations and shears intact instead of stretching the path to
+/// its axis-aligned bounding box.
+fn pdf_svg_path_of_shape_with_quad(
+  path : @shape.PdfPath,
+  origin_x : Double,
+  origin_y : Double,
+  page_height : Double,
+  target_quad : PdfQuad,
+) -> String {
+  let source_bounds = match pdf_shape_bounds(path) {
+    Some(bounds) => bounds
+    None => { min_x: 0.0, min_y: 0.0, max_x: 0.0, max_y: 0.0, }
   }
   let output = StringBuilder()
   for subpath in path.subpaths {
@@ -446,42 +927,36 @@ fn pdf_svg_path_of_shape(
       @shape.PdfPathSegment::PdfPathStraight(start, end) => {
         output.write_string(
           "M " +
-          pdf_svg_point(
-            start, origin_x, origin_y, page_height, source_min_x, source_min_y, scale_x,
-            scale_y, target_bounds,
+          pdf_svg_point_from_quad(
+            start, origin_x, origin_y, page_height, source_bounds, target_quad,
           ),
         )
         output.write_string(
           " L " +
-          pdf_svg_point(
-            end, origin_x, origin_y, page_height, source_min_x, source_min_y, scale_x,
-            scale_y, target_bounds,
+          pdf_svg_point_from_quad(
+            end, origin_x, origin_y, page_height, source_bounds, target_quad,
           ),
         )
       }
       @shape.PdfPathSegment::PdfPathBezier(start, c1, c2, end) => {
         output.write_string(
           "M " +
-          pdf_svg_point(
-            start, origin_x, origin_y, page_height, source_min_x, source_min_y, scale_x,
-            scale_y, target_bounds,
+          pdf_svg_point_from_quad(
+            start, origin_x, origin_y, page_height, source_bounds, target_quad,
           ),
         )
         output.write_string(
           " C " +
-          pdf_svg_point(
-            c1, origin_x, origin_y, page_height, source_min_x, source_min_y, scale_x,
-            scale_y, target_bounds,
+          pdf_svg_point_from_quad(
+            c1, origin_x, origin_y, page_height, source_bounds, target_quad,
           ) +
           " " +
-          pdf_svg_point(
-            c2, origin_x, origin_y, page_height, source_min_x, source_min_y, scale_x,
-            scale_y, target_bounds,
+          pdf_svg_point_from_quad(
+            c2, origin_x, origin_y, page_height, source_bounds, target_quad,
           ) +
           " " +
-          pdf_svg_point(
-            end, origin_x, origin_y, page_height, source_min_x, source_min_y, scale_x,
-            scale_y, target_bounds,
+          pdf_svg_point_from_quad(
+            end, origin_x, origin_y, page_height, source_bounds, target_quad,
           ),
         )
       }
@@ -491,27 +966,23 @@ fn pdf_svg_path_of_shape(
         @shape.PdfPathSegment::PdfPathStraight(_, end) =>
           output.write_string(
             " L " +
-            pdf_svg_point(
-              end, origin_x, origin_y, page_height, source_min_x, source_min_y, scale_x,
-              scale_y, target_bounds,
+            pdf_svg_point_from_quad(
+              end, origin_x, origin_y, page_height, source_bounds, target_quad,
             ),
           )
         @shape.PdfPathSegment::PdfPathBezier(_, c1, c2, end) =>
           output.write_string(
             " C " +
-            pdf_svg_point(
-              c1, origin_x, origin_y, page_height, source_min_x, source_min_y, scale_x,
-              scale_y, target_bounds,
+            pdf_svg_point_from_quad(
+              c1, origin_x, origin_y, page_height, source_bounds, target_quad,
             ) +
             " " +
-            pdf_svg_point(
-              c2, origin_x, origin_y, page_height, source_min_x, source_min_y, scale_x,
-              scale_y, target_bounds,
+            pdf_svg_point_from_quad(
+              c2, origin_x, origin_y, page_height, source_bounds, target_quad,
             ) +
             " " +
-            pdf_svg_point(
-              end, origin_x, origin_y, page_height, source_min_x, source_min_y, scale_x,
-              scale_y, target_bounds,
+            pdf_svg_point_from_quad(
+              end, origin_x, origin_y, page_height, source_bounds, target_quad,
             ),
           )
       }
@@ -565,18 +1036,31 @@ fn pdf_shape_bounds_add_point(
 }
 
 ///|
-fn pdf_svg_point(
+fn pdf_svg_point_from_quad(
   point : @geometry.Point2,
   origin_x : Double,
   origin_y : Double,
   page_height : Double,
-  source_min_x : Double,
-  source_min_y : Double,
-  scale_x : Double,
-  scale_y : Double,
-  target_bounds : PdfBounds,
+  source_bounds : PdfBounds,
+  target_quad : PdfQuad,
 ) -> String {
-  let x = target_bounds.min_x + (point.x - source_min_x) * scale_x
-  let y = target_bounds.min_y + (point.y - source_min_y) * scale_y
+  let x_ratio = if source_bounds.max_x > source_bounds.min_x {
+    (point.x - source_bounds.min_x) /
+    (source_bounds.max_x - source_bounds.min_x)
+  } else {
+    0.0
+  }
+  let y_ratio = if source_bounds.max_y > source_bounds.min_y {
+    (point.y - source_bounds.min_y) /
+    (source_bounds.max_y - source_bounds.min_y)
+  } else {
+    0.0
+  }
+  let x = target_quad.p0.x +
+    x_ratio * (target_quad.p3.x - target_quad.p0.x) +
+    y_ratio * (target_quad.p1.x - target_quad.p0.x)
+  let y = target_quad.p0.y +
+    x_ratio * (target_quad.p3.y - target_quad.p0.y) +
+    y_ratio * (target_quad.p1.y - target_quad.p0.y)
   (x - origin_x).to_string() + " " + (origin_y + page_height - y).to_string()
 }

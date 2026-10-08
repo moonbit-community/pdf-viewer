@@ -81,6 +81,34 @@ fn pdf_image_resource_of_object(
 }
 
 ///|
+/// Build the same browser resource for an inline image operator.
+///
+/// `pdflite` exposes inline-image bytes through `PdfContentOp`, while its
+/// JSON entry intentionally keeps only the geometry. Reconstructing a
+/// transient image stream here lets the viewer retain the payload without
+/// changing pdflite's public content-entry model.
+fn pdf_inline_image_resource_of(
+  document : @pdflite.PdfDocument,
+  resources : @syntax.PdfObject,
+  name : String,
+  dictionary : @syntax.PdfObject,
+  data : Bytes,
+) -> PdfImageResource? {
+  try {
+    let image_dictionary = dictionary.add_dict_entry(
+      pdf_image_name("/Length"),
+      @syntax.PdfInteger(data.length()),
+    )
+    let image = @syntax.pdf_stream(image_dictionary, StreamGot(data))
+    pdf_image_resource_of_object(document, resources, name, image)
+  } catch {
+    _ => None
+  } noraise {
+    resource => Some(resource)
+  }
+}
+
+///|
 fn pdf_image_name(text : String) -> @core.PdfName {
   let value = if text.has_prefix("/") { text } else { "/" + text }
   @core.pdf_name_of_bytes(@utf8.encode(value))

@@ -10,11 +10,19 @@
 - 以一基页码访问页面，暴露 `PdfPageModel`、`PdfTextContent` 和 paint-order
   display list；
 - 计算带缩放和旋转的 `PdfViewport`，旋转语义与 pdf.js 的顺时针页面旋转一致；
-- 将文字和矢量路径输出为自包含 SVG，并保留图片、shading 的位置占位信息；
+- 将文字、矢量路径、图片和渐变输出为自包含 SVG；JPEG、原始像素图片和 inline image
+  会转成浏览器可用的 data URL。JPEG2000、JBIG2 会保留原始媒体类型和 bytes，是否能
+  在浏览器中显示取决于宿主解码器；暂不支持的 mesh shading 会保留可见占位层；
 - 保留文字原始四边形，遇到旋转文字时按 glyph 方向生成 SVG transform；路径 display
   list 保留线帽、连接方式和虚线参数；
 - 按 PDF 用户空间矩形返回文本、边界和源 display-list item 索引，供上层做
   cursor/框选和 Agent 上下文压缩；
+- 暴露基础 annotation layer（link、highlight、underline、strikeout、text、widget 等）
+  以及 URI、颜色、边框和内容；
+- 跟踪 ExtGState 的填充/描边透明度和 SVG 可表达的 blend mode；
+- 对常见的彩色、路径型 tiling pattern 生成 SVG `<pattern>`，并把多段显式 clipping
+  以嵌套 clipPath 表达；pattern matrix、uncolored pattern、复杂 Form 资源和 soft mask
+  仍未覆盖；
 - 提供 native CLI，方便用真实 PDF 调试，而不需要先接入浏览器。
 
 ## 本地运行
@@ -33,6 +41,15 @@ moon run --target native cmd/main -- input.pdf [output.svg]
 moon run --target native cmd/main -- ./sample.pdf /tmp/page-1.svg
 ```
 
+也可以指定页码：
+
+```bash
+moon run --target native cmd/main -- ./sample.pdf /tmp/page-3.svg 3
+```
+
+这个命令只负责调试输入文件和输出 SVG；浏览器宿主可以直接调用同一组
+`open_document`、`page`、`render_svg` API。
+
 `reference/pdf.js` 是本地对照 checkout，不会随项目提交；当前对照版本记录在
 [`reference/README.md`](reference/README.md) 中。它的 `test/pdfs` corpus 用来驱动
 后续逐特性兼容测试。
@@ -49,9 +66,14 @@ moon run --target native cmd/main -- ./sample.pdf /tmp/page-1.svg
 | `PDFPageProxy.getOperatorList()` | `PdfViewerDocument::operator_list(n)` |
 | `PDFPageProxy.render(...)` | `PdfViewerDocument::render_svg(n, scale~)` / `render_svg_with_rotation(...)` |
 
-这不是声称已经达到 pdf.js 的覆盖率。图片解码、字体嵌入与字体 fallback、透明度
-和 blend mode、annotation/form layer、渐变和复杂 clipping 仍是后续工作；当前 API
-先把这些内容的页面位置和类型留在 display list 中，避免宿主丢失结构化信息。
+这不是声称已经达到 pdf.js 的覆盖率。字体 metrics 和 fallback、soft mask、pattern
+matrix、uncolored/复杂 tiling pattern、mesh shading、完整 annotation appearance/form
+行为仍是后续工作；当前 API 会先把这些内容的页面位置和类型留在 display list 中，避免
+宿主丢失结构化信息。现阶段 SVG 输出适合调试和建立回归基线，不能当作 pdf.js 的像素级
+替代品。
+
+旋转参数按 pdf.js 规则只接受 `0/90/180/270`（允许等价的负数和大于 360 的整数）；
+SVG 渲染遇到其它角度会返回 `PageRotationExpected`，不会静默近似成另一个角度。
 
 ## 参考实现和测试策略
 

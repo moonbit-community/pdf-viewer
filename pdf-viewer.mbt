@@ -39,6 +39,9 @@ pub(all) struct PdfTextItem {
   quad : PdfQuad
   font : String
   font_size : Double
+  fill_alpha : Double
+  blend_mode : String
+  clip_path : String?
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -52,6 +55,20 @@ pub(all) struct PdfFontResource {
   mime_type : String
   format : String
   data_uri : String?
+} derive(Eq, Debug, ToJson)
+
+///|
+/// A browser-ready coloured tiling pattern.
+///
+/// `tile_svg` contains the pattern cell's paint operations in the pattern's
+/// local coordinate system. The SVG renderer installs it in a reusable
+/// `<pattern>` definition when a path uses this resource.
+pub(all) struct PdfPatternResource {
+  name : String
+  bbox : PdfBounds
+  x_step : Double
+  y_step : Double
+  tile_svg : String
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -75,6 +92,9 @@ pub(all) struct PdfPathItem {
   line_join : Int
   dash_array : Array[Double]
   dash_phase : Double
+  pattern : PdfPatternResource?
+  blend_mode : String
+  clip_path : String?
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -92,12 +112,54 @@ pub(all) struct PdfImageResource {
 } derive(Eq, Debug, ToJson)
 
 ///|
+/// One sampled colour in a PDF function shading.
+pub(all) struct PdfGradientStop {
+  offset : Double
+  color : String
+} derive(Eq, Debug, ToJson)
+
+///|
+/// A browser-ready description of a PDF shading resource.
+pub(all) struct PdfShadingResource {
+  name : String
+  kind : String
+  coords : Array[Double]
+  stops : Array[PdfGradientStop]
+  extend_start : Bool
+  extend_end : Bool
+} derive(Eq, Debug, ToJson)
+
+///|
 /// An image or shading item in page paint order.
 pub(all) struct PdfVisualItem {
   index : Int
   bounds : PdfBounds
   name : String
   resource : PdfImageResource?
+  shading : PdfShadingResource?
+  fill_alpha : Double
+  stroke_alpha : Double
+  blend_mode : String
+  clip_path : String?
+} derive(Eq, Debug, ToJson)
+
+///|
+/// A page annotation exposed to the standalone renderer and host adapters.
+///
+/// The typed fields keep the annotation layer independent from pdflite's PDF
+/// object dictionaries while preserving the rectangle, visual style, text,
+/// and link target needed by a read-only viewer.
+pub(all) struct PdfAnnotationItem {
+  index : Int
+  subtype : String
+  bounds : PdfBounds
+  contents : String?
+  subject : String?
+  color : String?
+  border_width : Double
+  border_style : String
+  border_dash : Array[Int]
+  uri : String?
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -121,6 +183,7 @@ pub(all) struct PdfPageModel {
   rotation : Int
   fonts : Array[PdfFontResource]
   items : Array[PdfPageItem]
+  annotations : Array[PdfAnnotationItem]
   text : String
 } derive(Eq, Debug, ToJson)
 
@@ -149,6 +212,39 @@ pub(all) struct PdfViewport {
   matrix : Array[Double]
   transform : String
 } derive(Eq, Debug, ToJson)
+
+///|
+/// Convert a PDF user-space point to viewport coordinates, matching pdf.js'
+/// `PageViewport.convertToViewportPoint`.
+pub fn PdfViewport::convert_to_viewport_point(
+  self : PdfViewport,
+  point : PdfPoint,
+) -> PdfPoint {
+  {
+    x: self.matrix[0] * point.x + self.matrix[2] * point.y + self.matrix[4],
+    y: self.matrix[1] * point.x + self.matrix[3] * point.y + self.matrix[5],
+  }
+}
+
+///|
+/// Convert a viewport point back to PDF user-space coordinates, matching
+/// pdf.js' `PageViewport.convertToPdfPoint`.
+pub fn PdfViewport::convert_to_pdf_point(
+  self : PdfViewport,
+  point : PdfPoint,
+) -> PdfPoint {
+  let a = self.matrix[0]
+  let b = self.matrix[1]
+  let c = self.matrix[2]
+  let d = self.matrix[3]
+  let e = self.matrix[4]
+  let f = self.matrix[5]
+  let determinant = a * d - b * c
+  {
+    x: (d * (point.x - e) - c * (point.y - f)) / determinant,
+    y: (-b * (point.x - e) + a * (point.y - f)) / determinant,
+  }
+}
 
 ///|
 /// Text content exposed in the shape used by browser PDF viewers.
@@ -327,40 +423,46 @@ pub fn PdfPageModel::viewport(
   let normalized_rotation = pdf_normalize_rotation(rotation)
   let scaled_width = self.width * safe_scale
   let scaled_height = self.height * safe_scale
-  let (width, height, matrix, transform) = match normalized_rotation {
-    90 =>
-      (
-        scaled_height,
-        scaled_width,
-        [0.0, safe_scale, safe_scale, 0.0, 0.0, 0.0],
-        "translate(" + scaled_height.to_string() + " 0) rotate(90)",
-      )
-    180 =>
-      (
-        scaled_width,
-        scaled_height,
-        [-safe_scale, 0.0, 0.0, safe_scale, scaled_width, 0.0],
-        "translate(" +
-        scaled_width.to_string() +
-        " " +
-        scaled_height.to_string() +
-        ") rotate(180)",
-      )
-    270 =>
-      (
-        scaled_height,
-        scaled_width,
-        [0.0, -safe_scale, -safe_scale, 0.0, scaled_height, scaled_width],
-        "translate(0 " + scaled_width.to_string() + ") rotate(-90)",
-      )
-    _ =>
-      (
-        scaled_width,
-        scaled_height,
-        [safe_scale, 0.0, 0.0, -safe_scale, 0.0, scaled_height],
-        "translate(0 0)",
-      )
+  let (rotate_a, rotate_b, rotate_c, rotate_d) = match normalized_rotation {
+    90 => (0.0, 1.0, 1.0, 0.0)
+    180 => (-1.0, 0.0, 0.0, 1.0)
+    270 => (0.0, -1.0, -1.0, 0.0)
+    _ => (1.0, 0.0, 0.0, -1.0)
   }
+  let center_x = self.origin_x + self.width / 2.0
+  let center_y = self.origin_y + self.height / 2.0
+  let (width, height, offset_x, offset_y) = if rotate_a == 0.0 {
+    (
+      scaled_height,
+      scaled_width,
+      (center_y - self.origin_y).abs() * safe_scale,
+      (center_x - self.origin_x).abs() * safe_scale,
+    )
+  } else {
+    (
+      scaled_width,
+      scaled_height,
+      (center_x - self.origin_x).abs() * safe_scale,
+      (center_y - self.origin_y).abs() * safe_scale,
+    )
+  }
+  let matrix = [
+    rotate_a * safe_scale,
+    rotate_b * safe_scale,
+    rotate_c * safe_scale,
+    rotate_d * safe_scale,
+    offset_x -
+    rotate_a * safe_scale * center_x -
+    rotate_c * safe_scale * center_y,
+    offset_y -
+    rotate_b * safe_scale * center_x -
+    rotate_d * safe_scale * center_y,
+  ]
+  // Keep this field identical to pdf.js' `PageViewport.transform`: it maps
+  // PDF user-space coordinates directly into the top-left viewport. The SVG
+  // serializer uses a separate relative transform because page items already
+  // have their media-box origin removed.
+  let transform = "matrix(" + pdf_svg_matrix_values(matrix) + ")"
   {
     width,
     height,
@@ -368,6 +470,37 @@ pub fn PdfPageModel::viewport(
     rotation: normalized_rotation,
     matrix,
     transform,
+  }
+}
+
+///|
+fn pdf_svg_matrix_values(values : ArrayView[Double]) -> String {
+  let output = StringBuilder()
+  for index, value in values {
+    if index > 0 {
+      output.write_char(' ')
+    }
+    output.write_string(value.to_string())
+  }
+  output.to_string()
+}
+
+///|
+fn pdf_svg_relative_viewport_transform(
+  width : Double,
+  height : Double,
+  rotation : Int,
+) -> String {
+  match rotation {
+    90 => "translate(" + height.to_string() + " 0) rotate(90)"
+    180 =>
+      "translate(" +
+      width.to_string() +
+      " " +
+      height.to_string() +
+      ") rotate(180)"
+    270 => "translate(0 " + width.to_string() + ") rotate(-90)"
+    _ => "translate(0 0)"
   }
 }
 
@@ -396,16 +529,21 @@ fn pdf_normalize_rotation(rotation : Int) -> Int {
   if value < 0 {
     value += 360
   }
-  if value < 45 {
-    0
-  } else if value < 135 {
-    90
-  } else if value < 225 {
-    180
-  } else if value < 315 {
-    270
-  } else {
-    0
+  match value {
+    0 | 90 | 180 | 270 => value
+    _ => 0
+  }
+}
+
+///|
+fn pdf_normalize_rotation_strict(rotation : Int) -> Int raise @core.PdfError {
+  let mut value = rotation % 360
+  if value < 0 {
+    value += 360
+  }
+  match value {
+    0 | 90 | 180 | 270 => value
+    _ => raise @core.PageRotationExpected(rotation)
   }
 }
 
@@ -415,7 +553,7 @@ fn pdf_page_model(
   page : @page.PdfPage,
   page_number : Int,
 ) -> PdfPageModel raise @core.PdfError {
-  let rectangle = document.parse_rectangle(page.mediabox)
+  let rectangle = pdf_page_view_box(document, page)
   let items = pdf_items_of_page(
     document,
     page,
@@ -425,6 +563,7 @@ fn pdf_page_model(
   )
   let text = pdf_text_of_items(items)
   let fonts = pdf_font_resources_of_items(document, page_number, items)
+  let annotations = pdf_annotation_items_of_page(document, page)
   {
     number: page_number,
     origin_x: rectangle.min_x,
@@ -434,7 +573,153 @@ fn pdf_page_model(
     rotation: @page.pdf_page_int_of_rotation(page.rotate),
     fonts,
     items,
+    annotations,
     text,
+  }
+}
+
+///|
+/// PDF.js exposes the effective page view box (CropBox when present, otherwise
+/// MediaBox). pdflite keeps inherited page dictionaries in `rest`, so resolve
+/// that box here while leaving content parsing anchored to the source MediaBox.
+fn pdf_page_view_box(
+  document : @pdflite.PdfDocument,
+  page : @page.PdfPage,
+) -> @geometry.PdfRectangle raise @core.PdfError {
+  let crop_name = @core.pdf_name_of_bytes(@utf8.encode("/CropBox"))
+  match document.lookup_direct(crop_name, page.rest) {
+    Some(cropbox) => document.parse_rectangle(cropbox)
+    None => document.parse_rectangle(page.mediabox)
+  }
+}
+
+///|
+fn pdf_annotation_items_of_page(
+  document : @pdflite.PdfDocument,
+  page : @page.PdfPage,
+) -> Array[PdfAnnotationItem] raise @core.PdfError {
+  let annotations = document.annotations_of_page(page)
+  [
+    for index, annotation in annotations => {
+      let rectangle = annotation.rectangle
+      {
+        index,
+        subtype: pdf_annotation_subtype_name(annotation.subtype),
+        bounds: {
+          min_x: rectangle.min_x,
+          min_y: rectangle.min_y,
+          max_x: rectangle.max_x,
+          max_y: rectangle.max_y,
+        },
+        contents: pdf_annotation_text(annotation.contents),
+        subject: pdf_annotation_text(annotation.subject),
+        color: match annotation.colour {
+          Some(colour) =>
+            Some(pdf_annotation_rgb_hex(colour.red, colour.green, colour.blue))
+          None => None
+        },
+        border_width: annotation.border.width,
+        border_style: pdf_annotation_border_style(annotation.border.style),
+        border_dash: annotation.border.dash_array,
+        uri: pdf_annotation_uri(document, annotation.rest),
+      }
+    }
+  ]
+}
+
+///|
+fn pdf_annotation_subtype_name(
+  subtype : @annotation.PdfAnnotationSubtype,
+) -> String {
+  match subtype {
+    @annotation.AnnotationText => "text"
+    @annotation.AnnotationLink => "link"
+    @annotation.AnnotationFreeText => "free-text"
+    @annotation.AnnotationLine => "line"
+    @annotation.AnnotationSquare => "square"
+    @annotation.AnnotationCircle => "circle"
+    @annotation.AnnotationPolygon => "polygon"
+    @annotation.AnnotationPolyLine => "polyline"
+    @annotation.AnnotationHighlight => "highlight"
+    @annotation.AnnotationUnderline => "underline"
+    @annotation.AnnotationSquiggly => "squiggly"
+    @annotation.AnnotationStrikeOut => "strikeout"
+    @annotation.AnnotationStamp => "stamp"
+    @annotation.AnnotationCaret => "caret"
+    @annotation.AnnotationInk => "ink"
+    @annotation.AnnotationPopup(_) => "popup"
+    @annotation.AnnotationFileAttachment => "file-attachment"
+    @annotation.AnnotationSound => "sound"
+    @annotation.AnnotationMovie => "movie"
+    @annotation.AnnotationWidget => "widget"
+    @annotation.AnnotationScreen => "screen"
+    @annotation.AnnotationPrinterMark => "printer-mark"
+    @annotation.AnnotationTrapNet => "trap-net"
+    @annotation.AnnotationWatermark => "watermark"
+    @annotation.AnnotationThreeDee => "three-dee"
+    @annotation.AnnotationUnknown(name) => pdf_annotation_name_text(name)
+  }
+}
+
+///|
+fn pdf_annotation_name_text(name : @core.PdfName) -> String {
+  try @utf8.decode(name.bytes()[:]) catch {
+    _ => "unknown"
+  } noraise {
+    value => value
+  }
+}
+
+///|
+fn pdf_annotation_text(data : Bytes?) -> String? {
+  match data {
+    Some(bytes) =>
+      try Some(@utf8.decode(bytes[:])) catch {
+        _ => None
+      } noraise {
+        value => value
+      }
+    None => None
+  }
+}
+
+///|
+fn pdf_annotation_border_style(
+  style : @annotation.PdfAnnotationStyle,
+) -> String {
+  match style {
+    @annotation.AnnotationNoStyle => "none"
+    @annotation.AnnotationSolid => "solid"
+    @annotation.AnnotationDashed => "dashed"
+    @annotation.AnnotationBeveled => "beveled"
+    @annotation.AnnotationInset => "inset"
+    @annotation.AnnotationUnderlineStyle => "underline"
+  }
+}
+
+///|
+fn pdf_annotation_rgb_hex(red : Int, green : Int, blue : Int) -> String {
+  pdf_rgb_hex(
+    red.to_double() / 255.0,
+    green.to_double() / 255.0,
+    blue.to_double() / 255.0,
+  )
+}
+
+///|
+fn pdf_annotation_uri(
+  document : @pdflite.PdfDocument,
+  rest : @syntax.PdfObject,
+) -> String? {
+  let action_name = @core.pdf_name_of_bytes(@utf8.encode("/A"))
+  let uri_name = @core.pdf_name_of_bytes(@utf8.encode("/URI"))
+  match document.lookup_direct(action_name, rest) {
+    Some(action) =>
+      match document.lookup_direct(uri_name, action) {
+        Some(@syntax.PdfString(data)) => pdf_annotation_text(Some(data))
+        _ => None
+      }
+    None => None
   }
 }
 
@@ -521,9 +806,19 @@ fn pdf_items_of_page(
   height : Double,
 ) -> Array[PdfPageItem] raise @core.PdfError {
   let entries = document.content_entries_of_page(page)
+  let paint_attributes = pdf_paint_attributes_of_page(document, page)
+  let inline_images = pdf_inline_image_payloads_of_page(document, page)
   let items : Array[PdfPageItem] = Array(capacity=entries.length())
+  let mut inline_index = 0
   for index, entry in entries {
     let bounds = pdf_bounds_of_quad(entry.bounding_box)
+    let paint = pdf_paint_attributes_at(paint_attributes, index)
+    let clip_path = pdf_clip_path_of_entry_state(
+      entry.state,
+      origin_x,
+      origin_y,
+      height,
+    )
     match entry.object {
       @pdflite.PdfContentGlyphObject(_, _, text) =>
         if text != "" {
@@ -546,6 +841,9 @@ fn pdf_items_of_page(
               quad: pdf_quad_of_box(entry.bounding_box),
               font: state.font,
               font_size: state.font_size,
+              fill_alpha: paint.fill_alpha,
+              blend_mode: paint.blend_mode,
+              clip_path,
             }),
           )
         }
@@ -559,8 +857,26 @@ fn pdf_items_of_page(
           line_join,
           dash_array,
           dash_phase,
+          pattern,
         ) = match entry.state {
-          @pdflite.PdfContentStatePath(state) =>
+          @pdflite.PdfContentStatePath(state) => {
+            // pdflite 0.2.2 currently records `scn` in the stroke colour
+            // slot and `SCN` in the non-stroke slot. Look in both slots so a
+            // named tiling fill remains visible until that dependency is
+            // corrected; the path's fill flag controls SVG usage.
+            let pattern_name = match state.colour_non_stroke {
+              @pdflite.PdfContentColourNamed(name, _) => Some(name)
+              _ =>
+                match state.colour_stroke {
+                  @pdflite.PdfContentColourNamed(name, _) => Some(name)
+                  _ => None
+                }
+            }
+            let pattern = match pattern_name {
+              Some(name) =>
+                pdf_pattern_resource_of(document, page.resources, name)
+              None => None
+            }
             (
               pdf_colour_hex(state.colour_non_stroke),
               pdf_colour_hex(state.colour_stroke),
@@ -569,54 +885,560 @@ fn pdf_items_of_page(
               state.line_join,
               state.dash_pattern.array,
               state.dash_pattern.phase,
+              pattern,
             )
-          _ => ("#202124", "#202124", 1.0, 0, 0, [], 0.0)
+          }
+          _ => ("#202124", "#202124", 1.0, 0, 0, [], 0.0, None)
         }
         items.push(
           PdfPageItem::Path({
             index,
             bounds,
-            svg_path: pdf_svg_path_of_shape(
+            svg_path: pdf_svg_path_of_shape_with_quad(
               drawn.path,
               origin_x,
               origin_y,
               height,
-              bounds,
+              pdf_quad_of_box(entry.bounding_box),
             ),
             filled: drawn.filled,
             stroked: drawn.stroked,
             fill_color,
             stroke_color,
-            fill_alpha: 1.0,
-            stroke_alpha: 1.0,
+            fill_alpha: paint.fill_alpha,
+            stroke_alpha: paint.stroke_alpha,
             line_width,
             line_cap,
             line_join,
             dash_array,
             dash_phase,
+            pattern,
+            blend_mode: paint.blend_mode,
+            clip_path,
           }),
         )
       }
       @pdflite.PdfContentImageObject(name) => {
         let resource = pdf_image_resource_of(document, page, name)
-        items.push(PdfPageItem::Image({ index, bounds, name, resource, }))
-      }
-      @pdflite.PdfContentInlineImageObject =>
         items.push(
           PdfPageItem::Image({
             index,
             bounds,
-            name: "inline-image",
-            resource: None,
+            name,
+            resource,
+            shading: None,
+            fill_alpha: paint.fill_alpha,
+            stroke_alpha: paint.stroke_alpha,
+            blend_mode: paint.blend_mode,
+            clip_path,
           }),
         )
-      @pdflite.PdfContentShadingObject(name) =>
+      }
+      @pdflite.PdfContentInlineImageObject => {
+        let name = "inline-image-" + inline_index.to_string()
+        let resource = if inline_index < inline_images.length() {
+          match inline_images[inline_index] {
+            (dictionary, data, resources) =>
+              pdf_inline_image_resource_of(
+                document, resources, name, dictionary, data,
+              )
+          }
+        } else {
+          None
+        }
+        inline_index += 1
         items.push(
-          PdfPageItem::Shading({ index, bounds, name, resource: None, }),
+          PdfPageItem::Image({
+            index,
+            bounds,
+            name,
+            resource,
+            shading: None,
+            fill_alpha: paint.fill_alpha,
+            stroke_alpha: paint.stroke_alpha,
+            blend_mode: paint.blend_mode,
+            clip_path,
+          }),
         )
+      }
+      @pdflite.PdfContentShadingObject(name) => {
+        let shading = pdf_shading_resource_of(document, page, name)
+        items.push(
+          PdfPageItem::Shading({
+            index,
+            bounds,
+            name,
+            resource: None,
+            shading,
+            fill_alpha: paint.fill_alpha,
+            stroke_alpha: paint.stroke_alpha,
+            blend_mode: paint.blend_mode,
+            clip_path,
+          }),
+        )
+      }
     }
   }
   items
+}
+
+///|
+/// Convert an entry's clipping state into SVG page-space path data. `pdflite`
+/// prepends each explicit clip to the existing state, so the page boundary
+/// installed by the PDF interpreter is the final path. The browser's SVG
+/// viewport already supplies that clip, so only explicit additional clips are
+/// serialized.
+fn pdf_clip_path_of_entry_state(
+  state : @pdflite.PdfContentState,
+  origin_x : Double,
+  origin_y : Double,
+  height : Double,
+) -> String? {
+  let paths = match state {
+    @pdflite.PdfContentStateGlyph(value) => value.clipping_path
+    @pdflite.PdfContentStatePath(value) => value.clipping_path
+    @pdflite.PdfContentStateClipping(value) => value.clipping_path
+  }
+  if paths.length() <= 1 {
+    None
+  } else {
+    let explicit_paths = [
+      for index in 0..<(paths.length() - 1) => paths[index]
+    ]
+    pdf_svg_clip_path_of_shapes(explicit_paths, origin_x, origin_y, height)
+  }
+}
+
+///|
+/// The part of the graphics state that the SVG serializer can apply directly.
+priv struct PdfPaintAttributes {
+  fill_alpha : Double
+  stroke_alpha : Double
+  blend_mode : String
+}
+
+///|
+fn pdf_paint_attributes_default() -> PdfPaintAttributes {
+  { fill_alpha: 1.0, stroke_alpha: 1.0, blend_mode: "normal", }
+}
+
+///|
+fn pdf_paint_attributes_at(
+  attributes : ArrayView[PdfPaintAttributes],
+  index : Int,
+) -> PdfPaintAttributes {
+  if index < attributes.length() {
+    attributes[index]
+  } else {
+    pdf_paint_attributes_default()
+  }
+}
+
+///|
+/// Collect paint state in the same order as pdflite's recursive content
+/// entries. The public entry model does not include ExtGState alpha or blend
+/// mode, so this small parallel walk keeps that renderer state in the viewer.
+fn pdf_paint_attributes_of_page(
+  document : @pdflite.PdfDocument,
+  page : @page.PdfPage,
+) -> Array[PdfPaintAttributes] raise @core.PdfError {
+  let rectangle = document.parse_rectangle(page.mediabox)
+  let initial = @pdflite.pdf_content_initial_operator_state(
+    rectangle.min_x,
+    rectangle.min_y,
+    rectangle.max_x,
+    rectangle.max_y,
+  )
+  let ops = document.parse_content_ops_with_resources(
+    page.resources,
+    page.content,
+  )
+  pdf_paint_attributes_of_ops(document, initial, page.resources, ops)
+}
+
+///|
+fn pdf_paint_attributes_of_ops(
+  document : @pdflite.PdfDocument,
+  initial : @pdflite.PdfContentOperatorState,
+  resources : @syntax.PdfObject,
+  ops : ArrayView[@content.PdfContentOp],
+) -> Array[PdfPaintAttributes] raise @core.PdfError {
+  let output : Array[PdfPaintAttributes] = []
+  let mut state = initial
+  for op in ops {
+    match op {
+      @content.Op_Do(name) =>
+        match document.content_form_xobject_ops(resources, name) {
+          Some(form_ops) =>
+            match
+              (
+                document.content_form_xobject_enter_state(
+                  state, resources, name,
+                ),
+                document.content_form_xobject_resources(resources, name),
+              ) {
+              (Some(form_state), Some(form_resources)) =>
+                output.append(
+                  pdf_paint_attributes_of_ops(
+                    document, form_state, form_resources, form_ops,
+                  ),
+                )
+              _ => ()
+            }
+          None => output.push(pdf_paint_attributes_of_state(state))
+        }
+      @content.Op_InlineImage(_, _, _) =>
+        output.push(pdf_paint_attributes_of_state(state))
+      @content.Op_sh(name) =>
+        match
+          document.content_shading_entry_from_resources(state, resources, name) {
+          Some(_) => output.push(pdf_paint_attributes_of_state(state))
+          None => ()
+        }
+      @content.Op_gs(name) =>
+        state = pdf_apply_extgstate_for_viewer(document, state, resources, name)
+      _ => {
+        let result = document.content_apply_resource_op(state, resources, op)
+        for _ in result.entries {
+          output.push(pdf_paint_attributes_of_state(result.state))
+        }
+        state = result.state
+      }
+    }
+  }
+  output
+}
+
+///|
+/// Resolve `/ExtGState /Name` explicitly before applying it. This keeps the
+/// viewer independent from the JSON entry's intentionally compact state view.
+fn pdf_apply_extgstate_for_viewer(
+  document : @pdflite.PdfDocument,
+  state : @pdflite.PdfContentOperatorState,
+  resources : @syntax.PdfObject,
+  name : @core.PdfName,
+) -> @pdflite.PdfContentOperatorState raise @core.PdfError {
+  let extgstate_name = @core.pdf_name_of_bytes(@utf8.encode("/ExtGState"))
+  match document.lookup_direct(extgstate_name, resources) {
+    Some(extgstates) =>
+      match document.lookup_direct(name, extgstates) {
+        Some(extgstate) => {
+          let mut output = state
+          output = document.content_apply_extgstate_graphics_parameter_op(
+            output, extgstate,
+          )
+          output = document.content_apply_extgstate_dash_op(output, extgstate)
+          output = document.content_apply_extgstate_font_op(output, extgstate)
+          output = document.content_apply_extgstate_overprint_op(
+            output, extgstate,
+          )
+          output = document.content_apply_extgstate_transfer_op(
+            output, extgstate,
+          )
+          output = document.content_apply_extgstate_halftone_op(
+            output, extgstate,
+          )
+          output = document.content_apply_extgstate_rendering_op(
+            output, extgstate,
+          )
+          output = document.content_apply_extgstate_compositing_op(
+            output, extgstate,
+          )
+          output = document.content_apply_extgstate_alpha_op(output, extgstate)
+          output = document.content_apply_extgstate_text_op(output, extgstate)
+          output
+        }
+        None => state
+      }
+    None => state
+  }
+}
+
+///|
+fn pdf_paint_attributes_of_state(
+  state : @pdflite.PdfContentOperatorState,
+) -> PdfPaintAttributes {
+  {
+    fill_alpha: state.alpha_constant_non_stroke,
+    stroke_alpha: state.alpha_constant_stroke,
+    blend_mode: pdf_svg_blend_mode(state.blend_mode),
+  }
+}
+
+///|
+fn pdf_svg_blend_mode(value : @syntax.PdfObject) -> String {
+  match value {
+    @syntax.PdfNameObject(name) => {
+      let text = pdf_annotation_name_text(name).to_lower()
+      let text = if text.has_prefix("/") { text[1:].to_owned() } else { text }
+      match text {
+        "normal" | "compatible" => "normal"
+        "colordodge" => "color-dodge"
+        "colorburn" => "color-burn"
+        "hardlight" => "hard-light"
+        "softlight" => "soft-light"
+        _ => text
+      }
+    }
+    _ => "normal"
+  }
+}
+
+///|
+/// Collect inline image payloads in the same recursive paint order used by
+/// `content_entries_of_page`. Form XObjects are entered with their merged
+/// resource dictionary; image XObjects have no inline payload to collect.
+fn pdf_inline_image_payloads_of_page(
+  document : @pdflite.PdfDocument,
+  page : @page.PdfPage,
+) -> Array[(@syntax.PdfObject, Bytes, @syntax.PdfObject)] raise @core.PdfError {
+  let ops = document.parse_content_ops_with_resources(
+    page.resources,
+    page.content,
+  )
+  pdf_inline_image_payloads_of_ops(document, page.resources, ops)
+}
+
+///|
+fn pdf_inline_image_payloads_of_ops(
+  document : @pdflite.PdfDocument,
+  resources : @syntax.PdfObject,
+  ops : ArrayView[@content.PdfContentOp],
+) -> Array[(@syntax.PdfObject, Bytes, @syntax.PdfObject)] raise @core.PdfError {
+  let output : Array[(@syntax.PdfObject, Bytes, @syntax.PdfObject)] = []
+  for op in ops {
+    match op {
+      @content.Op_InlineImage(dictionary, _, data) =>
+        output.push((dictionary, data, resources))
+      @content.Op_Do(name) =>
+        match document.content_form_xobject_ops(resources, name) {
+          Some(form_ops) =>
+            match document.content_form_xobject_resources(resources, name) {
+              Some(form_resources) =>
+                output.append(
+                  pdf_inline_image_payloads_of_ops(
+                    document, form_resources, form_ops,
+                  ),
+                )
+              None => ()
+            }
+          None => ()
+        }
+      _ => ()
+    }
+  }
+  output
+}
+
+///|
+fn pdf_shading_resource_of(
+  document : @pdflite.PdfDocument,
+  page : @page.PdfPage,
+  name : String,
+) -> PdfShadingResource? {
+  let shading_dictionary_name = pdf_image_name("/Shading")
+  let shading_name = pdf_image_name(name)
+  match document.lookup_direct(shading_dictionary_name, page.resources) {
+    Some(shadings) =>
+      match document.lookup_direct(shading_name, shadings) {
+        Some(shading) =>
+          try
+            Some(pdf_shading_resource_of_object(document, name, shading))
+          catch {
+            _ => None
+          } noraise {
+            value => value
+          }
+        None => None
+      }
+    None => None
+  }
+}
+
+///|
+fn pdf_shading_resource_of_object(
+  document : @pdflite.PdfDocument,
+  name : String,
+  object : @syntax.PdfObject,
+) -> PdfShadingResource raise @core.PdfError {
+  let shading = document.content_read_shading(
+    @geometry.transform_identity_matrix,
+    @syntax.PdfNull,
+    object,
+  )
+  match shading.shading {
+    @pdflite.PdfContentAxialShading(axial) => {
+      let (x0, y0, x1, y1) = axial.axialshading_coords
+      let (domain_min, domain_max) = axial.axialshading_domain
+      {
+        name,
+        kind: "axial",
+        coords: [x0, y0, x1, y1],
+        stops: pdf_shading_stops(
+          axial.axialshading_function,
+          domain_min,
+          domain_max,
+          shading.shading_colourspace,
+        ),
+        extend_start: axial.axialshading_extend.0,
+        extend_end: axial.axialshading_extend.1,
+      }
+    }
+    @pdflite.PdfContentRadialShading(radial) => {
+      let (x0, y0, r0, x1, y1, r1) = radial.radialshading_coords
+      let (domain_min, domain_max) = radial.radialshading_domain
+      {
+        name,
+        kind: "radial",
+        coords: [x0, y0, r0, x1, y1, r1],
+        stops: pdf_shading_stops(
+          radial.radialshading_function,
+          domain_min,
+          domain_max,
+          shading.shading_colourspace,
+        ),
+        extend_start: radial.radialshading_extend.0,
+        extend_end: radial.radialshading_extend.1,
+      }
+    }
+    @pdflite.PdfContentFunctionShading(function) => {
+      let (domain_min, domain_max) = pdf_shading_function_domain([
+        function.funshading_function,
+      ])
+      {
+        name,
+        kind: "function",
+        coords: [],
+        stops: pdf_shading_stops(
+          [function.funshading_function],
+          domain_min,
+          domain_max,
+          shading.shading_colourspace,
+        ),
+        extend_start: true,
+        extend_end: true,
+      }
+    }
+    @pdflite.PdfContentFreeFormGouraudShading =>
+      {
+        name,
+        kind: "mesh",
+        coords: [],
+        stops: [],
+        extend_start: true,
+        extend_end: true,
+      }
+    @pdflite.PdfContentLatticeFormGouraudShading =>
+      {
+        name,
+        kind: "mesh",
+        coords: [],
+        stops: [],
+        extend_start: true,
+        extend_end: true,
+      }
+    @pdflite.PdfContentCoonsPatchMesh =>
+      {
+        name,
+        kind: "mesh",
+        coords: [],
+        stops: [],
+        extend_start: true,
+        extend_end: true,
+      }
+    @pdflite.PdfContentTensorProductPatchMesh =>
+      {
+        name,
+        kind: "mesh",
+        coords: [],
+        stops: [],
+        extend_start: true,
+        extend_end: true,
+      }
+  }
+}
+
+///|
+fn pdf_shading_function_domain(
+  functions : ArrayView[@pdflite.PdfFunction],
+) -> (Double, Double) {
+  match functions[0:] {
+    [function, ..] if function.domain.length() >= 2 =>
+      (function.domain[0], function.domain[1])
+    _ => (0.0, 1.0)
+  }
+}
+
+///|
+fn pdf_shading_stops(
+  functions : ArrayView[@pdflite.PdfFunction],
+  domain_min : Double,
+  domain_max : Double,
+  colourspace : @syntax.PdfObject,
+) -> Array[PdfGradientStop] {
+  let stops : Array[PdfGradientStop] = []
+  let sample_count = 16
+  for index in 0..<=sample_count {
+    let offset = index.to_double() / sample_count.to_double()
+    let input = domain_min + (domain_max - domain_min) * offset
+    match pdf_shading_sample(functions, input, colourspace) {
+      Some(color) => stops.push({ offset, color, })
+      None => ()
+    }
+  }
+  stops
+}
+
+///|
+fn pdf_shading_sample(
+  functions : ArrayView[@pdflite.PdfFunction],
+  input : Double,
+  colourspace : @syntax.PdfObject,
+) -> String? {
+  let values : Array[Double] = []
+  for function in functions {
+    let result = try Some(function.eval([input])) catch {
+      _ => None
+    } noraise {
+      value => value
+    }
+    match result {
+      Some(output) =>
+        for value in output {
+          values.push(value)
+        }
+      None => return None
+    }
+  }
+  if values.length() == 0 {
+    None
+  } else {
+    Some(pdf_shading_colour_hex(values, colourspace))
+  }
+}
+
+///|
+fn pdf_shading_colour_hex(
+  values : ArrayView[Double],
+  _colourspace : @syntax.PdfObject,
+) -> String {
+  if values.length() == 1 {
+    pdf_rgb_hex(values[0], values[0], values[0])
+  } else if values.length() >= 4 {
+    let cyan = values[0]
+    let magenta = values[1]
+    let yellow = values[2]
+    let black = values[3]
+    pdf_rgb_hex(
+      1.0 - 1.0.min(cyan + black),
+      1.0 - 1.0.min(magenta + black),
+      1.0 - 1.0.min(yellow + black),
+    )
+  } else if values.length() >= 3 {
+    pdf_rgb_hex(values[0], values[1], values[2])
+  } else {
+    "#000000"
+  }
 }
 
 ///|

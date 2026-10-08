@@ -14,6 +14,27 @@ pub fn open_document(Bytes) -> PdfViewerDocument raise @core.PdfError
 // Errors
 
 // Types and methods
+pub(all) struct PdfAnnotationItem {
+  index : Int
+  subtype : String
+  bounds : PdfBounds
+  contents : String?
+  subject : String?
+  color : String?
+  border_width : Double
+  border_style : String
+  border_dash : Array[Int]
+  uri : String?
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfAnnotationItem::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfAnnotationItem::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfAnnotationItem::to_json(Self) -> Json
+#deprecated
+pub fn PdfAnnotationItem::to_repr(Self) -> @debug.Repr
+
 pub(all) struct PdfBounds {
   min_x : Double
   min_y : Double
@@ -36,6 +57,27 @@ pub(all) struct PdfFontResource {
   format : String
   data_uri : String?
 } derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfFontResource::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfFontResource::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfFontResource::to_json(Self) -> Json
+#deprecated
+pub fn PdfFontResource::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfGradientStop {
+  offset : Double
+  color : String
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfGradientStop::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfGradientStop::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfGradientStop::to_json(Self) -> Json
+#deprecated
+pub fn PdfGradientStop::to_repr(Self) -> @debug.Repr
 
 pub(all) struct PdfImageResource {
   name : String
@@ -44,6 +86,14 @@ pub(all) struct PdfImageResource {
   width : Int?
   height : Int?
 } derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfImageResource::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfImageResource::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfImageResource::to_json(Self) -> Json
+#deprecated
+pub fn PdfImageResource::to_repr(Self) -> @debug.Repr
 
 pub(all) enum PdfPageItem {
   Text(PdfTextItem)
@@ -69,6 +119,7 @@ pub(all) struct PdfPageModel {
   rotation : Int
   fonts : Array[PdfFontResource]
   items : Array[PdfPageItem]
+  annotations : Array[PdfAnnotationItem]
   text : String
 } derive(Eq, ToJson, @debug.Debug)
 #deprecated
@@ -98,6 +149,9 @@ pub(all) struct PdfPathItem {
   line_join : Int
   dash_array : Array[Double]
   dash_phase : Double
+  pattern : PdfPatternResource?
+  blend_mode : String
+  clip_path : String?
 } derive(Eq, ToJson, @debug.Debug)
 #deprecated
 pub fn PdfPathItem::equal(Self, Self) -> Bool
@@ -108,10 +162,34 @@ pub fn PdfPathItem::to_json(Self) -> Json
 #deprecated
 pub fn PdfPathItem::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfPatternResource {
+  name : String
+  bbox : PdfBounds
+  x_step : Double
+  y_step : Double
+  tile_svg : String
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfPatternResource::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfPatternResource::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfPatternResource::to_json(Self) -> Json
+#deprecated
+pub fn PdfPatternResource::to_repr(Self) -> @debug.Repr
+
 pub(all) struct PdfPoint {
   x : Double
   y : Double
 } derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfPoint::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfPoint::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfPoint::to_json(Self) -> Json
+#deprecated
+pub fn PdfPoint::to_repr(Self) -> @debug.Repr
 
 pub(all) struct PdfQuad {
   p0 : PdfPoint
@@ -119,6 +197,14 @@ pub(all) struct PdfQuad {
   p2 : PdfPoint
   p3 : PdfPoint
 } derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfQuad::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfQuad::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfQuad::to_json(Self) -> Json
+#deprecated
+pub fn PdfQuad::to_repr(Self) -> @debug.Repr
 
 pub(all) struct PdfSelection {
   page : Int
@@ -134,6 +220,23 @@ pub fn PdfSelection::not_equal(Self, Self) -> Bool
 pub fn PdfSelection::to_json(Self) -> Json
 #deprecated
 pub fn PdfSelection::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfShadingResource {
+  name : String
+  kind : String
+  coords : Array[Double]
+  stops : Array[PdfGradientStop]
+  extend_start : Bool
+  extend_end : Bool
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfShadingResource::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfShadingResource::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfShadingResource::to_json(Self) -> Json
+#deprecated
+pub fn PdfShadingResource::to_repr(Self) -> @debug.Repr
 
 pub(all) struct PdfTextContent {
   items : Array[PdfTextItem]
@@ -155,6 +258,9 @@ pub(all) struct PdfTextItem {
   quad : PdfQuad
   font : String
   font_size : Double
+  fill_alpha : Double
+  blend_mode : String
+  clip_path : String?
 } derive(Eq, ToJson, @debug.Debug)
 #deprecated
 pub fn PdfTextItem::equal(Self, Self) -> Bool
@@ -190,6 +296,8 @@ pub(all) struct PdfViewport {
   matrix : Array[Double]
   transform : String
 } derive(Eq, ToJson, @debug.Debug)
+pub fn PdfViewport::convert_to_pdf_point(Self, PdfPoint) -> PdfPoint
+pub fn PdfViewport::convert_to_viewport_point(Self, PdfPoint) -> PdfPoint
 #deprecated
 pub fn PdfViewport::equal(Self, Self) -> Bool
 #deprecated
@@ -204,6 +312,11 @@ pub(all) struct PdfVisualItem {
   bounds : PdfBounds
   name : String
   resource : PdfImageResource?
+  shading : PdfShadingResource?
+  fill_alpha : Double
+  stroke_alpha : Double
+  blend_mode : String
+  clip_path : String?
 } derive(Eq, ToJson, @debug.Debug)
 #deprecated
 pub fn PdfVisualItem::equal(Self, Self) -> Bool

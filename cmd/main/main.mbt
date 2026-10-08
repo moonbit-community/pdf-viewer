@@ -1,46 +1,41 @@
 ///|
-/// Render the first page of a PDF to a self-contained SVG file.
-///
-/// Usage:
-///
-///   moon run cmd/main --target native -- input.pdf [output.svg]
-///
-/// The command is intentionally small: document parsing, page modelling,
-/// viewport calculation, and SVG serialization all live in the library so the
-/// same pipeline can later be called from a browser host.
-async fn main {
+fn main {
   let args = @env.args()
   if args.length() < 2 {
-    println(
-      "usage: moon run cmd/main --target native -- input.pdf [output.svg]",
-    )
-  } else {
-    let input_path = args[1]
-    let output_path = if args.length() >= 3 { args[2] } else { "page-1.svg" }
-    let source = @fs.read_file(input_path).binary()
-    let viewer = @viewer.open_document(source) catch {
+    println("usage: pdf-viewer <input.pdf> [output.svg] [page]")
+    return
+  }
+  let input = args[1]
+  let output = if args.length() >= 3 { args[2] } else { input + ".page-1.svg" }
+  let page_number = if args.length() >= 4 {
+    @string.parse_int(args[3]) catch {
       _ => {
-        println("failed to parse PDF: " + input_path)
+        println("pdf-viewer: page must be an integer")
         return
       }
     }
-    let rendered = viewer.render_svg(1, scale=1.0) catch { _ => None }
-    match rendered {
+  } else {
+    1
+  }
+  try {
+    let bytes = @fs.read_file_to_bytes(input)
+    let viewer = @pdf.open_document(bytes)
+    let svg = viewer.render_svg(page_number, scale=1.0) catch {
+      err => {
+        println("pdf-viewer: failed to render page: \{@debug.to_string(err)}")
+        return
+      }
+    }
+    match svg {
       Some(svg) => {
-        @fs.write_file(
-          output_path,
-          @utf8.encode(svg),
-          create_mode=CreateOrTruncate,
-          permission=0o644,
-        )
+        @fs.write_string_to_file(output, svg)
         println(
-          "rendered page 1/" +
-          viewer.page_count().to_string() +
-          " to " +
-          output_path,
+          "wrote page \{page_number} of \{viewer.page_count()} to \{output}",
         )
       }
-      None => println("PDF does not contain page 1")
+      None => println("pdf-viewer: page \{page_number} does not exist")
     }
+  } catch {
+    err => println("pdf-viewer: \{@debug.to_string(err)}")
   }
 }
