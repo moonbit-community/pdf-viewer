@@ -1,0 +1,219 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer"
+
+import {
+  "moonbitlang/core/debug",
+  "moonbitlang/pdflite",
+  "moonbitlang/pdflite/core",
+  "moonbitlang/pdflite/page",
+}
+
+// Values
+pub fn open_document(Bytes) -> PdfViewerDocument raise @core.PdfError
+
+// Errors
+
+// Types and methods
+pub(all) struct PdfBounds {
+  min_x : Double
+  min_y : Double
+  max_x : Double
+  max_y : Double
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfBounds::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfBounds::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfBounds::to_json(Self) -> Json
+#deprecated
+pub fn PdfBounds::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfFontResource {
+  name : String
+  family : String
+  mime_type : String
+  format : String
+  data_uri : String?
+} derive(Eq, ToJson, @debug.Debug)
+
+pub(all) struct PdfImageResource {
+  name : String
+  mime_type : String
+  data_uri : String?
+  width : Int?
+  height : Int?
+} derive(Eq, ToJson, @debug.Debug)
+
+pub(all) enum PdfPageItem {
+  Text(PdfTextItem)
+  Path(PdfPathItem)
+  Image(PdfVisualItem)
+  Shading(PdfVisualItem)
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfPageItem::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfPageItem::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfPageItem::to_json(Self) -> Json
+#deprecated
+pub fn PdfPageItem::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfPageModel {
+  number : Int
+  origin_x : Double
+  origin_y : Double
+  width : Double
+  height : Double
+  rotation : Int
+  fonts : Array[PdfFontResource]
+  items : Array[PdfPageItem]
+  text : String
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfPageModel::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfPageModel::not_equal(Self, Self) -> Bool
+pub fn PdfPageModel::operator_list(Self) -> Array[PdfPageItem]
+pub fn PdfPageModel::text_content(Self) -> PdfTextContent
+#deprecated
+pub fn PdfPageModel::to_json(Self) -> Json
+#deprecated
+pub fn PdfPageModel::to_repr(Self) -> @debug.Repr
+pub fn PdfPageModel::viewport(Self, scale? : Double, rotation? : Int) -> PdfViewport
+
+pub(all) struct PdfPathItem {
+  index : Int
+  bounds : PdfBounds
+  svg_path : String
+  filled : Bool
+  stroked : Bool
+  fill_color : String
+  stroke_color : String
+  fill_alpha : Double
+  stroke_alpha : Double
+  line_width : Double
+  line_cap : Int
+  line_join : Int
+  dash_array : Array[Double]
+  dash_phase : Double
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfPathItem::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfPathItem::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfPathItem::to_json(Self) -> Json
+#deprecated
+pub fn PdfPathItem::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfPoint {
+  x : Double
+  y : Double
+} derive(Eq, ToJson, @debug.Debug)
+
+pub(all) struct PdfQuad {
+  p0 : PdfPoint
+  p1 : PdfPoint
+  p2 : PdfPoint
+  p3 : PdfPoint
+} derive(Eq, ToJson, @debug.Debug)
+
+pub(all) struct PdfSelection {
+  page : Int
+  bounds : PdfBounds
+  text : String
+  item_indices : Array[Int]
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfSelection::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfSelection::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfSelection::to_json(Self) -> Json
+#deprecated
+pub fn PdfSelection::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfTextContent {
+  items : Array[PdfTextItem]
+  text : String
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfTextContent::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextContent::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextContent::to_json(Self) -> Json
+#deprecated
+pub fn PdfTextContent::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfTextItem {
+  index : Int
+  text : String
+  bounds : PdfBounds
+  quad : PdfQuad
+  font : String
+  font_size : Double
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfTextItem::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextItem::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextItem::to_json(Self) -> Json
+#deprecated
+pub fn PdfTextItem::to_repr(Self) -> @debug.Repr
+
+pub struct PdfViewerDocument {
+  source_length : Int
+  document : @pdflite.PdfDocument
+  pages : Array[@page.PdfPage]
+}
+pub fn PdfViewerDocument::operator_list(Self, Int) -> Array[PdfPageItem]? raise @core.PdfError
+pub fn PdfViewerDocument::page(Self, Int) -> PdfPageModel? raise @core.PdfError
+pub fn PdfViewerDocument::page_count(Self) -> Int
+pub fn PdfViewerDocument::page_json(Self, Int) -> Json? raise @core.PdfError
+pub fn PdfViewerDocument::pages(Self) -> Array[PdfPageModel] raise @core.PdfError
+pub fn PdfViewerDocument::render_svg(Self, Int, scale? : Double) -> String? raise @core.PdfError
+pub fn PdfViewerDocument::render_svg_with_rotation(Self, Int, Int, scale? : Double) -> String? raise @core.PdfError
+pub fn PdfViewerDocument::select(Self, Int, PdfBounds) -> PdfSelection? raise @core.PdfError
+pub fn PdfViewerDocument::source_length(Self) -> Int
+pub fn PdfViewerDocument::summary_json(Self) -> Json raise @core.PdfError
+pub fn PdfViewerDocument::text_content(Self, Int) -> PdfTextContent? raise @core.PdfError
+
+pub(all) struct PdfViewport {
+  width : Double
+  height : Double
+  scale : Double
+  rotation : Int
+  matrix : Array[Double]
+  transform : String
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfViewport::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfViewport::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfViewport::to_json(Self) -> Json
+#deprecated
+pub fn PdfViewport::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfVisualItem {
+  index : Int
+  bounds : PdfBounds
+  name : String
+  resource : PdfImageResource?
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfVisualItem::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfVisualItem::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfVisualItem::to_json(Self) -> Json
+#deprecated
+pub fn PdfVisualItem::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

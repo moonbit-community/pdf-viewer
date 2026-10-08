@@ -1,0 +1,11 @@
+import {
+  "moonbit-community/pdf-viewer" @viewer,
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/env",
+}
+
+pkgtype(kind: "executable")
+
+supported_targets = "+native"

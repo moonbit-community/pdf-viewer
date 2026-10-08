@@ -1,0 +1,63 @@
+# moonbit-community/pdf-viewer
+
+这是一个独立的 MoonBit PDF viewer 工程，目标是逐步对齐 pdf.js 的
+`document → page → viewport → text/display list → renderer` 工作流，最终为
+浏览器和 OpenSeek 一类宿主提供只读、高保真、可框选的 PDF 预览能力。
+
+当前第一个可运行里程碑已经具备：
+
+- 使用 `moonbitlang/pdflite` 从 PDF bytes 建立文档和页面模型；
+- 以一基页码访问页面，暴露 `PdfPageModel`、`PdfTextContent` 和 paint-order
+  display list；
+- 计算带缩放和旋转的 `PdfViewport`，旋转语义与 pdf.js 的顺时针页面旋转一致；
+- 将文字和矢量路径输出为自包含 SVG，并保留图片、shading 的位置占位信息；
+- 保留文字原始四边形，遇到旋转文字时按 glyph 方向生成 SVG transform；路径 display
+  list 保留线帽、连接方式和虚线参数；
+- 按 PDF 用户空间矩形返回文本、边界和源 display-list item 索引，供上层做
+  cursor/框选和 Agent 上下文压缩；
+- 提供 native CLI，方便用真实 PDF 调试，而不需要先接入浏览器。
+
+## 本地运行
+
+先安装 MoonBit，然后在本目录执行：
+
+```bash
+moon test
+moon check --target all
+moon run --target native cmd/main -- input.pdf [output.svg]
+```
+
+例如，CLI 会把第一页写成一个可以直接在浏览器打开的 SVG：
+
+```bash
+moon run --target native cmd/main -- ./sample.pdf /tmp/page-1.svg
+```
+
+`reference/pdf.js` 是本地对照 checkout，不会随项目提交；当前对照版本记录在
+[`reference/README.md`](reference/README.md) 中。它的 `test/pdfs` corpus 用来驱动
+后续逐特性兼容测试。
+
+## API 对照
+
+| pdf.js 概念 | 本项目当前 API |
+| --- | --- |
+| `getDocument(data)` | `open_document(bytes)` |
+| `PDFDocumentProxy.numPages` | `PdfViewerDocument::page_count()` |
+| `PDFDocumentProxy.getPage(n)` | `PdfViewerDocument::page(n)` |
+| `PDFPageProxy.getViewport({ scale, rotation })` | `PdfPageModel::viewport(scale~, rotation~)` (`matrix` and SVG transform included) |
+| `PDFPageProxy.getTextContent()` | `PdfViewerDocument::text_content(n)` / `PdfPageModel::text_content()` |
+| `PDFPageProxy.getOperatorList()` | `PdfViewerDocument::operator_list(n)` |
+| `PDFPageProxy.render(...)` | `PdfViewerDocument::render_svg(n, scale~)` / `render_svg_with_rotation(...)` |
+
+这不是声称已经达到 pdf.js 的覆盖率。图片解码、字体嵌入与字体 fallback、透明度
+和 blend mode、annotation/form layer、渐变和复杂 clipping 仍是后续工作；当前 API
+先把这些内容的页面位置和类型留在 display list 中，避免宿主丢失结构化信息。
+
+## 参考实现和测试策略
+
+`pdflite` 负责 PDF 语法、资源解析和内容条目生成；viewer 层只做页面模型、viewport、
+SVG 序列化和选择映射。后续每补一个 renderer 特性，就从 pdf.js 的 corpus 选一个最小
+fixture，同时保留一个 MoonBit snapshot/断言测试，先验证结构化输出，再验证浏览器视觉
+输出。这样可以把“解析正确”和“渲染接近 pdf.js”分开定位。
+
+更详细的分层和后续阶段见 [`docs/architecture.md`](docs/architecture.md)。
