@@ -45,6 +45,10 @@ fn pdf_image_resource_of_object(
   } else {
     None
   }
+  let color_key_mask = pdf_image_color_key_mask(document, xobject)
+  let alpha_mask_data_uri = pdf_image_alpha_mask_data_uri(
+    document, resources, xobject,
+  )
   let resource = match image {
     @pdflite.PdfJPEG(data, _) =>
       {
@@ -52,6 +56,7 @@ fn pdf_image_resource_of_object(
         mime_type: "image/jpeg",
         data_uri: Some(pdf_image_data_uri("image/jpeg", data)),
         mask_data_uri: None,
+        alpha_mask_data_uri,
         width,
         height,
       }
@@ -61,6 +66,7 @@ fn pdf_image_resource_of_object(
         mime_type: "image/jp2",
         data_uri: Some(pdf_image_data_uri("image/jp2", data)),
         mask_data_uri: None,
+        alpha_mask_data_uri,
         width,
         height,
       }
@@ -70,16 +76,24 @@ fn pdf_image_resource_of_object(
         mime_type: "image/jbig2",
         data_uri: Some(pdf_image_data_uri("image/jbig2", data)),
         mask_data_uri: None,
+        alpha_mask_data_uri,
         width,
         height,
       }
     @pdflite.PdfRawImage(raw_width, raw_height, layout, data) => {
-      let png = pdf_png_of_raw_image(raw_width, raw_height, layout, data)
+      let png = match color_key_mask {
+        Some(mask) =>
+          pdf_png_of_raw_image_with_color_key(
+            raw_width, raw_height, layout, data, mask,
+          )
+        None => pdf_png_of_raw_image(raw_width, raw_height, layout, data)
+      }
       {
         name,
         mime_type: "image/png",
         data_uri: Some(pdf_image_data_uri("image/png", png)),
         mask_data_uri: None,
+        alpha_mask_data_uri,
         width: Some(raw_width),
         height: Some(raw_height),
       }
@@ -92,6 +106,7 @@ fn pdf_image_resource_of_object(
         mime_type: "image/mask",
         data_uri: None,
         mask_data_uri: Some(mask_data_uri),
+        alpha_mask_data_uri: None,
         width,
         height,
       }
@@ -112,6 +127,245 @@ fn pdf_image_object_is_mask(
     ) {
     Some(@syntax.PdfBoolean(true)) => true
     _ => false
+  }
+}
+
+///|
+/// Read a colour-key `/Mask [min max ...]` array. The ranges are compared
+/// after pdflite has decoded the image into RGB samples, which covers the
+/// DeviceRGB and DeviceGray images used by the corpus while keeping the
+/// browser-facing resource independent from PDF dictionary objects.
+fn pdf_image_color_key_mask(
+  document : @pdflite.PdfDocument,
+  image : @syntax.PdfObject,
+) -> Array[Double]? {
+  match document.lookup_direct(pdf_image_name("/Mask"), image) {
+    Some(@syntax.PdfArray(values)) => {
+      let output : Array[Double] = Array(capacity=values.length())
+      for value in values {
+        let number = try Some(document.get_number(value)) catch {
+          _ => None
+        } noraise {
+          value => value
+        }
+        match number {
+          Some(number) => output.push(number)
+          None => return None
+        }
+      }
+      if output.length() > 0 && output.length() % 2 == 0 {
+        Some(output)
+      } else {
+        None
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+/// Resolve an image stream used by `/Mask` or `/SMask` and convert it into a
+/// luminance image suitable for an SVG mask. Form transparency groups are
+/// handled by the content walker separately; this helper deliberately accepts
+/// only image streams and returns `None` for a non-image mask object.
+fn pdf_image_alpha_mask_data_uri(
+  document : @pdflite.PdfDocument,
+  resources : @syntax.PdfObject,
+  image : @syntax.PdfObject,
+) -> String? {
+  let mask_object = match
+    document.lookup_direct(pdf_image_name("/SMask"), image) {
+    Some(value) => Some(value)
+    None =>
+      match document.lookup_direct(pdf_image_name("/Mask"), image) {
+        Some(@syntax.PdfArray(_)) | None => None
+        Some(value) => Some(value)
+      }
+  }
+  match mask_object {
+    Some(mask_object) => {
+      let mask_stream = match
+        document.lookup_direct(pdf_image_name("/G"), mask_object) {
+        Some(value) => Some(value)
+        None => None
+      }
+      let luminosity = match
+        document.lookup_direct(pdf_image_name("/S"), mask_object) {
+        Some(@syntax.PdfNameObject(name)) =>
+          pdf_annotation_name_text(name).contains("Luminosity")
+        _ => false
+      }
+      let transfer_map = pdf_transfer_map_of_mask(document, mask_object)
+      let backdrop = if luminosity {
+        pdf_mask_backdrop_gray(document, mask_object)
+      } else {
+        0.0
+      }
+      match mask_stream {
+        Some(form) =>
+          match
+            pdf_form_mask_data_uri(
+              document, resources, form, luminosity, backdrop, transfer_map,
+            ) {
+            Some(value) => Some(value)
+            None =>
+              pdf_image_alpha_mask_data_uri_of_stream(
+                document, resources, form, transfer_map,
+              )
+          }
+        None =>
+          pdf_image_alpha_mask_data_uri_of_stream(
+            document, resources, mask_object, transfer_map,
+          )
+      }
+    }
+    None => None
+  }
+}
+
+///|
+fn pdf_image_alpha_mask_data_uri_of_stream(
+  document : @pdflite.PdfDocument,
+  resources : @syntax.PdfObject,
+  mask_object : @syntax.PdfObject,
+  transfer_map : Array[Int]?,
+) -> String? {
+  try {
+    let mask_image = document.get_image_24bpp(resources, mask_object)
+    pdf_image_alpha_data_uri_of_image(
+      mask_image,
+      pdf_image_object_is_mask(document, mask_object),
+      transfer_map,
+    )
+  } catch {
+    _ => None
+  } noraise {
+    value => value
+  }
+}
+
+///|
+/// Convert an extracted mask image into a grayscale PNG or preserve an
+/// encoded image format that the browser can decode. ImageMask samples use
+/// the inverse paint convention; soft and explicit masks use their luminance
+/// directly.
+fn pdf_image_alpha_data_uri_of_image(
+  image : @pdflite.PdfImage,
+  invert : Bool,
+  transfer_map : Array[Int]?,
+) -> String? raise @core.PdfError {
+  match image {
+    @pdflite.PdfRawImage(width, height, layout, data) => {
+      let pixels = pdf_png_rgb_pixels(width, height, layout, data)
+      let gray : Array[Int] = Array(capacity=width * height)
+      for index in 0..<(width * height) {
+        let value = pixels[index * 3]
+        let value = if invert { 255 - value } else { value }
+        gray.push(pdf_apply_transfer_map(value, transfer_map))
+      }
+      let png = pdf_png_of_raw_image(
+        width,
+        height,
+        @pdflite.PdfBPP8,
+        @core.pdf_bytes_of_int_array(gray),
+      )
+      Some(pdf_image_data_uri("image/png", png))
+    }
+    @pdflite.PdfJPEG(data, _) => Some(pdf_image_data_uri("image/jpeg", data))
+    @pdflite.PdfJPEG2000(data, _) => Some(pdf_image_data_uri("image/jp2", data))
+    @pdflite.PdfJBIG2(data, _, _) =>
+      Some(pdf_image_data_uri("image/jbig2", data))
+  }
+}
+
+///|
+/// Compile a PDF soft-mask transfer function once into the 8-bit lookup table
+/// used by browser-facing mask images. `/Identity` and malformed functions
+/// intentionally fall back to no map, matching pdf.js' permissive error path.
+fn pdf_transfer_map_of_mask(
+  document : @pdflite.PdfDocument,
+  mask : @syntax.PdfObject,
+) -> Array[Int]? {
+  let transfer = match document.lookup_direct(pdf_image_name("/TR"), mask) {
+    Some(value) => value
+    None => return None
+  }
+  match transfer {
+    @syntax.PdfNameObject(name) =>
+      if pdf_annotation_name_text(name).contains("Identity") {
+        None
+      } else {
+        None
+      }
+    _ => {
+      let function = try Some(document.parse_function(transfer)) catch {
+        _ => None
+      } noraise {
+        value => value
+      }
+      match function {
+        Some(function) => {
+          let output : Array[Int] = Array(capacity=256)
+          for index in 0..<=256 {
+            let input = index.to_double() / 255.0
+            let value = try {
+              match function.eval([input]) {
+                [first, ..] => first
+                [] => input
+              }
+            } catch {
+              _ => input
+            } noraise {
+              value => value
+            }
+            output.push(pdf_transfer_value_to_byte(value))
+          }
+          Some(output)
+        }
+        None => None
+      }
+    }
+  }
+}
+
+///|
+fn pdf_transfer_value_to_byte(value : Double) -> Int {
+  let bounded = 0.0.max(1.0.min(value))
+  (bounded * 255.0 + 0.5).to_int()
+}
+
+///|
+/// Read the first `/BC` component used as the soft-mask backdrop. Standard
+/// corpus forms use DeviceGray; for multi-component arrays the first component
+/// is a conservative grayscale fallback until full colour-space conversion is
+/// added to the viewer layer.
+fn pdf_mask_backdrop_gray(
+  document : @pdflite.PdfDocument,
+  mask : @syntax.PdfObject,
+) -> Double {
+  match document.lookup_direct(pdf_image_name("/BC"), mask) {
+    Some(@syntax.PdfArray(values)) =>
+      match values[0:] {
+        [first, ..] =>
+          try document.get_number(first) catch {
+            _ => 0.0
+          } noraise {
+            value => value
+          }
+        [] => 0.0
+      }
+    _ => 0.0
+  }
+}
+
+///|
+fn pdf_apply_transfer_map(value : Int, transfer_map : Array[Int]?) -> Int {
+  match transfer_map {
+    Some(table) if table.length() >= 256 => {
+      let index = if value < 0 { 0 } else if value > 255 { 255 } else { value }
+      table[index]
+    }
+    _ => value
   }
 }
 
@@ -228,6 +482,92 @@ fn pdf_png_of_raw_image(
   }
   header.push(8)
   header.push(2)
+  header.push(0)
+  header.push(0)
+  header.push(0)
+  pdf_png_append_chunk(output, [0x49, 0x48, 0x44, 0x52], header)
+  pdf_png_append_chunk(
+    output,
+    [0x49, 0x44, 0x41, 0x54],
+    @core.pdf_int_array_of_bytes(compressed),
+  )
+  pdf_png_append_chunk(output, [0x49, 0x45, 0x4e, 0x44], [])
+  @core.pdf_bytes_of_int_array(output)
+}
+
+///|
+/// Encode a decoded image with a PDF colour-key mask as an RGBA PNG. Pixels
+/// inside every component range become transparent; all other pixels remain
+/// fully opaque. This is the browser equivalent of PDF `/Mask [min max ...]`
+/// for raw images.
+fn pdf_png_of_raw_image_with_color_key(
+  width : Int,
+  height : Int,
+  layout : @pdflite.PdfPixelLayout,
+  data : Bytes,
+  mask : ArrayView[Double],
+) -> Bytes raise @core.PdfError {
+  let pixels = pdf_png_rgb_pixels(width, height, layout, data)
+  let channels = if mask.length() >= 6 { 3 } else { 1 }
+  let scanlines : Array[Int] = Array(capacity=height * (width * 4 + 1))
+  let mut pixel = 0
+  for _ in 0..<height {
+    scanlines.push(0)
+    for _ in 0..<width {
+      let red = pixels[pixel * 3]
+      let green = pixels[pixel * 3 + 1]
+      let blue = pixels[pixel * 3 + 2]
+      let transparent = if channels == 1 {
+        pdf_color_key_component_matches(red, mask[0], mask[1])
+      } else {
+        pdf_color_key_component_matches(red, mask[0], mask[1]) &&
+        pdf_color_key_component_matches(green, mask[2], mask[3]) &&
+        pdf_color_key_component_matches(blue, mask[4], mask[5])
+      }
+      scanlines.push(red)
+      scanlines.push(green)
+      scanlines.push(blue)
+      scanlines.push(if transparent { 0 } else { 255 })
+      pixel += 1
+    }
+  }
+  pdf_png_of_scanlines(width, height, 6, scanlines)
+}
+
+///|
+fn pdf_color_key_component_matches(
+  value : Int,
+  minimum : Double,
+  maximum : Double,
+) -> Bool {
+  let sample = value.to_double()
+  sample >= minimum && sample <= maximum
+}
+
+///|
+/// Encode scanlines with a PNG colour type. `colour_type` is 2 for RGB and 6
+/// for RGBA; the caller supplies one filter byte followed by each row's
+/// samples.
+fn pdf_png_of_scanlines(
+  width : Int,
+  height : Int,
+  colour_type : Int,
+  scanlines : ArrayView[Int],
+) -> Bytes raise @core.PdfError {
+  let compressed = @flate.pdf_flate_encode(
+    @core.pdf_bytes_of_int_array(scanlines),
+  )
+  let output : Array[Int] = []
+  pdf_png_append_signature(output)
+  let header : Array[Int] = []
+  for value in pdf_png_u32_bytes(width) {
+    header.push(value)
+  }
+  for value in pdf_png_u32_bytes(height) {
+    header.push(value)
+  }
+  header.push(8)
+  header.push(colour_type)
   header.push(0)
   header.push(0)
   header.push(0)

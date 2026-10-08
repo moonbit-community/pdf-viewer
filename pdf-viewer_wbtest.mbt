@@ -15,6 +15,59 @@ test "raw PDF pixels become a browser-readable PNG" {
 }
 
 ///|
+test "colour-key masks become transparent RGBA PNG pixels" {
+  let data = try! @core.pdf_bytes_of_int_array([255, 0, 0, 0, 0, 255])
+  let png = try! pdf_png_of_raw_image_with_color_key(
+    2,
+    1,
+    @pdflite.PdfBPP24,
+    data,
+    [255.0, 255.0, 0.0, 255.0, 0.0, 255.0],
+  )
+  let parsed = try! @pdflite.pdf_read_png(png)
+  assert_eq(parsed.width, 2)
+  assert_eq(parsed.height, 1)
+  assert_eq(parsed.color_type, 6)
+}
+
+///|
+test "soft mask SVG keeps transfer-function backdrop pixels" {
+  let page : PdfPageModel = {
+    number: 1,
+    origin_x: 0.0,
+    origin_y: 0.0,
+    width: 100.0,
+    height: 100.0,
+    rotation: 0,
+    fonts: [],
+    items: [],
+    annotations: [],
+    text: "",
+  }
+  let mask : PdfSoftMaskResource = {
+    data_uri: "data:image/svg+xml;base64,AA==",
+    bounds: { min_x: 10.0, min_y: 10.0, max_x: 20.0, max_y: 20.0, },
+    luminosity: false,
+    background: "#808080",
+  }
+  let output = StringBuilder()
+  pdf_svg_soft_mask_defs(output, 4, page, Some(mask), 1.0)
+  let svg = output.to_string()
+  assert_true(svg.contains("fill=\"#808080\""))
+  assert_true(svg.contains("mask-type=\"luminance\""))
+}
+
+///|
+test "soft mask transfer table applies to 8-bit samples" {
+  let table : Array[Int] = Array(capacity=256)
+  for index in 0..<=256 {
+    table.push(255 - index)
+  }
+  assert_eq(pdf_apply_transfer_map(0, Some(table)), 255)
+  assert_eq(pdf_apply_transfer_map(255, Some(table)), 0)
+}
+
+///|
 test "rotated text uses its source quadrilateral" {
   let item : PdfTextItem = {
     index: 0,
@@ -31,6 +84,7 @@ test "rotated text uses its source quadrilateral" {
     fill_alpha: 1.0,
     blend_mode: "normal",
     clip_path: None,
+    soft_mask: None,
   }
   let page : PdfPageModel = {
     number: 1,
@@ -78,6 +132,7 @@ test "visual quads become affine SVG image transforms" {
       mime_type: "image/png",
       data_uri: Some("data:image/png;base64,AA=="),
       mask_data_uri: None,
+      alpha_mask_data_uri: None,
       width: Some(1),
       height: Some(1),
     }),
@@ -87,6 +142,7 @@ test "visual quads become affine SVG image transforms" {
     stroke_alpha: 1.0,
     blend_mode: "normal",
     clip_path: None,
+    soft_mask: None,
   }
   let output = StringBuilder()
   pdf_svg_image(output, page, item, 1.0)
@@ -168,6 +224,7 @@ test "svg preserves paint opacity and blend mode" {
     fill_alpha: 0.5,
     blend_mode: "multiply",
     clip_path: None,
+    soft_mask: None,
   }
   let page : PdfPageModel = {
     number: 1,
@@ -215,6 +272,7 @@ test "svg paints a path pattern through a reusable definition" {
     }),
     blend_mode: "normal",
     clip_path: None,
+    soft_mask: None,
   }
   let page : PdfPageModel = {
     number: 1,
@@ -253,6 +311,7 @@ test "svg places clipping definitions before painted elements" {
     fill_alpha: 1.0,
     blend_mode: "normal",
     clip_path: Some("M 0 0 L 10 0 L 10 10 L 0 10 Z"),
+    soft_mask: None,
   }
   let page : PdfPageModel = {
     number: 1,
@@ -366,6 +425,7 @@ test "inline ImageMask keeps a browser mask resource" {
     stroke_alpha: 1.0,
     blend_mode: "normal",
     clip_path: None,
+    soft_mask: None,
   }
   let page : PdfPageModel = {
     number: 1,

@@ -46,13 +46,16 @@ The current renderer has several concrete compatibility improvements: it emits t
 full viewport matrix, lowers path-only coloured tiling patterns to SVG `pattern` definitions,
 and applies a retained `/Matrix` at the paint site. Explicit clipping paths are serialized as
 nested clip paths so each additional path narrows the previous clip instead of becoming a union.
-PDF ImageMask resources are decoded into browser-ready mask images; a nested SVG applies the
-mask before the outer affine image transform, which avoids a Chromium clipping edge case.
-Uncolored pattern colour operands, soft masks, and every pattern resource kind are still open.
+PDF ImageMask, colour-key `/Mask`, image `/SMask`, and common Form soft-mask resources are lowered
+to browser-ready mask images. A nested SVG applies image masks before the outer affine transform,
+while page-space soft-mask definitions retain their `/BBox`, backdrop sample, and transfer-map
+output. The remaining gap is the group compositor: items are still flattened before SVG output,
+so isolated/non-isolated transparency groups, knockout, and nested soft-mask accumulation need a
+group display-list representation.
 
 The remaining implementation stages are ordered by the visible compatibility gap:
 
-1. CTM-preserving path/image geometry, ImageMask variants, soft masks, and mesh shading;
+1. CTM-preserving path/image geometry, complete group-level mask compositing, and mesh shading;
 2. embedded fonts and font metrics with a system-font fallback policy;
 3. complete annotation appearance and form/widget layers;
 4. Canvas/WebGL output and incremental page loading for large documents.

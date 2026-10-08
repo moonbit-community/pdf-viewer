@@ -83,6 +83,8 @@ fn pdf_pattern_resource_of_object(
         _ => return None
       }
       let tile_svg = pdf_pattern_tile_svg(
+        document,
+        pattern_resources,
         entries,
         bbox.min_x,
         bbox.min_y,
@@ -153,6 +155,8 @@ fn pdf_pattern_number_or(
 
 ///|
 fn pdf_pattern_tile_svg(
+  document : @pdflite.PdfDocument,
+  resources : @syntax.PdfObject,
   entries : ArrayView[@pdflite.PdfContentJsonEntry],
   bbox_min_x : Double,
   bbox_min_y : Double,
@@ -216,8 +220,68 @@ fn pdf_pattern_tile_svg(
           )
         }
       }
+      @pdflite.PdfContentImageObject(name) =>
+        match pdf_image_resource_of_resources(document, resources, name) {
+          Some(resource) =>
+            match resource.data_uri {
+              Some(data_uri) => {
+                let quad = pdf_quad_of_box(entry.bounding_box)
+                let transform = pdf_svg_pattern_image_transform(
+                  quad, bbox_min_x, bbox_min_y, bbox_height,
+                )
+                output.write_string(
+                  "<image data-pdf-name=\"" +
+                  pdf_escape_xml(name) +
+                  "\" x=\"0\" y=\"0\" width=\"1\" height=\"1\" transform=\"" +
+                  transform +
+                  "\" preserveAspectRatio=\"none\" href=\"" +
+                  data_uri +
+                  "\"/>",
+                )
+              }
+              None => ()
+            }
+          None => ()
+        }
       _ => ()
     }
   }
   output.to_string()
+}
+
+///|
+/// Map a content-entry image quad into the pattern cell's top-left SVG
+/// coordinate system. Pattern entries are already in pattern user space, so
+/// only the pattern bbox origin and PDF y-axis need to be applied here.
+fn pdf_svg_pattern_image_transform(
+  quad : PdfQuad,
+  bbox_min_x : Double,
+  bbox_min_y : Double,
+  bbox_height : Double,
+) -> String {
+  let top_left = {
+    x: quad.p1.x - bbox_min_x,
+    y: bbox_min_y + bbox_height - quad.p1.y,
+  }
+  let top_right = {
+    x: quad.p2.x - bbox_min_x,
+    y: bbox_min_y + bbox_height - quad.p2.y,
+  }
+  let bottom_left = {
+    x: quad.p0.x - bbox_min_x,
+    y: bbox_min_y + bbox_height - quad.p0.y,
+  }
+  "matrix(" +
+  (top_right.x - top_left.x).to_string() +
+  " " +
+  (top_right.y - top_left.y).to_string() +
+  " " +
+  (bottom_left.x - top_left.x).to_string() +
+  " " +
+  (bottom_left.y - top_left.y).to_string() +
+  " " +
+  top_left.x.to_string() +
+  " " +
+  top_left.y.to_string() +
+  ")"
 }

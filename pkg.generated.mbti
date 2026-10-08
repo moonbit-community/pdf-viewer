@@ -84,6 +84,7 @@ pub(all) struct PdfImageResource {
   mime_type : String
   data_uri : String?
   mask_data_uri : String?
+  alpha_mask_data_uri : String?
   width : Int?
   height : Int?
 } derive(Eq, ToJson, @debug.Debug)
@@ -153,6 +154,7 @@ pub(all) struct PdfPathItem {
   pattern : PdfPatternResource?
   blend_mode : String
   clip_path : String?
+  soft_mask : PdfSoftMaskResource?
 } derive(Eq, ToJson, @debug.Debug)
 #deprecated
 pub fn PdfPathItem::equal(Self, Self) -> Bool
@@ -241,6 +243,13 @@ pub fn PdfShadingResource::to_json(Self) -> Json
 #deprecated
 pub fn PdfShadingResource::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfSoftMaskResource {
+  data_uri : String
+  bounds : PdfBounds
+  luminosity : Bool
+  background : String
+} derive(Eq, ToJson, @debug.Debug)
+
 pub(all) struct PdfTextContent {
   items : Array[PdfTextItem]
   text : String
@@ -264,6 +273,7 @@ pub(all) struct PdfTextItem {
   fill_alpha : Double
   blend_mode : String
   clip_path : String?
+  soft_mask : PdfSoftMaskResource?
 } derive(Eq, ToJson, @debug.Debug)
 #deprecated
 pub fn PdfTextItem::equal(Self, Self) -> Bool
@@ -322,6 +332,7 @@ pub(all) struct PdfVisualItem {
   stroke_alpha : Double
   blend_mode : String
   clip_path : String?
+  soft_mask : PdfSoftMaskResource?
 } derive(Eq, ToJson, @debug.Debug)
 #deprecated
 pub fn PdfVisualItem::equal(Self, Self) -> Bool

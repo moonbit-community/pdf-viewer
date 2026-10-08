@@ -23,9 +23,11 @@
 - 对常见的彩色、路径型 tiling pattern 生成 SVG `<pattern>`，应用 pattern matrix，并把
   多段显式 clipping 以浏览器可工作的嵌套 clipPath 表达；uncolored pattern、复杂 Form
   资源和 soft mask 仍未覆盖；
-- 初步支持 PDF ImageMask，包括当前非描边颜色、`/Decode` 后的 1-bit 图像和 Form 内的
-  affine placement；浏览器不支持的 inline CCITT mask、普通 `/Mask` color-key、`/SMask`
-  和 transparency group 仍会保留为占位或未绘制项；
+- 支持 PDF ImageMask、普通 `/Mask` color-key、图片 `/SMask`，以及常见的 Form soft
+  mask；mask 会在图片的局部坐标系中合成，再交给页面 affine transform。Form mask 已处理
+  `/BBox`、`/S /Alpha`、`/S /Luminosity` 和常见 `/TR` transfer function，资源字典会随
+  Form 继承。浏览器不支持的 inline CCITT mask、复杂 transparency group、backdrop
+  色彩空间和部分 JPEG2000/JBIG2 mask 仍保留为占位或依赖宿主解码器；
 - 提供 native CLI，方便用真实 PDF 调试，而不需要先接入浏览器。
 
 ## 本地运行
@@ -69,8 +71,8 @@ moon run --target native cmd/main -- ./sample.pdf /tmp/page-3.svg 3
 | `PDFPageProxy.getOperatorList()` | `PdfViewerDocument::operator_list(n)` |
 | `PDFPageProxy.render(...)` | `PdfViewerDocument::render_svg(n, scale~)` / `render_svg_with_rotation(...)` |
 
-这不是声称已经达到 pdf.js 的覆盖率。字体 metrics 和 fallback、soft mask、普通
-`/Mask` color-key、uncolored/复杂 tiling pattern、mesh shading、完整 annotation
+这不是声称已经达到 pdf.js 的覆盖率。字体 metrics 和 fallback、soft mask 的完整组
+合成语义、uncolored/复杂 tiling pattern、mesh shading、完整 annotation
 appearance/form 行为仍是后续工作；当前 API 会先把这些内容的页面位置和类型留在
 display list 中，避免宿主丢失结构化信息。现阶段 SVG 输出适合调试和建立回归基线，不能
 当作 pdf.js 的像素级替代品。

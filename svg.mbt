@@ -94,7 +94,8 @@ fn pdf_svg_text_can_join(previous : PdfTextItem, current : PdfTextItem) -> Bool 
   (previous.bounds.max_y - current.bounds.max_y).abs() <= line_threshold &&
   previous.font == current.font &&
   (previous_angle - current_angle).abs() <= 0.01 &&
-  previous.clip_path == current.clip_path
+  previous.clip_path == current.clip_path &&
+  previous.soft_mask == current.soft_mask
 }
 
 ///|
@@ -153,6 +154,8 @@ fn pdf_svg_text(
     "normal"
   }
   pdf_svg_clip_defs(output, first.index, first.clip_path)
+  pdf_svg_soft_mask_defs(output, first.index, page, first.soft_mask, scale)
+  pdf_svg_soft_mask_open(output, first.index, first.soft_mask)
   pdf_svg_clip_open(output, first.index, first.clip_path)
   output.write_string(
     "<text x=\"" +
@@ -178,6 +181,7 @@ fn pdf_svg_text(
     "</text>",
   )
   pdf_svg_clip_close(output, first.index, first.clip_path)
+  pdf_svg_soft_mask_close(output, first.index, first.soft_mask)
 }
 
 ///|
@@ -275,6 +279,8 @@ fn pdf_svg_path(
   }
   pdf_svg_clip_defs(output, path.index, path.clip_path)
   pdf_svg_pattern_defs(output, page, path, scale)
+  pdf_svg_soft_mask_defs(output, path.index, page, path.soft_mask, scale)
+  pdf_svg_soft_mask_open(output, path.index, path.soft_mask)
   pdf_svg_clip_open(output, path.index, path.clip_path)
   output.write_string(
     "<path d=\"" +
@@ -310,6 +316,7 @@ fn pdf_svg_path(
     "/>",
   )
   pdf_svg_clip_close(output, path.index, path.clip_path)
+  pdf_svg_soft_mask_close(output, path.index, path.soft_mask)
 }
 
 ///|
@@ -379,14 +386,37 @@ fn pdf_svg_image(
   item : PdfVisualItem,
   scale : Double,
 ) -> Unit {
+  pdf_svg_soft_mask_defs(output, item.index, page, item.soft_mask, scale)
+  pdf_svg_soft_mask_open(output, item.index, item.soft_mask)
   match item.resource {
     Some(resource) =>
       match resource.mask_data_uri {
         Some(mask_data_uri) =>
           pdf_svg_masked_image(output, page, item, scale, mask_data_uri)
         None =>
-          match resource.data_uri {
-            Some(data_uri) => {
+          match (resource.data_uri, resource.alpha_mask_data_uri) {
+            (Some(data_uri), Some(alpha_mask_data_uri)) => {
+              let masked_data_uri = pdf_svg_alpha_mask_data_uri(
+                item, data_uri, alpha_mask_data_uri,
+              )
+              pdf_svg_clip_defs(output, item.index, item.clip_path)
+              pdf_svg_clip_open(output, item.index, item.clip_path)
+              output.write_string(
+                "<image data-pdf-name=\"" +
+                pdf_escape_xml(item.name) +
+                "\" x=\"0\" y=\"0\" width=\"1\" height=\"1\" transform=\"" +
+                pdf_svg_visual_transform(page, item.quad, scale) +
+                "\" preserveAspectRatio=\"none\" href=\"" +
+                masked_data_uri +
+                "\" opacity=\"" +
+                item.fill_alpha.to_string() +
+                "\"" +
+                pdf_svg_blend_style(item.blend_mode) +
+                "/>",
+              )
+              pdf_svg_clip_close(output, item.index, item.clip_path)
+            }
+            (Some(data_uri), None) => {
               pdf_svg_clip_defs(output, item.index, item.clip_path)
               pdf_svg_clip_open(output, item.index, item.clip_path)
               output.write_string(
@@ -404,11 +434,12 @@ fn pdf_svg_image(
               )
               pdf_svg_clip_close(output, item.index, item.clip_path)
             }
-            None => pdf_svg_placeholder(output, page, item, scale, "image")
+            _ => pdf_svg_placeholder(output, page, item, scale, "image")
           }
       }
     None => pdf_svg_placeholder(output, page, item, scale, "image")
   }
+  pdf_svg_soft_mask_close(output, item.index, item.soft_mask)
 }
 
 ///|
@@ -490,12 +521,62 @@ fn pdf_svg_colored_mask_data_uri(
 }
 
 ///|
+/// Combine a decoded image with an explicit `/Mask` or `/SMask` image. The
+/// mask is evaluated in the image's local coordinate system before the whole
+/// nested SVG receives the PDF quad transform, which keeps soft masks correct
+/// for rotated and sheared image placements.
+fn pdf_svg_alpha_mask_data_uri(
+  item : PdfVisualItem,
+  data_uri : String,
+  alpha_mask_data_uri : String,
+) -> String {
+  let (width, height) = match item.resource {
+    Some(resource) =>
+      (resource.width.unwrap_or(1).max(1), resource.height.unwrap_or(1).max(1))
+    None => (1, 1)
+  }
+  let mask_id = "pdf-alpha-mask-inner-" + item.index.to_string()
+  let inner = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 " +
+    width.to_string() +
+    " " +
+    height.to_string() +
+    "\" width=\"" +
+    width.to_string() +
+    "\" height=\"" +
+    height.to_string() +
+    "\"><defs><mask id=\"" +
+    mask_id +
+    "\" mask-type=\"luminance\" maskUnits=\"userSpaceOnUse\" maskContentUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" width=\"" +
+    width.to_string() +
+    "\" height=\"" +
+    height.to_string() +
+    "\"><image x=\"0\" y=\"0\" width=\"" +
+    width.to_string() +
+    "\" height=\"" +
+    height.to_string() +
+    "\" preserveAspectRatio=\"none\" href=\"" +
+    alpha_mask_data_uri +
+    "\"/></mask></defs><image x=\"0\" y=\"0\" width=\"" +
+    width.to_string() +
+    "\" height=\"" +
+    height.to_string() +
+    "\" preserveAspectRatio=\"none\" href=\"" +
+    data_uri +
+    "\" mask=\"url(#" +
+    mask_id +
+    ")\"/></svg>"
+  "data:image/svg+xml;base64," + @base64.encode(@utf8.encode(inner))
+}
+
+///|
 fn pdf_svg_shading(
   output : StringBuilder,
   page : PdfPageModel,
   item : PdfVisualItem,
   scale : Double,
 ) -> Unit {
+  pdf_svg_soft_mask_defs(output, item.index, page, item.soft_mask, scale)
+  pdf_svg_soft_mask_open(output, item.index, item.soft_mask)
   match item.shading {
     Some(shading) if shading.stops.length() > 0 => {
       let gradient_id = "pdf-shading-" +
@@ -575,6 +656,7 @@ fn pdf_svg_shading(
     }
     _ => pdf_svg_placeholder(output, page, item, scale, "shading")
   }
+  pdf_svg_soft_mask_close(output, item.index, item.soft_mask)
 }
 
 ///|
@@ -1002,6 +1084,84 @@ fn pdf_svg_clip_close(
       for _ in 0..<count {
         output.write_string("</g>")
       }
+    }
+    None => ()
+  }
+}
+
+///|
+/// Define a page-space SVG mask for an ExtGState soft mask. The mask image is
+/// placed with ordinary x/y/width/height attributes so browser coordinate
+/// systems do not lose it when the painted item has a PDF affine transform.
+fn pdf_svg_soft_mask_defs(
+  output : StringBuilder,
+  index : Int,
+  page : PdfPageModel,
+  soft_mask : PdfSoftMaskResource?,
+  scale : Double,
+) -> Unit {
+  match soft_mask {
+    Some(mask) => {
+      let id = "pdf-soft-mask-" + index.to_string()
+      let x = (mask.bounds.min_x - page.origin_x) * scale
+      let y = (page.origin_y + page.height - mask.bounds.max_y) * scale
+      let width = (mask.bounds.max_x - mask.bounds.min_x) * scale
+      let height = (mask.bounds.max_y - mask.bounds.min_y) * scale
+      output.write_string(
+        "<defs><mask id=\"" +
+        id +
+        "\" mask-type=\"luminance\" maskUnits=\"userSpaceOnUse\" maskContentUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" width=\"" +
+        (page.width * scale).to_string() +
+        "\" height=\"" +
+        (page.height * scale).to_string() +
+        "\"><rect x=\"0\" y=\"0\" width=\"" +
+        (page.width * scale).to_string() +
+        "\" height=\"" +
+        (page.height * scale).to_string() +
+        "\" fill=\"" +
+        pdf_escape_xml(mask.background) +
+        "\"/><image x=\"" +
+        x.to_string() +
+        "\" y=\"" +
+        y.to_string() +
+        "\" width=\"" +
+        width.to_string() +
+        "\" height=\"" +
+        height.to_string() +
+        "\" preserveAspectRatio=\"none\" href=\"" +
+        mask.data_uri +
+        "\"/></mask></defs>",
+      )
+    }
+    None => ()
+  }
+}
+
+///|
+fn pdf_svg_soft_mask_open(
+  output : StringBuilder,
+  index : Int,
+  soft_mask : PdfSoftMaskResource?,
+) -> Unit {
+  match soft_mask {
+    Some(_) =>
+      output.write_string(
+        "<g mask=\"url(#pdf-soft-mask-" + index.to_string() + ")\">",
+      )
+    None => ()
+  }
+}
+
+///|
+fn pdf_svg_soft_mask_close(
+  output : StringBuilder,
+  index : Int,
+  soft_mask : PdfSoftMaskResource?,
+) -> Unit {
+  match soft_mask {
+    Some(_) => {
+      ignore(index)
+      output.write_string("</g>")
     }
     None => ()
   }

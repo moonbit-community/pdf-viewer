@@ -42,6 +42,7 @@ pub(all) struct PdfTextItem {
   fill_alpha : Double
   blend_mode : String
   clip_path : String?
+  soft_mask : PdfSoftMaskResource?
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -96,6 +97,7 @@ pub(all) struct PdfPathItem {
   pattern : PdfPatternResource?
   blend_mode : String
   clip_path : String?
+  soft_mask : PdfSoftMaskResource?
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -109,6 +111,7 @@ pub(all) struct PdfImageResource {
   mime_type : String
   data_uri : String?
   mask_data_uri : String?
+  alpha_mask_data_uri : String?
   width : Int?
   height : Int?
 } derive(Eq, Debug, ToJson)
@@ -146,6 +149,18 @@ pub(all) struct PdfVisualItem {
   stroke_alpha : Double
   blend_mode : String
   clip_path : String?
+  soft_mask : PdfSoftMaskResource?
+} derive(Eq, Debug, ToJson)
+
+///|
+/// A soft mask attached to a paint item by an ExtGState. The mask data is a
+/// browser image in its own local coordinate system; `bounds` places it in
+/// page user space before the item is painted.
+pub(all) struct PdfSoftMaskResource {
+  data_uri : String
+  bounds : PdfBounds
+  luminosity : Bool
+  background : String
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -564,6 +579,7 @@ fn pdf_page_model(
     page,
     rectangle.min_x,
     rectangle.min_y,
+    rectangle.max_x - rectangle.min_x,
     rectangle.max_y - rectangle.min_y,
   )
   let text = pdf_text_of_items(items)
@@ -813,6 +829,13 @@ priv struct PdfCollectedEntry {
   resources : @syntax.PdfObject
   inline_image : (@syntax.PdfObject, @core.PdfBytes)?
   clip_paths : Array[@shape.PdfPath]
+  soft_mask : PdfCollectedSoftMask?
+}
+
+///|
+priv struct PdfCollectedSoftMask {
+  dictionary : @syntax.PdfObject
+  resources : @syntax.PdfObject
 }
 
 ///|
@@ -837,6 +860,7 @@ fn pdf_collected_entries_of_page(
     page.resources,
     ops,
     initial.clipping_path,
+    None,
   )
 }
 
@@ -849,12 +873,15 @@ fn pdf_collected_entries_of_ops(
   resources : @syntax.PdfObject,
   ops : ArrayView[@content.PdfContentOp],
   initial_clip_paths : ArrayView[@shape.PdfPath],
+  initial_soft_mask : PdfCollectedSoftMask?,
 ) -> Array[PdfCollectedEntry] raise @core.PdfError {
   let mut state = initial
+  let mut soft_mask = initial_soft_mask
   let mut clip_paths : Array[@shape.PdfPath] = [
     for path in initial_clip_paths => path
   ]
   let mut clip_stack : Array[Array[@shape.PdfPath]] = []
+  let mut soft_mask_stack : Array[PdfCollectedSoftMask?] = []
   let output : Array[PdfCollectedEntry] = []
   for op in ops {
     match op {
@@ -883,6 +910,7 @@ fn pdf_collected_entries_of_ops(
                 output.append(
                   pdf_collected_entries_of_ops(
                     document, form_state, form_resources, form_ops, form_clip_paths,
+                    soft_mask,
                   ),
                 )
               }
@@ -901,6 +929,7 @@ fn pdf_collected_entries_of_ops(
                 clip_paths: [
                   for path in clip_paths => path
                 ],
+                soft_mask,
               })
             }
             state = result.state
@@ -917,14 +946,20 @@ fn pdf_collected_entries_of_ops(
             clip_paths: [
               for path in clip_paths => path
             ],
+            soft_mask,
           })
         }
         state = result.state
       }
-      @content.Op_gs(name) =>
+      @content.Op_gs(name) => {
         state = pdf_apply_extgstate_for_viewer(document, state, resources, name)
+        soft_mask = pdf_update_soft_mask_for_viewer(
+          document, resources, name, soft_mask,
+        )
+      }
       @content.Op_q => {
         clip_stack.push([ for path in clip_paths => path ])
+        soft_mask_stack.push(soft_mask)
         let result = document.content_apply_resource_op(state, resources, op)
         state = result.state
       }
@@ -938,6 +973,16 @@ fn pdf_collected_entries_of_ops(
             let stack_length = clip_stack.length()
             clip_stack = [
               for index in 0..<(stack_length - 1) => clip_stack[index]
+            ]
+          }
+          None => ()
+        }
+        match soft_mask_stack.last() {
+          Some(previous) => {
+            soft_mask = previous
+            let stack_length = soft_mask_stack.length()
+            soft_mask_stack = [
+              for index in 0..<(stack_length - 1) => soft_mask_stack[index]
             ]
           }
           None => ()
@@ -963,6 +1008,7 @@ fn pdf_collected_entries_of_ops(
             clip_paths: [
               for path in clip_paths => path
             ],
+            soft_mask,
           })
         }
         state = result.state
@@ -978,6 +1024,7 @@ fn pdf_items_of_page(
   page : @page.PdfPage,
   origin_x : Double,
   origin_y : Double,
+  width : Double,
   height : Double,
 ) -> Array[PdfPageItem] raise @core.PdfError {
   let collected_entries = pdf_collected_entries_of_page(document, page)
@@ -992,6 +1039,14 @@ fn pdf_items_of_page(
       origin_x,
       origin_y,
       height,
+    )
+    let soft_mask = pdf_soft_mask_resource_of_collected(
+      document,
+      origin_x,
+      origin_y,
+      width,
+      height,
+      collected.soft_mask,
     )
     match entry.object {
       @pdflite.PdfContentGlyphObject(_, _, text) =>
@@ -1018,6 +1073,7 @@ fn pdf_items_of_page(
               fill_alpha: paint.fill_alpha,
               blend_mode: paint.blend_mode,
               clip_path,
+              soft_mask,
             }),
           )
         }
@@ -1095,6 +1151,7 @@ fn pdf_items_of_page(
             pattern,
             blend_mode: paint.blend_mode,
             clip_path,
+            soft_mask,
           }),
         )
       }
@@ -1119,6 +1176,7 @@ fn pdf_items_of_page(
             stroke_alpha: paint.stroke_alpha,
             blend_mode: paint.blend_mode,
             clip_path,
+            soft_mask,
           }),
         )
       }
@@ -1151,6 +1209,7 @@ fn pdf_items_of_page(
             stroke_alpha: paint.stroke_alpha,
             blend_mode: paint.blend_mode,
             clip_path,
+            soft_mask,
           }),
         )
       }
@@ -1174,6 +1233,7 @@ fn pdf_items_of_page(
             stroke_alpha: paint.stroke_alpha,
             blend_mode: paint.blend_mode,
             clip_path,
+            soft_mask,
           }),
         )
       }
