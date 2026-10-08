@@ -58,6 +58,9 @@ pub(all) struct PdfTextItem {
 pub(all) struct PdfFontResource {
   name : String
   family : String
+  base_name : String
+  weight : String
+  style : String
   mime_type : String
   format : String
   data_uri : String?
@@ -784,12 +787,32 @@ fn pdf_font_resources_of_items(
 }
 
 ///|
+fn pdf_font_base_name_of(
+  document : @pdflite.PdfDocument,
+  page_number : Int,
+  name : String,
+) -> String {
+  try document.list_fonts([page_number]) catch {
+    _ => []
+  } noraise {
+    entries => {
+      for entry in entries {
+        if entry.name == name && entry.basefont != "" {
+          return entry.basefont
+        }
+      }
+      name
+    }
+  }
+}
+
+///|
 fn pdf_font_resource_of(
   document : @pdflite.PdfDocument,
   page_number : Int,
   name : String,
 ) -> PdfFontResource {
-  let family = pdf_svg_embedded_font_family(name)
+  let base_name = pdf_font_base_name_of(document, page_number, name)
   let (mime_type, format, data_uri) = try {
     match document.extract_fontfile_bytes(page_number, name) {
       Some(data) => {
@@ -807,7 +830,23 @@ fn pdf_font_resource_of(
   } noraise {
     data => data
   }
-  { name, family, mime_type, format, data_uri, }
+  let family = match data_uri {
+    Some(_) => pdf_svg_embedded_font_family(name)
+    None => pdf_svg_font_family(base_name)
+  }
+  let weight = if base_name.contains("Bold") ||
+    base_name.contains("Demi") ||
+    base_name.contains("Black") {
+    "bold"
+  } else {
+    "normal"
+  }
+  let style = if base_name.contains("Italic") || base_name.contains("Oblique") {
+    "italic"
+  } else {
+    "normal"
+  }
+  { name, family, base_name, weight, style, mime_type, format, data_uri, }
 }
 
 ///|

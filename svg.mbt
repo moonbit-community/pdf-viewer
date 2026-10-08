@@ -347,12 +347,8 @@ fn pdf_svg_text(
     )
   }
   let family = pdf_svg_font_family_for_page(page, first.font)
-  let weight = if first.font.contains("Bold") { "bold" } else { "normal" }
-  let style = if first.font.contains("Italic") || first.font.contains("Oblique") {
-    "italic"
-  } else {
-    "normal"
-  }
+  let weight = pdf_svg_font_weight_for_page(page, first.font)
+  let style = pdf_svg_font_style_for_page(page, first.font)
   let fill = if pdf_text_mode_fills(first.rendering_mode) {
     first.fill_color
   } else {
@@ -430,7 +426,11 @@ fn pdf_text_offset(first : PdfTextItem, item : PdfTextItem) -> Double {
 fn pdf_svg_font_family(font : String) -> String {
   if font.contains("Courier") || font.contains("Mono") {
     "monospace"
-  } else if font.contains("Times") || font.contains("Serif") {
+  } else if font.contains("Times") ||
+    font.contains("Serif") ||
+    font.contains("Roman") ||
+    font.contains("NimbusRoman") ||
+    font.contains("LiberationSerif") {
     "serif"
   } else {
     "sans-serif"
@@ -449,11 +449,39 @@ fn pdf_svg_embedded_font_family(font : String) -> String {
 ///|
 fn pdf_svg_font_family_for_page(page : PdfPageModel, font : String) -> String {
   for resource in page.fonts {
-    if resource.name == font && resource.data_uri is Some(_) {
+    if resource.name == font {
       return resource.family
     }
   }
   pdf_svg_font_family(font)
+}
+
+///|
+fn pdf_svg_font_weight_for_page(page : PdfPageModel, font : String) -> String {
+  for resource in page.fonts {
+    if resource.name == font {
+      return resource.weight
+    }
+  }
+  if font.contains("Bold") {
+    "bold"
+  } else {
+    "normal"
+  }
+}
+
+///|
+fn pdf_svg_font_style_for_page(page : PdfPageModel, font : String) -> String {
+  for resource in page.fonts {
+    if resource.name == font {
+      return resource.style
+    }
+  }
+  if font.contains("Italic") || font.contains("Oblique") {
+    "italic"
+  } else {
+    "normal"
+  }
 }
 
 ///|

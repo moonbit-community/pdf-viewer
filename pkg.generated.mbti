@@ -53,6 +53,9 @@ pub fn PdfBounds::to_repr(Self) -> @debug.Repr
 pub(all) struct PdfFontResource {
   name : String
   family : String
+  base_name : String
+  weight : String
+  style : String
   mime_type : String
   format : String
   data_uri : String?
