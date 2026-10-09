@@ -70,6 +70,11 @@ fn pdf_type1_cid_start_data_header(
         (previous[1] != "Binary" && previous[1] != "Hex") {
         return None
       }
+      for char in previous[3].iter() {
+        if char < '0' || char > '9' {
+          return None
+        }
+      }
       let length = match pdf_type1_parse_int(Some(previous[3])) {
         Some(value) => value
         None => return None
@@ -119,6 +124,12 @@ fn pdf_type1_cid_start_data_header(
         match pdf_type1_parse_int(pdf_type1_next_token(scanner)) {
           Some(value) => header = { ..header, cid_map_offset: value, }
           None => ()
+        }
+      "FDArray" =>
+        if pdf_type1_parse_int(pdf_type1_next_token(scanner)) != Some(1) ||
+          pdf_type1_next_token(scanner) != Some("array") {
+          // Reading more than one private dictionary would mix lenIV/subrs.
+          return None
         }
       "FDBytes" =>
         match pdf_type1_parse_int(pdf_type1_next_token(scanner)) {
@@ -203,7 +214,7 @@ fn pdf_type1_cid_start_data_bytes(
     }
     return Some(@core.pdf_bytes_of_int_array(output))
   }
-  if declared_length > (data.length() - first) * 2 {
+  if declared_length > (data.length() - first) / 2 {
     return None
   }
   let output : Array[Int] = Array(capacity=declared_length)
@@ -240,6 +251,10 @@ fn pdf_type1_cid_read_uint(data : BytesView, offset : Int, width : Int) -> Int? 
     width > data.length() - offset {
     return None
   }
+  if width == 4 && data[offset].to_int() >= 0x80 {
+    // Byte offsets must fit the signed Int used by BytesView slicing.
+    return None
+  }
   let mut value = 0
   for byte in data[offset:offset + width] {
     value = (value << 8) | byte.to_int()
@@ -251,17 +266,6 @@ fn pdf_type1_cid_read_uint(data : BytesView, offset : Int, width : Int) -> Int? 
 fn pdf_type1_cid_empty_charstring() -> Bytes raise @core.PdfError {
   // A zero-width endchar is the same fallback used by pdf.js for missing CIDs.
   @core.pdf_bytes_of_int_array([14])
-}
-
-///|
-fn pdf_type1_cid_copy_charstring(
-  charstrings : Map[String, Bytes],
-  name : String,
-) -> Bytes? {
-  match charstrings.get(name) {
-    Some(value) => Some(value)
-    None => None
-  }
 }
 
 ///|
@@ -297,7 +301,7 @@ fn pdf_type1_parse_cid_font(data : Bytes) -> PdfType1Font? raise @core.PdfError 
   let entry_size = header.fd_bytes + header.gd_bytes
   if entry_size <= 0 ||
     header.cid_map_offset > bytes.length() ||
-    header.cid_count + 1 > (bytes.length() - header.cid_map_offset) / entry_size {
+    header.cid_count >= (bytes.length() - header.cid_map_offset) / entry_size {
     return None
   }
   if header.fd_bytes > 0 {
@@ -324,7 +328,7 @@ fn pdf_type1_parse_cid_font(data : Bytes) -> PdfType1Font? raise @core.PdfError 
       header.sd_bytes < 1 ||
       header.sd_bytes > 4 ||
       header.subr_map_offset > bytes.length() ||
-      header.subr_count + 1 >
+      header.subr_count >=
       (bytes.length() - header.subr_map_offset) / header.sd_bytes {
       return None
     }
@@ -345,14 +349,14 @@ fn pdf_type1_parse_cid_font(data : Bytes) -> PdfType1Font? raise @core.PdfError 
       let start = offsets[index]
       let end = offsets[index + 1]
       if start > end || start > bytes.length() || end > bytes.length() {
-        subrs.push(None)
+        subrs.push(Some(@core.pdf_bytes_of_int_array([])))
         continue
       }
       let decoded = match
         pdf_type1_decode_charstring(bytes[start:end], header.len_iv) {
         Some(value) => value
         None => {
-          subrs.push(None)
+          subrs.push(Some(@core.pdf_bytes_of_int_array([])))
           continue
         }
       }
@@ -393,8 +397,7 @@ fn pdf_type1_parse_cid_font(data : Bytes) -> PdfType1Font? raise @core.PdfError 
       }
       charstrings[name] = decoded
     } else {
-      charstrings[name] = match
-        pdf_type1_cid_copy_charstring(charstrings, ".notdef") {
+      charstrings[name] = match charstrings.get(".notdef") {
         Some(value) => value
         None => fallback
       }

@@ -1181,18 +1181,17 @@ fn pdf_type1_glyph_name(
   charcode : Int,
 ) -> String? {
   match pdf_font {
-    @pdflite.PdfFontCIDKeyed(cid_font) => {
-      let cid = pdf_viewer_ttf_cid_of_charcode(cid_font, charcode)
-      if cid < 0 {
-        None
-      } else {
-        let name = if cid == 0 { ".notdef" } else { "cid" + cid.to_string() }
-        match font.charstrings.get(name) {
-          Some(_) => Some(name)
-          None => None
+    @pdflite.PdfFontCIDKeyed(cid_font) =>
+      match pdf_viewer_cid_of_charcode(cid_font, charcode) {
+        Some(cid) if cid >= 0 => {
+          let name = if cid == 0 { ".notdef" } else { "cid" + cid.to_string() }
+          match font.charstrings.get(name) {
+            Some(_) => Some(name)
+            None => None
+          }
         }
+        _ => None
       }
-    }
     @pdflite.PdfFontSimple(simple) => {
       let name = for (code, value) in simple.encoding.table() {
         if code == charcode {

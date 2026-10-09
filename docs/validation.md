@@ -4,11 +4,11 @@ The annotation baseline uses the local pdf.js checkout at revision
 `89b500f5e1d98ed89bb90211e45b28730b2d99ac`, pdflite `0.2.2`, and the native SVG
 CLI. It does not measure parity with pdf.js rendering.
 
-The suite currently contains 89 tests on each of wasm, wasm-gc, JavaScript, and
-native. It includes 13 annotation tests, 17 CFF tests, 14 Type 1 tests, 4
-text-geometry tests, and 8 text-clipping tests. These results cover the MoonBit
-package and CLI;
-they do not establish complete pdf.js compatibility.
+The suite currently contains 103 tests on each of wasm, wasm-gc, JavaScript, and
+native. It includes 13 annotation tests, 17 CFF tests, 23 Type 1 tests, 5 CID
+layout tests, 4 text-geometry tests, and 8 text-clipping tests. These results
+cover the MoonBit package and CLI; they do not establish complete pdf.js
+compatibility.
 
 ## Reproduce
 
@@ -19,6 +19,7 @@ moon run tools/corpus.mbtx
 moon run tools/corpus.mbtx reference/pdf.js/test/pdfs annotation
 moon run tools/corpus.mbtx reference/pdf.js/test/pdfs cff
 moon run tools/corpus.mbtx reference/pdf.js/test/pdfs text_clip
+moon run tools/corpus.mbtx reference/pdf.js/test/pdfs issue15292
 ```
 
 The corpus runner creates a new `_build/corpus-*/` directory every time. Each
@@ -74,12 +75,40 @@ or a pdf.js fidelity score.
 subroutines, `seac`, flex othersubrs, truncated PFB trailers, CID-keyed Binary/Hex
 `StartData`, CIDMap/SubrMap offsets, page drawing, and text clipping. The parser
 uses the embedded font's FontMatrix and keeps parsed outlines cached by font
-object and glyph name. `issue14462_reduced.pdf` produced
+object and glyph name. Additional cases cover signed-Int offset overflow,
+huge counts, truncated tables, decimal-only StartData lengths, oversized and
+incomplete hex data, binary whitespace preservation, no-op invalid subrs, and
+rejection of multiple private dictionaries even when all FD indices are zero.
+CID clipping tests distinguish visible notdef fallback from a valid empty
+outline. `issue14462_reduced.pdf` produced
 11 Type 1 outline paths on its first page; `tracemonkey.pdf` produced 812 on its
 first page; `issue18548_reduced.pdf` produced 4 procedure-form Type 1 outline
 paths. These pages were rendered as SVG and visually compared with Poppler at
 72 dpi. The unit tests cover the single-FD CID-keyed parser; multiple FDArray
 entries and complex predefined CMap recovery are still unsupported.
+
+## External CMap widths and real CID Type 1 sample
+
+`cid_layout_wbtest.mbt` uses a PDF with deliberately different character-code
+and CID width entries. It verifies CID-indexed `/W`, `/DW` and notdef widths,
+consecutive `Tj`/`TJ`, numeric `TJ` adjustments, quote operators, character
+spacing, scale/shear/CTM, clipping positions, ToUnicode text, and preservation
+of the original font's width table. The correction is currently limited to
+two-byte horizontal strings with a parsed external CMap.
+
+The pdf.js fixture `issue15292.pdf` was downloaded from the URL in its `.link`
+file. Its first-page SVG contains 1,041 Type 1 outline paths and no explicit
+placeholders. A Chromium screenshot exposed overlapping text before the width
+correction: character codes were used to look up CID-indexed widths. After the
+correction the body and footer are legible, and their placement was visually
+compared with Poppler at 72 dpi. Artifacts are in
+`_build/corpus-1791554426187/`, with the prior output in
+`_build/corpus-1791553607280/`. This is a manual spot check, not an automated
+pixel diff or a pdf.js fidelity score.
+
+The current CLI smoke run also passed for `cid*.pdf` (2/2), `cff*.pdf` (1/1),
+and `tracemonkey*.pdf` (6/6). Together with `issue15292.pdf`, all 10 first pages
+produced SVGs without explicit placeholders. This checks conversion only.
 
 ## Focused annotation regressions
 

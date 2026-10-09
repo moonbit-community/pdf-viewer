@@ -1077,27 +1077,6 @@ fn pdf_transparency_group_of_form(
 }
 
 ///|
-/// Recursive content walk that mirrors pdflite's entry collector while
-/// retaining the active CTM and resource dictionary for every emitted item.
-fn pdf_text_glyphs_of_op(
-  state : @pdflite.PdfContentOperatorState,
-  op : @content.PdfContentOp,
-) -> Array[@pdflite.PdfContentTextGlyphPlacement] {
-  match op {
-    @content.Op_Tj(_)
-    | @content.Op_TJ(_)
-    | @content.Op_quote(_)
-    | @content.Op_double_quote(_, _, _) =>
-      state.text_state.content_apply_text_op(
-        state.text_state.current_font,
-        state.ctm,
-        op,
-      ).glyphs
-    _ => []
-  }
-}
-
-///|
 /// `pdflite` exposes the glyph placement that its text layer computes. A PDF
 /// vertical writing mode advances by `-w1` in user space, while the compact
 /// layout helper currently stores the positive magnitude. Correct the emitted
@@ -1377,10 +1356,9 @@ fn pdf_collected_entries_of_ops(
             }
           }
           None => {
-            let result = document.content_apply_resource_op(
-              state, resources, op,
+            let (result, raw_glyphs) = pdf_apply_op_for_viewer(
+              document, state, resources, op,
             )
-            let raw_glyphs = pdf_text_glyphs_of_op(state, op)
             let (glyphs, next_vertical_run) = pdf_viewer_correct_vertical_glyphs(
               state, raw_glyphs, vertical_run,
             )
@@ -1516,8 +1494,9 @@ fn pdf_collected_entries_of_ops(
         state = result.state
       }
       _ => {
-        let result = document.content_apply_resource_op(state, resources, op)
-        let raw_glyphs = pdf_text_glyphs_of_op(state, op)
+        let (result, raw_glyphs) = pdf_apply_op_for_viewer(
+          document, state, resources, op,
+        )
         let (glyphs, next_vertical_run) = pdf_viewer_correct_vertical_glyphs(
           state, raw_glyphs, vertical_run,
         )

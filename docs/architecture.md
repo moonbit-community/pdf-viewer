@@ -69,16 +69,29 @@ decoded in the viewer: eexec and PFB framing, ASCII-hex eexec, charstring
 encryption, direct-index subroutines, `seac`, and common flex othersubrs are
 supported. Single-FD CID-keyed Type 1 programs are also decoded from Binary/Hex
 `StartData`, including CIDMap, SubrMap, `lenIV`, and empty-CID fallback.
+Counted `1 array` FDArray declarations and headers without an FDArray
+declaration are supported; other FDArray declaration forms use text fallback.
 Multiple FDArray entries and complex CMap-to-CID recovery remain on the text
 fallback path.
+
+`cid_mapping.mbt` resolves Identity and explicit external CMap entries without
+using ToUnicode values as glyph CIDs. Explicit entries and inherited Identity
+mappings take precedence over notdef fallback. `text_layout.mbt` adapts
+horizontal external-CMap widths: `/W` and `/DW` are indexed by the mapped CID,
+then a temporary character-code width table is passed to pdflite's text-layout
+API. The original parsed font remains unchanged. One layout pass provides the
+entries, glyph transforms, selection bounds, text clips, and next text matrix,
+including consecutive `Tj`, `TJ` adjustments, and quote operators. This
+currently retains pdflite's two-byte CID string decoding; variable-length
+codespaces and full vertical metrics are not covered by this correction.
 
 Text rendering modes 4–7 collect glyph outlines while a text object is read;
 the combined path becomes active at `ET`. Later text-object clips are
 intersected, and the collector saves/restores them with `q/Q`. Form XObjects
 inherit the active clip while keeping their local text clips inside the Form.
 Each text-object clip is resolved once and shared by subsequent page items.
-The current path reconstruction covers CFF, single-byte Type 1, and embedded
-TrueType outlines;
+The current path reconstruction covers CFF, single-byte and single-FD CID-keyed
+Type 1, and embedded TrueType outlines;
 when a glyph outline cannot be decoded, the renderer leaves that clip
 unavailable instead of treating the missing glyph as an empty path. Type 3
 fonts do not contribute to this clip, as required by PDF text semantics.
@@ -109,7 +122,8 @@ outside the current SVG lowering.
 
 The remaining implementation stages are ordered by the visible compatibility gap:
 
-1. Multiple-FD/complex-CMap CID-keyed Type 1 outlines, complete font metrics and system-font fallback policy;
+1. Multiple-FD/complex-CMap CID-keyed Type 1 outlines, variable-length CMap decoding,
+   full vertical/font metrics, and system-font fallback policy;
 2. CTM-preserving path/image geometry, complete group-level mask compositing, and pixel-level
    Gouraud interpolation for mesh triangles;
 3. complete annotation appearance and form/widget layers;

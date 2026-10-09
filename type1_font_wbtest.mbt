@@ -146,6 +146,7 @@ fn type1_test_cid_font(
   cid_count : Int,
   as_hex? : Bool = false,
   len_iv? : Int = -1,
+  extra_header? : String = "",
 ) -> Bytes raise @core.PdfError {
   let output : Array[Int] = []
   let data_marker = if as_hex {
@@ -159,6 +160,7 @@ fn type1_test_cid_font(
     "/FontMatrix [0.001 0 0 0.001 0 0] def\n" +
     "/CIDMapOffset 0 def /FDBytes 0 def /GDBytes 1 def\n" +
     "/CIDCount \{cid_count} def /lenIV \{len_iv} def\n" +
+    extra_header +
     data_marker,
   )
   if as_hex {
@@ -187,17 +189,25 @@ fn type1_test_bytes_hex(data : Bytes) -> String {
 }
 
 ///|
-fn type1_test_cid_document() -> PdfViewerDocument raise {
+fn type1_test_cid_document(
+  contents? : String = "BT /F1 10 Tf 40 60 Td <0001> Tj ET",
+  visible_notdef? : Bool = false,
+) -> PdfViewerDocument raise {
   let binary = type1_test_cid_binary([
-    @core.pdf_bytes_of_int_array([14]),
+    if visible_notdef {
+      type1_test_page_charstring()
+    } else {
+      @core.pdf_bytes_of_int_array([14])
+    },
     type1_test_page_charstring(),
+    @core.pdf_bytes_of_int_array([]),
   ])
-  let font_hex = type1_test_bytes_hex(type1_test_cid_font(binary, 2))
+  let font_hex = type1_test_bytes_hex(type1_test_cid_font(binary, 3))
   annotation_test_document([
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
-    annotation_test_stream("", "BT /F1 10 Tf 40 60 Td <0001> Tj ET"),
+    annotation_test_stream("", contents),
     "<< /Type /Font /Subtype /Type0 /BaseFont /CIDViewer /Encoding /Identity-H /DescendantFonts [6 0 R] >>",
     "<< /Type /Font /Subtype /CIDFontType0 /BaseFont /CIDViewer /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /DW 500 /FontDescriptor 7 0 R >>",
     "<< /Type /FontDescriptor /FontName /CIDViewer /Flags 4 /FontBBox [0 0 1000 1000] /Ascent 1000 /Descent 0 /ItalicAngle 0 /StemV 80 /FontFile 8 0 R >>",
@@ -509,11 +519,280 @@ test "CID-keyed Type 1 rejects multiple FDArray indices" {
 }
 
 ///|
+test "CID-keyed Type 1 rejects multiple private dictionaries even with FD zero" {
+  let binary = type1_test_cid_binary([type1_test_page_charstring()])
+  let single = type1_test_cid_font(
+    binary,
+    1,
+    extra_header="/FDArray 1 array dup 0 1 dict dup begin /lenIV -1 def end put def\n",
+  )
+  assert_true(pdf_type1_parse_font(single) is Some(_))
+  let multiple = type1_test_cid_font(
+    binary,
+    1,
+    extra_header="/FDArray 2 array dup 0 1 dict dup begin /lenIV -1 def end put " +
+      "dup 1 1 dict dup begin /lenIV 4 def end put def\n",
+  )
+  assert_true(pdf_type1_parse_font(multiple) is None)
+}
+
+///|
+test "CID-keyed Type 1 rejects overflowing and truncated offset tables" {
+  let binary = type1_test_cid_binary([type1_test_page_charstring()])
+  assert_true(
+    pdf_type1_parse_font(type1_test_cid_font(binary, 0x7FFFFFFF)) is None,
+  )
+  assert_true(
+    pdf_type1_parse_font(
+      type1_test_cid_font(
+        binary,
+        1,
+        extra_header="/SubrMapOffset 0 def /SDBytes 1 def /SubrCount 2147483647 def\n",
+      ),
+    )
+    is None,
+  )
+  assert_true(pdf_type1_parse_font(type1_test_cid_font(b"\x02", 1)) is None)
+  assert_true(
+    pdf_type1_parse_font(
+      type1_test_cid_font(
+        binary,
+        1,
+        extra_header="/SubrMapOffset 0 def /SDBytes 4 def /SubrCount 5 def\n",
+      ),
+    )
+    is None,
+  )
+}
+
+///|
+test "CID-keyed Type 1 rejects unsigned offsets that do not fit a byte index" {
+  assert_eq(
+    pdf_type1_cid_read_uint(b"\x7F\xFF\xFF\xFF", 0, 4),
+    Some(0x7FFFFFFF),
+  )
+  assert_eq(pdf_type1_cid_read_uint(b"\x80\x00\x00\x00", 0, 4), None)
+  assert_eq(pdf_type1_cid_read_uint(b"\xFF\xFF\xFF\xFF", 0, 4), None)
+  for
+    binary in [
+      b"\x80\x00\x00\x00\x00\x00\x00\x09\x0E", b"\x00\x00\x00\x08\xFF\xFF\xFF\xFF\x0E",
+    ] {
+    assert_true(
+      pdf_type1_parse_font(
+        type1_test_cid_font(binary, 1, extra_header="/GDBytes 4 def\n"),
+      )
+      is None,
+    )
+  }
+  let binary = b"\x0A\x0B\x80\x00\x00\x00\x00\x00\x00\x0A\x0E"
+  assert_true(
+    pdf_type1_parse_font(
+      type1_test_cid_font(
+        binary,
+        1,
+        extra_header="/SubrMapOffset 2 def /SDBytes 4 def /SubrCount 1 def\n",
+      ),
+    )
+    is None,
+  )
+}
+
+///|
+test "CID-keyed Type 1 requires a decimal positive StartData length" {
+  for
+    tail in [
+      "Binary 4 StartData 0000", "(Ascii) 4 StartData 0000", "(Binary) 0 StartData 0000",
+      "(Binary) +4 StartData 0000", "(Binary) -4 StartData 0000", "(Binary) 4.0 StartData 0000",
+      "(Binary) 0x4 StartData 0000", "(Binary) 2147483648 StartData 0000",
+    ] {
+    assert_true(pdf_type1_cid_start_data_header(@utf8.encode(tail)[:]) is None)
+  }
+  guard pdf_type1_cid_start_data_header(b"(Binary) 0004 StartData 0000")
+    is Some((header, _)) else {
+    fail("leading zeroes are valid decimal digits")
+  }
+  assert_eq(header.start_data_length, 4)
+}
+
+///|
+test "CID-keyed Type 1 binary StartData keeps data whitespace and caps length" {
+  let data = b"\r\n \x00\x0E"
+  assert_eq(
+    pdf_type1_cid_start_data_bytes(data, 0, 0x7FFFFFFF, false),
+    Some(b" \x00\x0E"),
+  )
+  assert_eq(
+    pdf_type1_cid_start_data_bytes(b"  \x0E", 0, 2, false),
+    Some(b" \x0E"),
+  )
+  assert_eq(pdf_type1_cid_start_data_bytes(data, -1, 1, false), None)
+  assert_eq(
+    pdf_type1_cid_start_data_bytes(data, data.length() + 1, 1, false),
+    None,
+  )
+}
+
+///|
+test "CID-keyed Type 1 hex StartData rejects incomplete and oversized data" {
+  assert_eq(pdf_type1_cid_start_data_bytes(b" 0", 0, 1, true), None)
+  assert_eq(pdf_type1_cid_start_data_bytes(b" 0 E 1", 0, 2, true), None)
+  assert_eq(pdf_type1_cid_start_data_bytes(b" ZZ", 0, 1, true), None)
+  assert_eq(pdf_type1_cid_start_data_bytes(b" 00", 0, 0x7FFFFFFF, true), None)
+  assert_eq(
+    pdf_type1_cid_start_data_bytes(b" 0 E 0 a", 0, 2, true),
+    Some(b"\x0E\x0A"),
+  )
+}
+
+///|
+test "CID-keyed Type 1 invalid SubrMap intervals remain no-op subroutines" {
+  for offsets in [b"\xFF\xFE", b"\x00\xFF", b"\x05\x05"] {
+    // CIDMap (2), SubrMap (2), then 0 callsubr endchar.
+    let binary = @core.pdf_bytes_of_int_array([
+      4,
+      7,
+      offsets[0].to_int(),
+      offsets[1].to_int(),
+      139,
+      10,
+      14,
+    ])
+    guard pdf_type1_parse_font(
+        type1_test_cid_font(
+          binary,
+          1,
+          extra_header="/SubrMapOffset 2 def /SDBytes 1 def /SubrCount 1 def\n",
+        ),
+      )
+      is Some(font) else {
+      fail("an invalid subr interval should not reject the glyph")
+    }
+    let state = Ref(pdf_cff_new_state(Ref(1000)))
+    assert_true(pdf_type1_run_glyph(font, ".notdef", state, [], 0))
+    assert_true(state.val.commands.is_empty())
+  }
+}
+
+///|
+test "CID-keyed Type 1 does not guess unknown CMap character codes" {
+  let name = fn(value : String) -> @core.PdfName {
+    @core.pdf_name_of_bytes(@utf8.encode(value))
+  }
+  let empty_descriptor : @pdflite.PdfFontDescriptor = {
+    ascent: 0.0,
+    descent: 0.0,
+    avgwidth: 0.0,
+    maxwidth: 0.0,
+    flags: 0,
+    fontbbox: { min_x: 0.0, min_y: 0.0, max_x: 0.0, max_y: 0.0, },
+    italicangle: 0.0,
+    capheight: 0.0,
+    xheight: 0.0,
+    stemv: 0.0,
+    fontfile: None,
+    charset: None,
+    tounicode: None,
+  }
+  let composite : @pdflite.PdfCompositeCIDFont = {
+    cid_system_info: {
+      registry: @core.pdf_bytes_of_int_array([65]),
+      ordering: @core.pdf_bytes_of_int_array([73]),
+      supplement: 0,
+    },
+    cid_basefont: name("/CIDViewer"),
+    cid_fontdescriptor: empty_descriptor,
+    cid_widths: [],
+    cid_widths2: [],
+    cid_default_width: 1000.0,
+    cid_default_width2: [880.0, -1000.0],
+  }
+  let identity = @pdflite.PdfCIDKeyedFont::{
+    basefont: name("/CIDViewer"),
+    composite,
+    encoding: @pdflite.PdfPredefinedCMap(name("/Identity-H")),
+  }
+  assert_eq(pdf_viewer_cid_of_charcode(identity, 0x41), Some(0x41))
+  assert_eq(pdf_viewer_cid_of_charcode(identity, 0xFFFF), Some(0xFFFF))
+  assert_eq(pdf_viewer_cid_of_charcode(identity, 0x10000), None)
+  assert_eq(pdf_viewer_cid_of_charcode(identity, -1), None)
+
+  let unknown_predefined = @pdflite.PdfCIDKeyedFont::{
+    ..identity,
+    encoding: @pdflite.PdfPredefinedCMap(name("/90ms-RKSJ-H")),
+  }
+  assert_eq(pdf_viewer_cid_of_charcode(unknown_predefined, 0x41), None)
+
+  let parsed : @pdflite.PdfParsedCMap = {
+    map: [],
+    cid_map: [(0x41, 3)],
+    notdef_map: [],
+    codespaces: [],
+    usecmap: None,
+    wmode: None,
+    cmap_name: None,
+    cmap_type: None,
+    cid_system_info: None,
+  }
+  let external = @pdflite.PdfCIDKeyedFont::{
+    ..identity,
+    encoding: @pdflite.PdfExternalCMap(10, parsed),
+  }
+  assert_eq(pdf_viewer_cid_of_charcode(external, 0x41), Some(3))
+  assert_eq(pdf_viewer_cid_of_charcode(external, 0x42), None)
+
+  let notdef = @pdflite.PdfCIDKeyedFont::{
+    ..external,
+    encoding: @pdflite.PdfExternalCMap(10, {
+      ..parsed,
+      notdef_map: [(0x41, 0), (0x42, 0)],
+    }),
+  }
+  assert_eq(pdf_viewer_cid_of_charcode(notdef, 0x41), Some(3))
+  assert_eq(pdf_viewer_cid_of_charcode(notdef, 0x42), Some(0))
+  let inherited = @pdflite.PdfCIDKeyedFont::{
+    ..external,
+    encoding: @pdflite.PdfExternalCMap(10, {
+      ..parsed,
+      notdef_map: [(0x41, 0), (0x42, 0)],
+      usecmap: Some(name("/Identity-H")),
+    }),
+  }
+  assert_eq(pdf_viewer_cid_of_charcode(inherited, 0x41), Some(3))
+  assert_eq(pdf_viewer_cid_of_charcode(inherited, 0x42), Some(0x42))
+  assert_eq(pdf_viewer_cid_of_charcode(inherited, 0x10000), None)
+}
+
+///|
 test "CID-keyed Type 1 outlines are used by the page renderer" {
   let viewer = type1_test_cid_document()
   guard viewer.page(1) is Some(page) else { fail("missing CID Type 1 page") }
   let svg = pdf_render_page_svg(page, 1.0, 0)
   assert_true(svg.contains("data-pdf-font-outline=\"type1\""), msg=svg)
+}
+
+///|
+test "CID-keyed Type 1 clips with CID outlines and notdef fallback" {
+  for (code, visible_notdef) in [("0001", false), ("0002", true)] {
+    let page = type1_test_cid_document(
+        contents="BT /F1 10 Tf 7 Tr 40 60 Td <" +
+          code +
+          "> Tj ET 0 0 150 150 re f",
+        visible_notdef~,
+      )
+      .page(1)
+      .unwrap()
+    let paths = text_clip_test_paths(page)
+    assert_eq(paths.length(), 1)
+    assert_eq(paths[0].clip_path, Some("M 40 140 L 45 140 L 45 133 L 40 133"))
+    let svg = pdf_render_page_svg(page, 1.0, 0)
+    assert_true(svg.contains("clip-path=\"url(#pdf-clip-"))
+  }
+  let empty = type1_test_cid_document(
+      contents="BT /F1 10 Tf 7 Tr 40 60 Td <0002> Tj ET 0 0 150 150 re f",
+    )
+    .page(1)
+    .unwrap()
+  assert_eq(text_clip_test_paths(empty)[0].clip_path, Some(""))
 }
 
 ///|
