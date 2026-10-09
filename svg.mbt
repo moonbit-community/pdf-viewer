@@ -455,7 +455,7 @@ fn pdf_svg_text(
     "none"
   }
   let stroke_width = if stroke == "none" { 0.0 } else { font_size * 0.04 }
-  pdf_svg_clip_defs(output, first.index, first.clip_path)
+  pdf_svg_clip_defs(output, first.index, first.clip_path, scale)
   pdf_svg_soft_mask_defs(output, first.index, page, first.soft_mask, scale)
   pdf_svg_soft_mask_open(output, first.index, first.soft_mask)
   pdf_svg_clip_open(output, first.index, first.clip_path)
@@ -504,7 +504,7 @@ fn pdf_svg_outline_text(
   match item.type3_outline {
     None => ()
     Some(outline) => {
-      pdf_svg_clip_defs(output, item.index, item.clip_path)
+      pdf_svg_clip_defs(output, item.index, item.clip_path, scale)
       pdf_svg_soft_mask_defs(output, item.index, page, item.soft_mask, scale)
       pdf_svg_soft_mask_open(output, item.index, item.soft_mask)
       pdf_svg_clip_open(output, item.index, item.clip_path)
@@ -667,7 +667,7 @@ fn pdf_svg_path(
     (path.dash_phase * scale).to_string() +
     "\""
   }
-  pdf_svg_clip_defs(output, path.index, path.clip_path)
+  pdf_svg_clip_defs(output, path.index, path.clip_path, scale)
   pdf_svg_pattern_defs(output, page, path, scale)
   pdf_svg_soft_mask_defs(output, path.index, page, path.soft_mask, scale)
   pdf_svg_soft_mask_open(output, path.index, path.soft_mask)
@@ -920,7 +920,7 @@ fn pdf_svg_image(
               let masked_data_uri = pdf_svg_alpha_mask_data_uri(
                 item, data_uri, alpha_mask_data_uri,
               )
-              pdf_svg_clip_defs(output, item.index, item.clip_path)
+              pdf_svg_clip_defs(output, item.index, item.clip_path, scale)
               pdf_svg_clip_open(output, item.index, item.clip_path)
               output.write_string(
                 "<image data-pdf-name=\"" +
@@ -938,7 +938,7 @@ fn pdf_svg_image(
               pdf_svg_clip_close(output, item.index, item.clip_path)
             }
             (Some(data_uri), None) => {
-              pdf_svg_clip_defs(output, item.index, item.clip_path)
+              pdf_svg_clip_defs(output, item.index, item.clip_path, scale)
               pdf_svg_clip_open(output, item.index, item.clip_path)
               output.write_string(
                 "<image data-pdf-name=\"" +
@@ -975,7 +975,7 @@ fn pdf_svg_masked_image(
   mask_data_uri : String,
 ) -> Unit {
   let mask_data_uri = pdf_svg_colored_mask_data_uri(item, mask_data_uri)
-  pdf_svg_clip_defs(output, item.index, item.clip_path)
+  pdf_svg_clip_defs(output, item.index, item.clip_path, scale)
   pdf_svg_clip_open(output, item.index, item.clip_path)
   output.write_string(
     "<image data-pdf-name=\"" +
@@ -1100,7 +1100,7 @@ fn pdf_svg_shading(
   pdf_svg_soft_mask_open(output, item.index, item.soft_mask)
   match item.shading {
     Some(shading) if shading.mesh.length() > 0 => {
-      pdf_svg_clip_defs(output, item.index, item.clip_path)
+      pdf_svg_clip_defs(output, item.index, item.clip_path, scale)
       pdf_svg_clip_open(output, item.index, item.clip_path)
       output.write_string(
         "<g data-pdf-kind=\"mesh-shading\" data-pdf-name=\"" +
@@ -1120,7 +1120,7 @@ fn pdf_svg_shading(
         item.index.to_string() +
         "-" +
         item.name.replace(old="/", new="-")
-      pdf_svg_clip_defs(output, item.index, item.clip_path)
+      pdf_svg_clip_defs(output, item.index, item.clip_path, scale)
       pdf_svg_clip_open(output, item.index, item.clip_path)
       output.write_string("<defs>")
       if shading.kind == "axial" && shading.coords.length() >= 4 {
@@ -1297,7 +1297,7 @@ fn pdf_svg_placeholder(
   scale : Double,
   kind : String,
 ) -> Unit {
-  pdf_svg_clip_defs(output, item.index, item.clip_path)
+  pdf_svg_clip_defs(output, item.index, item.clip_path, scale)
   pdf_svg_clip_open(output, item.index, item.clip_path)
   output.write_string(
     "<g data-pdf-placeholder=\"true\" data-pdf-kind=\"" +
@@ -1376,6 +1376,7 @@ fn pdf_svg_clip_defs(
   output : StringBuilder,
   index : Int,
   clip_path : String?,
+  scale : Double,
 ) -> Unit {
   match clip_path {
     Some(path) => {
@@ -1384,11 +1385,25 @@ fn pdf_svg_clip_defs(
         parts.push(part.to_owned())
       }
       let base = "pdf-clip-" + index.to_string()
+      // Clips are stored in unscaled, page-relative SVG coordinates. Their
+      // wrappers sit outside the individual paints' scaled transforms, so
+      // apply the output scale here once, including every intersection part.
+      let transform = if scale == 1.0 {
+        ""
+      } else {
+        " transform=\"scale(" + scale.to_string() + ")\""
+      }
       output.write_string("<defs>")
       for part_index, part in parts {
         let id = pdf_svg_clip_id(base, parts.length(), part_index)
         output.write_string(
-          "<clipPath id=\"" + id + "\"><path d=\"" + part + "\"/></clipPath>",
+          "<clipPath id=\"" +
+          id +
+          "\" clipPathUnits=\"userSpaceOnUse\"><path d=\"" +
+          part +
+          "\"" +
+          transform +
+          "/></clipPath>",
         )
       }
       output.write_string("</defs>")

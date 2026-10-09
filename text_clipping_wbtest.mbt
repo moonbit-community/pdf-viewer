@@ -114,6 +114,69 @@ test "one text object contributes one combined clip after ET" {
 }
 
 ///|
+test "viewport scale reaches explicit and text clip intersections for mixed paints" {
+  let document = text_clip_test_document(
+    "q 0 0 150 150 re W n BT /F1 10 Tf 40 60 Td 4 Tr <00> Tj ET " +
+    "0 0 200 200 re f q 80 0 0 80 30 50 cm /Im1 Do Q /Sh1 sh Q",
+    resources="<< /Font << /F1 5 0 R >> /XObject << /Im1 8 0 R >> /Shading << /Sh1 9 0 R >> >>",
+    extra_objects=[
+      annotation_test_stream(
+        "/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode",
+        "FF0000>",
+      ),
+      "<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 200 200] /Function << /FunctionType 2 /Domain [0 1] /C0 [0 0 1] /C1 [0 1 0] /N 1 >> /Extend [true true] >>",
+    ],
+  )
+  let page = document.page(1).unwrap()
+  let mut text = 0
+  let mut paths = 0
+  let mut images = 0
+  let mut shadings = 0
+  for item in page.items {
+    match item {
+      PdfPageItem::Text(item) => {
+        assert_true(item.clip_path is Some(_))
+        text += 1
+      }
+      PdfPageItem::Path(item) => {
+        assert_true(item.clip_path is Some(_))
+        paths += 1
+      }
+      PdfPageItem::Image(item) => {
+        assert_true(item.clip_path is Some(_))
+        images += 1
+      }
+      PdfPageItem::Shading(item) => {
+        assert_true(item.clip_path is Some(_))
+        shadings += 1
+      }
+    }
+  }
+  assert_eq((text, paths, images, shadings), (1, 1, 1, 1))
+  let source_clips = text_clip_test_paths(page)[0].clip_path
+  for scale in [0.5, 1.0, 2.0] {
+    for rotation in [0, 90, 180, 270] {
+      let svg = page.render_svg(scale~, rotation~)
+      let mut clip_count = 0
+      for fragment in svg.split("<clipPath ").drop(1) {
+        let definition = fragment.split("</clipPath>").next().unwrap()
+        assert_true(definition.contains("clipPathUnits=\"userSpaceOnUse\""))
+        if scale == 1.0 {
+          assert_true(!definition.contains("transform="))
+        } else {
+          assert_true(definition.contains("transform=\"scale(\{scale})\""))
+        }
+        clip_count += 1
+      }
+      // The text uses the explicit clip; the following path/image/shading
+      // each intersect it with the glyph clip established after ET.
+      assert_eq(clip_count, 7)
+      assert_eq(text_clip_test_paths(page)[0].clip_path, source_clips)
+    }
+  }
+}
+
+///|
 test "separate text objects intersect while modes four through seven clip" {
   for mode in 4..<=7 {
     let page = text_clip_test_page(

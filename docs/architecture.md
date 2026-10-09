@@ -134,6 +134,9 @@ and applies a retained `/Matrix` at the paint site. ShadingType 4/5/6/7 streams 
 SVG fallback uses barycentric microtriangles and leaves per-vertex colours available for a future
 Canvas/WebGL Gouraud renderer. Explicit clipping paths are serialized as
 nested clip paths so each additional path narrows the previous clip instead of becoming a union.
+Their definitions carry the output scale, just like the paints they wrap;
+leaving them unscaled cuts off zoomed glyphs and images. All clip intersections
+use the same page-relative coordinate convention before the outer rotation.
 PDF ImageMask, colour-key `/Mask`, image `/SMask`, and common Form soft-mask resources are lowered
 to browser-ready mask images. A nested SVG applies image masks before the outer affine transform,
 while page-space soft-mask definitions retain their `/BBox`, backdrop sample, and transfer-map

@@ -6,10 +6,10 @@ CLI. That conversion baseline does not measure parity with pdf.js rendering.
 The automated selected-page visual baseline below now measures actual output
 against the same pinned PDF.js build.
 
-The suite currently contains 148 tests on each of wasm, wasm-gc, JavaScript, and
+The suite currently contains 149 tests on each of wasm, wasm-gc, JavaScript, and
 native. It includes 13 annotation tests, 17 CFF tests, 23 Type 1 tests, 5 CID
 layout tests, 9 variable-length CMap tests, 4 text-geometry tests, and 8
-text-clipping tests. The latest addition has 8 predefined-CMap tests, 8 vertical
+text-clipping tests plus one mixed-paint scaling regression. The latest addition has 8 predefined-CMap tests, 8 vertical
 CID tests, 4 word-spacing tests and 1 missing-descriptor recovery test. The
 browser/text-layer stage adds 4 geometry/range tests, 1 public-API test and
 3 checked documentation examples, plus a separate Chromium interaction suite.
@@ -310,7 +310,7 @@ moon run tools/visual_summary.mbtx _build/visual-test-<run>/report.json
 moon run tools/visual_contract_test.mbtx /path/to/chromium
 ```
 
-The 2026-10-10 baseline in `_build/visual-test-1791564786890/` measured
+The 2026-10-10 baseline in `_build/visual-test-1791565707102/` measured
 **14/14 page/rotation combinations from 9 PDFs**, with **0 measurement
 failures and 0 uncaught runtime exceptions**. PDF.js version `6.5.0`, build
 `89b500f`, rendered in the same Chromium profile as MoonBit, at scale 2 and
@@ -326,10 +326,22 @@ tolerance.** This is a selected corpus, not a visual compatibility percentage.
 | `issue18117.pdf` | page 1, 0° | 11,268 | Text agrees; glyph/raster differences remain |
 | `issue14462_reduced.pdf` | page 1, 0° | 1,578 | Type 1 glyph/raster differences remain |
 | `issue18548_reduced.pdf` | page 1, 0° | 0 | CID Type 1 result is within tolerance; minor exact pixel differences remain |
-| `text_clip_cff_cid.pdf` | page 1, 0° | 71,920 | Clipping does not follow 2x paint scale; the blue letters are cut off |
+| `text_clip_cff_cid.pdf` | page 1, 0° | 346 | Zoom clipping is corrected; residual pixel differences remain |
 | `annotation-highlight.pdf` | page 1, 0° | 2,308 | Appearance differences remain |
 | `annotation-freetext.pdf` | page 1, 0° | 585 | Appearance differences remain |
-| `tracemonkey.pdf` | pages 1/7/14, 0° | 281,767 / 309,663 / 151,714 | Glyphs and normalized extracted text differ |
+| `tracemonkey.pdf` | pages 1/7/14, 0° | 281,767 / 309,769 / 151,714 | Glyphs and normalized extracted text differ |
+
+The initial run `_build/visual-test-1791564786890/` exposed a concrete scale
+bug: clip definitions used unscaled coordinates while text, paths, images
+and shadings painted at the output scale. All clip-definition sites now
+receive that scale, including each part of an intersected clip. The real
+`text_clip_cff_cid.pdf` at scale 2 improves from **71,920 to 346** pixels
+above tolerance, with mean absolute RGB error decreasing from **25.448 to
+0.0147**. Its blue `ABC123` is fully visible in the inspected corrected
+image. The mixed-paint MoonBit regression exercises explicit and text-clip
+intersections on text/path/image/shading at scales 0.5/1/2 and all quarter
+rotations. These improvements do not remove the remaining geometry/font
+gaps in G-02/F-06.
 
 Each run retains PDF.js/MoonBit PNGs, raw RGBA, a heatmap, the original
 run/glyph text geometry, viewport diagnostics, fixture SHA-256, browser build,
@@ -348,6 +360,11 @@ is rejected after saving its report, and a missing fixture counts as one
 failed selected page. The diagnostic shift is recorded explicitly and is
 absent from the default manifest. These checks are separate from the 19
 standalone viewer interaction checks.
+
+After the zoom-clip correction, all **149/149** tests passed on wasm,
+wasm-gc, JavaScript and native, and the standalone Chromium suite again
+passed all **19** interactions. The latter report and screenshots are in
+`_build/browser-test-1791565835505/`.
 
 Normal mode exits successfully when measurement completes, including reported
 differences. Appending `--strict` rejects pixel differences above tolerance,
