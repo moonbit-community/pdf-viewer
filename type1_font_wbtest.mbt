@@ -738,7 +738,7 @@ test "CID-keyed Type 1 does not guess unknown CMap character codes" {
     encoding: @pdflite.PdfExternalCMap(10, parsed),
   }
   assert_eq(pdf_viewer_cid_of_charcode(external, 0x41), Some(3))
-  assert_eq(pdf_viewer_cid_of_charcode(external, 0x42), None)
+  assert_eq(pdf_viewer_cid_of_charcode(external, 0x42), Some(0))
 
   let notdef = @pdflite.PdfCIDKeyedFont::{
     ..external,

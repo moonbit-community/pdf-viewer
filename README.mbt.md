@@ -22,9 +22,10 @@
   flex/seac 和常见 Type 2 charstring 运算；对嵌入的单字节 Type 1 字体解析 eexec/PFB、
   charstring、subroutine、seac 和 flex，并使用同一轮廓绘制；CID-keyed Type 1 支持
   单 FD 的 Binary/Hex `StartData`、CIDMap、SubrMap 和 `lenIV`，多 FD 字体仍使用回退；
-- 对外部 CMap 的双字节水平文字先解析字符码到 CID 的映射，再按 CID 读取 `/W` 和
-  `/DW`。临时宽度表复用 pdflite 的布局计算，连续 `Tj`、`TJ` 字距调整和换行引号共用
-  正确的文字推进位置；绘制、选择边界和文字裁剪采用同一份 glyph placement；
+- 对 reader 已解析的水平外部 CMap，按 codespace 最短匹配切分 1–4 字节字符码，再按
+  映射后的 CID 读取 `/W` 和 `/DW`。每个字形用临时字体复用 pdflite 的几何计算，保留
+  原始字符码和 ToUnicode 多字符映射；连续 `Tj`、`TJ` 调整和换行引号共享文字推进，
+  只有原始单字节 `0x20` 应用 `Tw`。绘制、选择边界和文字裁剪采用同一份 glyph placement；
 - 文字保留实际的 `glyph_transform`（CTM、text matrix、字号、水平缩放、rise 和基线）；
   TrueType 轮廓按 em 绘制，不再把字体总包围盒压进单字的 advance box。SVG 普通文字
   也使用同一矩阵和 alphabetic baseline，避免 FreeText 外观中的文字落到裁剪区域之外；
@@ -135,13 +136,17 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs annotation-highlight
 十进制页码；这与 pdf.js 返回 `null` 的约定不同。optional-content API 目前读取配置，
 还不能通过切换图层改变渲染结果。
 
-这不是声称已经达到 pdf.js 的覆盖率。多 FD/复杂 CMap 的 CID-keyed Type 1、变长 CMap
-字符码与完整纵排 metrics、完整字体 metrics 和系统字体 fallback、
+这不是声称已经达到 pdf.js 的覆盖率。预定义 CMap 到 CID 的映射、复杂 CMap 继承及
+reader 未保留的 codespace、完整纵排 metrics、完整字体 metrics 和系统字体 fallback、
 soft mask 的完整组合成语义、透明组的完整 backdrop/knockout 合成、uncolored/复杂 tiling
 pattern、mesh 的最终像素级 Gouraud 合成、完整 annotation appearance/form 行为仍是后续工作；
 当前 API 会先把可解析内容的页面位置和类型留在
 display list 中，避免宿主丢失结构化信息。现阶段 SVG 输出适合调试和建立回归基线，不能
 当作 pdf.js 的像素级替代品。
+
+四字节字符码的高位保留在 `PdfTextItem.charcode` 的 `Int` 位模式中，可能显示为负数；
+MoonBit 宿主可用 `reinterpret_as_uint()` 取得无符号值。原始 byte span 尚未暴露为公开
+选择元数据。独立浏览器 viewer、DOM cursor 选择和自动 PDF.js 像素对比也尚未实现。
 
 旋转参数按 pdf.js 规则只接受 `0/90/180/270`（允许等价的负数和大于 360 的整数）；
 SVG 渲染遇到其它角度会返回 `PageRotationExpected`，不会静默近似成另一个角度。
@@ -154,3 +159,4 @@ fixture，同时保留一个 MoonBit snapshot/断言测试，先验证结构化�
 输出。这样可以把“解析正确”和“渲染接近 pdf.js”分开定位。
 
 更详细的分层和后续阶段见 [`docs/architecture.md`](docs/architecture.md)。
+逐项能力差距、优先级和验收条件见 [`docs/TODO.md`](docs/TODO.md)。

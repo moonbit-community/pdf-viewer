@@ -4,11 +4,11 @@ The annotation baseline uses the local pdf.js checkout at revision
 `89b500f5e1d98ed89bb90211e45b28730b2d99ac`, pdflite `0.2.2`, and the native SVG
 CLI. It does not measure parity with pdf.js rendering.
 
-The suite currently contains 103 tests on each of wasm, wasm-gc, JavaScript, and
+The suite currently contains 112 tests on each of wasm, wasm-gc, JavaScript, and
 native. It includes 13 annotation tests, 17 CFF tests, 23 Type 1 tests, 5 CID
-layout tests, 4 text-geometry tests, and 8 text-clipping tests. These results
-cover the MoonBit package and CLI; they do not establish complete pdf.js
-compatibility.
+layout tests, 9 variable-length CMap tests, 4 text-geometry tests, and 8
+text-clipping tests. These results cover the MoonBit package and CLI; they do
+not establish complete pdf.js compatibility.
 
 ## Reproduce
 
@@ -20,6 +20,7 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs annotation
 moon run tools/corpus.mbtx reference/pdf.js/test/pdfs cff
 moon run tools/corpus.mbtx reference/pdf.js/test/pdfs text_clip
 moon run tools/corpus.mbtx reference/pdf.js/test/pdfs issue15292
+moon run tools/corpus.mbtx reference/pdf.js/test/pdfs issue18117
 ```
 
 The corpus runner creates a new `_build/corpus-*/` directory every time. Each
@@ -93,8 +94,8 @@ entries and complex predefined CMap recovery are still unsupported.
 and CID width entries. It verifies CID-indexed `/W`, `/DW` and notdef widths,
 consecutive `Tj`/`TJ`, numeric `TJ` adjustments, quote operators, character
 spacing, scale/shear/CTM, clipping positions, ToUnicode text, and preservation
-of the original font's width table. The correction is currently limited to
-two-byte horizontal strings with a parsed external CMap.
+of the original font's width table. The horizontal external-CMap path now
+decodes variable-length strings, as described below.
 
 The pdf.js fixture `issue15292.pdf` was downloaded from the URL in its `.link`
 file. Its first-page SVG contains 1,041 Type 1 outline paths and no explicit
@@ -106,9 +107,46 @@ compared with Poppler at 72 dpi. Artifacts are in
 `_build/corpus-1791553607280/`. This is a manual spot check, not an automated
 pixel diff or a pdf.js fidelity score.
 
-The current CLI smoke run also passed for `cid*.pdf` (2/2), `cff*.pdf` (1/1),
+The earlier CLI smoke run also passed for `cid*.pdf` (2/2), `cff*.pdf` (1/1),
 and `tracemonkey*.pdf` (6/6). Together with `issue15292.pdf`, all 10 first pages
 produced SVGs without explicit placeholders. This checks conversion only.
+
+## Variable-length horizontal external CMaps
+
+`cmap_text_wbtest.mbt` adds 9 tests through the decoder and public byte-reader/
+page path. They cover mixed 1–4 byte codespaces, unsigned high-bit codes,
+shortest-match segmentation, leading zeroes, local versus inherited Identity
+codespaces, CID widths and outlines, multi-codepoint ToUnicode mappings,
+consecutive operators, numeric TJ adjustments, quote line/spacing state,
+source-length-sensitive Tw, invalid/truncated input, selection, and clipping.
+All 112 tests pass on wasm, wasm-gc, JavaScript, and native.
+
+The real PDF.js fixture `issue18117.pdf` contains an embedded SourceHanSansTC
+TrueType font with a UTF-8 CMap, one-byte Latin text, a three-byte punctuation
+code, and four-byte supplementary CJK codes. Its first-page SVG contains 86
+TrueType outline paths and no explicit placeholders. The SVG was opened in
+Chromium and visually compared with Poppler at 72 dpi; both lines, their spaces,
+and the supplementary glyphs are visible with comparable placement. Artifacts
+are in `_build/corpus-1791556855003/`, including `report.json`,
+`issue18117-browser.png`, and `issue18117-poppler.png`. Poppler reports warnings
+for this fixture's ToUnicode bfchar entries, so its extracted Unicode text is
+not used as the oracle. This is a manual visual spot check, not an automated
+PDF.js pixel comparison.
+
+The regression conversion run also passed for `issue15292.pdf` (1/1),
+`cid*.pdf` (2/2), and `cff*.pdf` (1/1). Those runs check first-page conversion,
+not full-document visual conformance. A new Chromium screenshot of
+`issue15292.pdf` was also inspected against the previous corrected screenshot;
+its body and footer placement remain unchanged. The new artifacts are in
+`_build/corpus-1791556939882/`.
+
+Limits: the new path applies to horizontal external CMaps whose codespaces
+survive pdflite's reader. Some four-byte ranges crossing the signed Int boundary
+can be dropped by pdflite `0.2.2`, such as `<00000000> <FFFFFFFF>`; recovering
+them, built-in CMaps, complex UseCMap inheritance, and vertical layout remain
+TODO. Source bytes are retained during layout but are not exposed as stable
+public byte-span metadata. Word spacing is corrected in this path; the other
+font paths have not yet been fully aligned.
 
 ## Focused annotation regressions
 

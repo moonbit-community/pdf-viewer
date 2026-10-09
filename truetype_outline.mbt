@@ -659,16 +659,9 @@ fn pdf_viewer_ttf_cid_of_charcode(
   font : @pdflite.PdfCIDKeyedFont,
   charcode : Int,
 ) -> Int {
-  match font.encoding {
-    @pdflite.PdfExternalCMap(_, parsed) =>
-      for entry in parsed.cid_map {
-        if entry.0 == charcode {
-          break entry.1
-        }
-      } nobreak {
-        charcode
-      }
-    _ => charcode
+  match pdf_viewer_cid_of_charcode(font, charcode) {
+    Some(cid) => cid
+    None => charcode
   }
 }
 

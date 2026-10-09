@@ -1,17 +1,25 @@
 ///|
-fn cid_layout_test_document(contents : String) -> PdfViewerDocument raise {
+fn cid_layout_test_document(
+  contents : String,
+  cmap? : String,
+  tounicode? : String,
+) -> PdfViewerDocument raise {
   let binary = type1_test_cid_binary([
     type1_test_page_charstring(),
     type1_test_page_charstring(),
     type1_test_page_charstring(),
   ])
   let font_hex = type1_test_bytes_hex(type1_test_cid_font(binary, 3))
-  let cmap = "/CMapType 1 def /WMode 0 def\n" +
+  let cmap = cmap.unwrap_or(
+    "/CMapType 1 def /WMode 0 def\n" +
     "1 begincodespacerange <0000> <FFFF> endcodespacerange\n" +
     "3 begincidchar <0041> 1 <0042> 2 <0043> 3 endcidchar\n" +
-    "1 beginnotdefchar <0044> 0 endnotdefchar\n"
-  let tounicode = "1 begincodespacerange <0000> <FFFF> endcodespacerange\n" +
-    "4 beginbfchar <0041> <0041> <0042> <0042> <0043> <0043> <0044> <0044> endbfchar\n"
+    "1 beginnotdefchar <0044> 0 endnotdefchar\n",
+  )
+  let tounicode = tounicode.unwrap_or(
+    "1 begincodespacerange <0000> <FFFF> endcodespacerange\n" +
+    "4 beginbfchar <0041> <0041> <0042> <0042> <0043> <0043> <0044> <0044> endbfchar\n",
+  )
   annotation_test_document([
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",

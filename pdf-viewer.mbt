@@ -35,6 +35,7 @@ pub(all) struct PdfBounds {
 pub(all) struct PdfTextItem {
   index : Int
   text : String
+  /// Four-byte CMap codes retain their unsigned bit pattern in this Int.
   charcode : Int
   advance_x : Double
   advance_y : Double

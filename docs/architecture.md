@@ -76,14 +76,24 @@ fallback path.
 
 `cid_mapping.mbt` resolves Identity and explicit external CMap entries without
 using ToUnicode values as glyph CIDs. Explicit entries and inherited Identity
-mappings take precedence over notdef fallback. `text_layout.mbt` adapts
-horizontal external-CMap widths: `/W` and `/DW` are indexed by the mapped CID,
-then a temporary character-code width table is passed to pdflite's text-layout
-API. The original parsed font remains unchanged. One layout pass provides the
+mappings take precedence over notdef fallback. An unmapped code without an
+inherited CMap uses CID 0. `text_layout.mbt` routes horizontal external-CMap
+operators through `cmap_text.mbt`. It decodes the reader's codespaces from one
+to four bytes, choosing the shortest match and comparing four-byte ranges as
+unsigned values. Codespaces inherit Identity's two-byte range only when no
+local ranges exist. Invalid or truncated codes consume one byte and preserve
+following text.
+
+`/W` and `/DW` are indexed by the mapped CID. A temporary font and synthetic
+two-byte code provide each glyph's geometry through pdflite's layout API;
+the original code and source bytes drive Unicode extraction, and only a
+source one-byte 0x20 applies word spacing. The original parsed font remains
+unchanged. One layout pass provides the
 entries, glyph transforms, selection bounds, text clips, and next text matrix,
-including consecutive `Tj`, `TJ` adjustments, and quote operators. This
-currently retains pdflite's two-byte CID string decoding; variable-length
-codespaces and full vertical metrics are not covered by this correction.
+including consecutive `Tj`, `TJ` adjustments, and quote operators. The public
+Int charcode preserves the bit pattern of unsigned four-byte values; original
+byte spans remain internal. Built-in CMaps, complex inheritance, reader-lost
+codespaces, and full vertical metrics remain outside this correction.
 
 Text rendering modes 4–7 collect glyph outlines while a text object is read;
 the combined path becomes active at `ET`. Later text-object clips are
@@ -122,12 +132,16 @@ outside the current SVG lowering.
 
 The remaining implementation stages are ordered by the visible compatibility gap:
 
-1. Multiple-FD/complex-CMap CID-keyed Type 1 outlines, variable-length CMap decoding,
-   full vertical/font metrics, and system-font fallback policy;
+1. Built-in CMap-to-CID mapping, complex CMap inheritance, full vertical/font
+   metrics, and system-font fallback policy;
 2. CTM-preserving path/image geometry, complete group-level mask compositing, and pixel-level
    Gouraud interpolation for mesh triangles;
 3. complete annotation appearance and form/widget layers;
 4. Canvas/WebGL output and incremental page loading for large documents.
+
+The complete feature backlog and acceptance rules live in
+[`TODO.md`](TODO.md). Multiple-FD CID-keyed Type 1 is an extension rather than
+a parity requirement: the pinned PDF.js Type 1 parser also supports only one FD.
 
 Annotation parsing and SVG lowering live in `annotations.mbt` and
 `annotations_svg.mbt`. The viewer reads the original `/Annots` array: popup

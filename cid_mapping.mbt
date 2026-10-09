@@ -4,12 +4,10 @@ fn pdf_viewer_cid_of_charcode(
   font : @pdflite.PdfCIDKeyedFont,
   charcode : Int,
 ) -> Int? {
-  if charcode < 0 {
-    return None
-  }
   match font.encoding {
     @pdflite.PdfPredefinedCMap(_) =>
-      if charcode <= 0xFFFF &&
+      if charcode >= 0 &&
+        charcode <= 0xFFFF &&
         (font.encoding.is_identity_h() || font.encoding.is_identity_v()) {
         Some(charcode)
       } else {
@@ -30,7 +28,7 @@ fn pdf_viewer_cid_of_charcode(
             Some(name) if name ==
               @core.pdf_name_of_bytes(@utf8.encode("/Identity-H")) ||
               name == @core.pdf_name_of_bytes(@utf8.encode("/Identity-V")) =>
-              if charcode <= 0xFFFF {
+              if charcode >= 0 && charcode <= 0xFFFF {
                 return Some(charcode)
               }
             _ => ()
@@ -40,7 +38,11 @@ fn pdf_viewer_cid_of_charcode(
               break Some(cid)
             }
           } nobreak {
-            None
+            if parsed.usecmap is None {
+              Some(0)
+            } else {
+              None
+            }
           }
         }
       }
