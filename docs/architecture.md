@@ -64,15 +64,21 @@ Embedded CFF fonts are decoded into glyph outlines as well. The parser handles
 raw CFF and OpenType `CFF ` tables, standard and expert encodings, Name-keyed
 and CID-keyed charsets, FDArray/FDSelect, private dictionaries and subroutines,
 and the Type 2 charstring operators used by the tested fonts. Parsed outlines
-are cached per embedded font and glyph. Type 1 charstrings and complete PDF
-font metrics remain outside this renderer.
+are cached per embedded font and glyph. Single-byte Type 1 programs are also
+decoded in the viewer: eexec and PFB framing, ASCII-hex eexec, charstring
+encryption, direct-index subroutines, `seac`, and common flex othersubrs are
+supported. Single-FD CID-keyed Type 1 programs are also decoded from Binary/Hex
+`StartData`, including CIDMap, SubrMap, `lenIV`, and empty-CID fallback.
+Multiple FDArray entries and complex CMap-to-CID recovery remain on the text
+fallback path.
 
 Text rendering modes 4–7 collect glyph outlines while a text object is read;
 the combined path becomes active at `ET`. Later text-object clips are
 intersected, and the collector saves/restores them with `q/Q`. Form XObjects
 inherit the active clip while keeping their local text clips inside the Form.
 Each text-object clip is resolved once and shared by subsequent page items.
-The current path reconstruction covers CFF and embedded TrueType outlines;
+The current path reconstruction covers CFF, single-byte Type 1, and embedded
+TrueType outlines;
 when a glyph outline cannot be decoded, the renderer leaves that clip
 unavailable instead of treating the missing glyph as an empty path. Type 3
 fonts do not contribute to this clip, as required by PDF text semantics.
@@ -103,7 +109,7 @@ outside the current SVG lowering.
 
 The remaining implementation stages are ordered by the visible compatibility gap:
 
-1. Type 1 glyph outlines, complete font metrics and system-font fallback policy;
+1. Multiple-FD/complex-CMap CID-keyed Type 1 outlines, complete font metrics and system-font fallback policy;
 2. CTM-preserving path/image geometry, complete group-level mask compositing, and pixel-level
    Gouraud interpolation for mesh triangles;
 3. complete annotation appearance and form/widget layers;

@@ -4,9 +4,10 @@ The annotation baseline uses the local pdf.js checkout at revision
 `89b500f5e1d98ed89bb90211e45b28730b2d99ac`, pdflite `0.2.2`, and the native SVG
 CLI. It does not measure parity with pdf.js rendering.
 
-The suite currently contains 75 tests on each of wasm, wasm-gc, JavaScript, and
-native. It includes 13 annotation tests, 17 CFF tests, 4 text-geometry tests,
-and 8 text-clipping tests. These results cover the MoonBit package and CLI;
+The suite currently contains 89 tests on each of wasm, wasm-gc, JavaScript, and
+native. It includes 13 annotation tests, 17 CFF tests, 14 Type 1 tests, 4
+text-geometry tests, and 8 text-clipping tests. These results cover the MoonBit
+package and CLI;
 they do not establish complete pdf.js compatibility.
 
 ## Reproduce
@@ -66,6 +67,19 @@ The `text_clip_cff_cid.pdf` SVG was opened in headless Chromium and visually
 compared with Poppler's 72 dpi render. The blue clipped text matched in this
 spot check. This is a manual browser comparison, not an automated pixel diff
 or a pdf.js fidelity score.
+
+## Type 1 outlines
+
+`type1_font_wbtest.mbt` covers eexec encryption, ASCII-hex eexec, direct-index
+subroutines, `seac`, flex othersubrs, truncated PFB trailers, CID-keyed Binary/Hex
+`StartData`, CIDMap/SubrMap offsets, page drawing, and text clipping. The parser
+uses the embedded font's FontMatrix and keeps parsed outlines cached by font
+object and glyph name. `issue14462_reduced.pdf` produced
+11 Type 1 outline paths on its first page; `tracemonkey.pdf` produced 812 on its
+first page; `issue18548_reduced.pdf` produced 4 procedure-form Type 1 outline
+paths. These pages were rendered as SVG and visually compared with Poppler at
+72 dpi. The unit tests cover the single-FD CID-keyed parser; multiple FDArray
+entries and complex predefined CMap recovery are still unsupported.
 
 ## Focused annotation regressions
 

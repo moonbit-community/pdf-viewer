@@ -19,14 +19,16 @@
   字形，并按 `CIDToGIDMap` 把 Identity-V/Identity-H 字符绘制成 SVG path。这样即使嵌入
   字体缺少浏览器可用的 `cmap`，日文等 CID 字体也不会退化成错误的 Unicode 字符；
   同时解析 raw CFF 和 OpenType/CFF 字形，支持 CID 字体、局部/全局 subroutine、hint mask、
-  flex/seac 和常见 Type 2 charstring 运算；Type 1 charstring 仍使用字体回退；
+  flex/seac 和常见 Type 2 charstring 运算；对嵌入的单字节 Type 1 字体解析 eexec/PFB、
+  charstring、subroutine、seac 和 flex，并使用同一轮廓绘制；CID-keyed Type 1 支持
+  单 FD 的 Binary/Hex `StartData`、CIDMap、SubrMap 和 `lenIV`，多 FD 字体仍使用回退；
 - 文字保留实际的 `glyph_transform`（CTM、text matrix、字号、水平缩放、rise 和基线）；
   TrueType 轮廓按 em 绘制，不再把字体总包围盒压进单字的 advance box。SVG 普通文字
   也使用同一矩阵和 alphabetic baseline，避免 FreeText 外观中的文字落到裁剪区域之外；
 - 保留 PDF text rendering mode、填充/描边颜色，并按 paint-site CTM 缩放路径线宽和虚线
   间距；文字 clipping mode 4–7 会在 `ET` 后按字形轮廓建立 clip path，同一 text object
   中的字形合并，后续 text object 求交，并遵守 `q/Q` 和 Form 的作用域。裁剪轮廓目前来自
-  CFF 和嵌入 TrueType 字体；其它字体没有可解码轮廓时不会伪造空 clip；非均匀 CTM 的
+  CFF、单字节 Type 1 和嵌入 TrueType 字体；其它字体没有可解码轮廓时不会伪造空 clip；非均匀 CTM 的
   椭圆文字笔画仍需更底层的 glyph/path renderer；
 - 按 PDF 用户空间矩形返回文本、边界和源 display-list item 索引，供上层做
   cursor/框选和 Agent 上下文压缩；
@@ -129,7 +131,7 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs annotation-highlight
 十进制页码；这与 pdf.js 返回 `null` 的约定不同。optional-content API 目前读取配置，
 还不能通过切换图层改变渲染结果。
 
-这不是声称已经达到 pdf.js 的覆盖率。Type 1 字体轮廓、字体 metrics 和系统字体 fallback、
+这不是声称已经达到 pdf.js 的覆盖率。多 FD/复杂 CMap 的 CID-keyed Type 1、完整字体 metrics 和系统字体 fallback、
 soft mask 的完整组合成语义、透明组的完整 backdrop/knockout 合成、uncolored/复杂 tiling
 pattern、mesh 的最终像素级 Gouraud 合成、完整 annotation appearance/form 行为仍是后续工作；
 当前 API 会先把可解析内容的页面位置和类型留在

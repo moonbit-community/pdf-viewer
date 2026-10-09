@@ -55,7 +55,7 @@ pub(all) struct PdfTextItem {
   soft_mask : PdfSoftMaskResource?
   group : PdfTransparencyGroup?
   group_path : Array[PdfTransparencyGroup]
-  /// An SVG outline for a Type 3, CFF or embedded TrueType glyph when the browser
+  /// An SVG outline for a Type 3, CFF, Type 1 or embedded TrueType glyph when the browser
   /// cannot use the PDF font's original character mapping.
   type3_outline : String?
 } derive(Eq, Debug, ToJson)
@@ -1591,6 +1591,7 @@ fn pdf_items_of_page(
   let collected_entries = pdf_collected_entries_of_page(document, page)
   let items : Array[PdfPageItem] = Array(capacity=collected_entries.length())
   let cff_fonts : Map[Int, PdfCffFont?] = Map([])
+  let type1_fonts : Map[Int, PdfType1Font?] = Map([])
   let mut inline_index = 0
   for source_index, collected in collected_entries {
     let index = index_offset + source_index
@@ -1598,7 +1599,7 @@ fn pdf_items_of_page(
     let bounds = pdf_bounds_of_quad(entry.bounding_box)
     let paint = pdf_paint_attributes_of_state(collected.state)
     let clip_path = pdf_clip_path_of_collected(
-      document, collected, cff_fonts, origin_x, origin_y, height,
+      document, collected, cff_fonts, type1_fonts, origin_x, origin_y, height,
     )
     let soft_mask = pdf_soft_mask_resource_of_collected(
       document,
@@ -1676,7 +1677,26 @@ fn pdf_items_of_page(
               height,
             )
         }
-        let glyph_outline = match cff_outline {
+        let type1_outline = match cff_outline {
+          Some(value) => Some(value)
+          None =>
+            pdf_type1_outline_of_pdf_glyph(
+              document,
+              collected.state.text_state.current_font,
+              type1_fonts,
+              charcode,
+              glyph_matrix,
+              state.rendering_mode,
+              fill_color,
+              stroke_color,
+              paint.fill_alpha,
+              paint.stroke_alpha,
+              origin_x,
+              origin_y,
+              height,
+            )
+        }
+        let glyph_outline = match type1_outline {
           Some(value) => Some(value)
           None =>
             pdf_truetype_outline_of_pdf_glyph(

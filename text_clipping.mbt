@@ -52,6 +52,7 @@ fn pdf_text_clip_path_of_group(
   document : @pdflite.PdfDocument,
   group : PdfCollectedTextClipGroup,
   fonts : Map[Int, PdfCffFont?],
+  type1_fonts : Map[Int, PdfType1Font?],
   origin_x : Double,
   origin_y : Double,
   height : Double,
@@ -62,7 +63,7 @@ fn pdf_text_clip_path_of_group(
   }
   let paths : Array[String] = []
   for glyph in group.glyphs {
-    let path = match
+    let cff_path = match
       pdf_cff_path_of_pdf_glyph(
         document,
         glyph.font,
@@ -73,6 +74,24 @@ fn pdf_text_clip_path_of_group(
         origin_y,
         height,
       ) {
+      Some(path) => Some(path)
+      None => None
+    }
+    let type1_path = match cff_path {
+      Some(path) => Some(path)
+      None =>
+        pdf_type1_path_of_pdf_glyph(
+          document,
+          glyph.font,
+          type1_fonts,
+          glyph.charcode,
+          Some(glyph.matrix),
+          origin_x,
+          origin_y,
+          height,
+        )
+    }
+    let path = match type1_path {
       Some(path) => Some(path)
       None =>
         pdf_truetype_path_of_pdf_glyph(
@@ -110,6 +129,7 @@ fn pdf_clip_path_of_collected(
   document : @pdflite.PdfDocument,
   collected : PdfCollectedEntry,
   fonts : Map[Int, PdfCffFont?],
+  type1_fonts : Map[Int, PdfType1Font?],
   origin_x : Double,
   origin_y : Double,
   height : Double,
@@ -123,7 +143,7 @@ fn pdf_clip_path_of_collected(
   for group in collected.text_clip_groups {
     match
       pdf_text_clip_path_of_group(
-        document, group, fonts, origin_x, origin_y, height,
+        document, group, fonts, type1_fonts, origin_x, origin_y, height,
       ) {
       Some(path) => parts.push(path)
       None => ()
