@@ -1,0 +1,884 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/process",
+  "moonbitlang/async/shell",
+  "moonbitlang/async/socket",
+  "moonbitlang/async/websocket",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
+  "moonbitlang/core/encoding/base64",
+}
+
+///|
+struct Browser {
+  socket : @websocket.Conn
+  mut id : Int
+  errors : Array[Json]
+  warnings : Array[Json]
+}
+
+///|
+async fn Browser::command(
+  self : Browser,
+  operation : String,
+  params? : Json = {},
+) -> Json {
+  self.id += 1
+  let id = self.id
+  let request : Json = { "id": id, "method": operation, "params": params }
+  self.socket.send_text(request.stringify())
+  for ;; {
+    let message = @async.with_timeout(45000, () => {
+      self.socket.recv().read_all().text()
+    })
+    let response = @json.parse(message)
+    match response {
+      { "id": Number(value, ..), "error": error, .. } if value == id.to_double() =>
+        fail("CDP error: " + error.stringify())
+      { "id": Number(value, ..), "result": result, .. } if value ==
+        id.to_double() => return result
+      { "method": String("Runtime.exceptionThrown"), .. } =>
+        self.errors.push(response)
+      {
+        "method": String("Runtime.consoleAPICalled"),
+        "params": { "type": String(kind), .. },
+        ..
+      } if kind == "warning" || kind == "error" => self.warnings.push(response)
+      _ => ()
+    }
+  }
+}
+
+///|
+async fn Browser::evaluate(self : Browser, expression : String) -> Json {
+  let response = self.command("Runtime.evaluate", params={
+    "expression": expression,
+    "awaitPromise": true,
+    "returnByValue": true,
+  })
+  match response {
+    {
+      "exceptionDetails": {
+        "exception": { "description": String(message), .. },
+        ..
+      },
+      ..
+    } => fail("Browser evaluation: " + message)
+    { "exceptionDetails": error, .. } =>
+      fail("Browser evaluation: " + error.stringify())
+    { "result": { "value": value, .. }, .. } => value
+    _ => fail("Missing browser result: " + response.stringify())
+  }
+}
+
+///|
+async fn Browser::capture(
+  self : Browser,
+  stem : String,
+  width : Int,
+  height : Int,
+) -> Unit {
+  guard width > 0 &&
+    height > 0 &&
+    width <= 8192 &&
+    height <= 8192 &&
+    width <= 16777216 / height else {
+    fail("Raster exceeds the validation limit (16M pixels / 8192px per side)")
+  }
+  let response = self.command("Page.captureScreenshot", params={
+    "format": "png",
+    "fromSurface": true,
+    "captureBeyondViewport": true,
+    "clip": { "x": 0, "y": 0, "width": width, "height": height, "scale": 1 },
+  })
+  guard response is { "data": String(png), .. } else {
+    fail("Missing screenshot")
+  }
+  @fs.write_file(stem + ".png", @base64.decode(png))
+  // Browser code here only decodes its own PNG and copies the RGBA bytes.
+  // Pixel analysis, accounting, file IO and process control remain MoonBit.
+  let raw = self.evaluate(
+    "window.decodeScreenshot(" + Json::string(png).stringify() + ")",
+  )
+  guard raw
+    is {
+      "rgba": String(rgba),
+      "width": Number(w, ..),
+      "height": Number(h, ..),
+      ..
+    } &&
+    w == width.to_double() &&
+    h == height.to_double() else {
+    fail("Screenshot dimensions differ from the requested device-pixel clip")
+  }
+  @fs.write_file(stem + ".rgba", @base64.decode(rgba))
+}
+
+///|
+async fn Browser::heatmap(
+  self : Browser,
+  stem : String,
+  width : Int,
+  height : Int,
+) -> Unit {
+  let bytes = @fs.read_file(stem + ".rgba").binary()
+  let encoded = @base64.encode(bytes)
+  let response = self.evaluate(
+    "window.encodeHeatmap(" +
+    Json::string(encoded).stringify() +
+    ",\{width},\{height})",
+  )
+  guard response is String(png) else { fail("Missing encoded heatmap") }
+  @fs.write_file(stem + ".png", @base64.decode(png))
+}
+
+///|
+fn field(value : Json, name : String) -> Json {
+  match value {
+    Object(fields) => fields.get(name).unwrap_or(Json::null())
+    _ => Json::null()
+  }
+}
+
+///|
+fn integer(value : Json) -> Int {
+  guard value is Number(number, ..) &&
+    !number.is_nan() &&
+    !number.is_inf() &&
+    number == number.trunc() &&
+    number >= -2147483648.0 &&
+    number <= 2147483647.0 else {
+    abort("Expected a finite Int: " + value.stringify())
+  }
+  number.to_int()
+}
+
+///|
+fn number(value : Json) -> Double {
+  guard value is Number(number, ..) else { abort("Expected a number") }
+  number
+}
+
+///|
+fn without_whitespace(text : String) -> String {
+  let output = StringBuilder()
+  for character in text {
+    if !character.is_whitespace() {
+      output.write_char(character)
+    }
+  }
+  output.to_string()
+}
+
+///|
+fn text_comparison(reference : Json, viewer : Json) -> Json {
+  guard field(reference, "text") is String(a) &&
+    field(viewer, "text") is String(b) else {
+    return { "error": "Missing text output" }
+  }
+  let normalized_a = without_whitespace(a)
+  let normalized_b = without_whitespace(b)
+  let limit = if normalized_a.length() < normalized_b.length() {
+    normalized_a.length()
+  } else {
+    normalized_b.length()
+  }
+  let mut first_difference = 0
+  while first_difference < limit &&
+        normalized_a[first_difference] == normalized_b[first_difference] {
+    first_difference += 1
+  }
+  {
+    "raw_equal": a == b,
+    "without_whitespace_equal": normalized_a == normalized_b,
+    "reference_utf16_units": a.length(),
+    "viewer_utf16_units": b.length(),
+    "reference_nonspace_utf16_units": normalized_a.length(),
+    "viewer_nonspace_utf16_units": normalized_b.length(),
+    "first_nonspace_difference_utf16": if normalized_a == normalized_b {
+      Json::null()
+    } else {
+      Json::number(first_difference.to_double())
+    },
+    "scope": "Paint-order text with whitespace removed; no bidi/ligature normalization or glyph/run correspondence is inferred",
+  }
+}
+
+///|
+fn geometry_comparison(reference : Json, viewer : Json) -> Json {
+  let a = field(reference, "viewport")
+  let b = field(viewer, "viewport")
+  let width_delta = (number(field(a, "width")) - number(field(b, "width"))).abs()
+  let height_delta = (number(field(a, "height")) - number(field(b, "height"))).abs()
+  guard field(a, "matrix") is Array(am) &&
+    field(b, "matrix") is Array(bm) &&
+    am.length() == 6 &&
+    bm.length() == 6 else {
+    return { "error": "Invalid viewport matrix" }
+  }
+  let mut matrix_delta = 0.0
+  for index in 0..<6 {
+    let delta = (number(am[index]) - number(bm[index])).abs()
+    if delta > matrix_delta {
+      matrix_delta = delta
+    }
+  }
+  {
+    "equal_within_1e_6": width_delta <= 0.000001 &&
+    height_delta <= 0.000001 &&
+    matrix_delta <= 0.000001,
+    "width_delta": width_delta,
+    "height_delta": height_delta,
+    "max_matrix_delta": matrix_delta,
+    "reference": a,
+    "viewer": b,
+    "scope": "Viewport dimensions and affine transform; raw per-run/glyph geometry is retained separately",
+  }
+}
+
+///|
+async fn serve(request : @http.Request, conn : @http.ServerConnection) -> Unit {
+  let path = request.path
+  if !(request.meth is (Get | Head)) {
+    conn.send_response(405, "Method Not Allowed")
+    conn.end_response()
+    return
+  }
+  if path == "/" {
+    let html = "<!doctype html><meta charset=utf-8><title>PDF comparison</title><style>html,body{margin:0;background:white}svg,canvas{display:block}</style>"
+    conn.send_response(200, "OK", extra_headers={
+      "Content-Type": "text/html; charset=utf-8",
+    })
+    if request.meth is Get {
+      conn.write(html)
+    }
+    conn.end_response()
+    return
+  }
+  let file = match path {
+    "/_moon/pdf.js" => Some("web/_generated/pdf.js")
+    [.. "/fixture/", .. name] if valid_filename(name.to_owned()) &&
+      name.has_suffix(".pdf") =>
+      Some("reference/pdf.js/test/pdfs/" + name.to_owned())
+    [.. "/_oracle/build/", .. name] if name == "pdf.mjs" ||
+      name == "pdf.worker.mjs" ||
+      name == "pdf.renderer.mjs" =>
+      Some("reference/pdf.js/build/generic/build/" + name.to_owned())
+    [.. "/_oracle/web/", .. rest] => {
+      let parts = rest.split("/").to_array()
+      if parts.length() == 2 &&
+        (
+          parts[0] == "cmaps" ||
+          parts[0] == "standard_fonts" ||
+          parts[0] == "wasm" ||
+          parts[0] == "iccs"
+        ) &&
+        valid_filename(parts[1].to_owned()) {
+        Some("reference/pdf.js/build/generic/web/" + rest.to_owned())
+      } else {
+        None
+      }
+    }
+    _ => None
+  }
+  guard file is Some(file) && @fs.exists(file) else {
+    conn.send_response(404, "Not Found")
+    conn.end_response()
+    return
+  }
+  let mime = if file.has_suffix(".mjs") || file.has_suffix(".js") {
+    "text/javascript; charset=utf-8"
+  } else if file.has_suffix(".wasm") {
+    "application/wasm"
+  } else {
+    "application/octet-stream"
+  }
+  let bytes = @fs.read_file(file).binary()
+  conn.send_response(200, "OK", extra_headers={
+    "Content-Type": mime,
+    "Content-Length": bytes.length().to_string(),
+    "Cache-Control": "no-store",
+  })
+  if request.meth is Get {
+    conn.write(bytes)
+  }
+  conn.end_response()
+}
+
+///|
+fn valid_filename(name : String) -> Bool {
+  if name.is_empty() || name.contains("..") {
+    return false
+  }
+  for character in name {
+    if !((character >= 'a' && character <= 'z') ||
+      (character >= 'A' && character <= 'Z') ||
+      (character >= '0' && character <= '9') ||
+      character == '.' ||
+      character == '_' ||
+      character == '-') {
+      return false
+    }
+  }
+  true
+}
+
+///|
+let browser_bridge =
+  #| (async () => {
+  #|   window.pdfjs = await import('/_oracle/build/pdf.mjs');
+  #|   pdfjs.GlobalWorkerOptions.workerSrc = '/_oracle/build/pdf.worker.mjs';
+  #|   window.moon = await import('/_moon/pdf.js');
+  #|   window.openPair = async file => {
+  #|     if (window.referenceTask) await referenceTask.destroy();
+  #|     moon.close_pdf();
+  #|     const response = await fetch('/fixture/' + encodeURIComponent(file));
+  #|     if (!response.ok) throw new Error('Fixture fetch failed: ' + response.status);
+  #|     const bytes = new Uint8Array(await response.arrayBuffer());
+  #|     const viewer = JSON.parse(moon.open_pdf(bytes));
+  #|     if (!viewer.ok) throw new Error(viewer.error);
+  #|     window.referenceTask = pdfjs.getDocument({
+  #|       data: bytes.slice(), cMapUrl: '/_oracle/web/cmaps/', cMapPacked: true,
+  #|       standardFontDataUrl: '/_oracle/web/standard_fonts/', wasmUrl: '/_oracle/web/wasm/',
+  #|       iccUrl: '/_oracle/web/iccs/', useSystemFonts: true, disableFontFace: false,
+  #|       isEvalSupported: false, enableXfa: false,
+  #|     });
+  #|     window.referenceDocument = await referenceTask.promise;
+  #|     return {referencePages: referenceDocument.numPages, viewerPages: viewer.pages};
+  #|   };
+  #|   const painted = async () => {
+  #|     await document.fonts.ready;
+  #|     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  #|   };
+  #|   window.renderReference = async (number, scale, rotation) => {
+  #|     const start = performance.now();
+  #|     const page = await referenceDocument.getPage(number);
+  #|     const viewport = page.getViewport({scale, rotation: page.rotate + rotation});
+  #|     const canvas = document.createElement('canvas');
+  #|     canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
+  #|     document.body.replaceChildren(canvas);
+  #|     await page.render({canvas, viewport, annotationMode: pdfjs.AnnotationMode.ENABLE,
+  #|       background: 'rgb(255,255,255)', intent: 'display'}).promise;
+  #|     await painted();
+  #|     const content = await page.getTextContent();
+  #|     return {width: canvas.width, height: canvas.height, render_ms: performance.now() - start,
+  #|       viewport: {width: viewport.width, height: viewport.height, matrix: viewport.transform},
+  #|       text: content.items.map(i => (i.str || '') + (i.hasEOL ? '\n' : '')).join(''),
+  #|       content, rotation: page.rotate + rotation};
+  #|   };
+  #|   window.renderViewer = async (number, scale, rotation, diagnosticTranslateX) => {
+  #|     const start = performance.now();
+  #|     const result = JSON.parse(moon.render_page(number, scale, rotation));
+  #|     if (!result.ok) throw new Error(result.error);
+  #|     document.body.innerHTML = result.svg;
+  #|     document.body.querySelector('svg').style.display = 'block';
+  #|     document.body.querySelector('svg').style.transform = `translateX(${diagnosticTranslateX}px)`;
+  #|     await Promise.all([...document.querySelectorAll('image')].map(element => new Promise((resolve, reject) => {
+  #|       const image = new Image(); image.onload = resolve; image.onerror = () => reject(new Error('SVG image decode failed'));
+  #|       image.src = element.getAttribute('href') || element.getAttribute('xlink:href');
+  #|     })));
+  #|     await painted();
+  #|     return {width: Math.ceil(result.layer.viewport.width), height: Math.ceil(result.layer.viewport.height),
+  #|       render_ms: performance.now() - start, viewport: result.layer.viewport,
+  #|       text: result.layer.items.map(i => i.separator + i.text).join(''), layer: result.layer,
+  #|       diagnostic_viewer_translation_x: diagnosticTranslateX,
+  #|       placeholders: document.querySelectorAll('[data-pdf-placeholder="true"]').length};
+  #|   };
+  #|   const base64 = bytes => {
+  #|     const chunks = []; for (let i = 0; i < bytes.length; i += 32768) chunks.push(String.fromCharCode(...bytes.subarray(i, i + 32768)));
+  #|     return btoa(chunks.join(''));
+  #|   };
+  #|   window.decodeScreenshot = async png => {
+  #|     const blob = await (await fetch('data:image/png;base64,' + png)).blob();
+  #|     const image = await createImageBitmap(blob);
+  #|     const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
+  #|     const ctx = canvas.getContext('2d', {willReadFrequently: true}); ctx.drawImage(image, 0, 0);
+  #|     const rgba = base64(ctx.getImageData(0, 0, image.width, image.height).data);
+  #|     const result = {width: image.width, height: image.height, rgba}; image.close(); return result;
+  #|   };
+  #|   window.encodeHeatmap = (raw, width, height) => {
+  #|     const bytes = Uint8ClampedArray.from(atob(raw), c => c.charCodeAt(0));
+  #|     const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+  #|     canvas.getContext('2d').putImageData(new ImageData(bytes, width, height), 0, 0);
+  #|     return canvas.toDataURL('image/png').split(',')[1];
+  #|   };
+  #|   return {version: pdfjs.version, build: pdfjs.build, userAgent: navigator.userAgent};
+  #| })()
+
+///|
+async fn measure(
+  browser : Browser,
+  file : String,
+  page : Int,
+  rotation : Int,
+  scale : Double,
+  counts : Json,
+  features : Json,
+  hash : String,
+  output : String,
+  diagnostic_translation : Double,
+) -> Json {
+  let stem = file + ".page-\{page}.rotation-\{rotation}"
+  let reference_stem = output + "/" + stem + ".reference"
+  let viewer_stem = output + "/" + stem + ".viewer"
+  let diff_stem = output + "/" + stem + ".diff"
+  let args = "(\{page},\{scale},\{rotation})"
+  let reference = browser.evaluate("window.renderReference" + args)
+  @fs.write_file(reference_stem + ".json", reference.stringify(indent=2))
+  let rw = integer(field(reference, "width"))
+  let rh = integer(field(reference, "height"))
+  browser.capture(reference_stem, rw, rh)
+  let viewer = browser.evaluate(
+    "window.renderViewer(\{page},\{scale},\{rotation},\{diagnostic_translation})",
+  )
+  @fs.write_file(viewer_stem + ".json", viewer.stringify(indent=2))
+  let vw = integer(field(viewer, "width"))
+  let vh = integer(field(viewer, "height"))
+  browser.capture(viewer_stem, vw, vh)
+  let result = @shell.Cmd(
+    "_build/native/release/build/cmd/visual_diff/visual_diff.exe",
+    [
+      reference_stem + ".rgba",
+      rw.to_string(),
+      rh.to_string(),
+      viewer_stem + ".rgba",
+      vw.to_string(),
+      vh.to_string(),
+      diff_stem + ".rgba",
+    ],
+  ).output(timeout_ms=30000)
+  guard result.exit_code() == 0 else {
+    fail("Pixel comparison failed: " + result.stdout() + result.stderr())
+  }
+  let pixels = @json.parse(result.stdout())
+  browser.heatmap(
+    diff_stem,
+    integer(field(pixels, "width")),
+    integer(field(pixels, "height")),
+  )
+  let geometry = geometry_comparison(reference, viewer)
+  let text = text_comparison(reference, viewer)
+  let difference = integer(field(pixels, "changed_above_tolerance")) > 0 ||
+    field(geometry, "equal_within_1e_6") != Json::boolean(true) ||
+    field(text, "without_whitespace_equal") != Json::boolean(true) ||
+    field(counts, "referencePages") != field(counts, "viewerPages")
+  {
+    "file": file,
+    "file_sha256": hash,
+    "page": page,
+    "rotation": rotation,
+    "scale": scale,
+    "diagnostic_viewer_translation_x": diagnostic_translation,
+    "features": features,
+    "page_counts": counts,
+    "status": if difference {
+      "measured-with-differences"
+    } else {
+      "measured-within-tolerance"
+    },
+    "pixels": pixels,
+    "geometry": geometry,
+    "text": text,
+    "reference_render_ms": field(reference, "render_ms"),
+    "viewer_render_ms": field(viewer, "render_ms"),
+    "placeholders": field(viewer, "placeholders"),
+    "reference_png": stem + ".reference.png",
+    "viewer_png": stem + ".viewer.png",
+    "diff_png": stem + ".diff.png",
+    "reference_json": stem + ".reference.json",
+    "viewer_json": stem + ".viewer.json",
+  }
+}
+
+///|
+fn escape_html(value : String) -> String {
+  value
+  .replace(old="&", new="&amp;")
+  .replace(old="<", new="&lt;")
+  .replace(old=">", new="&gt;")
+  .replace(old="\"", new="&quot;")
+  .replace(old="'", new="&#39;")
+}
+
+///|
+fn html_report(results : Array[Json]) -> String {
+  let html = StringBuilder()
+  let intro =
+    #| <!doctype html><meta charset="utf-8"><title>MoonBit / PDF.js comparison</title>
+    #| <style>body{font:15px system-ui;margin:32px;background:#f5f6f8;color:#182235}article{background:white;padding:20px;margin:24px 0;border-radius:8px}.pages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}img{display:block;max-width:100%;border:1px solid #ccd2da}pre{white-space:pre-wrap}a{color:#1854b3}</style>
+    #| <h1>MoonBit / PDF.js comparison</h1><p>Same browser, white background, scale and device-pixel coordinates. Yellow: matching colors within a symmetric 1px neighborhood; red: outside that neighborhood. Yellow can still mean a shifted thin line. Raw differences remain counted. This selected corpus is not a compatibility percentage.</p><p><a href="report.json">Full JSON report</a></p>
+  html.write_string(intro)
+  for result in results {
+    html.write_string("<article><h2>")
+    html.write_string(escape_html(field(result, "file").stringify()))
+    html.write_string(
+      " · page " +
+      field(result, "page").stringify() +
+      " · rotation " +
+      field(result, "rotation").stringify() +
+      "</h2>",
+    )
+    if field(result, "status") == Json::string("failed") {
+      html.write_string(
+        "<pre>" + escape_html(result.stringify(indent=2)) + "</pre></article>",
+      )
+      continue
+    }
+    let pixels = field(result, "pixels")
+    html.write_string(
+      "<p>" +
+      escape_html(field(result, "status").stringify()) +
+      " · raw pixels above tolerance: " +
+      field(pixels, "changed_above_tolerance").stringify() +
+      " · outside neighborhood: " +
+      field(pixels, "outside_neighborhood").stringify() +
+      "</p><div class=pages>",
+    )
+    for
+      (name, key) in [
+        ("PDF.js", "reference_png"),
+        ("MoonBit", "viewer_png"),
+        ("Differences", "diff_png"),
+      ] {
+      guard field(result, key) is String(path) else { continue }
+      html.write_string(
+        "<div>" +
+        name +
+        "<a href=\"" +
+        escape_html(path) +
+        "\"><img loading=lazy src=\"" +
+        escape_html(path) +
+        "\"></a></div>",
+      )
+    }
+    html.write_string(
+      "</div><details><summary>Text / viewport / pixel metrics</summary><pre>" +
+      escape_html(result.stringify(indent=2)) +
+      "</pre></details></article>",
+    )
+  }
+  html.to_string()
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  if args.length() > 4 {
+    fail("usage: visual_test.mbtx [manifest.json] [chromium] [--strict]")
+  }
+  let manifest_path = if args.length() > 1 {
+    args[1]
+  } else {
+    "tools/visual_cases.json"
+  }
+  let chrome = if args.length() > 2 {
+    args[2]
+  } else {
+    "/root/.cache/ms-playwright/chromium-1223/chrome-linux/chrome"
+  }
+  let strict = args.length() > 3 && args[3] == "--strict"
+  if args.length() > 3 && !strict {
+    fail("Unknown argument: " + args[3])
+  }
+  let manifest = @json.parse(@fs.read_file(manifest_path).text())
+  guard field(manifest, "reference_revision") is String(revision) &&
+    revision.length() == 40 else {
+    fail("Manifest requires a full reference revision")
+  }
+  guard field(manifest, "cases") is Array(cases) && !cases.is_empty() else {
+    fail("Manifest requires selected cases")
+  }
+  let scale = number(field(manifest, "scale"))
+  guard !scale.is_nan() && !scale.is_inf() && scale > 0.0 && scale <= 8.0 else {
+    fail("Invalid render scale")
+  }
+  let ref_revision = @shell.Cmd("git", [
+    "-C", "reference/pdf.js", "rev-parse", "HEAD",
+  ]).output()
+  guard ref_revision.exit_code() == 0 &&
+    ref_revision.stdout().trim() == revision else {
+    fail("PDF.js checkout does not match the manifest revision")
+  }
+  let ref_dirty = @shell.Cmd("git", [
+    "-C", "reference/pdf.js", "diff", "--name-only", "HEAD", "src", "external", "gulpfile.mjs",
+    "package.json", "package-lock.json",
+  ]).output()
+  guard ref_dirty.exit_code() == 0 && ref_dirty.stdout().trim().is_empty() else {
+    fail("PDF.js reference sources have uncommitted changes")
+  }
+  let version_info = @json.parse(
+    @fs.read_file("reference/pdf.js/build/version.json").text(),
+  )
+  guard field(version_info, "commit") is String(short_revision) &&
+    revision.has_prefix(short_revision) &&
+    short_revision.length() >= 7 else {
+    fail(
+      "Build PDF.js at the pinned revision with `npx gulp generic` before measuring",
+    )
+  }
+  @shell.Cmd("moon", ["run", "tools/build_web.mbtx"]).run()
+  @shell.Cmd("moon", [
+    "build", "--target", "native", "--release", "cmd/visual_diff",
+  ]).run()
+  let output = "_build/visual-test-\{@env.now()}"
+  @fs.mkdir(output, recursive=true)
+  @fs.write_file(output + "/manifest.json", manifest.stringify(indent=2))
+  let font_list = @shell.Cmd("fc-list", []).output()
+  @fs.write_file(output + "/host-fonts.txt", font_list.stdout())
+  let viewer_revision = @shell.Cmd("git", ["rev-parse", "HEAD"]).output()
+  let viewer_dirty = @shell.Cmd("git", ["status", "--porcelain"]).output()
+  let results : Array[Json] = []
+  let errors : Array[Json] = []
+  let warnings : Array[Json] = []
+  let mut runtime : Json = Json::null()
+  @async.with_task_group(group => {
+    let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+    defer server.close()
+    group.spawn_bg(
+      () => server.run_forever((request, _, conn) => serve(request, conn)),
+      no_wait=true,
+    )
+    let base = "http://" + server.addr.to_string()
+    let log = @process.redirect_to_file(output + "/chromium.log")
+    defer log.close()
+    let process = @process.spawn(
+      group,
+      chrome,
+      [
+        "--headless",
+        "--no-sandbox",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--remote-debugging-port=0",
+        "--remote-allow-origins=*",
+        "--user-data-dir=" + output + "/profile",
+        "--window-size=1280,900",
+        "about:blank",
+      ],
+      stdout=log,
+      stderr=log,
+    )
+    defer process.cancel()
+    let port_path = output + "/profile/DevToolsActivePort"
+    for _ in 0..<400 {
+      if @fs.exists(port_path) {
+        break
+      }
+      @async.sleep(25)
+    }
+    guard @fs.exists(port_path) else {
+      fail("Chromium did not start; see " + output + "/chromium.log")
+    }
+    let port = @fs.read_file(port_path)
+      .text()
+      .split("\n")
+      .next()
+      .unwrap()
+      .to_owned()
+    let (response, body) = @http.put(
+      "http://127.0.0.1:" + port + "/json/new?about:blank",
+      b"",
+    )
+    guard response.code == 200 else {
+      fail("Chromium failed to create a target")
+    }
+    guard @json.parse(body.text())
+      is { "webSocketDebuggerUrl": String(url), .. } else {
+      fail("Missing CDP URL")
+    }
+    let browser : Browser = {
+      socket: @websocket.connect(url),
+      id: 0,
+      errors,
+      warnings,
+    }
+    defer browser.socket.close()
+    ignore(browser.command("Page.enable"))
+    ignore(browser.command("Runtime.enable"))
+    ignore(
+      browser.command("Emulation.setDeviceMetricsOverride", params={
+        "width": 1280,
+        "height": 900,
+        "deviceScaleFactor": 1,
+        "mobile": false,
+      }),
+    )
+    ignore(browser.command("Page.navigate", params={ "url": base + "/" }))
+    for _ in 0..<400 {
+      if browser.evaluate(
+          "document.readyState === 'complete' && location.href === " +
+          Json::string(base + "/").stringify(),
+        ) ==
+        Json::boolean(true) {
+        break
+      }
+      @async.sleep(25)
+    }
+    runtime = browser.evaluate(browser_bridge)
+    guard field(runtime, "build") is String(build) &&
+      build.length() >= 7 &&
+      revision.has_prefix(build) else {
+      fail("Loaded PDF.js does not match the manifest revision")
+    }
+    for fixture in cases {
+      guard field(fixture, "file") is String(file) &&
+        valid_filename(file) &&
+        file.has_suffix(".pdf") else {
+        fail("Invalid fixture filename")
+      }
+      guard field(fixture, "pages") is Array(pages) &&
+        !pages.is_empty() &&
+        field(fixture, "rotations") is Array(rotations) &&
+        !rotations.is_empty() else {
+        fail("Fixture requires pages and rotations")
+      }
+      let features = field(fixture, "features")
+      let diagnostic_translation = match
+        field(fixture, "diagnostic_viewer_translation_x") {
+        Null => 0.0
+        Number(value, ..) if !value.is_nan() &&
+          !value.is_inf() &&
+          value.abs() <= 16.0 => value
+        _ => fail("Invalid diagnostic viewer translation")
+      }
+      let hash_output = @shell.Cmd("sha256sum", [
+        "reference/pdf.js/test/pdfs/" + file,
+      ]).output()
+      let hash = if hash_output.exit_code() == 0 {
+        hash_output.stdout().split(" ").next().unwrap().to_owned()
+      } else {
+        "unavailable"
+      }
+      let pair = browser.evaluate(
+        "window.openPair(" + Json::string(file).stringify() + ")",
+      ) catch {
+        error => Json::object({ "error": @debug.to_string(error) })
+      }
+      for page_value in pages {
+        let page = integer(page_value)
+        guard page > 0 else { fail("Page numbers must be positive") }
+        for rotation_value in rotations {
+          let rotation = integer(rotation_value)
+          guard rotation % 90 == 0 else {
+            fail("Rotation must be a multiple of 90")
+          }
+          let result = try {
+            if field(pair, "error") is String(message) {
+              fail("Document open failed: " + message)
+            }
+            measure(
+              browser, file, page, rotation, scale, pair, features, hash, output,
+              diagnostic_translation,
+            )
+          } catch {
+            error =>
+              Json::object({
+                "file": file,
+                "file_sha256": hash,
+                "page": page,
+                "rotation": rotation,
+                "scale": scale,
+                "features": features,
+                "status": "failed",
+                "error": @debug.to_string(error),
+              })
+          }
+          results.push(result)
+          @fs.write_file(
+            output + "/partial-results.json",
+            Json::array(results).stringify(indent=2),
+          )
+          if field(result, "status") == Json::string("failed") {
+            println(
+              "FAILED: \{file} page \{page} rotation \{rotation}: " +
+              field(result, "error").stringify(),
+            )
+          } else {
+            let pixels = field(result, "pixels")
+            println(
+              "MEASURED: \{file} page \{page} rotation \{rotation}: " +
+              field(pixels, "changed_above_tolerance").stringify() +
+              " raw changed pixels; " +
+              field(pixels, "outside_neighborhood").stringify() +
+              " outside 1px neighborhood",
+            )
+          }
+        }
+      }
+    }
+    ignore(
+      browser.evaluate(
+        "(async () => { if (window.referenceTask) await referenceTask.destroy(); moon.close_pdf(); return true; })()",
+      ) catch {
+        error => {
+          errors.push({ "cleanup_error": @debug.to_string(error) })
+          Json::null()
+        }
+      },
+    )
+    group.return_immediately(())
+  })
+  let failed = results
+    .filter(r => field(r, "status") == Json::string("failed"))
+    .length()
+  let different = results
+    .filter(r => field(r, "status") == Json::string("measured-with-differences"))
+    .length()
+  let report : Json = {
+    "status": if failed > 0 || !errors.is_empty() {
+      "measurement-failed"
+    } else if different > 0 {
+      "measured-with-differences"
+    } else {
+      "measured-within-tolerance"
+    },
+    "scope": "All manifest-selected pages/rotations; not the full PDF.js corpus or a compatibility percentage",
+    "reference_revision": revision,
+    "reference_runtime": runtime,
+    "viewer_revision": viewer_revision.stdout().trim().to_owned(),
+    "viewer_worktree": viewer_dirty.stdout(),
+    "scale": scale,
+    "device_scale_factor": 1,
+    "background": "white",
+    "reference_options": {
+      "annotation_mode": "ENABLE",
+      "use_system_fonts": true,
+      "disable_font_face": false,
+      "enable_xfa": false,
+    },
+    "pixel_policy": {
+      "channel_tolerance": 8,
+      "ink_tolerance": 24,
+      "neighborhood_radius": 1,
+      "neighborhood_is_diagnostic_only": true,
+    },
+    "host_fonts": "host-fonts.txt",
+    "strict": strict,
+    "total": results.length(),
+    "measured": results.length() - failed,
+    "failed": failed,
+    "with_differences": different,
+    "runtime_exceptions": errors,
+    "console_warnings": warnings,
+    "results": results,
+  }
+  @fs.write_file(output + "/report.json", report.stringify(indent=2))
+  @fs.write_file(output + "/index.html", html_report(results))
+  println("Visual report: " + output + "/index.html")
+  println(
+    "Measured \{results.length() - failed}/\{results.length()}; \{different} with differences; \{failed} failed",
+  )
+  if failed > 0 || !errors.is_empty() {
+    fail("Visual measurement failed; inspect " + output + "/report.json")
+  }
+  if strict && different > 0 {
+    fail(
+      "Strict comparison rejected known visual/text/viewport differences; inspect the report",
+    )
+  }
+}

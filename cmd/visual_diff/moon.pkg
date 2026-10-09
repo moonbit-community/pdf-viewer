@@ -1,0 +1,12 @@
+import {
+  "moonbit-community/pdf-viewer/tools/pixels" @pixels,
+  "moonbitlang/core/debug",
+  "moonbitlang/core/env",
+  "moonbitlang/core/string",
+  "moonbitlang/x/fs",
+  "moonbitlang/x/sys",
+}
+
+supported_targets = "native"
+
+pkgtype(kind: "executable")

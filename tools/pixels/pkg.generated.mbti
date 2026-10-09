@@ -1,0 +1,53 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/tools/pixels"
+
+// Values
+pub fn compare(Raster, Raster) -> PixelComparison raise PixelError
+
+// Errors
+pub suberror PixelError {
+  CombinedRasterTooLarge
+}
+
+// Types and methods
+pub struct PixelComparison {
+  stats : PixelStats
+  heatmap : Bytes
+}
+
+pub struct PixelStats {
+  width : Int
+  height : Int
+  dimensions_match : Bool
+  pixels : Int
+  exact_changed : Int
+  changed_above_tolerance : Int
+  neighborhood_matched : Int
+  outside_neighborhood : Int
+  reference_ink : Int
+  viewer_ink : Int
+  union_ink : Int
+  missing_ink : Int
+  extra_ink : Int
+  changed_fraction : Double
+  outside_neighborhood_fraction : Double
+  changed_over_union_ink : Double
+  mean_absolute_error : Double
+  root_mean_square_error : Double
+  max_channel_error : Int
+  changed_bounds : Array[Int]?
+  outside_neighborhood_bounds : Array[Int]?
+} derive(ToJson)
+#deprecated
+pub fn PixelStats::to_json(Self) -> Json
+
+pub struct Raster {
+  rgba : Bytes
+  width : Int
+  height : Int
+}
+pub fn Raster::from_rgba(Bytes, Int, Int) -> Self?
+
+// Type aliases
+
+// Traits

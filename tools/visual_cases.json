@@ -1,0 +1,15 @@
+{
+  "reference_revision": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+  "scale": 2,
+  "cases": [
+    { "file": "90ms_rksj_h_sample.pdf", "pages": [1], "rotations": [0, 90], "features": ["predefined-cmap", "host-font", "rotation"] },
+    { "file": "vertical.pdf", "pages": [1, 2, 3], "rotations": [0], "features": ["vertical-cid", "blank-page"] },
+    { "file": "issue18117.pdf", "pages": [1], "rotations": [0], "features": ["variable-length-cmap", "embedded-truetype"] },
+    { "file": "issue14462_reduced.pdf", "pages": [1], "rotations": [0], "features": ["type1"] },
+    { "file": "issue18548_reduced.pdf", "pages": [1], "rotations": [0], "features": ["cid-type1"] },
+    { "file": "text_clip_cff_cid.pdf", "pages": [1], "rotations": [0], "features": ["cff", "text-clip"] },
+    { "file": "annotation-highlight.pdf", "pages": [1], "rotations": [0], "features": ["annotation", "transparency"] },
+    { "file": "annotation-freetext.pdf", "pages": [1], "rotations": [0], "features": ["annotation", "truetype"] },
+    { "file": "tracemonkey.pdf", "pages": [1, 7, 14], "rotations": [0], "features": ["type1", "text-order", "long-document"] }
+  ]
+}

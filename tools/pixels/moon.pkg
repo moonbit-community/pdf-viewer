@@ -1,0 +1,3 @@
+import {
+  "moonbit-community/pdf-viewer/tools/pixels" @pixels,
+} for "test"

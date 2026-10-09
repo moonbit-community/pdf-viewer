@@ -2,17 +2,21 @@
 
 The annotation baseline uses the local pdf.js checkout at revision
 `89b500f5e1d98ed89bb90211e45b28730b2d99ac`, pdflite `0.2.2`, and the native SVG
-CLI. It does not measure parity with pdf.js rendering.
+CLI. That conversion baseline does not measure parity with pdf.js rendering.
+The automated selected-page visual baseline below now measures actual output
+against the same pinned PDF.js build.
 
-The suite currently contains 141 tests on each of wasm, wasm-gc, JavaScript, and
+The suite currently contains 148 tests on each of wasm, wasm-gc, JavaScript, and
 native. It includes 13 annotation tests, 17 CFF tests, 23 Type 1 tests, 5 CID
 layout tests, 9 variable-length CMap tests, 4 text-geometry tests, and 8
 text-clipping tests. The latest addition has 8 predefined-CMap tests, 8 vertical
 CID tests, 4 word-spacing tests and 1 missing-descriptor recovery test. The
 browser/text-layer stage adds 4 geometry/range tests, 1 public-API test and
 3 checked documentation examples, plus a separate Chromium interaction suite.
-These results cover the MoonBit package and CLI; they do
-not establish complete pdf.js compatibility.
+Seven additional pixel-classifier tests cover blank/identical images,
+missing paint, small and large shifts, color differences, alpha compositing,
+unequal viewport dimensions and allocation bounds. These results cover the
+MoonBit packages and CLI; they do not establish complete pdf.js compatibility.
 
 ## Reproduce
 
@@ -237,7 +241,8 @@ public byte-reader/page/SVG path. It checks:
 These assertions cover structure and resource selection. They do not establish
 font rasterization, complete transparency compositing, full form layout, or
 pixel equivalence to pdf.js. The independent browser is now covered by the
-following section; automated PDF.js pixel comparisons remain future work.
+following section; selected-page automated PDF.js comparisons are recorded
+in the visual baseline below.
 
 ## Standalone browser and native cursor selection
 
@@ -288,6 +293,76 @@ pending. The body layer uses source paint order plus a writing-direction
 separator heuristic; general reading order/bidi and raw PDF byte spans are
 not completed. Annotation appearances and readonly widgets still need their
 own DOM interaction layer. Search, thumbnails and printing remain TODO.
+
+## Automated PDF.js visual baseline
+
+`moon run tools/visual_test.mbtx` builds the MoonBit bridge and the native
+MoonBit pixel comparer, then measures every page/rotation in
+`tools/visual_cases.json`. It needs Chromium and the generic build of the
+pinned reference (`npx gulp generic` inside `reference/pdf.js`). The viewer
+itself still loads no PDF.js code. This runner starts its own temporary
+loopback HTTP server and isolated Chromium profile; it does not replace the
+viewer on port 4312.
+
+```bash
+moon run tools/visual_test.mbtx tools/visual_cases.json /path/to/chromium
+moon run tools/visual_summary.mbtx _build/visual-test-<run>/report.json
+moon run tools/visual_contract_test.mbtx /path/to/chromium
+```
+
+The 2026-10-10 baseline in `_build/visual-test-1791564786890/` measured
+**14/14 page/rotation combinations from 9 PDFs**, with **0 measurement
+failures and 0 uncaught runtime exceptions**. PDF.js version `6.5.0`, build
+`89b500f`, rendered in the same Chromium profile as MoonBit, at scale 2 and
+deviceScaleFactor 1, on white. All 14 viewport dimension/matrix comparisons
+matched within 1e-6; 11 text comparisons matched after removing whitespace.
+**11 combinations had pixel or text differences; 3 were within the recorded
+tolerance.** This is a selected corpus, not a visual compatibility percentage.
+
+| Sample | Selected pages/rotations | Pixels above per-channel tolerance 8 | Main finding |
+| --- | --- | ---: | --- |
+| `90ms_rksj_h_sample.pdf` | page 1, 0/90° | 0 / 0 | Visible ASCII/Japanese control matches in this environment |
+| `vertical.pdf` | pages 1/2/3, 0° | 2,569 / 1,497 / 1,497 | Page edges differ; pages 2/3 have no body text, not entirely blank pixels |
+| `issue18117.pdf` | page 1, 0° | 11,268 | Text agrees; glyph/raster differences remain |
+| `issue14462_reduced.pdf` | page 1, 0° | 1,578 | Type 1 glyph/raster differences remain |
+| `issue18548_reduced.pdf` | page 1, 0° | 0 | CID Type 1 result is within tolerance; minor exact pixel differences remain |
+| `text_clip_cff_cid.pdf` | page 1, 0° | 71,920 | Clipping does not follow 2x paint scale; the blue letters are cut off |
+| `annotation-highlight.pdf` | page 1, 0° | 2,308 | Appearance differences remain |
+| `annotation-freetext.pdf` | page 1, 0° | 585 | Appearance differences remain |
+| `tracemonkey.pdf` | pages 1/7/14, 0° | 281,767 / 309,663 / 151,714 | Glyphs and normalized extracted text differ |
+
+Each run retains PDF.js/MoonBit PNGs, raw RGBA, a heatmap, the original
+run/glyph text geometry, viewport diagnostics, fixture SHA-256, browser build,
+host font list, renderer options, warnings and viewer revision/worktree state.
+`index.html` links the side-by-side images and `report.json`. Yellow heatmap
+pixels have symmetrically matching colors within a 1px neighborhood; red
+pixels do not. Yellow is a diagnostic candidate, **not proof of antialiasing**:
+a shifted thin line can also be yellow. Raw differences, missing/extra ink,
+error metrics and exclusive difference bounds remain in the report. Pages
+are never resized to hide geometry mismatches.
+
+The seven `tools/pixels` tests pass on all four backends. The independent
+runner contract checks in `_build/visual-contract-1791565301945/` verify a
+visible, nonblank control is accepted in strict mode, a deliberate 3px shift
+is rejected after saving its report, and a missing fixture counts as one
+failed selected page. The diagnostic shift is recorded explicitly and is
+absent from the default manifest. These checks are separate from the 19
+standalone viewer interaction checks.
+
+Normal mode exits successfully when measurement completes, including reported
+differences. Appending `--strict` rejects pixel differences above tolerance,
+viewport mismatches and text mismatches after removing whitespace. Input,
+rendering and capture failures always fail the run and are counted in the
+report. No missing file is counted as a matching blank page.
+
+Limits: this baseline samples pages 1/7/14 of `tracemonkey.pdf`, not its entire
+14-page document. It has not yet measured every decoder, color, pattern,
+transparency, optional-content, form or XFA case in TODO. Text comparison
+retains paint order and removes whitespace only; it does not normalize bidi
+or ligatures. Automatic geometry comparison currently covers viewport
+dimensions/matrices; per-run/glyph data is saved for further diagnosis,
+without claiming a completed run-to-glyph correspondence. Raster captures
+and their comparison union are bounded to 16M pixels / 8192px per side.
 
 ## Text geometry and browser spot checks
 

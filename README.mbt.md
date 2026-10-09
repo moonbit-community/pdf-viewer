@@ -95,6 +95,19 @@ moon run tools/dev.mbtx 4312
 moon run tools/browser_test.mbtx http://127.0.0.1:4312 /path/to/chromium
 ```
 
+固定 PDF.js 版本的自动对照（需要 `reference/pdf.js` 的 `npx gulp generic` 构建）：
+
+```bash
+moon run tools/visual_test.mbtx tools/visual_cases.json /path/to/chromium
+moon run tools/visual_summary.mbtx _build/visual-test-<run>/report.json
+moon run tools/visual_contract_test.mbtx /path/to/chromium
+```
+
+每次生成新的 `_build/visual-test-*/index.html`，并排展示 PDF.js、MoonBit 与差异图，
+JSON 包含原始像素差异、viewport/文本比较和样本 hash。普通模式成功表示完成测量；
+末尾加 `--strict` 时，像素、viewport 或非空白文本差异都会让命令失败。
+输入/渲染失败始终计入失败并返回非零，不会当作空白页匹配。
+
 部署到静态服务器时，先执行 `moon run tools/build_web.mbtx`，然后发布 `web/`，
 包含生成的 `_generated/pdf.js`。部署不需要 pdflite 的 native 程序，也不需要 PDF.js。
 
@@ -178,7 +191,8 @@ display list 中，避免宿主丢失结构化信息。现阶段 SVG 输出适�
 MoonBit 宿主可用 `reinterpret_as_uint()` 取得无符号值。原始 byte span 尚未暴露为公开
 选择元数据。`select_text()` 的 offsets 是 DOM 使用的 UTF-16 code-unit offsets；
 部分 ligature 的选择保留完整源 glyph 的 quad，不能解释成原始 PDF byte offset。
-自动 PDF.js 像素对比尚未实现。
+自动 PDF.js 像素对照、viewport 与文本诊断已经实现；首批样本仍存在明确差异，
+结果见 [`docs/validation.md`](docs/validation.md#automated-pdfjs-visual-baseline)。
 
 浏览器在 `#viewer` 上发出 `pdf-selection-change`，`event.detail` 包含
 `file: { name, path }`、归并的 `text` 和每页的 `ranges`；选区清空时为 `null`。

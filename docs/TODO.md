@@ -10,18 +10,19 @@
 
 ## 还差多少
 
-当前明确跟踪 **50 项，分为 14 个能力领域；完成 7 项，剩余 43 项**。
-剩余项按优先级分为 P0 17 项、P1 24 项、P2 2 项；其中部分已有基础实现。
+当前明确跟踪 **50 项，分为 14 个能力领域；完成 8 项，剩余 42 项**。
+剩余项按优先级分为 P0 16 项、P1 24 项、P2 2 项；其中部分已有基础实现。
 这些项大小不等，
 有的只是一个语义修正，有的需要完整解码器或合成器，不能把条目数换算成完成百分比。
 已完成 F-01（水平外部 CMap）、F-02（Adobe 预定义 CMap）、F-04（CID 纵排）
 和 T-03（编码相关字距），以及 U-01（独立浏览器）、U-02（cursor 选择层）
-和 U-03（跨页选择映射及重投影）。复杂外部 CMap 继承和 reader 丢弃的范围仍由 F-03 跟踪。
+和 U-03（跨页选择映射及重投影）、V-01（自动对照工具与首批像素基线）。
+复杂外部 CMap 继承和 reader 丢弃的范围仍由 F-03 跟踪。
 
 现在有可运行的 native CLI、页面模型、SVG 输出和独立的浏览器 viewer。
-141 个测试在四个后端通过，浏览器有 19 项交互检查，真实 PDF 有转换检查和少量
-Chromium/Poppler 视觉抽查，
-**没有自动 PDF.js 像素对比，因而还不能给出可信的视觉兼容率**。
+148 个测试在四个后端通过，浏览器有 19 项交互检查。自动 PDF.js 对照现已测量
+9 份 PDF 的 14 个页面/旋转组合：全部得到报告，11 个组合存在像素或文本差异。
+这些是按特性挑选的样本，**仍不能给出可信的视觉兼容率**。
 转换成功、没有占位、测试通过，都不能单独证明没有漏画或排版错误。
 基线细节见 [validation.md](validation.md)。
 
@@ -40,7 +41,7 @@ Chromium/Poppler 视觉抽查，
 | 导航/图层 | outline、labels、attachments、OCG、metadata 读取 | destination 导航、图层实际过滤、浏览器展示 | 3 | D-01 至 D-03 |
 | 浏览器体验 | 独立应用、文件载入、多页滚动、缩放/旋转、cursor 选择及复制、跨页来源映射 | 全文搜索、缩略图、打印与更完整的导航 | 2 | U-01 至 U-05 |
 | 可访问性/XFA | structure tree 读取 | 可访问的 DOM、只读 XFA 页面 | 2 | X-01 至 X-02 |
-| 验证/性能 | 四后端测试、多页 CLI corpus、Chromium 交互测试、页面缓存 | 像素基线、Worker/取消/缓存上限、大文件与 CI | 3 | V-01 至 V-03 |
+| 验证/性能 | 四后端测试、多页 CLI corpus、Chromium 交互测试、PDF.js 像素/viewport/文本对照及差异图、页面缓存 | 扩大基线覆盖、Worker/取消/缓存上限、大文件与 CI | 2 | V-01 至 V-03 |
 
 “当前已有”只描述实现基础。除非待办满足验收条件并有证据，不把整个领域标为完成。
 
@@ -67,7 +68,7 @@ Chromium/Poppler 视觉抽查，
 - [ ] F-03 / P0：补齐复杂 UseCMap 继承、缺失 codespace、映射优先级与未定义字符的恢复；遵守 reader 已解析的继承关系。pdflite `0.2.2` 的 signed Int 范围校验还会丢弃部分跨高位边界的四字节范围（如 `<00000000> <FFFFFFFF>`），viewer 解码器尚不能恢复这类缺失的 codespace。
 - [x] F-04 / P0：统一纵排的 W2/DW2、垂直原点、带符号推进、TJ 调整与 character/word spacing；绘制、裁剪和选择共用同一 glyph placement。8 个纵排测试通过，覆盖 Identity/外部/预定义 CMap、连续操作、q/Q、引号、rise、剪切、负字号和选择/裁剪；真实 `vertical.pdf` 三页完成转换及 Chromium/Poppler 抽查，见 [validation.md](validation.md#adobe-predefined-cmaps-vertical-layout-and-word-spacing)。
 - [ ] F-05 / P1：扩大 TrueType cmap/encoding、symbol 字体、composite 与损坏字体恢复覆盖；明确轮廓模式和浏览器字体模式的差异。
-- [ ] F-06 / P1：扩大 Type 1/CFF 的 FontMatrix、缺字、损坏 charstring 和特殊字体程序覆盖；失败不造成整页空白。
+- [ ] F-06 / P1：扩大 Type 1/CFF 的 FontMatrix、缺字、损坏 charstring 和特殊字体程序覆盖；失败不造成整页空白。自动基线中的 `issue14462_reduced.pdf` 和 `tracemonkey.pdf` 已暴露字形差异，尚未归因或修复。
 - [ ] F-07 / P0：提供可复现且许可明确的标准 14 字体替代与 metrics；字形、advance 和粗斜体匹配。
 - [ ] F-08 / P1：提供宿主字体解析/注入入口及系统字体回退策略；浏览器和 native 分开实现，记录替代字体。
 
@@ -81,7 +82,7 @@ Chromium/Poppler 视觉抽查，
 ## 绘制、图片与色彩
 
 - [ ] G-01 / P0：保留绘制时的完整 CTM，正确处理非均匀缩放/剪切下的描边、文字描边、虚线和椭圆笔画。
-- [ ] G-02 / P1：扩大 hairline、miter、退化路径、填充规则、clip 生效时机和多层 Form scope 的精确覆盖。
+- [ ] G-02 / P1：扩大 hairline、miter、退化路径、填充规则、clip 生效时机和多层 Form scope 的精确覆盖。自动基线显示 `text_clip_cff_cid.pdf` 在 2x 缩放时裁剪不跟随绘制，`vertical.pdf` 的页面边缘线也有像素差异。
 - [ ] G-03 / P0：实现可控的像素绘制后端，处理 SVG 无法精确表达的绘制语义；Canvas/WebGL 选型以可验证结果决定。
 - [ ] I-01 / P0：实现或接入 MoonBit 可用的 JPEG2000/JPX 解码，使浏览器不依赖原始 image/jp2 支持。
 - [ ] I-02 / P0：实现或接入 MoonBit 可用的 JBIG2 解码，覆盖 globals、常见 segment 和 mask。
@@ -119,13 +120,13 @@ Chromium/Poppler 视觉抽查，
 - [ ] U-05 / P1：在已有多页滚动、页码、缩放/旋转与下载基础上，补缩略图、打印、滚动/分页模式和浏览器历史；避免每次操作重建全文件。
 - [ ] X-01 / P1：把 tagged structure tree 和阅读顺序落实到可访问的 DOM/ARIA，而不仅是 JSON。
 - [ ] X-02 / P2：支持 XFA 文档的只读页面布局与文本展示，编辑与脚本不在范围内。
-- [ ] V-01 / P0：建立固定 PDF.js 版本的自动像素对比、几何/文本比较和差异图；覆盖全部选定页面，区分抗锯齿差异与缺画/错位。
+- [x] V-01 / P0：`tools/visual_test.mbtx` 使用固定 PDF.js 版本和同一 Chromium，测量清单内全部页面/旋转；保存原图、差异图、原始 RGBA、viewport 与文本比较。报告保留原始差异、对称一像素邻域候选和缺失/新增墨迹；候选不等于已证明抗锯齿差异。首批 14/14 个组合已测量，11 个有差异；`--strict` 会拒绝差异，输入或渲染失败计入失败数。7 个分类器测试和独立 runner 合约检查覆盖正确匹配、明显错位、漏画及缺失输入。具体结果和限制见 [validation.md](validation.md#automated-pdfjs-visual-baseline)。后续每个渲染功能都要扩大这份基线。
 - [ ] V-02 / P1：补 Worker、取消、页模型/字体/图片缓存、内存上限与大文件压力基线；报出耗时和峰值内存。
 - [ ] V-03 / P1：把四后端测试、corpus、视觉基线和差距表纳入 CI；固定对照/依赖版本，记录样本来源和资产许可。
 
 ## 推荐推进顺序
 
-1. V-01、V-02：在独立浏览器和 cursor 选择的基础上，建立可重复的 PDF.js 对照及 Worker/页面调度。
+1. 利用 V-01 的差异图先修复 G-02 已确认的缩放裁剪错误；同时推进 V-02 的 Worker/页面调度。
 2. F-03、F-07、F-08：补复杂 CMap 与字体回退，稳定文字绘制。
 3. I-01、I-02、C-01：补图像和颜色覆盖缺口。
 4. G-01、G-03、M-01 至 M-03、H-01/H-03：补 SVG 近似无法解决的精确绘制与合成。

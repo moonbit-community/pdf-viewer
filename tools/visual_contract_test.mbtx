@@ -1,0 +1,119 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+///|
+fn field(value : Json, name : String) -> Json {
+  match value {
+    Object(fields) => fields.get(name).unwrap_or(Json::null())
+    _ => Json::null()
+  }
+}
+
+///|
+async fn run_case(
+  output : String,
+  chrome : String,
+  name : String,
+  file : String,
+  translation? : Int = 0,
+) -> (Int, Json) {
+  let manifest : Json = {
+    "reference_revision": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+    "scale": 2,
+    "cases": [
+      {
+        "file": file,
+        "pages": [1],
+        "rotations": [0],
+        "features": ["runner-contract"],
+        "diagnostic_viewer_translation_x": translation,
+      },
+    ],
+  }
+  let path = output + "/" + name + ".json"
+  @fs.write_file(path, manifest.stringify())
+  let process = @shell.Cmd("moon", [
+    "run", "tools/visual_test.mbtx", path, chrome, "--strict",
+  ]).output(timeout_ms=60000)
+  @fs.write_file(
+    output + "/" + name + ".log",
+    process.stdout() + process.stderr(),
+  )
+  for line in process.stdout().split("\n") {
+    if line.has_prefix("Visual report: ") {
+      let report_path = line[15:]
+        .to_owned()
+        .replace(old="/index.html", new="/report.json")
+      return (
+        process.exit_code(),
+        @json.parse(@fs.read_file(report_path).text()),
+      )
+    }
+  }
+  fail(
+    "Missing final report for " + name + "; see " + output + "/" + name + ".log",
+  )
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  let chrome = if args.length() > 1 {
+    args[1]
+  } else {
+    "/root/.cache/ms-playwright/chromium-1223/chrome-linux/chrome"
+  }
+  let output = "_build/visual-contract-\{@env.now()}"
+  @fs.mkdir(output, recursive=true)
+  let (equal_exit, equal) = run_case(
+    output, chrome, "visible-equal", "90ms_rksj_h_sample.pdf",
+  )
+  guard equal_exit == 0 &&
+    field(equal, "status") == Json::string("measured-within-tolerance") &&
+    field(equal, "results") is Array(equal_results) &&
+    equal_results.length() == 1 else {
+    fail("Strict runner did not accept the measured control")
+  }
+  guard field(field(equal_results[0], "pixels"), "reference_ink")
+    is Number(ink, ..) &&
+    ink > 100.0 else {
+    fail("The visible control cannot be a blank or unpainted screenshot")
+  }
+  println("PASS: strict comparison accepts a visible measured control")
+  let (different_exit, different) = run_case(
+    output,
+    chrome,
+    "injected-difference",
+    "90ms_rksj_h_sample.pdf",
+    translation=3,
+  )
+  guard different_exit != 0 &&
+    field(different, "status") == Json::string("measured-with-differences") &&
+    field(different, "with_differences") == Json::number(1.0) &&
+    field(different, "failed") == Json::number(0.0) else {
+    fail(
+      "Strict runner silently accepted the deliberately shifted visible control",
+    )
+  }
+  println(
+    "PASS: strict comparison rejects a 3px shifted control after saving its report",
+  )
+  let (missing_exit, missing) = run_case(
+    output, chrome, "missing-fixture", "viewer-no-such-fixture.pdf",
+  )
+  guard missing_exit != 0 &&
+    field(missing, "status") == Json::string("measurement-failed") &&
+    field(missing, "total") == Json::number(1.0) &&
+    field(missing, "measured") == Json::number(0.0) &&
+    field(missing, "failed") == Json::number(1.0) else {
+    fail("Missing input was silently skipped or counted as a visual match")
+  }
+  println("PASS: missing input is counted as a failed selected page")
+  println("Visual runner contracts: " + output)
+}

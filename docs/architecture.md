@@ -177,9 +177,22 @@ Worker decoding, cancellation, page virtualization and memory bounds remain
 pending. The body text layer does not reconstruct annotation appearance
 streams or readonly widgets as DOM; those belong to the annotation layer.
 
+The validation renderer is separate from the standalone viewer. A temporary
+loopback server in `tools/visual_test.mbtx` serves the pinned PDF.js build and
+the same MoonBit browser bridge to an isolated Chromium profile. It captures
+actual rendered DOM pages rather than converting SVG through an Image element,
+so embedded fonts follow the viewer's rendering path. Pixel comparison runs
+in MoonBit (`tools/pixels/`, `cmd/visual_diff/`) and never rescales either page.
+Both original images, raw RGBA, a heatmap, viewport/text diagnostics, fixture
+hashes, the browser version and the host font list are retained. Symmetric 1px
+neighborhood matches are diagnostic candidates; they do not excuse raw errors.
+Strict mode rejects differences, while measurement errors always fail the run.
+The contract test deliberately shifts a visible control and removes an input
+to verify that the harness cannot pass an empty or failed operation.
+
 The remaining implementation stages are ordered by the visible compatibility gap:
 
-1. An automated PDF.js comparison harness and Worker/page scheduling, followed
+1. Fixes for the measured clipping/font gaps and Worker/page scheduling, followed
    by complex CMap inheritance, font metrics and system-font fallback policy;
 2. CTM-preserving path/image geometry, complete group-level mask compositing, and pixel-level
    Gouraud interpolation for mesh triangles;
@@ -234,5 +247,7 @@ and known failures are recorded in `docs/validation.md`.
 `tools/browser_test.mbtx` uses Chromium's DevTools protocol from MoonBit,
 verifying native mouse/keyboard selection, source ranges, local file input,
 error recovery and zoom/rotation across real fixtures. It captures screenshots
-and records passed checks. This is interaction verification; an automated
-PDF.js pixel-diff harness has not been added yet.
+and records passed checks. This is interaction verification.
+`tools/visual_test.mbtx` adds selected-page PDF.js pixel/viewport/text comparison;
+coverage grows with each rendering feature, and does not yet include every
+feature in the backlog or the entire upstream corpus.

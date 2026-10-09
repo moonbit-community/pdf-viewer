@@ -1,0 +1,49 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+///|
+fn field(value : Json, name : String) -> Json {
+  match value {
+    Object(fields) => fields.get(name).unwrap_or(Json::null())
+    _ => Json::null()
+  }
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  guard args.length() == 2 else {
+    fail("usage: visual_summary.mbtx <report.json>")
+  }
+  let report = @json.parse(@fs.read_file(args[1]).text())
+  guard field(report, "results") is Array(results) else {
+    fail("Missing results")
+  }
+  for result in results {
+    let pixel = field(result, "pixels")
+    let stats : Json = {
+      "file": field(result, "file"),
+      "page": field(result, "page"),
+      "rotation": field(result, "rotation"),
+      "status": field(result, "status"),
+      "viewport_equal": field(field(result, "geometry"), "equal_within_1e_6"),
+      "text_equal_without_whitespace": field(
+        field(result, "text"),
+        "without_whitespace_equal",
+      ),
+      "reference_ink": field(pixel, "reference_ink"),
+      "viewer_ink": field(pixel, "viewer_ink"),
+      "raw_changed": field(pixel, "changed_above_tolerance"),
+      "outside_neighborhood": field(pixel, "outside_neighborhood"),
+      "bounds": field(pixel, "changed_bounds"),
+      "mean_absolute_error": field(pixel, "mean_absolute_error"),
+      "error": field(result, "error"),
+    }
+    println(stats.stringify())
+  }
+}
