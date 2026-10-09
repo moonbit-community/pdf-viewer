@@ -78,6 +78,18 @@ pub extend PdfGradientStop with ToJson::{to_json}
 
 ///|
 #deprecated
+pub extend PdfMeshTriangle with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfMeshTriangle with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfMeshTriangle with ToJson::{to_json}
+
+///|
+#deprecated
 pub extend PdfShadingResource with @debug.Debug::{to_repr}
 
 ///|
@@ -99,6 +111,18 @@ pub extend PdfAnnotationItem with Eq::{not_equal, equal}
 ///|
 #deprecated
 pub extend PdfAnnotationItem with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfAnnotationAppearance with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfAnnotationAppearance with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfAnnotationAppearance with ToJson::{to_json}
 
 ///|
 #deprecated

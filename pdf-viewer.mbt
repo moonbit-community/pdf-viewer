@@ -35,6 +35,13 @@ pub(all) struct PdfBounds {
 pub(all) struct PdfTextItem {
   index : Int
   text : String
+  charcode : Int
+  advance_x : Double
+  advance_y : Double
+  vertical : Bool
+  /// Affine transform from a one-em glyph coordinate system (baseline at
+  /// y=0, y up) into PDF user space. None is allowed for host-built models.
+  glyph_transform : Array[Double]?
   bounds : PdfBounds
   quad : PdfQuad
   font : String
@@ -48,6 +55,9 @@ pub(all) struct PdfTextItem {
   soft_mask : PdfSoftMaskResource?
   group : PdfTransparencyGroup?
   group_path : Array[PdfTransparencyGroup]
+  /// An SVG outline for a Type 3, CFF or embedded TrueType glyph when the browser
+  /// cannot use the PDF font's original character mapping.
+  type3_outline : String?
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -79,6 +89,10 @@ pub(all) struct PdfPatternResource {
   y_step : Double
   matrix : Array[Double]
   tile_svg : String
+  /// A shading pattern is kept separately from a tiling pattern.  The SVG
+  /// renderer can clip this mesh to the path that selected the pattern,
+  /// instead of pretending that a shading is a repeated tile.
+  shading : PdfShadingResource?
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -103,6 +117,7 @@ pub(all) struct PdfPathItem {
   dash_array : Array[Double]
   dash_phase : Double
   pattern : PdfPatternResource?
+  shading_pattern : PdfShadingResource?
   blend_mode : String
   clip_path : String?
   soft_mask : PdfSoftMaskResource?
@@ -134,6 +149,22 @@ pub(all) struct PdfGradientStop {
 } derive(Eq, Debug, ToJson)
 
 ///|
+/// One triangle from a PDF Gouraud or patch mesh.
+///
+/// PDF mesh colors are retained per vertex. SVG does not have a portable
+/// Gouraud primitive, so the SVG backend lowers each triangle to barycentric
+/// microtriangles while hosts can use the same data for Canvas or WebGL
+/// interpolation later.
+pub(all) struct PdfMeshTriangle {
+  p0 : PdfPoint
+  p1 : PdfPoint
+  p2 : PdfPoint
+  c0 : String
+  c1 : String
+  c2 : String
+} derive(Eq, Debug, ToJson)
+
+///|
 /// A browser-ready description of a PDF shading resource.
 pub(all) struct PdfShadingResource {
   name : String
@@ -141,6 +172,7 @@ pub(all) struct PdfShadingResource {
   coords : Array[Double]
   matrix : Array[Double]
   stops : Array[PdfGradientStop]
+  mesh : Array[PdfMeshTriangle]
   extend_start : Bool
   extend_end : Bool
 } derive(Eq, Debug, ToJson)
@@ -176,6 +208,20 @@ pub(all) struct PdfSoftMaskResource {
 } derive(Eq, Debug, ToJson)
 
 ///|
+/// A normal appearance stream attached to an annotation.
+///
+/// `svg` is rendered in the appearance stream's own coordinate system. The
+/// renderer maps it into the annotation rectangle using `bbox` and `matrix`,
+/// following pdf.js' appearance-stream transform rules. Keeping the fragment
+/// in the page model also lets non-SVG hosts decide whether to use the raw
+/// geometry or the browser-ready fallback.
+pub(all) struct PdfAnnotationAppearance {
+  bbox : PdfBounds
+  matrix : Array[Double]
+  svg : String
+} derive(Eq, Debug, ToJson)
+
+///|
 /// Metadata for a Form XObject transparency group. Items remain in source
 /// paint order, while the renderer can use this marker to keep the group's
 /// source compositing boundary visible in SVG.
@@ -192,9 +238,35 @@ pub(all) struct PdfTransparencyGroup {
 /// object dictionaries while preserving the rectangle, visual style, text,
 /// and link target needed by a read-only viewer.
 pub(all) struct PdfAnnotationItem {
+  /// Original index in `/Annots`, including gaps for skipped Popup or invalid entries.
   index : Int
   subtype : String
+  /// Annotation flags from `/F`, plus the derived display/print decisions.
+  flags : Int
+  visible : Bool
+  print : Bool
   bounds : PdfBounds
+  /// Normalized PDF annotation quads, in bottom-left, bottom-right,
+  /// top-right, top-left order. Markup annotations may contain more than one.
+  quad_points : Array[PdfQuad]
+  /// Endpoints from `/L` for line annotations.
+  line_points : Array[PdfPoint]
+  /// Vertices from `/Vertices` for polygon and polyline annotations.
+  vertices : Array[PdfPoint]
+  /// Paths from `/InkList` for ink annotations.
+  ink_paths : Array[Array[PdfPoint]]
+  appearance : PdfAnnotationAppearance?
+  /// AcroForm metadata inherited from a widget's field parents.
+  field_name : String?
+  field_type : String?
+  field_value : String?
+  field_flags : Int?
+  field_options : Array[String]
+  field_tooltip : String?
+  /// The widget's own on-state name and resolved check/radio state. These
+  /// differ from the inherited `/V`, which is shared by a radio group.
+  button_value : String?
+  button_checked : Bool?
   contents : String?
   subject : String?
   color : String?
@@ -307,11 +379,16 @@ pub struct PdfViewerDocument {
 /// Parse a PDF from bytes and resolve its page tree.
 pub fn open_document(bytes : Bytes) -> PdfViewerDocument raise @core.PdfError {
   let document = @pdflite.pdf_read_document_from_bytes(bytes)
-  {
-    source_length: bytes.length(),
-    document,
-    pages: document.pages_of_pagetree(),
+  let (document, pages) = (document, document.pages_of_pagetree()) catch {
+    @core.PageTreeExpected => {
+      let recovered = pdf_recover_compressed_document(bytes, document) catch {
+        _ => raise @core.PageTreeExpected
+      }
+      (recovered, recovered.pages_of_pagetree())
+    }
+    error => raise error
   }
+  { source_length: bytes.length(), document, pages, }
 }
 
 ///|
@@ -426,6 +503,102 @@ pub fn PdfViewerDocument::summary_json(
       ],
     ),
   })
+}
+
+///|
+/// Return the document outline in pdflite's bookmark JSON schema.
+/// This is a reader adapter, not the pdf.js `getOutline()` schema.
+pub fn PdfViewerDocument::outline_json(
+  self : PdfViewerDocument,
+) -> Json raise @core.PdfError {
+  self.document.bookmarks_json()
+}
+
+///|
+/// Return page-label definitions (`/PageLabels`) as JSON. A missing page-label
+/// tree is represented by an empty array. Entries use pdflite's schema.
+pub fn PdfViewerDocument::page_labels_json(
+  self : PdfViewerDocument,
+) -> Json raise @core.PdfError {
+  Json::array(
+    [
+      for label in self.document.read_page_labels() => ToJson::to_json(label)
+    ],
+  )
+}
+
+///|
+/// Return a display label for every page. Unlike pdf.js' nullable
+/// `getPageLabels()`, documents without a `/PageLabels` tree return one-based
+/// decimal labels.
+pub fn PdfViewerDocument::page_labels(
+  self : PdfViewerDocument,
+) -> Array[String] raise @core.PdfError {
+  let labels = self.document.read_page_labels()
+  [
+    for page_number in 1..<=self.pages.length() => {
+      match @label.pdf_page_label_text_of_page_number(page_number, labels) {
+        Some(value) =>
+          try @utf8.decode(value[:]) catch {
+            _ => page_number.to_string()
+          } noraise {
+            text => text
+          }
+        None => page_number.to_string()
+      }
+    }
+  ]
+}
+
+///|
+/// Return embedded file attachments, including their decoded bytes when
+/// pdflite made them available.
+pub fn PdfViewerDocument::attachments_json(
+  self : PdfViewerDocument,
+) -> Json raise @core.PdfError {
+  Json::array(
+    [
+      for attachment in self.document.list_attached_files() => {
+        ToJson::to_json(attachment)
+      }
+    ],
+  )
+}
+
+///|
+/// Return optional-content configuration (layers) when the document defines
+/// an `/OCProperties` dictionary.
+pub fn PdfViewerDocument::optional_content_json(
+  self : PdfViewerDocument,
+) -> Json? raise @core.PdfError {
+  match self.document.read_optional_content_groups() {
+    Some(config) => Some(ToJson::to_json(config))
+    None => None
+  }
+}
+
+///|
+/// Return the tagged-PDF structure tree when present.
+pub fn PdfViewerDocument::struct_tree_json(
+  self : PdfViewerDocument,
+) -> Json raise @core.PdfError {
+  self.document.extract_struct_tree()
+}
+
+///|
+/// Return the classic Info dictionary in a host-friendly JSON form.
+pub fn PdfViewerDocument::info_json(
+  self : PdfViewerDocument,
+) -> Json raise @core.PdfError {
+  self.document.info_json()
+}
+
+///|
+/// Return the document's XMP metadata packet, if one is embedded.
+pub fn PdfViewerDocument::metadata_bytes(
+  self : PdfViewerDocument,
+) -> Bytes? raise @core.PdfError {
+  self.document.metadata()
 }
 
 ///|
@@ -606,7 +779,13 @@ fn pdf_page_model(
   )
   let text = pdf_text_of_items(items)
   let fonts = pdf_font_resources_of_items(document, page_number, items)
-  let annotations = pdf_annotation_items_of_page(document, page)
+  let next_index = Ref(0)
+  for item in items {
+    next_index.val = next_index.val.max(pdf_page_item_index(item) + 1)
+  }
+  let annotations = pdf_annotation_items_of_page(
+    document, page, page_number, next_index,
+  )
   {
     number: page_number,
     origin_x: rectangle.min_x,
@@ -633,136 +812,6 @@ fn pdf_page_view_box(
   match document.lookup_direct(crop_name, page.rest) {
     Some(cropbox) => document.parse_rectangle(cropbox)
     None => document.parse_rectangle(page.mediabox)
-  }
-}
-
-///|
-fn pdf_annotation_items_of_page(
-  document : @pdflite.PdfDocument,
-  page : @page.PdfPage,
-) -> Array[PdfAnnotationItem] raise @core.PdfError {
-  let annotations = document.annotations_of_page(page)
-  [
-    for index, annotation in annotations => {
-      let rectangle = annotation.rectangle
-      {
-        index,
-        subtype: pdf_annotation_subtype_name(annotation.subtype),
-        bounds: {
-          min_x: rectangle.min_x,
-          min_y: rectangle.min_y,
-          max_x: rectangle.max_x,
-          max_y: rectangle.max_y,
-        },
-        contents: pdf_annotation_text(annotation.contents),
-        subject: pdf_annotation_text(annotation.subject),
-        color: match annotation.colour {
-          Some(colour) =>
-            Some(pdf_annotation_rgb_hex(colour.red, colour.green, colour.blue))
-          None => None
-        },
-        border_width: annotation.border.width,
-        border_style: pdf_annotation_border_style(annotation.border.style),
-        border_dash: annotation.border.dash_array,
-        uri: pdf_annotation_uri(document, annotation.rest),
-      }
-    }
-  ]
-}
-
-///|
-fn pdf_annotation_subtype_name(
-  subtype : @annotation.PdfAnnotationSubtype,
-) -> String {
-  match subtype {
-    @annotation.AnnotationText => "text"
-    @annotation.AnnotationLink => "link"
-    @annotation.AnnotationFreeText => "free-text"
-    @annotation.AnnotationLine => "line"
-    @annotation.AnnotationSquare => "square"
-    @annotation.AnnotationCircle => "circle"
-    @annotation.AnnotationPolygon => "polygon"
-    @annotation.AnnotationPolyLine => "polyline"
-    @annotation.AnnotationHighlight => "highlight"
-    @annotation.AnnotationUnderline => "underline"
-    @annotation.AnnotationSquiggly => "squiggly"
-    @annotation.AnnotationStrikeOut => "strikeout"
-    @annotation.AnnotationStamp => "stamp"
-    @annotation.AnnotationCaret => "caret"
-    @annotation.AnnotationInk => "ink"
-    @annotation.AnnotationPopup(_) => "popup"
-    @annotation.AnnotationFileAttachment => "file-attachment"
-    @annotation.AnnotationSound => "sound"
-    @annotation.AnnotationMovie => "movie"
-    @annotation.AnnotationWidget => "widget"
-    @annotation.AnnotationScreen => "screen"
-    @annotation.AnnotationPrinterMark => "printer-mark"
-    @annotation.AnnotationTrapNet => "trap-net"
-    @annotation.AnnotationWatermark => "watermark"
-    @annotation.AnnotationThreeDee => "three-dee"
-    @annotation.AnnotationUnknown(name) => pdf_annotation_name_text(name)
-  }
-}
-
-///|
-fn pdf_annotation_name_text(name : @core.PdfName) -> String {
-  try @utf8.decode(name.bytes()[:]) catch {
-    _ => "unknown"
-  } noraise {
-    value => value
-  }
-}
-
-///|
-fn pdf_annotation_text(data : Bytes?) -> String? {
-  match data {
-    Some(bytes) =>
-      try Some(@utf8.decode(bytes[:])) catch {
-        _ => None
-      } noraise {
-        value => value
-      }
-    None => None
-  }
-}
-
-///|
-fn pdf_annotation_border_style(
-  style : @annotation.PdfAnnotationStyle,
-) -> String {
-  match style {
-    @annotation.AnnotationNoStyle => "none"
-    @annotation.AnnotationSolid => "solid"
-    @annotation.AnnotationDashed => "dashed"
-    @annotation.AnnotationBeveled => "beveled"
-    @annotation.AnnotationInset => "inset"
-    @annotation.AnnotationUnderlineStyle => "underline"
-  }
-}
-
-///|
-fn pdf_annotation_rgb_hex(red : Int, green : Int, blue : Int) -> String {
-  pdf_rgb_hex(
-    red.to_double() / 255.0,
-    green.to_double() / 255.0,
-    blue.to_double() / 255.0,
-  )
-}
-
-///|
-fn pdf_annotation_uri(
-  document : @pdflite.PdfDocument,
-  rest : @syntax.PdfObject,
-) -> String? {
-  let action_name = @core.pdf_name_of_bytes(@utf8.encode("/A"))
-  let uri_name = @core.pdf_name_of_bytes(@utf8.encode("/URI"))
-  match document.lookup_direct(action_name, rest) {
-    Some(action) =>
-      match document.lookup_direct(uri_name, action) {
-        Some(@syntax.PdfString(data)) => pdf_annotation_text(Some(data))
-        _ => None
-      }
-    None => None
   }
 }
 
@@ -813,26 +862,34 @@ fn pdf_font_resource_of(
   name : String,
 ) -> PdfFontResource {
   let base_name = pdf_font_base_name_of(document, page_number, name)
-  let (mime_type, format, data_uri) = try {
-    match document.extract_fontfile_bytes(page_number, name) {
-      Some(data) => {
-        let (mime_type, format) = pdf_font_format_of_bytes(data)
-        (
-          mime_type,
-          format,
-          Some("data:" + mime_type + ";base64," + @base64.encode(data)),
-        )
-      }
-      None => ("font/ttf", "truetype", None)
-    }
-  } catch {
-    _ => ("font/ttf", "truetype", None)
-  } noraise {
-    data => data
+  let bytes = document.extract_fontfile_bytes(page_number, name) catch {
+    _ => None
   }
+  pdf_font_resource_from_bytes(name, base_name, bytes, name)
+}
+
+///|
+fn pdf_font_resource_from_bytes(
+  name : String,
+  base_name : String,
+  bytes : Bytes?,
+  family_key : String,
+) -> PdfFontResource {
+  let (mime_type, format, data_uri) = match bytes {
+    Some(data) => {
+      let (mime_type, format) = pdf_font_format_of_bytes(data)
+      (
+        mime_type,
+        format,
+        Some("data:" + mime_type + ";base64," + @base64.encode(data)),
+      )
+    }
+    None => ("font/ttf", "truetype", None)
+  }
+  let browser_font = format != "cff" && format != "type1"
   let family = match data_uri {
-    Some(_) => pdf_svg_embedded_font_family(name)
-    None => pdf_svg_font_family(base_name)
+    Some(_) if browser_font => pdf_svg_embedded_font_family(family_key)
+    _ => pdf_svg_font_family(base_name)
   }
   let weight = if base_name.contains("Bold") ||
     base_name.contains("Demi") ||
@@ -853,10 +910,22 @@ fn pdf_font_resource_of(
 fn pdf_font_format_of_bytes(data : Bytes) -> (String, String) {
   if pdf_bytes_start_with(data, [79, 84, 84, 79]) {
     ("font/otf", "opentype")
+  } else if pdf_bytes_start_with(data, [0, 1, 0, 0]) {
+    ("font/ttf", "truetype")
   } else if pdf_bytes_start_with(data, [119, 79, 70, 70]) {
     ("font/woff", "woff")
   } else if pdf_bytes_start_with(data, [119, 79, 70, 50]) {
     ("font/woff2", "woff2")
+  } else if pdf_bytes_start_with(data, [1, 0]) {
+    // FontFile3 Type1C and CIDFontType0C streams contain a raw CFF program,
+    // not an OpenType wrapper that a browser can load as @font-face.
+    ("font/otf", "cff")
+  } else if pdf_bytes_start_with(data, [128, 1]) ||
+    pdf_bytes_start_with(data, [128, 2]) ||
+    pdf_bytes_start_with(data, [
+      37, 33, 80, 83, 45, 65, 100, 111, 98, 101, 70, 111, 110, 116,
+    ]) {
+    ("application/x-font-type1", "type1")
   } else {
     ("font/ttf", "truetype")
   }
@@ -884,12 +953,16 @@ fn pdf_bytes_start_with(data : Bytes, prefix : ArrayView[Int]) -> Bool {
 priv struct PdfCollectedEntry {
   entry : @pdflite.PdfContentJsonEntry
   state : @pdflite.PdfContentOperatorState
+  text_glyph : @pdflite.PdfContentTextGlyphPlacement?
   resources : @syntax.PdfObject
   inline_image : (@syntax.PdfObject, @core.PdfBytes)?
   clip_paths : Array[@shape.PdfPath]
+  text_clip_groups : Array[PdfCollectedTextClipGroup]
   soft_mask : PdfCollectedSoftMask?
   group : PdfTransparencyGroup?
   group_path : Array[PdfTransparencyGroup]
+  fill_color_explicit : Bool
+  stroke_color_explicit : Bool
 }
 
 ///|
@@ -922,6 +995,8 @@ fn pdf_collected_entries_of_page(
     initial.clipping_path,
     None,
     [],
+    false,
+    false,
   )
 }
 
@@ -1004,6 +1079,209 @@ fn pdf_transparency_group_of_form(
 ///|
 /// Recursive content walk that mirrors pdflite's entry collector while
 /// retaining the active CTM and resource dictionary for every emitted item.
+fn pdf_text_glyphs_of_op(
+  state : @pdflite.PdfContentOperatorState,
+  op : @content.PdfContentOp,
+) -> Array[@pdflite.PdfContentTextGlyphPlacement] {
+  match op {
+    @content.Op_Tj(_)
+    | @content.Op_TJ(_)
+    | @content.Op_quote(_)
+    | @content.Op_double_quote(_, _, _) =>
+      state.text_state.content_apply_text_op(
+        state.text_state.current_font,
+        state.ctm,
+        op,
+      ).glyphs
+    _ => []
+  }
+}
+
+///|
+/// `pdflite` exposes the glyph placement that its text layer computes. A PDF
+/// vertical writing mode advances by `-w1` in user space, while the compact
+/// layout helper currently stores the positive magnitude. Correct the emitted
+/// quads in the viewer so Identity-V pages retain the visual order expected by
+/// pdf.js without changing the dependency's public model.
+priv struct PdfViewerVerticalRun {
+  anchor_x : Double
+  anchor_y : Double
+  previous_x : Double
+  previous_y : Double
+  direction_x : Double?
+  direction_y : Double?
+  distance : Double
+}
+
+///|
+fn pdf_viewer_correct_vertical_glyphs(
+  state : @pdflite.PdfContentOperatorState,
+  glyphs : Array[@pdflite.PdfContentTextGlyphPlacement],
+  run : PdfViewerVerticalRun?,
+) -> (Array[@pdflite.PdfContentTextGlyphPlacement], PdfViewerVerticalRun?) {
+  if !state.text_state.current_font.content_is_vertical() {
+    return (glyphs, run)
+  }
+  let output : Array[@pdflite.PdfContentTextGlyphPlacement] = Array(
+    capacity=glyphs.length(),
+  )
+  let mut current_run = run
+  for glyph in glyphs {
+    let box = glyph.bounding_box
+    let raw_x = box.x1
+    let raw_y = box.y1
+    match current_run {
+      None => {
+        output.push(glyph)
+        current_run = Some({
+          anchor_x: raw_x,
+          anchor_y: raw_y,
+          previous_x: raw_x,
+          previous_y: raw_y,
+          direction_x: None,
+          direction_y: None,
+          distance: pdf_viewer_vertical_glyph_advance(state, glyph),
+        })
+      }
+      Some(previous) => {
+        let direction = match (previous.direction_x, previous.direction_y) {
+          (Some(x), Some(y)) => Some((x, y))
+          _ => {
+            let delta_x = raw_x - previous.previous_x
+            let delta_y = raw_y - previous.previous_y
+            let length = (delta_x * delta_x + delta_y * delta_y).sqrt()
+            if length > 0.000001 {
+              Some((-delta_x / length, -delta_y / length))
+            } else {
+              None
+            }
+          }
+        }
+        let (dx, dy) = match direction {
+          Some((direction_x, direction_y)) => {
+            let target_x = previous.anchor_x + direction_x * previous.distance
+            let target_y = previous.anchor_y + direction_y * previous.distance
+            (target_x - raw_x, target_y - raw_y)
+          }
+          None => (0.0, 0.0)
+        }
+        output.push({
+          ..glyph,
+          bounding_box: {
+            x0: box.x0 + dx,
+            y0: box.y0 + dy,
+            x1: box.x1 + dx,
+            y1: box.y1 + dy,
+            x2: box.x2 + dx,
+            y2: box.y2 + dy,
+            x3: box.x3 + dx,
+            y3: box.y3 + dy,
+          },
+        })
+        current_run = Some({
+          ..previous,
+          previous_x: raw_x,
+          previous_y: raw_y,
+          direction_x: match direction {
+            Some(value) => Some(value.0)
+            None => None
+          },
+          direction_y: match direction {
+            Some(value) => Some(value.1)
+            None => None
+          },
+          distance: previous.distance +
+          pdf_viewer_vertical_glyph_advance(state, glyph),
+        })
+      }
+    }
+  }
+  (output, current_run)
+}
+
+///|
+fn pdf_viewer_vertical_run_reset(op : @content.PdfContentOp) -> Bool {
+  match op {
+    @content.Op_BT
+    | @content.Op_ET
+    | @content.Op_Tf(_, _)
+    | @content.Op_Td(_, _)
+    | @content.Op_TD(_, _)
+    | @content.Op_Tm(_)
+    | @content.Op_Tstar
+    | @content.Op_quote(_)
+    | @content.Op_double_quote(_, _, _)
+    | @content.Op_Do(_) => true
+    _ => false
+  }
+}
+
+///|
+fn pdf_viewer_vertical_glyph_advance(
+  state : @pdflite.PdfContentOperatorState,
+  glyph : @pdflite.PdfContentTextGlyphPlacement,
+) -> Double {
+  match state.text_state.current_font {
+    @pdflite.PdfFontCIDKeyed(font) => {
+      let cid = pdf_viewer_ttf_cid_of_charcode(font, glyph.charcode)
+      let width = for entry in font.composite.cid_widths2 {
+        if entry.0 == cid {
+          break Some(entry.1.width)
+        }
+      } nobreak {
+        None
+      }
+      match width {
+        Some(value) =>
+          value / 1000.0 * state.text_state.font_size +
+          state.text_state.character_spacing
+        None =>
+          if glyph.width != 0.0 {
+            glyph.width * 2.0 * state.text_state.font_size +
+            state.text_state.character_spacing
+          } else {
+            match font.composite.cid_default_width2 {
+              [value, ..] =>
+                value / 1000.0 * state.text_state.font_size +
+                state.text_state.character_spacing
+              [] => glyph.advance_y
+            }
+          }
+      }
+    }
+    _ => glyph.advance_y
+  }
+}
+
+///|
+/// Track whether a PDF content stream explicitly changed either painting
+/// colour. `pdflite`'s compact initial path state uses white as a placeholder,
+/// while PDF's default non-stroking and stroking colours are black. Keeping
+/// this bit alongside the collected entry lets the viewer correct that
+/// dependency default without changing an explicit white paint operation.
+fn pdf_color_explicit_after_op(
+  op : @content.PdfContentOp,
+  fill : Bool,
+  stroke : Bool,
+) -> (Bool, Bool) {
+  match op {
+    @content.Op_g(_)
+    | @content.Op_rg(_, _, _)
+    | @content.Op_k(_, _, _, _)
+    | @content.Op_sc(_)
+    | @content.Op_scn(_)
+    | @content.Op_scnName(_, _) => (true, stroke)
+    @content.Op_G(_)
+    | @content.Op_RG(_, _, _)
+    | @content.Op_K(_, _, _, _)
+    | @content.Op_SC(_)
+    | @content.Op_SCN(_)
+    | @content.Op_SCNName(_, _) => (fill, true)
+    _ => (fill, stroke)
+  }
+}
+
+///|
 fn pdf_collected_entries_of_ops(
   document : @pdflite.PdfDocument,
   initial : @pdflite.PdfContentOperatorState,
@@ -1012,6 +1290,9 @@ fn pdf_collected_entries_of_ops(
   initial_clip_paths : ArrayView[@shape.PdfPath],
   initial_soft_mask : PdfCollectedSoftMask?,
   initial_group_path : ArrayView[PdfTransparencyGroup],
+  initial_fill_color_explicit : Bool,
+  initial_stroke_color_explicit : Bool,
+  initial_text_clip_groups? : ArrayView[PdfCollectedTextClipGroup] = [],
 ) -> Array[PdfCollectedEntry] raise @core.PdfError {
   let mut state = initial
   let mut soft_mask = initial_soft_mask
@@ -1023,9 +1304,20 @@ fn pdf_collected_entries_of_ops(
     for path in initial_clip_paths => path
   ]
   let mut clip_stack : Array[Array[@shape.PdfPath]] = []
+  let mut text_clip_groups = [ for group in initial_text_clip_groups => group ]
+  let text_clip_stack : Array[Array[PdfCollectedTextClipGroup]] = []
+  let pending_text_clip : Array[PdfCollectedTextClipGlyph] = []
   let mut soft_mask_stack : Array[PdfCollectedSoftMask?] = []
+  let mut fill_color_explicit = initial_fill_color_explicit
+  let mut stroke_color_explicit = initial_stroke_color_explicit
+  let mut vertical_run : PdfViewerVerticalRun? = None
+  let mut fill_color_stack : Array[Bool] = []
+  let mut stroke_color_stack : Array[Bool] = []
   let output : Array[PdfCollectedEntry] = []
   for op in ops {
+    if pdf_viewer_vertical_run_reset(op) {
+      vertical_run = None
+    }
     match op {
       @content.Op_Do(name) =>
         match document.content_form_xobject_ops(resources, name) {
@@ -1048,6 +1340,13 @@ fn pdf_collected_entries_of_ops(
                 document.content_form_xobject_resources(resources, name),
               ) {
               (Some(form_state), Some(form_resources)) => {
+                // Resource names can resolve to different fonts inside a
+                // Form. Preserve the inherited active font, but rebuild the
+                // name-based cache on the next Tf in this resource scope.
+                let form_state = {
+                  ..form_state,
+                  text_state: { ..form_state.text_state, font_cache: [], },
+                }
                 let form_clip_paths = if form_state.clipping_path.length() >
                   state.clipping_path.length() {
                   [
@@ -1061,8 +1360,16 @@ fn pdf_collected_entries_of_ops(
                 }
                 output.append(
                   pdf_collected_entries_of_ops(
-                    document, form_state, form_resources, form_ops, form_clip_paths,
-                    soft_mask, child_group_path,
+                    document,
+                    form_state,
+                    form_resources,
+                    form_ops,
+                    form_clip_paths,
+                    soft_mask,
+                    child_group_path,
+                    fill_color_explicit,
+                    stroke_color_explicit,
+                    initial_text_clip_groups=text_clip_groups[:],
                   ),
                 )
               }
@@ -1073,21 +1380,38 @@ fn pdf_collected_entries_of_ops(
             let result = document.content_apply_resource_op(
               state, resources, op,
             )
+            let raw_glyphs = pdf_text_glyphs_of_op(state, op)
+            let (glyphs, next_vertical_run) = pdf_viewer_correct_vertical_glyphs(
+              state, raw_glyphs, vertical_run,
+            )
+            vertical_run = next_vertical_run
+            let mut glyph_index = 0
             for entry in result.entries {
+              let emitted_entry = match glyphs.get(glyph_index) {
+                Some(glyph) => { ..entry, bounding_box: glyph.bounding_box, }
+                None => entry
+              }
               output.push({
-                entry,
+                entry: emitted_entry,
                 state: result.state,
+                text_glyph: glyphs.get(glyph_index),
                 resources,
                 inline_image: None,
                 clip_paths: [
                   for path in clip_paths => path
+                ],
+                text_clip_groups: [
+                  for group in text_clip_groups => group
                 ],
                 soft_mask,
                 group,
                 group_path: [
                   for value in group_path => value
                 ],
+                fill_color_explicit,
+                stroke_color_explicit,
               })
+              glyph_index += 1
             }
             state = result.state
           }
@@ -1098,16 +1422,22 @@ fn pdf_collected_entries_of_ops(
           output.push({
             entry,
             state: result.state,
+            text_glyph: None,
             resources,
             inline_image: Some((dictionary, data)),
             clip_paths: [
               for path in clip_paths => path
+            ],
+            text_clip_groups: [
+              for group in text_clip_groups => group
             ],
             soft_mask,
             group,
             group_path: [
               for value in group_path => value
             ],
+            fill_color_explicit,
+            stroke_color_explicit,
           })
         }
         state = result.state
@@ -1120,13 +1450,20 @@ fn pdf_collected_entries_of_ops(
       }
       @content.Op_q => {
         clip_stack.push([ for path in clip_paths => path ])
+        text_clip_stack.push([ for group in text_clip_groups => group ])
         soft_mask_stack.push(soft_mask)
+        fill_color_stack.push(fill_color_explicit)
+        stroke_color_stack.push(stroke_color_explicit)
         let result = document.content_apply_resource_op(state, resources, op)
         state = result.state
       }
       @content.Op_Q => {
         let result = document.content_apply_resource_op(state, resources, op)
         state = result.state
+        match text_clip_stack.pop() {
+          Some(previous) => text_clip_groups = previous
+          None => ()
+        }
         match clip_stack.last() {
           Some(previous) => {
             clip_paths.clear()
@@ -1148,6 +1485,26 @@ fn pdf_collected_entries_of_ops(
           }
           None => ()
         }
+        match fill_color_stack.last() {
+          Some(previous) => {
+            fill_color_explicit = previous
+            let stack_length = fill_color_stack.length()
+            fill_color_stack = [
+              for index in 0..<(stack_length - 1) => fill_color_stack[index]
+            ]
+          }
+          None => ()
+        }
+        match stroke_color_stack.last() {
+          Some(previous) => {
+            stroke_color_explicit = previous
+            let stack_length = stroke_color_stack.length()
+            stroke_color_stack = [
+              for index in 0..<(stack_length - 1) => stroke_color_stack[index]
+            ]
+          }
+          None => ()
+        }
       }
       @content.Op_W | @content.Op_Wstar => {
         let previous_length = state.clipping_path.length()
@@ -1160,25 +1517,62 @@ fn pdf_collected_entries_of_ops(
       }
       _ => {
         let result = document.content_apply_resource_op(state, resources, op)
+        let raw_glyphs = pdf_text_glyphs_of_op(state, op)
+        let (glyphs, next_vertical_run) = pdf_viewer_correct_vertical_glyphs(
+          state, raw_glyphs, vertical_run,
+        )
+        vertical_run = next_vertical_run
+        if op is @content.Op_BT {
+          pending_text_clip.clear()
+        }
+        if op is @content.Op_ET && !pending_text_clip.is_empty() {
+          text_clip_groups.push({
+            glyphs: [
+              for glyph in pending_text_clip => glyph
+            ],
+            path: None,
+          })
+          pending_text_clip.clear()
+        }
+        pending_text_clip.append(
+          pdf_collect_text_clip_glyphs(result.state, resources, glyphs[:]),
+        )
+        let mut glyph_index = 0
         for entry in result.entries {
+          let emitted_entry = match glyphs.get(glyph_index) {
+            Some(glyph) => { ..entry, bounding_box: glyph.bounding_box, }
+            None => entry
+          }
           output.push({
-            entry,
+            entry: emitted_entry,
             state: result.state,
+            text_glyph: glyphs.get(glyph_index),
             resources,
             inline_image: None,
             clip_paths: [
               for path in clip_paths => path
+            ],
+            text_clip_groups: [
+              for group in text_clip_groups => group
             ],
             soft_mask,
             group,
             group_path: [
               for value in group_path => value
             ],
+            fill_color_explicit,
+            stroke_color_explicit,
           })
+          glyph_index += 1
         }
         state = result.state
       }
     }
+    let (next_fill, next_stroke) = pdf_color_explicit_after_op(
+      op, fill_color_explicit, stroke_color_explicit,
+    )
+    fill_color_explicit = next_fill
+    stroke_color_explicit = next_stroke
   }
   output
 }
@@ -1191,19 +1585,20 @@ fn pdf_items_of_page(
   origin_y : Double,
   width : Double,
   height : Double,
+  index_offset? : Int = 0,
+  appearance_fonts? : PdfAppearanceFontScope,
 ) -> Array[PdfPageItem] raise @core.PdfError {
   let collected_entries = pdf_collected_entries_of_page(document, page)
   let items : Array[PdfPageItem] = Array(capacity=collected_entries.length())
+  let cff_fonts : Map[Int, PdfCffFont?] = Map([])
   let mut inline_index = 0
-  for index, collected in collected_entries {
+  for source_index, collected in collected_entries {
+    let index = index_offset + source_index
     let entry = collected.entry
     let bounds = pdf_bounds_of_quad(entry.bounding_box)
     let paint = pdf_paint_attributes_of_state(collected.state)
-    let clip_path = pdf_clip_path_of_paths(
-      collected.clip_paths,
-      origin_x,
-      origin_y,
-      height,
+    let clip_path = pdf_clip_path_of_collected(
+      document, collected, cff_fonts, origin_x, origin_y, height,
     )
     let soft_mask = pdf_soft_mask_resource_of_collected(
       document,
@@ -1214,43 +1609,132 @@ fn pdf_items_of_page(
       collected.soft_mask,
     )
     match entry.object {
-      @pdflite.PdfContentGlyphObject(_, _, text) =>
-        if text != "" {
-          let state = match entry.state {
-            @pdflite.PdfContentStateGlyph(state) => state
-            _ =>
-              {
-                rendering_mode: 0,
-                knockout: false,
-                font: "",
-                font_size: 0.0,
-                clipping_path: [],
-              }
-          }
-          items.push(
-            PdfPageItem::Text({
-              index,
-              text,
-              bounds,
-              quad: pdf_quad_of_box(entry.bounding_box),
-              font: state.font,
-              font_size: state.font_size,
-              rendering_mode: state.rendering_mode,
-              fill_color: pdf_colour_hex(
-                collected.state.path_state.colour_non_stroke,
-              ),
-              stroke_color: pdf_colour_hex(
-                collected.state.path_state.colour_stroke,
-              ),
-              fill_alpha: paint.fill_alpha,
-              blend_mode: paint.blend_mode,
-              clip_path,
-              soft_mask,
-              group: collected.group,
-              group_path: collected.group_path,
-            }),
-          )
+      @pdflite.PdfContentGlyphObject(charcode, _, text) => {
+        let state = match entry.state {
+          @pdflite.PdfContentStateGlyph(state) => state
+          _ =>
+            {
+              rendering_mode: 0,
+              knockout: false,
+              font: "",
+              font_size: 0.0,
+              clipping_path: [],
+            }
         }
+        let fill_color = pdf_colour_hex_for_paint(
+          collected.state.path_state.colour_non_stroke,
+          collected.fill_color_explicit,
+        )
+        let stroke_color = pdf_colour_hex_for_paint(
+          collected.state.path_state.colour_stroke,
+          collected.stroke_color_explicit,
+        )
+        let (advance_x, advance_y, vertical) = match collected.text_glyph {
+          Some(glyph) => {
+            let font = collected.state.text_state.current_font
+            (glyph.advance_x, glyph.advance_y, font.content_is_vertical())
+          }
+          None => (0.0, 0.0, false)
+        }
+        let type3_outline = pdf_type3_outline_of_glyph(
+          document,
+          collected.resources,
+          state.font,
+          charcode,
+          pdf_quad_of_box(entry.bounding_box),
+          state.rendering_mode,
+          fill_color,
+          stroke_color,
+          paint.fill_alpha,
+          paint.stroke_alpha,
+          origin_x,
+          origin_y,
+          height,
+        ) catch {
+          _ => None
+        }
+        let glyph_matrix = match collected.text_glyph {
+          Some(glyph) => Some(pdf_glyph_transform(collected.state, glyph))
+          None => None
+        }
+        let cff_outline = match type3_outline {
+          Some(value) => Some(value)
+          None =>
+            pdf_cff_outline_of_pdf_glyph(
+              document,
+              collected.state.text_state.current_font,
+              cff_fonts,
+              charcode,
+              glyph_matrix,
+              state.rendering_mode,
+              fill_color,
+              stroke_color,
+              paint.fill_alpha,
+              paint.stroke_alpha,
+              origin_x,
+              origin_y,
+              height,
+            )
+        }
+        let glyph_outline = match cff_outline {
+          Some(value) => Some(value)
+          None =>
+            pdf_truetype_outline_of_pdf_glyph(
+              document,
+              collected.resources,
+              state.font,
+              charcode,
+              glyph_matrix,
+              state.rendering_mode,
+              fill_color,
+              stroke_color,
+              paint.fill_alpha,
+              paint.stroke_alpha,
+              origin_x,
+              origin_y,
+              height,
+            ) catch {
+              _ => None
+            }
+        }
+        items.push(
+          PdfPageItem::Text({
+            index,
+            text,
+            charcode,
+            advance_x,
+            advance_y,
+            vertical,
+            glyph_transform: match glyph_matrix {
+              Some(m) => Some([m.a, m.b, m.c, m.d, m.e, m.f])
+              None => None
+            },
+            bounds,
+            quad: pdf_quad_of_box(entry.bounding_box),
+            font: match appearance_fonts {
+              Some(scope) =>
+                pdf_annotation_font_name(
+                  document,
+                  collected.resources,
+                  state.font,
+                  scope,
+                )
+              None => state.font
+            },
+            font_size: state.font_size,
+            rendering_mode: state.rendering_mode,
+            fill_color,
+            stroke_color,
+            fill_alpha: paint.fill_alpha,
+            blend_mode: paint.blend_mode,
+            clip_path,
+            soft_mask,
+            group: collected.group,
+            group_path: collected.group_path,
+            type3_outline: glyph_outline,
+          }),
+        )
+      }
       @pdflite.PdfContentPathObject(path) => {
         let drawn = path
         let (
@@ -1262,6 +1746,7 @@ fn pdf_items_of_page(
           dash_array,
           dash_phase,
           pattern,
+          shading_pattern,
         ) = match entry.state {
           @pdflite.PdfContentStatePath(state) => {
             let stroke_scale = pdf_ctm_stroke_scale(collected.state.ctm)
@@ -1289,9 +1774,23 @@ fn pdf_items_of_page(
                 }
               None => None
             }
+            let (pattern, shading_pattern) = match pattern {
+              Some(value) =>
+                match value.shading {
+                  Some(shading) => (None, Some(shading))
+                  None => (Some(value), None)
+                }
+              None => (None, None)
+            }
             (
-              pdf_colour_hex(state.colour_non_stroke),
-              pdf_colour_hex(state.colour_stroke),
+              pdf_colour_hex_for_paint(
+                state.colour_non_stroke,
+                collected.fill_color_explicit,
+              ),
+              pdf_colour_hex_for_paint(
+                state.colour_stroke,
+                collected.stroke_color_explicit,
+              ),
               state.line_width * stroke_scale,
               state.line_cap,
               state.line_join,
@@ -1300,9 +1799,10 @@ fn pdf_items_of_page(
               ],
               state.dash_pattern.phase * stroke_scale,
               pattern,
+              shading_pattern,
             )
           }
-          _ => ("#202124", "#202124", 1.0, 0, 0, [], 0.0, None)
+          _ => ("#202124", "#202124", 1.0, 0, 0, [], 0.0, None, None)
         }
         items.push(
           PdfPageItem::Path({
@@ -1326,6 +1826,7 @@ fn pdf_items_of_page(
             dash_array,
             dash_phase,
             pattern,
+            shading_pattern,
             blend_mode: paint.blend_mode,
             clip_path,
             soft_mask,
@@ -1348,8 +1849,9 @@ fn pdf_items_of_page(
             name,
             resource,
             shading: None,
-            fill_color: pdf_colour_hex(
+            fill_color: pdf_colour_hex_for_paint(
               collected.state.path_state.colour_non_stroke,
+              collected.fill_color_explicit,
             ),
             fill_alpha: paint.fill_alpha,
             stroke_alpha: paint.stroke_alpha,
@@ -1383,8 +1885,9 @@ fn pdf_items_of_page(
             name,
             resource,
             shading: None,
-            fill_color: pdf_colour_hex(
+            fill_color: pdf_colour_hex_for_paint(
               collected.state.path_state.colour_non_stroke,
+              collected.fill_color_explicit,
             ),
             fill_alpha: paint.fill_alpha,
             stroke_alpha: paint.stroke_alpha,
@@ -1411,7 +1914,10 @@ fn pdf_items_of_page(
             name,
             resource: None,
             shading,
-            fill_color: "#000000",
+            fill_color: pdf_colour_hex_for_paint(
+              collected.state.path_state.colour_non_stroke,
+              collected.fill_color_explicit,
+            ),
             fill_alpha: paint.fill_alpha,
             stroke_alpha: paint.stroke_alpha,
             blend_mode: paint.blend_mode,
@@ -1580,11 +2086,27 @@ fn pdf_shading_resource_of_object(
   name : String,
   object : @syntax.PdfObject,
 ) -> PdfShadingResource raise @core.PdfError {
-  let shading = document.content_read_shading(
-    @geometry.transform_identity_matrix,
-    @syntax.PdfNull,
-    object,
+  pdf_shading_resource_of_object_with_matrix(
+    document, name, object, @geometry.transform_identity_matrix,
   )
+}
+
+///|
+fn pdf_shading_resource_of_object_with_matrix(
+  document : @pdflite.PdfDocument,
+  name : String,
+  object : @syntax.PdfObject,
+  matrix : @geometry.TransformMatrix,
+) -> PdfShadingResource raise @core.PdfError {
+  let shading = document.content_read_shading(matrix, @syntax.PdfNull, object)
+  let matrix = [
+    shading.shading_matrix.a,
+    shading.shading_matrix.b,
+    shading.shading_matrix.c,
+    shading.shading_matrix.d,
+    shading.shading_matrix.e,
+    shading.shading_matrix.f,
+  ]
   match shading.shading {
     @pdflite.PdfContentAxialShading(axial) => {
       let (x0, y0, x1, y1) = axial.axialshading_coords
@@ -1593,13 +2115,14 @@ fn pdf_shading_resource_of_object(
         name,
         kind: "axial",
         coords: [x0, y0, x1, y1],
-        matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        matrix,
         stops: pdf_shading_stops(
           axial.axialshading_function,
           domain_min,
           domain_max,
           shading.shading_colourspace,
         ),
+        mesh: [],
         extend_start: axial.axialshading_extend.0,
         extend_end: axial.axialshading_extend.1,
       }
@@ -1611,13 +2134,14 @@ fn pdf_shading_resource_of_object(
         name,
         kind: "radial",
         coords: [x0, y0, r0, x1, y1, r1],
-        matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        matrix,
         stops: pdf_shading_stops(
           radial.radialshading_function,
           domain_min,
           domain_max,
           shading.shading_colourspace,
         ),
+        mesh: [],
         extend_start: radial.radialshading_extend.0,
         extend_end: radial.radialshading_extend.1,
       }
@@ -1630,13 +2154,14 @@ fn pdf_shading_resource_of_object(
         name,
         kind: "function",
         coords: [],
-        matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        matrix,
         stops: pdf_shading_stops(
           [function.funshading_function],
           domain_min,
           domain_max,
           shading.shading_colourspace,
         ),
+        mesh: [],
         extend_start: true,
         extend_end: true,
       }
@@ -1646,8 +2171,13 @@ fn pdf_shading_resource_of_object(
         name,
         kind: "mesh",
         coords: [],
-        matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        matrix,
         stops: [],
+        mesh: pdf_mesh_triangles_of_shading(
+          document,
+          object,
+          shading.shading_colourspace,
+        ),
         extend_start: true,
         extend_end: true,
       }
@@ -1656,8 +2186,13 @@ fn pdf_shading_resource_of_object(
         name,
         kind: "mesh",
         coords: [],
-        matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        matrix,
         stops: [],
+        mesh: pdf_mesh_triangles_of_shading(
+          document,
+          object,
+          shading.shading_colourspace,
+        ),
         extend_start: true,
         extend_end: true,
       }
@@ -1666,8 +2201,13 @@ fn pdf_shading_resource_of_object(
         name,
         kind: "mesh",
         coords: [],
-        matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        matrix,
         stops: [],
+        mesh: pdf_mesh_triangles_of_shading(
+          document,
+          object,
+          shading.shading_colourspace,
+        ),
         extend_start: true,
         extend_end: true,
       }
@@ -1678,6 +2218,11 @@ fn pdf_shading_resource_of_object(
         coords: [],
         matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
         stops: [],
+        mesh: pdf_mesh_triangles_of_shading(
+          document,
+          object,
+          shading.shading_colourspace,
+        ),
         extend_start: true,
         extend_end: true,
       }
@@ -1692,7 +2237,18 @@ fn pdf_shading_resource_with_ctm(
   shading : PdfShadingResource,
   ctm : @geometry.TransformMatrix,
 ) -> PdfShadingResource {
-  { ..shading, matrix: [ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f], }
+  let base = if shading.matrix.length() >= 6 {
+    shading.matrix
+  } else {
+    [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+  }
+  let a = ctm.a * base[0] + ctm.c * base[1]
+  let b = ctm.b * base[0] + ctm.d * base[1]
+  let c = ctm.a * base[2] + ctm.c * base[3]
+  let d = ctm.b * base[2] + ctm.d * base[3]
+  let e = ctm.a * base[4] + ctm.c * base[5] + ctm.e
+  let f = ctm.b * base[4] + ctm.d * base[5] + ctm.f
+  { ..shading, matrix: [a, b, c, d, e, f], }
 }
 
 ///|
@@ -1845,6 +2401,255 @@ fn pdf_colour_hex(values : @pdflite.PdfContentColourValues) -> String {
         [] => "#000000"
       }
     _ => "#000000"
+  }
+}
+
+///|
+fn pdf_colour_hex_for_paint(
+  values : @pdflite.PdfContentColourValues,
+  explicit : Bool,
+) -> String {
+  if explicit {
+    pdf_colour_hex(values)
+  } else {
+    "#000000"
+  }
+}
+
+///|
+fn pdf_type3_page_matrix(
+  quad : PdfQuad,
+  bbox : @geometry.PdfRectangle,
+) -> @geometry.TransformMatrix {
+  let width = bbox.max_x - bbox.min_x
+  let height = bbox.max_y - bbox.min_y
+  if width == 0.0 || height == 0.0 {
+    @geometry.transform_identity_matrix
+  } else {
+    let x_vector = {
+      x: (quad.p2.x - quad.p1.x) / width,
+      y: (quad.p2.y - quad.p1.y) / width,
+    }
+    let y_vector = {
+      x: (quad.p1.x - quad.p0.x) / height,
+      y: (quad.p1.y - quad.p0.y) / height,
+    }
+    {
+      a: x_vector.x,
+      b: x_vector.y,
+      c: y_vector.x,
+      d: y_vector.y,
+      e: quad.p0.x - x_vector.x * bbox.min_x - y_vector.x * bbox.min_y,
+      f: quad.p0.y - x_vector.y * bbox.min_x - y_vector.y * bbox.min_y,
+    }
+  }
+}
+
+///|
+fn pdf_type3_paint_type(
+  document : @pdflite.PdfDocument,
+  font : @syntax.PdfObject,
+) -> Int {
+  match document.lookup_direct(pdf_name_key("/PaintType"), font) {
+    Some(@syntax.PdfInteger(value)) => value
+    Some(@syntax.PdfReal(value)) => value.to_int()
+    _ => 2
+  }
+}
+
+///|
+fn pdf_type3_outline_of_glyph(
+  document : @pdflite.PdfDocument,
+  resources : @syntax.PdfObject,
+  font_name : String,
+  charcode : Int,
+  quad : PdfQuad,
+  rendering_mode : Int,
+  fill_color : String,
+  stroke_color : String,
+  fill_alpha : Double,
+  stroke_alpha : Double,
+  origin_x : Double,
+  origin_y : Double,
+  page_height : Double,
+) -> String? raise @core.PdfError {
+  match document.lookup_direct(pdf_name_key("/Font"), resources) {
+    None => None
+    Some(fonts) =>
+      match document.lookup_direct(pdf_name_key(font_name), fonts) {
+        None => None
+        Some(font_object) =>
+          match document.read_font(font_object) {
+            @pdflite.PdfFontSimple(simple) =>
+              match simple.fonttype {
+                @pdflite.PdfSimpleFontType::PdfType3(data) => {
+                  let glyph_name = for (code, name) in simple.encoding.table() {
+                    if code == charcode {
+                      break Some(name)
+                    }
+                  } nobreak {
+                    None
+                  }
+                  match glyph_name {
+                    None => None
+                    Some(glyph_name) => {
+                      let charproc = for (name, object) in data.charprocs {
+                        if name == glyph_name {
+                          break Some(object)
+                        }
+                      } nobreak {
+                        None
+                      }
+                      match charproc {
+                        None => None
+                        Some(charproc) => {
+                          let ops = document.parse_content_ops_with_resources(
+                            data.resources,
+                            [charproc],
+                          )
+                          let initial = @pdflite.pdf_content_initial_operator_state(
+                            data.fontbbox.min_x,
+                            data.fontbbox.min_y,
+                            data.fontbbox.max_x,
+                            data.fontbbox.max_y,
+                          )
+                          let entries = pdf_collected_entries_of_ops(
+                            document,
+                            initial,
+                            data.resources,
+                            ops,
+                            initial.clipping_path,
+                            None,
+                            [],
+                            false,
+                            false,
+                          )
+                          let mapping = pdf_type3_page_matrix(
+                            quad,
+                            data.fontbbox,
+                          )
+                          let paint_type = pdf_type3_paint_type(
+                            document, font_object,
+                          )
+                          let output = StringBuilder()
+                          for collected in entries {
+                            match collected.entry.object {
+                              @pdflite.PdfContentPathObject(drawn) => {
+                                let path_state = match collected.entry.state {
+                                  @pdflite.PdfContentStatePath(value) =>
+                                    Some(value)
+                                  _ => None
+                                }
+                                let combined = @geometry.transform_matrix_compose(
+                                  mapping,
+                                  collected.state.ctm,
+                                )
+                                let path = drawn.path.transform(combined)
+                                let d = pdf_svg_path_of_shape_direct(
+                                  path, origin_x, origin_y, page_height,
+                                )
+                                if d != "" {
+                                  let path_fill = if drawn.filled &&
+                                    pdf_text_mode_fills(rendering_mode) {
+                                    if paint_type == 1 {
+                                      pdf_colour_hex_for_paint(
+                                        match path_state {
+                                          Some(value) => value.colour_non_stroke
+                                          None =>
+                                            @pdflite.PdfContentColourFloats([
+                                              0.0,
+                                            ])
+                                        },
+                                        collected.fill_color_explicit,
+                                      )
+                                    } else {
+                                      fill_color
+                                    }
+                                  } else {
+                                    "none"
+                                  }
+                                  let path_stroke = if drawn.stroked &&
+                                    pdf_text_mode_strokes(rendering_mode) {
+                                    if paint_type == 1 {
+                                      pdf_colour_hex_for_paint(
+                                        match path_state {
+                                          Some(value) => value.colour_stroke
+                                          None =>
+                                            @pdflite.PdfContentColourFloats([
+                                              0.0,
+                                            ])
+                                        },
+                                        collected.stroke_color_explicit,
+                                      )
+                                    } else {
+                                      stroke_color
+                                    }
+                                  } else {
+                                    "none"
+                                  }
+                                  let line_width = match path_state {
+                                    Some(value) =>
+                                      value.line_width *
+                                      pdf_ctm_stroke_scale(combined)
+                                    None => 1.0
+                                  }
+                                  let dash = match path_state {
+                                    Some(value) if value.dash_pattern.array.length() >
+                                      0 =>
+                                      " stroke-dasharray=\"" +
+                                      pdf_svg_dash_array(
+                                        [
+                                          for dash in value.dash_pattern.array => {
+                                            dash *
+                                            pdf_ctm_stroke_scale(combined)
+                                          }
+                                        ],
+                                        1.0,
+                                      ) +
+                                      "\" stroke-dashoffset=\"" +
+                                      (value.dash_pattern.phase *
+                                      pdf_ctm_stroke_scale(combined)).to_string() +
+                                      "\""
+                                    _ => ""
+                                  }
+                                  output.write_string(
+                                    "<path d=\"" +
+                                    pdf_escape_xml(d) +
+                                    "\" fill=\"" +
+                                    path_fill +
+                                    "\" stroke=\"" +
+                                    path_stroke +
+                                    "\" stroke-width=\"" +
+                                    line_width.to_string() +
+                                    "\" fill-opacity=\"" +
+                                    fill_alpha.to_string() +
+                                    "\" stroke-opacity=\"" +
+                                    stroke_alpha.to_string() +
+                                    "\"" +
+                                    dash +
+                                    " data-pdf-type3=\"true\"/>",
+                                  )
+                                }
+                              }
+                              _ => ()
+                            }
+                          }
+                          let value = output.to_string()
+                          if value == "" {
+                            None
+                          } else {
+                            Some(value)
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                _ => None
+              }
+            _ => None
+          }
+      }
   }
 }
 

@@ -29,6 +29,10 @@ test "viewer builds page model and selection from pdflite" {
   assert_true(
     first.quad.p0.x != first.quad.p1.x || first.quad.p0.y != first.quad.p1.y,
   )
+  assert_eq(first.charcode, 72)
+  assert_true(first.advance_x > 0.0)
+  assert_eq(first.advance_y, 0.0)
+  assert_true(!first.vertical)
   let selection = viewer.select(1, @pdf-viewer.PdfBounds::{
     min_x: 0.0,
     min_y: 0.0,
@@ -49,7 +53,7 @@ test "viewer renders inspectable SVG" {
   guard svg is Some(svg) else { fail("page 1 should render") }
   assert_true(svg.has_prefix("<svg"))
   assert_true(svg.contains(">Hello</text>"))
-  assert_true(svg.contains("dominant-baseline=\"hanging\""))
+  assert_true(svg.contains("dominant-baseline=\"alphabetic\""))
   assert_true(svg.contains("viewBox"))
 }
 
@@ -88,4 +92,31 @@ test "viewer exposes pdfjs-style page surfaces" {
     _ => None
   }
   assert_eq(invalid, None)
+}
+
+///|
+test "viewer exposes document navigation and metadata surfaces" {
+  let viewer = pdf_viewer_fixture()
+  let outline = viewer.outline_json() catch {
+    _ => fail("outline should be readable")
+  }
+  assert_true(outline is Array(_))
+  let labels = viewer.page_labels_json() catch {
+    _ => fail("page labels should be readable")
+  }
+  assert_true(labels is Array(_))
+  let visible_labels = viewer.page_labels() catch {
+    _ => fail("visible page labels should be readable")
+  }
+  assert_eq(visible_labels, ["1"])
+  let attachments = viewer.attachments_json() catch {
+    _ => fail("attachments should be readable")
+  }
+  assert_true(attachments is Array(_))
+  let info = viewer.info_json() catch { _ => fail("info should be readable") }
+  assert_true(info is Object(_))
+  let optional_content = viewer.optional_content_json() catch {
+    _ => fail("optional content should be readable")
+  }
+  assert_true(optional_content is None)
 }

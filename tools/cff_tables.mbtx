@@ -1,0 +1,73 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/json",
+}
+
+///|
+async fn reference_table(file : String, name : String) -> Array[String] {
+  let source = @fs.read_file("reference/pdf.js/src/core/" + file).text()
+  let marker = "const " + name + " = ["
+  let start = source.find(marker).unwrap() + marker.length() - 1
+  let rest = source[start:]
+  let end = rest.find("];").unwrap() + 1
+  guard @json.parse(rest[:end].to_owned()) is Array(items) else {
+    fail("Expected a JSON array for " + name)
+  }
+  items.map(item => {
+    match item {
+      String(value) => value
+      _ => fail("Expected strings in " + name)
+    }
+  })
+}
+
+///|
+fn emit_table(
+  output : StringBuilder,
+  name : String,
+  values : Array[String],
+) -> Unit {
+  output.write_string("\n///|\nlet " + name + " : Array[String] = [\n")
+  for value in values {
+    output.write_string("  " + Json::string(value).stringify() + ",\n")
+  }
+  output.write_string("]\n")
+}
+
+///|
+async fn main {
+  let output = StringBuilder()
+  let header =
+    #|// Copyright 2012 Mozilla Foundation
+    #|//
+    #|// Licensed under the Apache License, Version 2.0 (the "License");
+    #|// you may not use this file except in compliance with the License.
+    #|// You may obtain a copy of the License at
+    #|//
+    #|//     http://www.apache.org/licenses/LICENSE-2.0
+    #|//
+    #|// Unless required by applicable law or agreed to in writing, software
+    #|// distributed under the License is distributed on an "AS IS" BASIS,
+    #|// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    #|// See the License for the specific language governing permissions and
+    #|// limitations under the License.
+    #|//
+    #|// CFF specification tables transcribed from pdf.js by tools/cff_tables.mbtx.
+    #|// Reference revision: 89b500f5e1d98ed89bb90211e45b28730b2d99ac.
+    #|
+  output.write_string(header)
+  for
+    (file, source, target) in [
+      ("cff_parser.js", "CFFStandardStrings", "pdf_cff_standard_strings"),
+      ("charsets.js", "ISOAdobeCharset", "pdf_cff_iso_adobe_charset"),
+      ("charsets.js", "ExpertCharset", "pdf_cff_expert_charset"),
+      ("charsets.js", "ExpertSubsetCharset", "pdf_cff_expert_subset_charset"),
+      ("encodings.js", "StandardEncoding", "pdf_cff_standard_encoding"),
+      ("encodings.js", "ExpertEncoding", "pdf_cff_expert_encoding"),
+    ] {
+    emit_table(output, target, reference_table(file, source))
+  }
+  @fs.write_file("cff_tables.mbt", output.to_string())
+}

@@ -281,6 +281,20 @@ fn pdf_svg_flush_text_run(
 
 ///|
 fn pdf_svg_text_can_join(previous : PdfTextItem, current : PdfTextItem) -> Bool {
+  let same_transform = match
+    (previous.glyph_transform, current.glyph_transform) {
+    (Some([a, b, c, d, e, f]), Some([aa, bb, cc, dd, ee, ff])) => {
+      let determinant = a * d - b * c
+      determinant != 0.0 &&
+      (a - aa).abs() < 0.000001 &&
+      (b - bb).abs() < 0.000001 &&
+      (c - cc).abs() < 0.000001 &&
+      (d - dd).abs() < 0.000001 &&
+      ((-b * (ee - e) + a * (ff - f)) / determinant).abs() < 0.000001
+    }
+    (None, None) => true
+    _ => false
+  }
   let line_threshold = if previous.font_size > current.font_size {
     previous.font_size * 0.2
   } else {
@@ -290,6 +304,10 @@ fn pdf_svg_text_can_join(previous : PdfTextItem, current : PdfTextItem) -> Bool 
   let current_angle = pdf_text_angle(current)
   (previous.bounds.max_y - current.bounds.max_y).abs() <= line_threshold &&
   previous.font == current.font &&
+  previous.font_size == current.font_size &&
+  previous.fill_alpha == current.fill_alpha &&
+  previous.blend_mode == current.blend_mode &&
+  same_transform &&
   previous.rendering_mode == current.rendering_mode &&
   previous.fill_color == current.fill_color &&
   previous.stroke_color == current.stroke_color &&
@@ -305,6 +323,22 @@ fn pdf_svg_text(
   items : ArrayView[PdfTextItem],
   scale : Double,
 ) -> Unit {
+  let has_outline = for item in items {
+    if item.type3_outline is Some(_) {
+      break true
+    }
+  } nobreak {
+    false
+  }
+  if has_outline {
+    for item in items {
+      match item.type3_outline {
+        Some(_) => pdf_svg_outline_text(output, page, item, scale)
+        None => pdf_svg_text(output, page, [item], scale)
+      }
+    }
+    return
+  }
   let first = items[0]
   let angle = pdf_text_angle(first)
   let rotated = angle.abs() > 0.001
@@ -346,6 +380,36 @@ fn pdf_svg_text(
       "",
     )
   }
+  let (x, y, transform, font_size, baseline) = match first.glyph_transform {
+    Some([a, b, c, d, e, f]) if a * d - b * c != 0.0 => {
+      let positions : Array[String] = []
+      for item in items {
+        let position = match item.glyph_transform {
+          Some([_, _, _, _, ee, ff]) =>
+            (d * (ee - e) - c * (ff - f)) / (a * d - b * c)
+          _ => 0.0
+        }
+        positions.push(position.to_string())
+      }
+      let values = [
+        a * scale,
+        -b * scale,
+        -c * scale,
+        d * scale,
+        (e - page.origin_x) * scale,
+        (page.origin_y + page.height - f) * scale,
+      ]
+      let matrix = values.map(v => v.to_string()).join(" ")
+      (
+        positions.join(" "),
+        0.0,
+        " transform=\"matrix(\{matrix})\"",
+        1.0,
+        "alphabetic",
+      )
+    }
+    _ => (x, y, transform, first.font_size * scale, "hanging")
+  }
   let family = pdf_svg_font_family_for_page(page, first.font)
   let weight = pdf_svg_font_weight_for_page(page, first.font)
   let style = pdf_svg_font_style_for_page(page, first.font)
@@ -359,7 +423,7 @@ fn pdf_svg_text(
   } else {
     "none"
   }
-  let stroke_width = if stroke == "none" { 0.0 } else { first.font_size * 0.04 }
+  let stroke_width = if stroke == "none" { 0.0 } else { font_size * 0.04 }
   pdf_svg_clip_defs(output, first.index, first.clip_path)
   pdf_svg_soft_mask_defs(output, first.index, page, first.soft_mask, scale)
   pdf_svg_soft_mask_open(output, first.index, first.soft_mask)
@@ -374,7 +438,7 @@ fn pdf_svg_text(
     " font-family=\"" +
     family +
     "\" font-size=\"" +
-    (first.font_size * scale).to_string() +
+    font_size.to_string() +
     "\" font-weight=\"" +
     weight +
     "\" font-style=\"" +
@@ -389,12 +453,45 @@ fn pdf_svg_text(
     first.fill_alpha.to_string() +
     "\"" +
     pdf_svg_blend_style(first.blend_mode) +
-    " dominant-baseline=\"hanging\">" +
+    " dominant-baseline=\"" +
+    baseline +
+    "\">" +
     pdf_escape_xml(value.to_string()) +
     "</text>",
   )
   pdf_svg_clip_close(output, first.index, first.clip_path)
   pdf_svg_soft_mask_close(output, first.index, first.soft_mask)
+}
+
+///|
+fn pdf_svg_outline_text(
+  output : StringBuilder,
+  page : PdfPageModel,
+  item : PdfTextItem,
+  scale : Double,
+) -> Unit {
+  match item.type3_outline {
+    None => ()
+    Some(outline) => {
+      pdf_svg_clip_defs(output, item.index, item.clip_path)
+      pdf_svg_soft_mask_defs(output, item.index, page, item.soft_mask, scale)
+      pdf_svg_soft_mask_open(output, item.index, item.soft_mask)
+      pdf_svg_clip_open(output, item.index, item.clip_path)
+      output.write_string(
+        "<g transform=\"scale(" +
+        scale.to_string() +
+        ")\" data-pdf-text-outline=\"true\" data-pdf-text-index=\"" +
+        item.index.to_string() +
+        "\"" +
+        pdf_svg_blend_style(item.blend_mode) +
+        ">" +
+        outline +
+        "</g>",
+      )
+      pdf_svg_clip_close(output, item.index, item.clip_path)
+      pdf_svg_soft_mask_close(output, item.index, item.soft_mask)
+    }
+  }
 }
 
 ///|
@@ -489,15 +586,16 @@ fn pdf_svg_fonts(output : StringBuilder, page : PdfPageModel) -> Unit {
   let css = StringBuilder()
   for resource in page.fonts {
     match resource.data_uri {
-      Some(data_uri) => {
-        css.write_string("@font-face{font-family:'")
-        css.write_string(resource.family)
-        css.write_string("';src:url('")
-        css.write_string(data_uri)
-        css.write_string("') format('")
-        css.write_string(resource.format)
-        css.write_string("');}")
-      }
+      Some(data_uri) =>
+        if resource.format != "cff" && resource.format != "type1" {
+          css.write_string("@font-face{font-family:'")
+          css.write_string(resource.family)
+          css.write_string("';src:url('")
+          css.write_string(data_uri)
+          css.write_string("') format('")
+          css.write_string(resource.format)
+          css.write_string("');}")
+        }
       None => ()
     }
   }
@@ -516,9 +614,13 @@ fn pdf_svg_path(
   scale : Double,
 ) -> Unit {
   let fill = if path.filled {
-    match path.pattern {
-      Some(_) => "url(#pdf-pattern-" + path.index.to_string() + ")"
-      None => path.fill_color
+    match path.shading_pattern {
+      Some(_) => "none"
+      None =>
+        match path.pattern {
+          Some(_) => "url(#pdf-pattern-" + path.index.to_string() + ")"
+          None => path.fill_color
+        }
     }
   } else {
     "none"
@@ -573,7 +675,138 @@ fn pdf_svg_path(
     "/>",
   )
   pdf_svg_clip_close(output, path.index, path.clip_path)
+  match path.shading_pattern {
+    Some(shading) =>
+      pdf_svg_shading_pattern_path(output, page, path, shading, scale)
+    None => ()
+  }
   pdf_svg_soft_mask_close(output, path.index, path.soft_mask)
+}
+
+///|
+/// Lower a PatternType 2 shading as a clipped mesh.  A PDF shading pattern is
+/// defined over the path that selected it; treating it as an endlessly
+/// repeated SVG tile changes both the extent and the edge behavior.  Clipping
+/// the mesh to the original path preserves that relationship and works in
+/// browsers without a custom Canvas renderer.
+fn pdf_svg_shading_pattern_path(
+  output : StringBuilder,
+  page : PdfPageModel,
+  path : PdfPathItem,
+  shading : PdfShadingResource,
+  scale : Double,
+) -> Unit {
+  if shading.mesh.length() == 0 {
+    return
+  }
+  let clip_id = "pdf-shading-path-" + path.index.to_string()
+  let transformed = pdf_transform_svg_path(path.svg_path, page.height, scale)
+  output.write_string(
+    "<defs><clipPath id=\"" +
+    clip_id +
+    "\"><path d=\"" +
+    transformed +
+    "\"/></clipPath></defs><g clip-path=\"url(#" +
+    clip_id +
+    ")\" opacity=\"" +
+    path.fill_alpha.to_string() +
+    "\" transform=\"" +
+    pdf_svg_shading_transform(page, shading.matrix, scale) +
+    "\">",
+  )
+  pdf_svg_mesh_triangles(output, shading.mesh)
+  output.write_string("</g>")
+}
+
+///|
+fn pdf_svg_mesh_triangles(
+  output : StringBuilder,
+  triangles : ArrayView[PdfMeshTriangle],
+) -> Unit {
+  let steps = pdf_mesh_subdivision_steps(triangles.length())
+  for triangle in triangles {
+    pdf_svg_mesh_triangle(output, triangle, steps)
+  }
+}
+
+///|
+/// SVG has no consistently supported mesh-gradient element. Subdivide each
+/// source triangle and sample its barycentric colour at each small triangle's
+/// centroid. This follows the same linear interpolation as pdf.js' software
+/// path and avoids the obvious one-colour facets of the old fallback.
+fn pdf_svg_mesh_triangle(
+  output : StringBuilder,
+  triangle : PdfMeshTriangle,
+  steps : Int,
+) -> Unit {
+  let denominator = steps.to_double()
+  for row in 0..<steps {
+    for column in 0..<(steps - row) {
+      let u0 = column.to_double() / denominator
+      let v0 = row.to_double() / denominator
+      let u1 = (column + 1).to_double() / denominator
+      let v1 = (row + 1).to_double() / denominator
+      let a = pdf_mesh_triangle_point(triangle, u0, v0)
+      let b = pdf_mesh_triangle_point(triangle, u1, v0)
+      let c = pdf_mesh_triangle_point(triangle, u0, v1)
+      pdf_svg_mesh_microtriangle(
+        output,
+        triangle,
+        a,
+        b,
+        c,
+        (u0 + u1 + u0) / 3.0,
+        (v0 + v0 + v1) / 3.0,
+      )
+      if column < steps - row - 1 {
+        let d = pdf_mesh_triangle_point(triangle, u1, v1)
+        pdf_svg_mesh_microtriangle(
+          output,
+          triangle,
+          b,
+          d,
+          c,
+          (u1 + u1 + u0) / 3.0,
+          (v0 + v1 + v1) / 3.0,
+        )
+      }
+    }
+  }
+}
+
+///|
+/// Serialize one microtriangle. A very small same-colour stroke closes the
+/// subpixel antialiasing seam between adjacent polygons without drawing the
+/// heavy outlines used by the old large-triangle fallback.
+fn pdf_svg_mesh_microtriangle(
+  output : StringBuilder,
+  source : PdfMeshTriangle,
+  first : PdfPoint,
+  second : PdfPoint,
+  third : PdfPoint,
+  u : Double,
+  v : Double,
+) -> Unit {
+  let color = pdf_mesh_triangle_color_at(source, u, v)
+  output.write_string(
+    "<polygon points=\"" +
+    first.x.to_string() +
+    " " +
+    first.y.to_string() +
+    " " +
+    second.x.to_string() +
+    " " +
+    second.y.to_string() +
+    " " +
+    third.x.to_string() +
+    " " +
+    third.y.to_string() +
+    "\" fill=\"" +
+    color +
+    "\" stroke=\"" +
+    color +
+    "\" stroke-width=\"0.08\" stroke-linejoin=\"round\"/>",
+  )
 }
 
 ///|
@@ -835,6 +1068,22 @@ fn pdf_svg_shading(
   pdf_svg_soft_mask_defs(output, item.index, page, item.soft_mask, scale)
   pdf_svg_soft_mask_open(output, item.index, item.soft_mask)
   match item.shading {
+    Some(shading) if shading.mesh.length() > 0 => {
+      pdf_svg_clip_defs(output, item.index, item.clip_path)
+      pdf_svg_clip_open(output, item.index, item.clip_path)
+      output.write_string(
+        "<g data-pdf-kind=\"mesh-shading\" data-pdf-name=\"" +
+        pdf_escape_xml(item.name) +
+        "\" opacity=\"" +
+        item.fill_alpha.to_string() +
+        "\" transform=\"" +
+        pdf_svg_shading_transform(page, shading.matrix, scale) +
+        "\">",
+      )
+      pdf_svg_mesh_triangles(output, shading.mesh)
+      output.write_string("</g>")
+      pdf_svg_clip_close(output, item.index, item.clip_path)
+    }
     Some(shading) if shading.stops.length() > 0 => {
       let gradient_id = "pdf-shading-" +
         item.index.to_string() +
@@ -1020,7 +1269,7 @@ fn pdf_svg_placeholder(
   pdf_svg_clip_defs(output, item.index, item.clip_path)
   pdf_svg_clip_open(output, item.index, item.clip_path)
   output.write_string(
-    "<g data-pdf-kind=\"" +
+    "<g data-pdf-placeholder=\"true\" data-pdf-kind=\"" +
     kind +
     "\" data-pdf-name=\"" +
     pdf_escape_xml(item.name) +
@@ -1032,189 +1281,6 @@ fn pdf_svg_placeholder(
     "</title></g>",
   )
   pdf_svg_clip_close(output, item.index, item.clip_path)
-}
-
-///|
-fn pdf_svg_annotations(
-  output : StringBuilder,
-  page : PdfPageModel,
-  scale : Double,
-) -> Unit {
-  for annotation in page.annotations {
-    pdf_svg_annotation(output, page, annotation, scale)
-  }
-}
-
-///|
-fn pdf_svg_annotation(
-  output : StringBuilder,
-  page : PdfPageModel,
-  annotation : PdfAnnotationItem,
-  scale : Double,
-) -> Unit {
-  let x = (annotation.bounds.min_x - page.origin_x) * scale
-  let y = (page.origin_y + page.height - annotation.bounds.max_y) * scale
-  let width = (annotation.bounds.max_x - annotation.bounds.min_x) * scale
-  let height = (annotation.bounds.max_y - annotation.bounds.min_y) * scale
-  let color = match annotation.color {
-    Some(value) => value
-    None =>
-      match annotation.subtype {
-        "highlight" => "#facc15"
-        "underline" => "#2563eb"
-        "strikeout" => "#dc2626"
-        _ => "#2563eb"
-      }
-  }
-  let stroke_width = if annotation.border_width * scale < 0.5 {
-    0.5
-  } else {
-    annotation.border_width * scale
-  }
-  let dash = if annotation.border_dash.length() > 0 {
-    " stroke-dasharray=\"" +
-    pdf_svg_annotation_dash(annotation.border_dash, scale) +
-    "\""
-  } else if annotation.border_style == "dashed" {
-    " stroke-dasharray=\"4 3\""
-  } else {
-    ""
-  }
-  let name = "data-pdf-annotation-index=\"" +
-    annotation.index.to_string() +
-    "\" data-pdf-annotation-type=\"" +
-    pdf_escape_xml(annotation.subtype) +
-    "\""
-  match annotation.uri {
-    Some(uri) =>
-      output.write_string(
-        "<a href=\"" +
-        pdf_escape_xml(uri) +
-        "\" target=\"_blank\" " +
-        name +
-        ">",
-      )
-    None => ()
-  }
-  match annotation.subtype {
-    "highlight" =>
-      output.write_string(
-        "<rect " +
-        name +
-        " x=\"" +
-        x.to_string() +
-        "\" y=\"" +
-        y.to_string() +
-        "\" width=\"" +
-        width.to_string() +
-        "\" height=\"" +
-        height.to_string() +
-        "\" fill=\"" +
-        color +
-        "\" fill-opacity=\"0.35\" stroke=\"none\"/>",
-      )
-    "underline" =>
-      output.write_string(
-        "<line " +
-        name +
-        " x1=\"" +
-        x.to_string() +
-        "\" y1=\"" +
-        (y + height).to_string() +
-        "\" x2=\"" +
-        (x + width).to_string() +
-        "\" y2=\"" +
-        (y + height).to_string() +
-        "\" stroke=\"" +
-        color +
-        "\" stroke-width=\"" +
-        stroke_width.to_string() +
-        "\"/>",
-      )
-    "strikeout" =>
-      output.write_string(
-        "<line " +
-        name +
-        " x1=\"" +
-        x.to_string() +
-        "\" y1=\"" +
-        (y + height / 2.0).to_string() +
-        "\" x2=\"" +
-        (x + width).to_string() +
-        "\" y2=\"" +
-        (y + height / 2.0).to_string() +
-        "\" stroke=\"" +
-        color +
-        "\" stroke-width=\"" +
-        stroke_width.to_string() +
-        "\"/>",
-      )
-    "text" => {
-      let radius = 6.0.max(width.min(height) / 3.0)
-      output.write_string(
-        "<g " +
-        name +
-        "><circle cx=\"" +
-        (x + radius).to_string() +
-        "\" cy=\"" +
-        (y + radius).to_string() +
-        "\" r=\"" +
-        radius.to_string() +
-        "\" fill=\"" +
-        color +
-        "\" fill-opacity=\"0.9\" stroke=\"white\" stroke-width=\"1\"/>" +
-        pdf_svg_annotation_title(annotation) +
-        "</g>",
-      )
-    }
-    _ =>
-      output.write_string(
-        "<rect " +
-        name +
-        " x=\"" +
-        x.to_string() +
-        "\" y=\"" +
-        y.to_string() +
-        "\" width=\"" +
-        width.to_string() +
-        "\" height=\"" +
-        height.to_string() +
-        "\" fill=\"none\" stroke=\"" +
-        color +
-        "\" stroke-width=\"" +
-        stroke_width.to_string() +
-        "\"" +
-        dash +
-        "/>" +
-        pdf_svg_annotation_title(annotation),
-      )
-  }
-  match annotation.uri {
-    Some(_) => output.write_string("</a>")
-    None => ()
-  }
-}
-
-///|
-fn pdf_svg_annotation_title(annotation : PdfAnnotationItem) -> String {
-  match annotation.contents {
-    Some(contents) => "<title>" + pdf_escape_xml(contents) + "</title>"
-    None => ""
-  }
-}
-
-///|
-fn pdf_svg_annotation_dash(values : ArrayView[Int], scale : Double) -> String {
-  let output = StringBuilder()
-  let mut first = true
-  for value in values {
-    if !first {
-      output.write_char(' ')
-    }
-    first = false
-    output.write_string((value.to_double() * scale).to_string())
-  }
-  output.to_string()
 }
 
 ///|

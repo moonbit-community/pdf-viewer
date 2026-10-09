@@ -1,0 +1,195 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+struct CaseResult {
+  file : String
+  page : Int
+  status : String
+  exit_code : Int?
+  svg_path : String?
+  placeholders : Int
+  message : String
+} derive(ToJson)
+
+///|
+async fn render_case(
+  executable : String,
+  input : String,
+  output : String,
+) -> CaseResult {
+  let result = @shell.Cmd(executable, [input, output, "1"]).output(
+    timeout_ms=15000,
+  ) catch {
+    @async.TimeoutError =>
+      return {
+        file: input,
+        page: 1,
+        status: "timeout",
+        exit_code: None,
+        svg_path: None,
+        placeholders: 0,
+        message: "Exceeded 15000 ms",
+      }
+    error =>
+      return {
+        file: input,
+        page: 1,
+        status: "runner-error",
+        exit_code: None,
+        svg_path: None,
+        placeholders: 0,
+        message: @debug.to_string(error),
+      }
+  }
+  let message = result.stdout() + result.stderr()
+  let failed : CaseResult = {
+    file: input,
+    page: 1,
+    status: "failed",
+    exit_code: Some(result.exit_code()),
+    svg_path: None,
+    placeholders: 0,
+    message,
+  }
+  if result.exit_code() != 0 || message.contains("pdf-viewer:") {
+    return failed
+  }
+  if !@fs.exists(output) {
+    return { ..failed, status: "missing-output", }
+  }
+  let data = @fs.read_file(output).text()
+  if !data.has_prefix("<svg ") || !data.has_suffix("</svg>") {
+    return { ..failed, status: "invalid-svg", }
+  }
+  // Ordinary gradients also use data-pdf-kind="shading". Only the explicit
+  // placeholder marker counts as a missing paint operation.
+  let placeholders = data.split("data-pdf-placeholder=\"true\"").length() - 1
+  { ..failed, status: "rendered", svg_path: Some(output), placeholders, }
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  let corpus = if args.length() > 1 {
+    args[1]
+  } else {
+    "reference/pdf.js/test/pdfs"
+  }
+  let prefix = if args.length() > 2 { args[2] } else { "annotation" }
+  @shell.Cmd("moon", ["build", "--target", "native", "cmd/main"]).run()
+  let executable = "_build/native/debug/build/cmd/main/main.exe"
+  // Each invocation gets a fresh output directory. A stale SVG can never
+  // turn a failed conversion into a successful corpus result.
+  let output_dir = "_build/corpus-\{@env.now()}"
+  @fs.mkdir(output_dir, recursive=true)
+  let broken = output_dir + "/invalid.pdf"
+  @fs.write_file(broken, "not a PDF")
+  let valid = output_dir + "/blank.pdf"
+  @fs.write_file(valid, blank_pdf())
+  let cli_checks : Array[(String, Array[String], Int)] = [
+    ("usage", [], 2),
+    ("missing input", [output_dir + "/missing.pdf"], 1),
+    ("invalid PDF", [broken], 1),
+    ("invalid page", [broken, output_dir + "/bad.svg", "zero"], 2),
+    ("nonpositive page", [broken, output_dir + "/bad.svg", "0"], 2),
+    ("missing page", [valid, output_dir + "/bad.svg", "2"], 1),
+    ("unwritable output", [valid, output_dir + "/missing/blank.svg"], 1),
+  ]
+  for (name, arguments, expected) in cli_checks {
+    let result = @shell.Cmd(executable, arguments).output(timeout_ms=5000)
+    if result.exit_code() != expected {
+      fail(
+        "CLI contract failed (\{name}): expected \{expected}, got \{result.exit_code()}",
+      )
+    }
+  }
+  let smoke = render_case(executable, valid, output_dir + "/blank.svg")
+  if smoke.status != "rendered" {
+    fail("CLI failed to render a valid blank PDF: \{smoke.message}")
+  }
+  let results : Array[CaseResult] = []
+  let mut rendered = 0
+  let mut with_placeholders = 0
+  for name in @fs.readdir(corpus, sort=true) {
+    if !name.has_prefix(prefix) || !name.has_suffix(".pdf") {
+      continue
+    }
+    let result = render_case(
+      executable,
+      corpus + "/" + name,
+      output_dir + "/" + name + ".page-1.svg",
+    )
+    results.push(result)
+    if result.status == "rendered" {
+      rendered += 1
+      if result.placeholders > 0 {
+        with_placeholders += 1
+      }
+    } else {
+      println("\{result.status}: \{name}: \{result.message}")
+    }
+  }
+  if results.is_empty() {
+    fail("No PDF files matched prefix '\{prefix}' in \{corpus}")
+  }
+  let revision_result = @shell.Cmd("git", ["-C", corpus, "rev-parse", "HEAD"]).output()
+  let revision = if revision_result.exit_code() == 0 {
+    revision_result.stdout().trim().to_owned()
+  } else {
+    "unavailable"
+  }
+  let report : Json = {
+    "corpus": corpus,
+    "revision": revision,
+    "prefix": prefix,
+    "page": 1,
+    "timeout_ms": 15000,
+    "total": results.length(),
+    "rendered": rendered,
+    "rendered_with_placeholders": with_placeholders,
+    "failed_or_timeout": results.length() - rendered,
+    "scope": "First-page CLI/SVG smoke test; does not measure visual fidelity",
+    "results": results,
+  }
+  let report_path = output_dir + "/report.json"
+  @fs.write_file(report_path, report.stringify(indent=2))
+  println(
+    "\{rendered}/\{results.length()} first pages produced SVG; \{with_placeholders} include placeholders.",
+  )
+  println("Report: \{report_path}")
+  if rendered != results.length() {
+    fail("Corpus contains failures; see report.json for per-file errors")
+  }
+}
+
+///|
+fn blank_pdf() -> Bytes {
+  let objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources << >> >>",
+  ]
+  let pdf = StringBuilder()
+  pdf.write_string("%PDF-1.7\n")
+  let offsets : Array[Int] = []
+  for i, object in objects {
+    offsets.push(pdf.to_string().length())
+    pdf.write_string("\{i + 1} 0 obj\n\{object}\nendobj\n")
+  }
+  let xref = pdf.to_string().length()
+  pdf.write_string("xref\n0 4\n0000000000 65535 f \n")
+  for offset in offsets {
+    pdf.write_string(offset.to_string().pad_start(10, '0') + " 00000 n \n")
+  }
+  pdf.write_string(
+    "trailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n\{xref}\n%%EOF\n",
+  )
+  @utf8.encode(pdf.to_string())
+}

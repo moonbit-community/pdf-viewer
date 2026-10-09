@@ -14,10 +14,40 @@ pub fn open_document(Bytes) -> PdfViewerDocument raise @core.PdfError
 // Errors
 
 // Types and methods
+pub(all) struct PdfAnnotationAppearance {
+  bbox : PdfBounds
+  matrix : Array[Double]
+  svg : String
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfAnnotationAppearance::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfAnnotationAppearance::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfAnnotationAppearance::to_json(Self) -> Json
+#deprecated
+pub fn PdfAnnotationAppearance::to_repr(Self) -> @debug.Repr
+
 pub(all) struct PdfAnnotationItem {
   index : Int
   subtype : String
+  flags : Int
+  visible : Bool
+  print : Bool
   bounds : PdfBounds
+  quad_points : Array[PdfQuad]
+  line_points : Array[PdfPoint]
+  vertices : Array[PdfPoint]
+  ink_paths : Array[Array[PdfPoint]]
+  appearance : PdfAnnotationAppearance?
+  field_name : String?
+  field_type : String?
+  field_value : String?
+  field_flags : Int?
+  field_options : Array[String]
+  field_tooltip : String?
+  button_value : String?
+  button_checked : Bool?
   contents : String?
   subject : String?
   color : String?
@@ -100,6 +130,23 @@ pub fn PdfImageResource::to_json(Self) -> Json
 #deprecated
 pub fn PdfImageResource::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfMeshTriangle {
+  p0 : PdfPoint
+  p1 : PdfPoint
+  p2 : PdfPoint
+  c0 : String
+  c1 : String
+  c2 : String
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfMeshTriangle::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfMeshTriangle::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfMeshTriangle::to_json(Self) -> Json
+#deprecated
+pub fn PdfMeshTriangle::to_repr(Self) -> @debug.Repr
+
 pub(all) enum PdfPageItem {
   Text(PdfTextItem)
   Path(PdfPathItem)
@@ -155,6 +202,7 @@ pub(all) struct PdfPathItem {
   dash_array : Array[Double]
   dash_phase : Double
   pattern : PdfPatternResource?
+  shading_pattern : PdfShadingResource?
   blend_mode : String
   clip_path : String?
   soft_mask : PdfSoftMaskResource?
@@ -177,6 +225,7 @@ pub(all) struct PdfPatternResource {
   y_step : Double
   matrix : Array[Double]
   tile_svg : String
+  shading : PdfShadingResource?
 } derive(Eq, ToJson, @debug.Debug)
 #deprecated
 pub fn PdfPatternResource::equal(Self, Self) -> Bool
@@ -236,6 +285,7 @@ pub(all) struct PdfShadingResource {
   coords : Array[Double]
   matrix : Array[Double]
   stops : Array[PdfGradientStop]
+  mesh : Array[PdfMeshTriangle]
   extend_start : Bool
   extend_end : Bool
 } derive(Eq, ToJson, @debug.Debug)
@@ -279,6 +329,11 @@ pub fn PdfTextContent::to_repr(Self) -> @debug.Repr
 pub(all) struct PdfTextItem {
   index : Int
   text : String
+  charcode : Int
+  advance_x : Double
+  advance_y : Double
+  vertical : Bool
+  glyph_transform : Array[Double]?
   bounds : PdfBounds
   quad : PdfQuad
   font : String
@@ -292,6 +347,7 @@ pub(all) struct PdfTextItem {
   soft_mask : PdfSoftMaskResource?
   group : PdfTransparencyGroup?
   group_path : Array[PdfTransparencyGroup]
+  type3_outline : String?
 } derive(Eq, ToJson, @debug.Debug)
 #deprecated
 pub fn PdfTextItem::equal(Self, Self) -> Bool
@@ -321,15 +377,23 @@ pub struct PdfViewerDocument {
   document : @pdflite.PdfDocument
   pages : Array[@page.PdfPage]
 }
+pub fn PdfViewerDocument::attachments_json(Self) -> Json raise @core.PdfError
+pub fn PdfViewerDocument::info_json(Self) -> Json raise @core.PdfError
+pub fn PdfViewerDocument::metadata_bytes(Self) -> Bytes? raise @core.PdfError
 pub fn PdfViewerDocument::operator_list(Self, Int) -> Array[PdfPageItem]? raise @core.PdfError
+pub fn PdfViewerDocument::optional_content_json(Self) -> Json? raise @core.PdfError
+pub fn PdfViewerDocument::outline_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::page(Self, Int) -> PdfPageModel? raise @core.PdfError
 pub fn PdfViewerDocument::page_count(Self) -> Int
 pub fn PdfViewerDocument::page_json(Self, Int) -> Json? raise @core.PdfError
+pub fn PdfViewerDocument::page_labels(Self) -> Array[String] raise @core.PdfError
+pub fn PdfViewerDocument::page_labels_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::pages(Self) -> Array[PdfPageModel] raise @core.PdfError
 pub fn PdfViewerDocument::render_svg(Self, Int, scale? : Double) -> String? raise @core.PdfError
 pub fn PdfViewerDocument::render_svg_with_rotation(Self, Int, Int, scale? : Double) -> String? raise @core.PdfError
 pub fn PdfViewerDocument::select(Self, Int, PdfBounds) -> PdfSelection? raise @core.PdfError
 pub fn PdfViewerDocument::source_length(Self) -> Int
+pub fn PdfViewerDocument::struct_tree_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::summary_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::text_content(Self, Int) -> PdfTextContent? raise @core.PdfError
 

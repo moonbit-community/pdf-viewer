@@ -102,9 +102,82 @@ fn pdf_pattern_resource_of_object(
         y_step,
         matrix,
         tile_svg,
+        shading: None,
       })
     }
+    Some(@syntax.PdfInteger(2)) => {
+      let shading_object = match
+        document.lookup_direct(pdf_image_name("/Shading"), pattern) {
+        Some(value) => value
+        None => return None
+      }
+      let shading = try
+        Some(pdf_shading_resource_of_object(document, name, shading_object))
+      catch {
+        _ => None
+      } noraise {
+        value => value
+      }
+      match shading {
+        Some(value) => {
+          let matrix = pdf_pattern_matrix_or_identity(document, pattern)
+          Some({
+            name,
+            bbox: pdf_mesh_bounds_or_unit(value.mesh),
+            x_step: pdf_mesh_extent_or_unit(value.mesh, true),
+            y_step: pdf_mesh_extent_or_unit(value.mesh, false),
+            // Keep the Pattern dictionary's matrix on the resource.  The
+            // paint-site CTM is composed into it below before the path is
+            // lowered as a clipped mesh.
+            matrix,
+            tile_svg: "",
+            shading: Some(value),
+          })
+        }
+        None => None
+      }
+    }
     _ => None
+  }
+}
+
+///|
+fn pdf_mesh_bounds_or_unit(mesh : ArrayView[PdfMeshTriangle]) -> PdfBounds {
+  if mesh.length() == 0 {
+    { min_x: 0.0, min_y: 0.0, max_x: 1.0, max_y: 1.0, }
+  } else {
+    let first = mesh[0].p0
+    let mut min_x = first.x
+    let mut min_y = first.y
+    let mut max_x = first.x
+    let mut max_y = first.y
+    for triangle in mesh {
+      for point in [triangle.p0, triangle.p1, triangle.p2] {
+        min_x = min_x.min(point.x)
+        min_y = min_y.min(point.y)
+        max_x = max_x.max(point.x)
+        max_y = max_y.max(point.y)
+      }
+    }
+    { min_x, min_y, max_x, max_y, }
+  }
+}
+
+///|
+fn pdf_mesh_extent_or_unit(
+  mesh : ArrayView[PdfMeshTriangle],
+  horizontal : Bool,
+) -> Double {
+  let bounds = pdf_mesh_bounds_or_unit(mesh)
+  let value = if horizontal {
+    bounds.max_x - bounds.min_x
+  } else {
+    bounds.max_y - bounds.min_y
+  }
+  if value > 0.0 {
+    value
+  } else {
+    1.0
   }
 }
 
@@ -131,13 +204,26 @@ fn pdf_pattern_resource_with_ctm(
   } else {
     [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
   }
-  let a = ctm.a * pattern_matrix[0] + ctm.c * pattern_matrix[1]
-  let b = ctm.b * pattern_matrix[0] + ctm.d * pattern_matrix[1]
-  let c = ctm.a * pattern_matrix[2] + ctm.c * pattern_matrix[3]
-  let d = ctm.b * pattern_matrix[2] + ctm.d * pattern_matrix[3]
-  let e = ctm.a * pattern_matrix[4] + ctm.c * pattern_matrix[5] + ctm.e
-  let f = ctm.b * pattern_matrix[4] + ctm.d * pattern_matrix[5] + ctm.f
-  { ..pattern, matrix: [a, b, c, d, e, f], }
+  // A PatternType 2 shading is already painted in page user space. Its
+  // `/Matrix` is the pattern-to-user transform and must stay independent of
+  // the CTM that was used to construct the path being clipped. This mirrors
+  // pdf.js' `handleColorN` path: the pattern matrix is retained on the
+  // shading IR, while the path geometry carries the paint-site CTM.
+  match pattern.shading {
+    Some(value) => {
+      let shading = { ..value, matrix: pattern_matrix, }
+      { ..pattern, matrix: pattern_matrix, shading: Some(shading), }
+    }
+    None => {
+      let a = ctm.a * pattern_matrix[0] + ctm.c * pattern_matrix[1]
+      let b = ctm.b * pattern_matrix[0] + ctm.d * pattern_matrix[1]
+      let c = ctm.a * pattern_matrix[2] + ctm.c * pattern_matrix[3]
+      let d = ctm.b * pattern_matrix[2] + ctm.d * pattern_matrix[3]
+      let e = ctm.a * pattern_matrix[4] + ctm.c * pattern_matrix[5] + ctm.e
+      let f = ctm.b * pattern_matrix[4] + ctm.d * pattern_matrix[5] + ctm.f
+      { ..pattern, matrix: [a, b, c, d, e, f], shading: None, }
+    }
+  }
 }
 
 ///|

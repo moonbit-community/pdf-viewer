@@ -15,6 +15,95 @@ test "raw PDF pixels become a browser-readable PNG" {
 }
 
 ///|
+test "embedded CFF and Type 1 programs are preserved without invalid browser font faces" {
+  let cff = pdf_font_resource_from_bytes(
+    "F1",
+    "ABCDEE+ExampleSans",
+    Some(Bytes::from_array([1, 0, 4, 4, 0])),
+    "F1",
+  )
+  assert_eq(cff.mime_type, "font/otf")
+  assert_eq(cff.format, "cff")
+  assert_true(cff.data_uri is Some(_))
+  assert_eq(cff.family, "sans-serif")
+  let type1 = pdf_font_resource_from_bytes(
+    "F2",
+    "ExampleSerif",
+    Some(Bytes::from_array([128, 1, 2, 3])),
+    "F2",
+  )
+  assert_eq(type1.format, "type1")
+  assert_eq(type1.family, "serif")
+  let truetype = pdf_font_resource_from_bytes(
+    "F3",
+    "ExampleSans",
+    Some(Bytes::from_array([0, 1, 0, 0, 0])),
+    "F3",
+  )
+  assert_eq(truetype.format, "truetype")
+  assert_true(truetype.family.has_prefix("pdf-font-"))
+  let wrapped = pdf_font_resource_from_bytes(
+    "F4",
+    "ExampleSerif",
+    Some(Bytes::from_array([79, 84, 84, 79, 0])),
+    "F4",
+  )
+  assert_eq(wrapped.format, "opentype")
+  assert_true(wrapped.family.has_prefix("pdf-font-"))
+}
+
+///|
+test "viewer corrects pdflite's placeholder default paint colour" {
+  assert_eq(
+    pdf_colour_hex_for_paint(@pdflite.PdfContentColourFloats([1.0]), false),
+    "#000000",
+  )
+  assert_eq(
+    pdf_colour_hex_for_paint(@pdflite.PdfContentColourFloats([1.0]), true),
+    "#FFFFFF",
+  )
+}
+
+///|
+test "type3 glyph mapping follows the source text quad" {
+  let matrix = pdf_type3_page_matrix(
+    {
+      p0: { x: 100.0, y: 200.0, },
+      p1: { x: 100.0, y: 212.0, },
+      p2: { x: 112.0, y: 212.0, },
+      p3: { x: 112.0, y: 200.0, },
+    },
+    { min_x: 0.0, min_y: 0.0, max_x: 750.0, max_y: 750.0, },
+  )
+  let bottom_left = matrix.apply(@geometry.point2(0.0, 0.0))
+  let top_right = matrix.apply(@geometry.point2(750.0, 750.0))
+  assert_eq(bottom_left.x, 100.0)
+  assert_eq(bottom_left.y, 200.0)
+  assert_eq(top_right.x, 112.0)
+  assert_eq(top_right.y, 212.0)
+}
+
+///|
+test "TrueType outline serialization preserves quadratic contours" {
+  let contour : Array[PdfViewerTrueTypePoint] = [
+    { x: 0.0, y: 0.0, on_curve: true, },
+    { x: 500.0, y: 1000.0, on_curve: false, },
+    { x: 1000.0, y: 0.0, on_curve: true, },
+  ]
+  let path = pdf_viewer_ttf_path_of_contours(
+    [contour][:],
+    1000,
+    @geometry.transform_identity_matrix,
+    0.0,
+    0.0,
+    1000.0,
+  )
+  assert_true(path.has_prefix("M "))
+  assert_true(path.contains(" Q "))
+  assert_true(path.has_suffix(" Z"))
+}
+
+///|
 test "colour-key masks become transparent RGBA PNG pixels" {
   let data = try! @core.pdf_bytes_of_int_array([255, 0, 0, 0, 0, 255])
   let png = try! pdf_png_of_raw_image_with_color_key(
@@ -76,8 +165,13 @@ test "adjacent soft-masked paint items share one compositor group" {
     background: "#000000",
   }
   let text_a : PdfTextItem = {
+    glyph_transform: None,
     index: 0,
     text: "A",
+    charcode: 65,
+    advance_x: 10.0,
+    advance_y: 0.0,
+    vertical: false,
     bounds: { min_x: 10.0, min_y: 70.0, max_x: 20.0, max_y: 80.0, },
     quad: {
       p0: { x: 10.0, y: 70.0, },
@@ -96,6 +190,7 @@ test "adjacent soft-masked paint items share one compositor group" {
     soft_mask: Some(mask),
     group: None,
     group_path: [],
+    type3_outline: None,
   }
   let text_b : PdfTextItem = {
     ..text_a,
@@ -134,8 +229,13 @@ test "svg preserves transparency group metadata and isolation" {
     knockout: false,
   }
   let item : PdfTextItem = {
+    glyph_transform: None,
     index: 0,
     text: "A",
+    charcode: 65,
+    advance_x: 10.0,
+    advance_y: 0.0,
+    vertical: false,
     bounds: { min_x: 10.0, min_y: 70.0, max_x: 20.0, max_y: 80.0, },
     quad: {
       p0: { x: 10.0, y: 70.0, },
@@ -154,6 +254,7 @@ test "svg preserves transparency group metadata and isolation" {
     soft_mask: None,
     group: Some(group),
     group_path: [group],
+    type3_outline: None,
   }
   let page : PdfPageModel = {
     number: 1,
@@ -177,8 +278,13 @@ test "svg preserves transparency group metadata and isolation" {
 ///|
 test "rotated text uses its source quadrilateral" {
   let item : PdfTextItem = {
+    glyph_transform: None,
     index: 0,
     text: "A",
+    charcode: 65,
+    advance_x: 10.0,
+    advance_y: 0.0,
+    vertical: false,
     bounds: { min_x: 0.0, min_y: 20.0, max_x: 10.0, max_y: 30.0, },
     quad: {
       p0: { x: 10.0, y: 20.0, },
@@ -197,6 +303,7 @@ test "rotated text uses its source quadrilateral" {
     soft_mask: None,
     group: None,
     group_path: [],
+    type3_outline: None,
   }
   let page : PdfPageModel = {
     number: 1,
@@ -324,8 +431,13 @@ test "path serialization preserves a rotated target quad" {
 ///|
 test "svg preserves paint opacity and blend mode" {
   let item : PdfTextItem = {
+    glyph_transform: None,
     index: 0,
     text: "A",
+    charcode: 65,
+    advance_x: 10.0,
+    advance_y: 0.0,
+    vertical: false,
     bounds: { min_x: 0.0, min_y: 20.0, max_x: 10.0, max_y: 30.0, },
     quad: {
       p0: { x: 0.0, y: 20.0, },
@@ -344,6 +456,7 @@ test "svg preserves paint opacity and blend mode" {
     soft_mask: None,
     group: None,
     group_path: [],
+    type3_outline: None,
   }
   let page : PdfPageModel = {
     number: 1,
@@ -367,8 +480,13 @@ test "svg preserves paint opacity and blend mode" {
 ///|
 test "svg maps stroked PDF text rendering mode" {
   let item : PdfTextItem = {
+    glyph_transform: None,
     index: 0,
     text: "A",
+    charcode: 65,
+    advance_x: 10.0,
+    advance_y: 0.0,
+    vertical: false,
     bounds: { min_x: 0.0, min_y: 20.0, max_x: 10.0, max_y: 30.0, },
     quad: {
       p0: { x: 0.0, y: 20.0, },
@@ -387,6 +505,7 @@ test "svg maps stroked PDF text rendering mode" {
     soft_mask: None,
     group: None,
     group_path: [],
+    type3_outline: None,
   }
   let page : PdfPageModel = {
     number: 1,
@@ -444,7 +563,9 @@ test "svg paints a path pattern through a reusable definition" {
       y_step: 2.0,
       matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
       tile_svg: "<path d=\"M 0 0 L 1 1\" fill=\"none\"/>",
+      shading: None,
     }),
+    shading_pattern: None,
     blend_mode: "normal",
     clip_path: None,
     soft_mask: None,
@@ -472,10 +593,120 @@ test "svg paints a path pattern through a reusable definition" {
 }
 
 ///|
+test "shading pattern keeps its own matrix outside the path CTM" {
+  let shading : PdfShadingResource = {
+    name: "S0",
+    kind: "mesh",
+    coords: [],
+    matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+    stops: [],
+    mesh: [],
+    extend_start: true,
+    extend_end: true,
+  }
+  let pattern : PdfPatternResource = {
+    name: "P0",
+    bbox: { min_x: 0.0, min_y: 0.0, max_x: 1.0, max_y: 1.0, },
+    x_step: 1.0,
+    y_step: 1.0,
+    matrix: [2.0, 0.0, 0.0, 2.0, 150.0, 300.0],
+    tile_svg: "",
+    shading: Some(shading),
+  }
+  let transformed = pdf_pattern_resource_with_ctm(pattern, {
+    a: 0.24,
+    b: 0.0,
+    c: 0.0,
+    d: 0.24,
+    e: 0.0,
+    f: 0.0,
+  })
+  assert_eq(transformed.matrix, [2.0, 0.0, 0.0, 2.0, 150.0, 300.0])
+  guard transformed.shading is Some(shading) else {
+    fail("shading pattern should retain its shading resource")
+  }
+  assert_eq(shading.matrix, [2.0, 0.0, 0.0, 2.0, 150.0, 300.0])
+}
+
+///|
+test "svg lowers a mesh shading triangle" {
+  let item : PdfVisualItem = {
+    index: 11,
+    bounds: { min_x: 0.0, min_y: 0.0, max_x: 20.0, max_y: 20.0, },
+    quad: {
+      p0: { x: 0.0, y: 0.0, },
+      p1: { x: 0.0, y: 20.0, },
+      p2: { x: 20.0, y: 20.0, },
+      p3: { x: 20.0, y: 0.0, },
+    },
+    name: "Mesh0",
+    resource: None,
+    shading: Some({
+      name: "Mesh0",
+      kind: "mesh",
+      coords: [],
+      matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+      stops: [],
+      mesh: [
+        {
+          p0: { x: 0.0, y: 0.0, },
+          p1: { x: 20.0, y: 0.0, },
+          p2: { x: 0.0, y: 20.0, },
+          c0: "#FF0000",
+          c1: "#00FF00",
+          c2: "#0000FF",
+        },
+      ],
+      extend_start: true,
+      extend_end: true,
+    }),
+    fill_color: "#000000",
+    fill_alpha: 1.0,
+    stroke_alpha: 1.0,
+    blend_mode: "normal",
+    clip_path: None,
+    soft_mask: None,
+    group: None,
+    group_path: [],
+  }
+  let page : PdfPageModel = {
+    number: 1,
+    origin_x: 0.0,
+    origin_y: 0.0,
+    width: 20.0,
+    height: 20.0,
+    rotation: 0,
+    fonts: [],
+    items: [],
+    annotations: [],
+    text: "",
+  }
+  let output = StringBuilder()
+  pdf_svg_shading(output, page, item, 1.0)
+  let svg = output.to_string()
+  assert_true(svg.contains("data-pdf-kind=\"mesh-shading\""))
+  assert_true(svg.split("<polygon").length() > 10)
+  assert_true(svg.contains("fill=\"#AA2B2B\""))
+  assert_true(svg.contains("stroke-width=\"0.08\""))
+}
+
+///|
+test "mesh SVG expansion stays bounded for large sources" {
+  assert_eq(pdf_mesh_subdivision_steps(1), 4)
+  assert_eq(pdf_mesh_subdivision_steps(1001), 3)
+  assert_eq(pdf_mesh_subdivision_steps(2001), 2)
+}
+
+///|
 test "svg places clipping definitions before painted elements" {
   let item : PdfTextItem = {
+    glyph_transform: None,
     index: 7,
     text: "A",
+    charcode: 65,
+    advance_x: 10.0,
+    advance_y: 0.0,
+    vertical: false,
     bounds: { min_x: 0.0, min_y: 20.0, max_x: 10.0, max_y: 30.0, },
     quad: {
       p0: { x: 0.0, y: 20.0, },
@@ -494,6 +725,7 @@ test "svg places clipping definitions before painted elements" {
     soft_mask: None,
     group: None,
     group_path: [],
+    type3_outline: None,
   }
   let page : PdfPageModel = {
     number: 1,

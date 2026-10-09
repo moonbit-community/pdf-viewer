@@ -1,6 +1,7 @@
 import {
   "moonbitlang/core/encoding/base64",
   "moonbitlang/core/debug",
+  "moonbitlang/core/string",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/math",
   "moonbitlang/pdflite",
@@ -10,8 +11,11 @@ import {
   "moonbitlang/pdflite/flate",
   "moonbitlang/pdflite/geometry",
   "moonbitlang/pdflite/page",
+  "moonbitlang/pdflite/page/label",
+  "moonbitlang/pdflite/reader",
   "moonbitlang/pdflite/shape",
   "moonbitlang/pdflite/syntax",
+  "moonbitlang/pdflite/font/truetype",
 }
 
 import {
