@@ -310,7 +310,7 @@ moon run tools/visual_summary.mbtx _build/visual-test-<run>/report.json
 moon run tools/visual_contract_test.mbtx /path/to/chromium
 ```
 
-The 2026-10-10 baseline in `_build/visual-test-1791565707102/` measured
+The 2026-10-10 baseline in `_build/visual-test-1791566623303/` measured
 **14/14 page/rotation combinations from 9 PDFs**, with **0 measurement
 failures and 0 uncaught runtime exceptions**. PDF.js version `6.5.0`, build
 `89b500f`, rendered in the same Chromium profile as MoonBit, at scale 2 and
@@ -329,7 +329,7 @@ tolerance.** This is a selected corpus, not a visual compatibility percentage.
 | `text_clip_cff_cid.pdf` | page 1, 0° | 346 | Zoom clipping is corrected; residual pixel differences remain |
 | `annotation-highlight.pdf` | page 1, 0° | 2,308 | Appearance differences remain |
 | `annotation-freetext.pdf` | page 1, 0° | 585 | Appearance differences remain |
-| `tracemonkey.pdf` | pages 1/7/14, 0° | 281,767 / 309,769 / 151,714 | Glyphs and normalized extracted text differ |
+| `tracemonkey.pdf` | pages 1/7/14, 0° | 246,338 / 276,148 / 136,162 | Nimbus/Computer Modern fallback family improved; glyphs and normalized extracted text still differ |
 
 The initial run `_build/visual-test-1791564786890/` exposed a concrete scale
 bug: clip definitions used unscaled coordinates while text, paths, images
@@ -342,6 +342,12 @@ image. The mixed-paint MoonBit regression exercises explicit and text-clip
 intersections on text/path/image/shading at scales 0.5/1/2 and all quarter
 rotations. These improvements do not remove the remaining geometry/font
 gaps in G-02/F-06.
+
+The later baseline `_build/visual-test-1791566623303/` also includes the
+Nimbus/Computer Modern family fallback correction. Tracemonkey's raw changed
+pixels fell by 35,429 / 33,621 / 15,552 on pages 1/7/14 respectively. The
+remaining Type 1 failures are per-glyph parser coverage and font metrics work,
+not an excuse to mark F-06 or F-07 complete.
 
 Each run retains PDF.js/MoonBit PNGs, raw RGBA, a heatmap, the original
 run/glyph text geometry, viewport diagnostics, fixture SHA-256, browser build,

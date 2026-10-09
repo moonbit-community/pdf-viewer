@@ -75,6 +75,14 @@ declaration are supported; other FDArray declaration forms use text fallback.
 Multiple FDArray entries remain on the text fallback path. CMap-to-CID mapping
 is shared with the TrueType and CFF paths.
 
+When an embedded Type 1 program still has a glyph the native parser cannot
+lower, SVG text fallback uses the font's family metadata. Nimbus Roman and
+Computer Modern Roman/symbol names map to serif, CMTT/Nimbus Mono to
+monospace, and medium/italic/slanted suffixes are retained. This improves the
+fallback shape without claiming that host metrics equal the PDF font; the
+selected visual baseline still tracks the unresolved glyphs and metrics as
+F-06/F-07 work.
+
 `cid_mapping.mbt` resolves Identity, Adobe predefined and explicit external
 CMap entries without using ToUnicode values as glyph CIDs. Explicit entries
 and inherited mappings take precedence over notdef fallback. An unmapped code

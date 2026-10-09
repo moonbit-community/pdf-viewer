@@ -893,13 +893,16 @@ fn pdf_font_resource_from_bytes(
     _ => pdf_svg_font_family(base_name)
   }
   let weight = if base_name.contains("Bold") ||
+    base_name.contains("Medi") ||
     base_name.contains("Demi") ||
     base_name.contains("Black") {
     "bold"
   } else {
     "normal"
   }
-  let style = if base_name.contains("Italic") || base_name.contains("Oblique") {
+  let style = if base_name.contains("Italic") ||
+    base_name.contains("Oblique") ||
+    base_name.contains("Slant") {
     "italic"
   } else {
     "normal"

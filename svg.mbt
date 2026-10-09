@@ -552,12 +552,20 @@ fn pdf_text_offset(first : PdfTextItem, item : PdfTextItem) -> Double {
 
 ///|
 fn pdf_svg_font_family(font : String) -> String {
-  if font.contains("Courier") || font.contains("Mono") {
+  if font.contains("Courier") ||
+    font.contains("Mono") ||
+    font.contains("NimbusMono") ||
+    font.contains("CMTT") {
     "monospace"
   } else if font.contains("Times") ||
     font.contains("Serif") ||
     font.contains("Roman") ||
+    font.contains("NimbusRom") ||
     font.contains("NimbusRoman") ||
+    font.contains("CMR") ||
+    font.contains("CMSY") ||
+    font.contains("CMMI") ||
+    font.contains("CMEX") ||
     font.contains("LiberationSerif") {
     "serif"
   } else {
@@ -591,7 +599,10 @@ fn pdf_svg_font_weight_for_page(page : PdfPageModel, font : String) -> String {
       return resource.weight
     }
   }
-  if font.contains("Bold") {
+  if font.contains("Bold") ||
+    font.contains("Medi") ||
+    font.contains("Demi") ||
+    font.contains("Black") {
     "bold"
   } else {
     "normal"
@@ -605,7 +616,9 @@ fn pdf_svg_font_style_for_page(page : PdfPageModel, font : String) -> String {
       return resource.style
     }
   }
-  if font.contains("Italic") || font.contains("Oblique") {
+  if font.contains("Italic") ||
+    font.contains("Oblique") ||
+    font.contains("Slant") {
     "italic"
   } else {
     "normal"
