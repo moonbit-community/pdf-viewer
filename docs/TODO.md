@@ -20,7 +20,7 @@
 复杂外部 CMap 继承和 reader 丢弃的范围仍由 F-03 跟踪。
 
 现在有可运行的 native CLI、页面模型、SVG 输出和独立的浏览器 viewer。
-149 个测试在四个后端通过，浏览器有 19 项交互检查。自动 PDF.js 对照现已测量
+153 个测试在四个后端通过，浏览器有 19 项交互检查。自动 PDF.js 对照现已测量
 9 份 PDF 的 14 个页面/旋转组合：全部得到报告，11 个组合存在像素或文本差异。
 这些是按特性挑选的样本，**仍不能给出可信的视觉兼容率**。
 转换成功、没有占位、测试通过，都不能单独证明没有漏画或排版错误。
@@ -68,7 +68,7 @@
 - [ ] F-03 / P0：补齐复杂 UseCMap 继承、缺失 codespace、映射优先级与未定义字符的恢复；遵守 reader 已解析的继承关系。pdflite `0.2.2` 的 signed Int 范围校验还会丢弃部分跨高位边界的四字节范围（如 `<00000000> <FFFFFFFF>`），viewer 解码器尚不能恢复这类缺失的 codespace。
 - [x] F-04 / P0：统一纵排的 W2/DW2、垂直原点、带符号推进、TJ 调整与 character/word spacing；绘制、裁剪和选择共用同一 glyph placement。8 个纵排测试通过，覆盖 Identity/外部/预定义 CMap、连续操作、q/Q、引号、rise、剪切、负字号和选择/裁剪；真实 `vertical.pdf` 三页完成转换及 Chromium/Poppler 抽查，见 [validation.md](validation.md#adobe-predefined-cmaps-vertical-layout-and-word-spacing)。
 - [ ] F-05 / P1：扩大 TrueType cmap/encoding、symbol 字体、composite 与损坏字体恢复覆盖；明确轮廓模式和浏览器字体模式的差异。
-- [ ] F-06 / P1：扩大 Type 1/CFF 的 FontMatrix、缺字、损坏 charstring 和特殊字体程序覆盖；失败不造成整页空白。已修正 NimbusRom、CMR/CMSY、CMTT 的 fallback family 和 medium/slant 后缀；自动基线中的 `issue14462_reduced.pdf` 和 `tracemonkey.pdf` 仍暴露未解析 glyph 与 raster 差异。
+- [ ] F-06 / P1：扩大 Type 1/CFF 的 FontMatrix、缺字、损坏 charstring 和特殊字体程序覆盖；失败不造成整页空白。已修正 NimbusRom、CMR/CMSY、CMTT 的 fallback family 和 medium/slant 后缀，并让 Type 1 `endchar` 残留操作数与 `setcurrentpoint` 遵循 PDF.js 的恢复语义；新增两项回归测试。自动基线中的 `issue14462_reduced.pdf` 和 `tracemonkey.pdf` 仍暴露未解析 glyph 与 raster 差异。
 - [ ] F-07 / P0：提供可复现且许可明确的标准 14 字体替代与 metrics；字形、advance 和粗斜体匹配。当前只按嵌入字体名称选择系统 serif/sans/monospace，未提供完整可许可的 14 字体 metrics/outline 包。
 - [ ] F-08 / P1：提供宿主字体解析/注入入口及系统字体回退策略；浏览器和 native 分开实现，记录替代字体。
 

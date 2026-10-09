@@ -955,9 +955,11 @@ fn pdf_type1_run_charstring(
         state.val = { ..state.val, x: side, y: 0.0, has_subpath: false, }
       }
       14 => {
-        if !stack.is_empty() {
-          return false
-        }
+        // Type 1 producers sometimes leave width or hinting operands on the
+        // stack before endchar. PDF.js discards those operands while emitting
+        // the terminator; rejecting the glyph here makes an otherwise valid
+        // outline fall back to a host font.
+        stack.clear()
         return true
       }
       21 => {
@@ -1158,16 +1160,11 @@ fn pdf_type1_run_charstring(
         }
       }
       0x0C11 => ()
-      0x0C21 => {
-        if stack.length() >= 2 {
-          state.val = {
-            ..state.val,
-            x: stack[stack.length() - 2],
-            y: stack[stack.length() - 1],
-          }
-        }
+      0x0C21 =>
+        // setcurrentpoint is a hinting-era Type 1 operator. PDF.js ignores
+        // it for outline conversion and clears its operands; changing the
+        // current point here can shift all following contours.
         stack.clear()
-      }
       _ => return false
     }
   }

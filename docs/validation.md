@@ -6,8 +6,8 @@ CLI. That conversion baseline does not measure parity with pdf.js rendering.
 The automated selected-page visual baseline below now measures actual output
 against the same pinned PDF.js build.
 
-The suite currently contains 149 tests on each of wasm, wasm-gc, JavaScript, and
-native. It includes 13 annotation tests, 17 CFF tests, 23 Type 1 tests, 5 CID
+The suite currently contains 153 tests on each of wasm, wasm-gc, JavaScript, and
+native. It includes 13 annotation tests, 17 CFF tests, 25 Type 1 tests, 5 CID
 layout tests, 9 variable-length CMap tests, 4 text-geometry tests, and 8
 text-clipping tests plus one mixed-paint scaling regression. The latest addition has 8 predefined-CMap tests, 8 vertical
 CID tests, 4 word-spacing tests and 1 missing-descriptor recovery test. The
@@ -106,8 +106,9 @@ outline. `issue14462_reduced.pdf` produced
 11 Type 1 outline paths on its first page; `tracemonkey.pdf` produced 812 on its
 first page; `issue18548_reduced.pdf` produced 4 procedure-form Type 1 outline
 paths. These pages were rendered as SVG and visually compared with Poppler at
-72 dpi. The unit tests cover the single-FD CID-keyed parser; multiple FDArray
-entries remain unsupported. Predefined CMaps are now supported as described
+72 dpi. The unit tests cover the single-FD CID-keyed parser; residual Type 1
+operands at `endchar` and `setcurrentpoint` recovery now match the pinned
+PDF.js behavior. Multiple FDArray entries remain unsupported. Predefined CMaps are now supported as described
 below; complex external-stream CMap inheritance remains pending.
 
 ## External CMap widths and real CID Type 1 sample
@@ -270,9 +271,9 @@ The Chromium DevTools suite passed **19 interaction checks** using
 
 Screenshots and the per-check report are saved in a fresh
 `_build/browser-test-*/` directory. The initial complete 19-check run is in
-`_build/browser-test-1791563539676/`; the final formatted rerun, including
-all 19 check names and the passed count in `report.json`, is in
-`_build/browser-test-1791563834238/`. The mouse-selection screenshot was
+`_build/browser-test-1791563539676/`; the latest rerun, including all 19 check
+names and the passed count in `report.json`, is in
+`_build/browser-test-1791566968073/`. The mouse-selection screenshot was
 inspected: the Japanese line stays legible and the native highlight follows
 its glyphs. The rotated screenshot places the selection on the rotated text;
 the browser scrolls it into view instead of leaving it outside the viewport.
@@ -349,6 +350,11 @@ pixels fell by 35,429 / 33,621 / 15,552 on pages 1/7/14 respectively. The
 remaining Type 1 failures are per-glyph parser coverage and font metrics work,
 not an excuse to mark F-06 or F-07 complete.
 
+The Type 1 recovery change in this update was checked with the full corpus
+smoke run and all four MoonBit backends. This environment has no
+Chromium executable available, so the pixel counts above remain the prior
+selected baseline until that visual run is repeated.
+
 Each run retains PDF.js/MoonBit PNGs, raw RGBA, a heatmap, the original
 run/glyph text geometry, viewport diagnostics, fixture SHA-256, browser build,
 host font list, renderer options, warnings and viewer revision/worktree state.
@@ -367,10 +373,10 @@ failed selected page. The diagnostic shift is recorded explicitly and is
 absent from the default manifest. These checks are separate from the 19
 standalone viewer interaction checks.
 
-After the zoom-clip correction, all **149/149** tests passed on wasm,
+After the zoom-clip correction, all **153/153** tests passed on wasm,
 wasm-gc, JavaScript and native, and the standalone Chromium suite again
 passed all **19** interactions. The latter report and screenshots are in
-`_build/browser-test-1791565835505/`.
+`_build/browser-test-1791566968073/`.
 
 Normal mode exits successfully when measurement completes, including reported
 differences. Appending `--strict` rejects pixel differences above tolerance,

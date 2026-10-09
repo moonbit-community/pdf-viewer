@@ -402,6 +402,49 @@ test "Type 1 flex othersubr produces two cubic curves" {
 }
 
 ///|
+test "Type 1 endchar discards residual operands like PDF.js" {
+  let glyph = @core.pdf_bytes_of_int_array([
+    139, 248, 136, 13, // hsbw 0 500
+     149, // an ignored width/hinting operand
+     14,
+  ])
+  let source = type1_test_program([], [("A", glyph)])
+  guard pdf_type1_parse_program(
+      source[:],
+      @geometry.transform_identity_matrix,
+      Map([]),
+    )
+    is Some(font) else {
+    fail("Type 1 residual-stack glyph was rejected")
+  }
+  let state = Ref(pdf_cff_new_state(Ref(1000)))
+  assert_true(pdf_type1_run_glyph(font, "A", state, [], 0))
+}
+
+///|
+test "Type 1 setcurrentpoint is ignored during outline conversion" {
+  let glyph = @core.pdf_bytes_of_int_array([
+    139, 248, 136, 13, // hsbw 0 500
+     139, 139, 21, // rmoveto 0 0
+     239, 239, 12, 33, // setcurrentpoint 100 100
+     149, 139, 5, // rlineto 10 0
+     14,
+  ])
+  let source = type1_test_program([], [("A", glyph)])
+  guard pdf_type1_parse_program(
+      source[:],
+      @geometry.transform_identity_matrix,
+      Map([]),
+    )
+    is Some(font) else {
+    fail("Type 1 setcurrentpoint glyph was rejected")
+  }
+  let state = Ref(pdf_cff_new_state(Ref(1000)))
+  assert_true(pdf_type1_run_glyph(font, "A", state, [], 0))
+  assert_true(state.val.commands.contains(CffLine(10.0, 0.0)))
+}
+
+///|
 test "partial PFB trailer does not discard its complete encrypted font segment" {
   let header = @utf8.encode("/FontMatrix [0.001 0 0 0.001 0 0] def\neexec\n")
   let encrypted = @core.pdf_bytes_of_int_array([1, 2, 3, 4, 5, 6])
