@@ -2,7 +2,7 @@
 
 这是一个独立的 MoonBit PDF viewer 工程，目标是逐步对齐 pdf.js 的
 `document → page → viewport → text/display list → renderer` 工作流，最终为
-浏览器和 OpenSeek 一类宿主提供只读、高保真、可框选的 PDF 预览能力。
+浏览器和 OpenSeek 一类宿主提供只读、高保真、可选择文本的 PDF 预览能力。
 
 当前第一个可运行里程碑已经具备：
 
@@ -68,6 +68,9 @@
   Form 继承。浏览器不支持的 inline CCITT mask、复杂 backdrop/knockout 合成、backdrop
   色彩空间和部分 JPEG2000/JBIG2 mask 仍保留为占位或依赖宿主解码器；
 - 提供 native CLI，方便用真实 PDF 调试，而不需要先接入浏览器。
+- 提供独立浏览器 viewer，本地文件和拖放载入、多页滚动、缩放、旋转、下载可用。
+  页面正文有透明 DOM text layer，原生 cursor 拖选、复制、Shift＋方向键和文档全选
+  会映射回 MoonBit 的 glyph/item；跨页选区保留文件信息，缩放/旋转后恢复原生高亮。
 
 渲染器会把相邻且共享同一个 soft mask 的 display-list item 放进一个 SVG mask
 compositor group，再输出文字、路径和图片。这与 pdf.js 先合成 source group、再应用
@@ -76,6 +79,24 @@ soft mask 的顺序一致。Form XObject 的透明组边界也会保留下来；
 backdrop/knockout 像素合成仍需要 Canvas/WebGL compositor。
 
 ## 本地运行
+
+独立浏览器入口：
+
+```bash
+moon run tools/dev.mbtx 4312
+```
+
+打开 `http://127.0.0.1:4312/`，选择或拖入本地 PDF；文件读取和 PDF 解码在浏览器中进行。
+开发服务器也提供已下载的对照 fixture，例如
+`http://127.0.0.1:4312/?file=/fixtures/90ms_rksj_h_sample.pdf`。
+浏览器交互检查（需要 Chromium，可在第二个参数指定可执行文件）：
+
+```bash
+moon run tools/browser_test.mbtx http://127.0.0.1:4312 /path/to/chromium
+```
+
+部署到静态服务器时，先执行 `moon run tools/build_web.mbtx`，然后发布 `web/`，
+包含生成的 `_generated/pdf.js`。部署不需要 pdflite 的 native 程序，也不需要 PDF.js。
 
 先安装 MoonBit，然后在本目录执行：
 
@@ -134,8 +155,10 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs vertical 1,2,3
 | `PDFDocumentProxy.getPage(n)` | `PdfViewerDocument::page(n)` |
 | `PDFPageProxy.getViewport({ scale, rotation })` | `PdfPageModel::viewport(scale~, rotation~)` (`matrix` and SVG transform included) |
 | `PDFPageProxy.getTextContent()` | `PdfViewerDocument::text_content(n)` / `PdfPageModel::text_content()` |
+| DOM text layer | `PdfPageModel::text_layer(scale~, rotation~)` |
+| cursor selection → source glyphs | `PdfPageModel::select_text(start_item, start_offset, end_item, end_offset)` |
 | `PDFPageProxy.getOperatorList()` | `PdfViewerDocument::operator_list(n)` |
-| `PDFPageProxy.render(...)` | `PdfViewerDocument::render_svg(n, scale~)` / `render_svg_with_rotation(...)` |
+| `PDFPageProxy.render(...)` | `PdfViewerDocument::render_svg(n, scale~)` / `render_svg_with_rotation(...)` / cached `PdfPageModel::render_svg(...)` |
 
 文档读取补充 API：`outline_json()`、`page_labels_json()`、`page_labels()`、
 `attachments_json()`、`optional_content_json()`、`struct_tree_json()`、`info_json()`、
@@ -153,7 +176,15 @@ display list 中，避免宿主丢失结构化信息。现阶段 SVG 输出适�
 
 四字节字符码的高位保留在 `PdfTextItem.charcode` 的 `Int` 位模式中，可能显示为负数；
 MoonBit 宿主可用 `reinterpret_as_uint()` 取得无符号值。原始 byte span 尚未暴露为公开
-选择元数据。独立浏览器 viewer、DOM cursor 选择和自动 PDF.js 像素对比也尚未实现。
+选择元数据。`select_text()` 的 offsets 是 DOM 使用的 UTF-16 code-unit offsets；
+部分 ligature 的选择保留完整源 glyph 的 quad，不能解释成原始 PDF byte offset。
+自动 PDF.js 像素对比尚未实现。
+
+浏览器在 `#viewer` 上发出 `pdf-selection-change`，`event.detail` 包含
+`file: { name, path }`、归并的 `text` 和每页的 `ranges`；选区清空时为 `null`。
+本地文件的 `path` 为浏览器能获得的文件名，URL 载入保留传入的 URL。
+这只是独立 viewer 的来源信息，未接入 OpenSeek。阅读顺序/bidi、批注与表单的 DOM 层、
+全文搜索、缩略图、打印、Worker/取消和大文件内存上限继续由 TODO 跟踪。
 
 旋转参数按 pdf.js 规则只接受 `0/90/180/270`（允许等价的负数和大于 360 的整数）；
 SVG 渲染遇到其它角度会返回 `PageRotationExpected`，不会静默近似成另一个角度。

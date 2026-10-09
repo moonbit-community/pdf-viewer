@@ -1,4 +1,35 @@
 ///|
+/// Render an already decoded page, allowing hosts to reuse the page model for
+/// zoom, rotation, text selection and repeated paint operations.
+///
+/// ```mbt check
+/// test {
+///   let page : @pdf-viewer.PdfPageModel = {
+///     number: 1,
+///     origin_x: 0.0,
+///     origin_y: 0.0,
+///     width: 200.0,
+///     height: 300.0,
+///     rotation: 0,
+///     fonts: [],
+///     items: [],
+///     annotations: [],
+///     text: "",
+///   }
+///   assert_true(
+///     page.render_svg(scale=2.0, rotation=90).contains("viewBox=\"0 0 600 400\""),
+///   )
+/// }
+/// ```
+pub fn PdfPageModel::render_svg(
+  self : PdfPageModel,
+  scale? : Double = 1.0,
+  rotation? : Int = self.rotation,
+) -> String raise @core.PdfError {
+  pdf_render_page_svg(self, scale, rotation)
+}
+
+///|
 fn pdf_render_page_svg(
   page : PdfPageModel,
   scale : Double,

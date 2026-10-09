@@ -8,3 +8,4 @@ target
 # The pdf.js checkout is a local comparison corpus. Keep the pinned revision
 # documented in reference/README.md instead of vendoring its large test tree.
 reference/pdf.js/
+web/_generated/

@@ -1,0 +1,66 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/env",
+  "moonbitlang/core/string",
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  let port = if args.length() > 1 { @string.parse_int(args[1]) } else { 4312 }
+  guard port > 0 && port <= 65535 else { fail("Invalid port") }
+  @shell.Cmd("moon", ["run", "tools/build_web.mbtx"]).run()
+  let server = @http.Server(@socket.Addr::parse("127.0.0.1:\{port}"))
+  println("PDF viewer: http://127.0.0.1:\{port}/")
+  server.run_forever((request, _, conn) => {
+    let path = match request.path.find("?") {
+      Some(index) => request.path[:index].to_owned()
+      None => request.path
+    }
+    let (file, mime) = match path {
+      "/" | "/index.html" =>
+        (Some("web/index.html"), "text/html; charset=utf-8")
+      "/viewer.css" => (Some("web/viewer.css"), "text/css; charset=utf-8")
+      "/viewer.js" => (Some("web/viewer.js"), "text/javascript; charset=utf-8")
+      "/_generated/pdf.js" =>
+        (Some("web/_generated/pdf.js"), "text/javascript; charset=utf-8")
+      [.. "/fixtures/", .. filename] if filename.has_suffix(".pdf") &&
+        !filename.contains("/") &&
+        !filename.contains("..") =>
+        (
+          Some("reference/pdf.js/test/pdfs/" + filename.to_owned()),
+          "application/pdf",
+        )
+      _ => (None, "text/plain; charset=utf-8")
+    }
+    if !(request.meth is (Get | Head)) {
+      conn.send_response(405, "Method Not Allowed")
+      conn.write("Method Not Allowed")
+      conn.end_response()
+      return
+    }
+    guard file is Some(file) && @fs.exists(file) else {
+      conn.send_response(404, "Not Found")
+      if request.meth is Get {
+        conn.write("Not Found")
+      }
+      conn.end_response()
+      return
+    }
+    let data = @fs.read_file(file).binary()
+    conn.send_response(200, "OK", extra_headers={
+      "Content-Type": mime,
+      "Content-Length": data.length().to_string(),
+      "Cache-Control": "no-store",
+    })
+    if request.meth is Get {
+      conn.write(data)
+    }
+    conn.end_response()
+  })
+}

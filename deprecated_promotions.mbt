@@ -255,3 +255,39 @@ pub extend PdfTextContent with Eq::{not_equal, equal}
 ///|
 #deprecated
 pub extend PdfTextContent with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextLayerItem with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextLayerItem with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextLayerItem with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextLayer with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextLayer with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextLayer with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextRangeSelection with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextRangeSelection with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextRangeSelection with ToJson::{to_json}

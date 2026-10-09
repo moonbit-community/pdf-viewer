@@ -4,11 +4,13 @@ The annotation baseline uses the local pdf.js checkout at revision
 `89b500f5e1d98ed89bb90211e45b28730b2d99ac`, pdflite `0.2.2`, and the native SVG
 CLI. It does not measure parity with pdf.js rendering.
 
-The suite currently contains 133 tests on each of wasm, wasm-gc, JavaScript, and
+The suite currently contains 141 tests on each of wasm, wasm-gc, JavaScript, and
 native. It includes 13 annotation tests, 17 CFF tests, 23 Type 1 tests, 5 CID
 layout tests, 9 variable-length CMap tests, 4 text-geometry tests, and 8
 text-clipping tests. The latest addition has 8 predefined-CMap tests, 8 vertical
-CID tests, 4 word-spacing tests and 1 missing-descriptor recovery test.
+CID tests, 4 word-spacing tests and 1 missing-descriptor recovery test. The
+browser/text-layer stage adds 4 geometry/range tests, 1 public-API test and
+3 checked documentation examples, plus a separate Chromium interaction suite.
 These results cover the MoonBit package and CLI; they do
 not establish complete pdf.js compatibility.
 
@@ -26,6 +28,16 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs issue18117
 moon run tools/corpus.mbtx reference/pdf.js/test/pdfs vertical 1,2,3
 moon run tools/corpus.mbtx reference/pdf.js/test/pdfs 90ms_rksj
 ```
+
+For the independent browser, run `moon run tools/dev.mbtx 4312`, then in a
+second terminal:
+
+```bash
+moon run tools/browser_test.mbtx http://127.0.0.1:4312 /path/to/chromium
+```
+
+`tools/build_web.mbtx` builds the MoonBit JS bridge and stages the static
+`web/` deployment. No PDF.js renderer is loaded by the viewer.
 
 The corpus runner creates a new `_build/corpus-*/` directory every time. Each
 entry in `report.json` includes the source filename, page number, status,
@@ -224,8 +236,58 @@ public byte-reader/page/SVG path. It checks:
 
 These assertions cover structure and resource selection. They do not establish
 font rasterization, complete transparency compositing, full form layout, or
-pixel equivalence to pdf.js. The standalone browser viewer and automated
-pdf.js pixel comparisons remain future work.
+pixel equivalence to pdf.js. The independent browser is now covered by the
+following section; automated PDF.js pixel comparisons remain future work.
+
+## Standalone browser and native cursor selection
+
+On 2026-10-10, all **141/141** MoonBit tests passed on wasm, wasm-gc,
+JavaScript and native. `text_layer_wbtest.mbt` verifies the layer matrix maps
+all four corners onto the public viewport for every quarter rotation and
+multiple scales, including nonzero page origins and affine shear. Cursor
+tests verify sparse source item indices, partial ligatures, reversed ranges,
+UTF-16 surrogate boundaries, rotated baselines and vertical columns.
+`text_layer_test.mbt` exercises the public decoded-page/text-layer/range/SVG
+surface; three checked API examples compile and run as documentation tests.
+
+The Chromium DevTools suite passed **19 interaction checks** using
+`90ms_rksj_h_sample.pdf`, `vertical.pdf` (3 pages), and `tracemonkey.pdf`
+(14 pages). It verifies:
+
+- actual mouse drag on ordinary, rotated/scaled and vertical CJK text;
+- Shift plus arrow and keyboard initiation of cursor selection;
+- DOM selection mapped to source item indices, quads and available file path;
+- copied text, cross-page ranges and document-only select-all on all 14 pages;
+- selection restoration and highlighter reprojection after zoom/rotation;
+- actual browser file input, invalid-file reporting, retention of the prior
+  preview and reopening after an error;
+- absence of uncaught browser runtime exceptions during these checks.
+
+Screenshots and the per-check report are saved in a fresh
+`_build/browser-test-*/` directory. The initial complete 19-check run is in
+`_build/browser-test-1791563539676/`; the final formatted rerun, including
+all 19 check names and the passed count in `report.json`, is in
+`_build/browser-test-1791563834238/`. The mouse-selection screenshot was
+inspected: the Japanese line stays legible and the native highlight follows
+its glyphs. The rotated screenshot places the selection on the rotated text;
+the browser scrolls it into view instead of leaving it outside the viewport.
+The 14-page screenshot confirms visible body text and selected glyphs.
+
+Real dragging exposed a failure that programmatic Range tests had missed:
+1px DOM fonts scaled up by CSS did not extend the mouse selection. The browser
+now uses a normal font size, fits each text advance inside its source glyph
+rectangle and applies a normalized affine basis. A repeated full-document
+mount also exposed synchronous layout caused by computed-style reads mixed
+with per-glyph writes; it now reuses inline styles and cached measurements.
+
+Limits: these are Chromium interaction checks and structural geometry
+assertions, **not automated PDF.js pixel parity** or an all-browser fidelity
+score. The browser eagerly mounts all pages, so Worker scheduling,
+virtualization, cancellation, memory limits and performance budgets remain
+pending. The body layer uses source paint order plus a writing-direction
+separator heuristic; general reading order/bidi and raw PDF byte spans are
+not completed. Annotation appearances and readonly widgets still need their
+own DOM interaction layer. Search, thumbnails and printing remain TODO.
 
 ## Text geometry and browser spot checks
 

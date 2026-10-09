@@ -179,7 +179,10 @@ pub fn PdfPageModel::equal(Self, Self) -> Bool
 #deprecated
 pub fn PdfPageModel::not_equal(Self, Self) -> Bool
 pub fn PdfPageModel::operator_list(Self) -> Array[PdfPageItem]
+pub fn PdfPageModel::render_svg(Self, scale? : Double, rotation? : Int) -> String raise @core.PdfError
+pub fn PdfPageModel::select_text(Self, Int, Int, Int, Int) -> PdfTextRangeSelection?
 pub fn PdfPageModel::text_content(Self) -> PdfTextContent
+pub fn PdfPageModel::text_layer(Self, scale? : Double, rotation? : Int) -> PdfTextLayer
 #deprecated
 pub fn PdfPageModel::to_json(Self) -> Json
 #deprecated
@@ -357,6 +360,58 @@ pub fn PdfTextItem::not_equal(Self, Self) -> Bool
 pub fn PdfTextItem::to_json(Self) -> Json
 #deprecated
 pub fn PdfTextItem::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfTextLayer {
+  page : Int
+  viewport : PdfViewport
+  items : Array[PdfTextLayerItem]
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfTextLayer::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextLayer::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextLayer::to_json(Self) -> Json
+#deprecated
+pub fn PdfTextLayer::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfTextLayerItem {
+  item_index : Int
+  text : String
+  separator : String
+  matrix : Array[Double]
+  font_family : String
+  font_weight : String
+  font_style : String
+  vertical : Bool
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfTextLayerItem::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextLayerItem::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextLayerItem::to_json(Self) -> Json
+#deprecated
+pub fn PdfTextLayerItem::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfTextRangeSelection {
+  page : Int
+  text : String
+  item_indices : Array[Int]
+  quads : Array[PdfQuad]
+  start_item : Int
+  start_offset : Int
+  end_item : Int
+  end_offset : Int
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfTextRangeSelection::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextRangeSelection::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextRangeSelection::to_json(Self) -> Json
+#deprecated
+pub fn PdfTextRangeSelection::to_repr(Self) -> @debug.Repr
 
 pub(all) struct PdfTransparencyGroup {
   id : String

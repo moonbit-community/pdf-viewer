@@ -16,7 +16,7 @@ PdfViewerDocument ── page(n) ── PdfPageModel
                                   └─ selection mapping
   │
   ▼
-SVG renderer / future Canvas renderer / host adapter
+SVG renderer / browser DOM text layer / future Canvas renderer / host adapter
 ```
 
 `pdflite` owns PDF syntax, xref recovery, resources, font decoding, content
@@ -145,11 +145,42 @@ flags, including a `group_path` for nested Forms. SVG maps isolated groups to
 non-isolated backdrops and knockout. Exact backdrop and knockout pixel compositing remains
 outside the current SVG lowering.
 
+The standalone browser shell lives in `web/`, with a MoonBit JS bridge in
+`cmd/browser/`. PDF bytes are decoded entirely by the MoonBit/pdflite module;
+the JavaScript shell handles file input, DOM mounting and native browser
+selection. `open_pdf`, `render_page`, `select_text` and `close_pdf` are the
+small JS export surface. Page models are cached until close/reopen, and
+embedded font families receive page prefixes so multiple SVGs do not replace
+each other's @font-face rules. Rendering an already decoded page uses
+`PdfPageModel::render_svg`.
+
+`text_layer.mbt` maps the actual glyph quads through the public viewport and
+retains source item indices. A layer item carries a unit-square affine matrix;
+the browser normalizes its basis onto a rectangle with a normal CSS font size.
+Using a 1px font and scaling it up looked correct under programmatic Range
+selection but failed real Chromium mouse drag. Normal CSS glyph rectangles,
+fitted text advances and DOM-order separators make native drag and copy work
+with outline rendering as well. Font measurements are cached, and inline style
+values are reused to avoid repeated synchronous layout during a multi-page
+mount.
+
+`PdfPageModel::select_text` normalizes cursor endpoints, validates UTF-16
+boundaries, and returns source quads and item indices. The browser combines
+these page ranges, attaches available file information and emits
+`pdf-selection-change`; it restores ranges after zoom/rotation. Partial
+ligatures retain a complete source glyph quad, and raw PDF byte spans are not
+claimed. The writing-direction separator heuristic is independent of page
+rotation; full reading-order/bidi reconstruction remains a separate task.
+
+The current browser eagerly mounts every page and yields between pages.
+Worker decoding, cancellation, page virtualization and memory bounds remain
+pending. The body text layer does not reconstruct annotation appearance
+streams or readonly widgets as DOM; those belong to the annotation layer.
+
 The remaining implementation stages are ordered by the visible compatibility gap:
 
-1. A standalone browser viewer, DOM cursor selection and an automated PDF.js
-   comparison harness, followed by complex CMap inheritance, font metrics and
-   system-font fallback policy;
+1. An automated PDF.js comparison harness and Worker/page scheduling, followed
+   by complex CMap inheritance, font metrics and system-font fallback policy;
 2. CTM-preserving path/image geometry, complete group-level mask compositing, and pixel-level
    Gouraud interpolation for mesh triangles;
 3. complete annotation appearance and form/widget layers;
@@ -199,5 +230,9 @@ output before adding pixel or browser-level assertions. `tools/corpus.mbtx`
 builds and runs the native CLI with per-file timeouts and fresh artifact paths,
 checks error exit codes and SVG creation, and writes a JSON report. These are
 selected-page conversion checks (page 1 by default), not visual conformance tests. The measured result
-and known failures are recorded in `docs/validation.md`; a browser pixel-diff
-harness has not been claimed or added yet.
+and known failures are recorded in `docs/validation.md`.
+`tools/browser_test.mbtx` uses Chromium's DevTools protocol from MoonBit,
+verifying native mouse/keyboard selection, source ranges, local file input,
+error recovery and zoom/rotation across real fixtures. It captures screenshots
+and records passed checks. This is interaction verification; an automated
+PDF.js pixel-diff harness has not been added yet.

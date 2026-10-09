@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MoonBit PDF Viewer</title>
+    <link rel="stylesheet" href="./viewer.css" />
+  </head>
+  <body>
+    <header class="toolbar" aria-label="文档工具栏">
+      <a class="brand" href="./">MoonBit <strong>PDF</strong></a>
+      <div class="file-controls">
+        <button id="open-file" type="button">打开 PDF</button>
+        <input
+          id="file-input"
+          type="file"
+          accept="application/pdf,.pdf"
+          hidden
+        />
+        <span id="file-name" title="">未打开文档</span>
+      </div>
+      <div class="page-controls">
+        <button id="previous-page" title="上一页" aria-label="上一页" disabled>
+          ↑
+        </button>
+        <input
+          id="page-number"
+          type="number"
+          min="1"
+          value="1"
+          aria-label="页码"
+          disabled
+        />
+        <span id="page-count">/ 0</span>
+        <button id="next-page" title="下一页" aria-label="下一页" disabled>
+          ↓
+        </button>
+      </div>
+      <div class="zoom-controls">
+        <button id="zoom-out" title="缩小" aria-label="缩小" disabled>−</button>
+        <select id="zoom" aria-label="缩放" disabled>
+          <option value="fit">适合宽度</option>
+          <option value="0.5">50%</option>
+          <option value="0.75">75%</option>
+          <option value="1">100%</option>
+          <option value="1.25">125%</option>
+          <option value="1.5">150%</option>
+          <option value="2">200%</option>
+        </select>
+        <button id="zoom-in" title="放大" aria-label="放大" disabled>+</button>
+        <button id="rotate" title="顺时针旋转" aria-label="顺时针旋转" disabled>
+          ↻
+        </button>
+      </div>
+      <button id="download" disabled>下载</button>
+    </header>
+    <main id="viewer" tabindex="0" aria-label="PDF 文档" aria-busy="false">
+      <section id="empty-state">
+        <div class="document-symbol" aria-hidden="true">PDF</div>
+        <h1>打开一份文档</h1>
+        <p>将 PDF 拖到这里，或选择本地文件。</p>
+        <button id="open-empty" type="button">选择 PDF 文件</button>
+        <p class="hint">文档在浏览器中读取和渲染。</p>
+      </section>
+      <div id="pages"></div>
+    </main>
+    <footer class="status-bar">
+      <span id="status" role="status" aria-live="polite">就绪</span>
+      <span id="selection-status"></span>
+      <button id="copy-selection" disabled>复制选中文字</button>
+    </footer>
+    <div id="error" role="alert" hidden></div>
+    <script type="module" src="./viewer.js"></script>
+  </body>
+</html>

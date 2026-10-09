@@ -1,0 +1,19 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+}
+
+///|
+async fn main {
+  @shell.Cmd("moon", ["build", "--target", "js", "--release", "cmd/browser"]).run()
+  if !@fs.exists("web/_generated") {
+    @fs.mkdir("web/_generated", recursive=true)
+  }
+  @fs.write_file(
+    "web/_generated/pdf.js",
+    @fs.read_file("_build/js/release/build/cmd/browser/browser.js").binary(),
+  )
+  println("Browser build: web/ (serve this directory as a static site)")
+}

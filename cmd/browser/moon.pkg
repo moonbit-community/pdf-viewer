@@ -1,0 +1,15 @@
+import {
+  "moonbit-community/pdf-viewer" @pdf,
+  "moonbitlang/core/debug",
+}
+
+supported_targets = "js"
+
+options(
+  link: {
+    "js": {
+      "exports": ["open_pdf", "render_page", "select_text", "close_pdf"],
+      "format": "esm",
+    },
+  },
+)

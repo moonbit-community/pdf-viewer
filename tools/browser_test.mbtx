@@ -1,0 +1,538 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/process",
+  "moonbitlang/async/http",
+  "moonbitlang/async/websocket",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/core/encoding/base64",
+}
+
+///|
+struct Browser {
+  socket : @websocket.Conn
+  mut id : Int
+  errors : Array[Json]
+  checks : Array[String]
+}
+
+///|
+async fn Browser::command(
+  self : Browser,
+  operation : String,
+  params? : Json = {},
+) -> Json {
+  self.id += 1
+  let id = self.id
+  let request : Json = { "id": id, "method": operation, "params": params }
+  self.socket.send_text(request.stringify())
+  for ;; {
+    let message = @async.with_timeout(30000, () => {
+      self.socket.recv().read_all().text()
+    })
+    let response = @json.parse(message)
+    match response {
+      { "id": Number(value, ..), "error": error, .. } if value == id.to_double() =>
+        fail("CDP error: " + error.stringify())
+      { "id": Number(value, ..), "result": result, .. } if value ==
+        id.to_double() => return result
+      { "method": String("Runtime.exceptionThrown"), .. } =>
+        self.errors.push(response)
+      _ => ()
+    }
+  }
+}
+
+///|
+async fn Browser::evaluate(self : Browser, expression : String) -> Json {
+  let response = self.command("Runtime.evaluate", params={
+    "expression": expression,
+    "awaitPromise": true,
+    "returnByValue": true,
+  })
+  match response {
+    { "exceptionDetails": error, .. } =>
+      fail("Browser evaluation: " + error.stringify())
+    { "result": { "value": value, .. }, .. } => value
+    _ => fail("Missing browser value: " + response.stringify())
+  }
+}
+
+///|
+async fn Browser::check(
+  self : Browser,
+  name : String,
+  expression : String,
+) -> Unit {
+  let result = self.evaluate(expression)
+  guard result == Json::boolean(true) else {
+    fail("Browser assertion failed (" + name + "): " + result.stringify())
+  }
+  println("PASS: " + name)
+  self.checks.push(name)
+}
+
+///|
+async fn Browser::ready(self : Browser, expected_pages : Int) -> Unit {
+  for _ in 0..<400 {
+    if self.evaluate(
+        "document.querySelectorAll('.page').length === \{expected_pages} && document.getElementById('viewer').getAttribute('aria-busy') === 'false'",
+      ) ==
+      Json::boolean(true) {
+      return
+    }
+    @async.sleep(25)
+  }
+  let error = self.evaluate(
+    "({error: document.getElementById('error')?.textContent, status: document.getElementById('status')?.textContent, pages: document.querySelectorAll('.page').length})",
+  )
+  fail("Viewer did not become ready: " + error.stringify())
+}
+
+///|
+async fn Browser::navigate(self : Browser, url : String, pages : Int) -> Unit {
+  ignore(self.command("Page.navigate", params={ "url": url }))
+  // Wait until the new document has loaded before asking for its page state.
+  for _ in 0..<400 {
+    if self.evaluate(
+        "location.href === " +
+        Json::string(url).stringify() +
+        " && document.readyState === 'complete'",
+      ) ==
+      Json::boolean(true) {
+      break
+    }
+    @async.sleep(25)
+  }
+  self.ready(pages)
+}
+
+///|
+async fn Browser::screenshot(self : Browser, path : String) -> Unit {
+  let result = self.command("Page.captureScreenshot", params={ "format": "png" })
+  guard result is { "data": String(data), .. } else {
+    fail("Missing screenshot")
+  }
+  @fs.write_file(path, @base64.decode(data))
+}
+
+///|
+async fn Browser::upload(self : Browser, filename : String) -> Unit {
+  let document = self.command("DOM.getDocument")
+  guard document is { "root": { "nodeId": Number(root, ..), .. }, .. } else {
+    fail("Missing root node")
+  }
+  let found = self.command("DOM.querySelector", params={
+    "nodeId": root,
+    "selector": "#file-input",
+  })
+  guard found is { "nodeId": Number(node, ..), .. } else {
+    fail("Missing file input")
+  }
+  ignore(
+    self.command("DOM.setFileInputFiles", params={
+      "nodeId": node,
+      "files": [filename],
+    }),
+  )
+}
+
+///|
+async fn Browser::drag(self : Browser, first : String, last : String) -> Unit {
+  let expression =
+    #| ((firstText, lastText) => {
+    #|   const glyphs = [...document.querySelectorAll('.glyph')];
+    #|   const first = glyphs.find(g => g.textContent === firstText);
+    #|   const last = glyphs.find(g => g.textContent === lastText);
+    #|   first.scrollIntoView({block: 'center', inline: 'center'});
+    #|   const point = (glyph, fraction) => {
+    #|     const page = glyph.closest('.page').getBoundingClientRect();
+    #|     const matrix = new DOMMatrix(glyph.style.transform);
+    #|     const x = parseFloat(glyph.style.width) * fraction;
+    #|     const y = parseFloat(glyph.style.height) * 0.5;
+    #|     return {x: page.left + parseFloat(glyph.style.left) + matrix.a*x + matrix.c*y, y: page.top + parseFloat(glyph.style.top) + matrix.b*x + matrix.d*y};
+    #|   };
+    #|   return {start: point(first, 0.001), end: point(last, 0.999)};
+    #| })
+  let positions = self.evaluate(
+    expression +
+    "(" +
+    Json::string(first).stringify() +
+    "," +
+    Json::string(last).stringify() +
+    ")",
+  )
+  guard positions
+    is {
+      "start": { "x": Number(x0, ..), "y": Number(y0, ..), .. },
+      "end": { "x": Number(x1, ..), "y": Number(y1, ..), .. },
+      ..
+    } else {
+    fail("Missing drag points")
+  }
+  ignore(
+    self.command("Input.dispatchMouseEvent", params={
+      "type": "mouseMoved",
+      "x": x0,
+      "y": y0,
+    }),
+  )
+  ignore(
+    self.command("Input.dispatchMouseEvent", params={
+      "type": "mousePressed",
+      "x": x0,
+      "y": y0,
+      "button": "left",
+      "buttons": 1,
+      "clickCount": 1,
+    }),
+  )
+  for step in 1..<=12 {
+    let ratio = step.to_double() / 12.0
+    ignore(
+      self.command("Input.dispatchMouseEvent", params={
+        "type": "mouseMoved",
+        "x": x0 + (x1 - x0) * ratio,
+        "y": y0 + (y1 - y0) * ratio,
+        "button": "left",
+        "buttons": 1,
+      }),
+    )
+  }
+  ignore(
+    self.command("Input.dispatchMouseEvent", params={
+      "type": "mouseReleased",
+      "x": x1,
+      "y": y1,
+      "button": "left",
+      "buttons": 0,
+      "clickCount": 1,
+    }),
+  )
+  @async.sleep(100)
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  let base = if args.length() > 1 { args[1] } else { "http://127.0.0.1:4312" }
+  let chrome = if args.length() > 2 {
+    args[2]
+  } else {
+    "/root/.cache/ms-playwright/chromium-1223/chrome-linux/chrome"
+  }
+  let output = "_build/browser-test-\{@env.now()}"
+  @fs.mkdir(output, recursive=true)
+  @async.with_task_group(group => {
+    let log = @process.redirect_to_file(output + "/chromium.log")
+    defer log.close()
+    let process = @process.spawn(
+      group,
+      chrome,
+      [
+        "--headless",
+        "--no-sandbox",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--remote-debugging-port=0",
+        "--remote-allow-origins=*",
+        "--user-data-dir=" + output + "/profile",
+        "--window-size=1280,900",
+        "about:blank",
+      ],
+      stdout=log,
+      stderr=log,
+    )
+    defer process.cancel()
+    let port_path = output + "/profile/DevToolsActivePort"
+    for _ in 0..<400 {
+      if @fs.exists(port_path) {
+        break
+      }
+      @async.sleep(25)
+    }
+    guard @fs.exists(port_path) else { fail("Chromium did not start") }
+    let port = @fs.read_file(port_path)
+      .text()
+      .split("\n")
+      .next()
+      .unwrap()
+      .to_owned()
+    let (response, body) = @http.put(
+      "http://127.0.0.1:" + port + "/json/new?about:blank",
+      b"",
+    )
+    guard response.code == 200 else {
+      fail("Chromium failed to create a target")
+    }
+    let target = @json.parse(body.text())
+    guard target is { "webSocketDebuggerUrl": String(url), .. } else {
+      fail("Missing CDP URL")
+    }
+    let browser : Browser = {
+      socket: @websocket.connect(url),
+      id: 0,
+      errors: [],
+      checks: [],
+    }
+    defer browser.socket.close()
+    ignore(browser.command("Page.enable"))
+    ignore(browser.command("Runtime.enable"))
+    ignore(
+      browser.command("Emulation.setDeviceMetricsOverride", params={
+        "width": 1280,
+        "height": 900,
+        "deviceScaleFactor": 1,
+        "mobile": false,
+      }),
+    )
+    browser.navigate(base + "/?file=/fixtures/90ms_rksj_h_sample.pdf", 1)
+    browser.check(
+      "predefined CMap paints and exposes native DOM text", "document.querySelector('.text-layer').textContent.includes('日本語テスト') && document.querySelector('.paint-layer').querySelector('svg') !== null && document.getElementById('error').hidden",
+    )
+    browser.screenshot(output + "/japanese-viewer.png")
+    browser.check(
+      "cursor text layer has PDF item indices and affine glyph boxes", "[...document.querySelectorAll('.glyph')].every(g => g.dataset.item !== undefined && getComputedStyle(g).cursor === 'text' && g.getBoundingClientRect().height > 0)",
+    )
+    let positions = browser.evaluate(
+      (
+        #| (() => {
+        #|   const glyphs = [...document.querySelectorAll('.glyph')];
+        #|   const first = glyphs.find(g => g.textContent === '日').getBoundingClientRect();
+        #|   const last = glyphs.find(g => g.textContent === 'ト').getBoundingClientRect();
+        #|   return {x0: first.left + 0.1, y0: first.top + first.height / 2, x1: last.right - 0.1, y1: last.top + last.height / 2};
+        #| })()
+      ),
+    )
+    guard positions
+      is {
+        "x0": Number(x0, ..),
+        "y0": Number(y0, ..),
+        "x1": Number(x1, ..),
+        "y1": Number(y1, ..),
+        ..
+      } else {
+      fail("Missing drag coordinates")
+    }
+    ignore(
+      browser.command("Input.dispatchMouseEvent", params={
+        "type": "mouseMoved",
+        "x": x0,
+        "y": y0,
+      }),
+    )
+    ignore(
+      browser.command("Input.dispatchMouseEvent", params={
+        "type": "mousePressed",
+        "x": x0,
+        "y": y0,
+        "button": "left",
+        "buttons": 1,
+        "clickCount": 1,
+      }),
+    )
+    let drag_start = browser.evaluate(
+      "({text: getSelection().toString(), anchor: getSelection().anchorNode?.textContent, anchorOffset: getSelection().anchorOffset})",
+    )
+    for step in 1..<=12 {
+      let ratio = step.to_double() / 12.0
+      ignore(
+        browser.command("Input.dispatchMouseEvent", params={
+          "type": "mouseMoved",
+          "x": x0 + (x1 - x0) * ratio,
+          "y": y0 + (y1 - y0) * ratio,
+          "button": "left",
+          "buttons": 1,
+        }),
+      )
+    }
+    ignore(
+      browser.command("Input.dispatchMouseEvent", params={
+        "type": "mouseReleased",
+        "x": x1,
+        "y": y1,
+        "button": "left",
+        "buttons": 0,
+        "clickCount": 1,
+      }),
+    )
+    @async.sleep(100)
+    browser.screenshot(output + "/mouse-selection.png")
+    browser.check(
+      "real mouse drag selects Japanese text",
+      "getSelection().toString() === '日本語テスト' || ({start: " +
+      drag_start.stringify() +
+      ", text: getSelection().toString(), anchor: getSelection().anchorNode?.textContent, anchorOffset: getSelection().anchorOffset, focus: getSelection().focusNode?.textContent, focusOffset: getSelection().focusOffset})",
+    )
+    ignore(
+      browser.command("Input.dispatchKeyEvent", params={
+        "type": "keyDown",
+        "key": "ArrowLeft",
+        "code": "ArrowLeft",
+        "modifiers": 8,
+        "windowsVirtualKeyCode": 37,
+      }),
+    )
+    ignore(
+      browser.command("Input.dispatchKeyEvent", params={
+        "type": "keyUp",
+        "key": "ArrowLeft",
+        "code": "ArrowLeft",
+        "modifiers": 8,
+        "windowsVirtualKeyCode": 37,
+      }),
+    )
+    @async.sleep(100)
+    browser.check(
+      "Shift plus arrow adjusts a native cursor selection", "getSelection().toString() === '日本語テス'",
+    )
+    browser.check(
+      "MoonBit range selection matches DOM text",
+      (
+        #| (async () => {
+        #|   const bridge = await import('./_generated/pdf.js');
+        #|   const glyphs = [...document.querySelectorAll('.glyph')];
+        #|   const first = glyphs.find(g => g.textContent === '日');
+        #|   const last = glyphs.find(g => g.textContent === 'ト');
+        #|   const result = JSON.parse(bridge.select_text(1, +first.dataset.item, 0, +last.dataset.item, 1));
+        #|   return result.ok && result.selection.text === '日本語テスト' && result.selection.quads.length === 6;
+        #| })()
+      ),
+    )
+    browser.check(
+      "native selection publishes source ranges and file path",
+      (
+        #| (async () => {
+        #|   const viewer = document.getElementById('viewer');
+        #|   viewer.addEventListener('pdf-selection-change', e => window.lastPdfSelection = e.detail);
+        #|   const glyphs = [...document.querySelectorAll('.glyph')];
+        #|   const first = glyphs.find(g => g.textContent === '日');
+        #|   const last = glyphs.find(g => g.textContent === 'ト');
+        #|   const range = new Range();
+        #|   range.setStart(first.firstChild.firstChild, 0);
+        #|   range.setEnd(last.firstChild.firstChild, 1);
+        #|   getSelection().removeAllRanges(); getSelection().addRange(range);
+        #|   await new Promise(r => setTimeout(r, 100));
+        #|   return getSelection().toString() === '日本語テスト' && lastPdfSelection.text === '日本語テスト' && lastPdfSelection.file.path === '/fixtures/90ms_rksj_h_sample.pdf' && lastPdfSelection.ranges[0].item_indices.length === 6;
+        #| })()
+      ),
+    )
+    browser.check(
+      "copy uses selected text and selected source glyphs",
+      (
+        #| (() => {
+        #|   const data = new DataTransfer();
+        #|   const event = new ClipboardEvent('copy', {clipboardData: data, bubbles: true, cancelable: true});
+        #|   document.dispatchEvent(event);
+        #|   return event.defaultPrevented && data.getData('text/plain') === '日本語テスト';
+        #| })()
+      ),
+    )
+    ignore(browser.evaluate("document.getElementById('rotate').click(); true"))
+    browser.ready(1)
+    browser.check(
+      "rotation preserves native selection and source indices", "getSelection().toString() === '日本語テスト' && lastPdfSelection.text === '日本語テスト' && document.querySelector('.page').offsetWidth > document.querySelector('.page').offsetHeight",
+    )
+    ignore(
+      browser.evaluate(
+        "document.getElementById('zoom').value = '2'; document.getElementById('zoom').dispatchEvent(new Event('change')); true",
+      ),
+    )
+    browser.ready(1)
+    browser.check(
+      "zoom reprojects selection without losing text", "getSelection().toString() === '日本語テスト' && document.querySelector('.page').offsetWidth === 1584 && lastPdfSelection.ranges[0].item_indices.length === 6",
+    )
+    browser.screenshot(output + "/rotated-selection.png")
+    browser.drag("日", "ト")
+    browser.check(
+      "real mouse drag works on rotated scaled glyphs", "getSelection().toString() === '日本語テスト' || getSelection().toString()",
+    )
+    browser.navigate(base + "/?file=/fixtures/vertical.pdf", 3)
+    browser.check(
+      "vertical text stays selectable across the full three-page fixture", "document.querySelectorAll('.page').length === 3 && [...document.querySelectorAll('.glyph[data-vertical=true]')].map(g => g.textContent).join('').includes('あいうえお') && document.getElementById('error').hidden",
+    )
+    browser.screenshot(output + "/vertical-viewer.png")
+    browser.drag("あ", "お")
+    browser.check(
+      "real mouse drag works on vertical CJK text", "getSelection().toString() === 'あいうえお' || getSelection().toString()",
+    )
+    browser.navigate(base + "/?file=/fixtures/tracemonkey.pdf", 14)
+    browser.check(
+      "multi-page source range and normalized copied lines",
+      (
+        #| (async () => {
+        #|   document.getElementById('viewer').addEventListener('pdf-selection-change', e => window.lastPdfSelection = e.detail);
+        #|   const pages = document.querySelectorAll('.page');
+        #|   const first = pages[0].querySelector('.glyph-text').firstChild;
+        #|   const last = pages[1].querySelector('.glyph-text').firstChild;
+        #|   const range = new Range(); range.setStart(first, 0); range.setEnd(last, last.length);
+        #|   getSelection().removeAllRanges(); getSelection().addRange(range);
+        #|   await new Promise(r => setTimeout(r, 100));
+        #|   return lastPdfSelection.ranges.length === 2 && lastPdfSelection.ranges[0].page === 1 && lastPdfSelection.ranges[1].page === 2 && lastPdfSelection.text.includes('\n');
+        #| })()
+      ),
+    )
+    browser.screenshot(output + "/multi-page-viewer.png")
+    browser.check(
+      "select all stays inside document text and maps every page",
+      (
+        #| (async () => {
+        #|   document.getElementById('viewer').focus();
+        #|   document.getElementById('viewer').dispatchEvent(new KeyboardEvent('keydown', {key: 'a', ctrlKey: true, bubbles: true, cancelable: true}));
+        #|   await new Promise(r => setTimeout(r, 100));
+        #|   return (lastPdfSelection?.ranges.length === 14 && !getSelection().toString().includes('打开 PDF')) || {ranges: lastPdfSelection?.ranges.map(r => r.page), text: getSelection().toString().slice(0, 100), error: document.getElementById('error').textContent};
+        #| })()
+      ),
+    )
+    browser.navigate(base + "/", 0)
+    browser.check(
+      "standalone empty state allows local PDF input", "!document.getElementById('empty-state').hidden && document.getElementById('file-input').accept.includes('.pdf')",
+    )
+    let cwd = @env.current_dir().unwrap()
+    browser.upload(cwd + "/reference/pdf.js/test/pdfs/90ms_rksj_h_sample.pdf")
+    browser.ready(1)
+    browser.check(
+      "real file input opens a PDF without uploading its bytes", "document.getElementById('file-name').textContent === '90ms_rksj_h_sample.pdf' && document.querySelector('.text-layer').textContent.includes('日本語テスト') && location.search === ''",
+    )
+    let invalid = output + "/invalid.pdf"
+    @fs.write_file(invalid, "invalid PDF data")
+    browser.upload(cwd + "/" + invalid)
+    @async.sleep(100)
+    browser.check(
+      "invalid input reports an error and retains the previous preview", "!document.getElementById('error').hidden && document.querySelector('.text-layer').textContent.includes('日本語テスト')",
+    )
+    browser.upload(cwd + "/reference/pdf.js/test/pdfs/90ms_rksj_h_sample.pdf")
+    browser.ready(1)
+    browser.check(
+      "reopening after an invalid file clears the error", "document.getElementById('error').hidden",
+    )
+    browser.check(
+      "keyboard can start a selection from the focused viewer",
+      (
+        #| (async () => {
+        #|   getSelection().removeAllRanges(); document.getElementById('viewer').focus();
+        #|   document.getElementById('viewer').dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', shiftKey: true, bubbles: true, cancelable: true}));
+        #|   await new Promise(r => setTimeout(r, 100));
+        #|   return getSelection().toString() === 'H';
+        #| })()
+      ),
+    )
+    guard browser.errors.is_empty() else {
+      fail("Browser errors: " + browser.errors.to_json().stringify())
+    }
+    let report : Json = {
+      "status": "passed",
+      "checks": browser.checks,
+      "passed": browser.checks.length(),
+      "scope": "Browser DOM text, source ranges, zoom/rotation, copy and multi-page smoke tests; not pixel parity",
+      "fixtures": ["90ms_rksj_h_sample.pdf", "vertical.pdf", "tracemonkey.pdf"],
+      "artifacts": output,
+    }
+    @fs.write_file(output + "/report.json", report.stringify(indent=2))
+    println("Browser results: " + output + "/report.json")
+    process.cancel()
+    ignore(process.wait())
+  })
+}
