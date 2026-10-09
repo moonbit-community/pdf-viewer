@@ -11,15 +11,31 @@ fn pdf_apply_op_for_viewer(
   Array[@pdflite.PdfContentTextGlyphPlacement],
 ) raise @core.PdfError {
   match op {
+    @content.Op_Tf(_, _) => {
+      let result = document.content_apply_resource_op(state, resources, op) catch {
+        @core.CIDFontDescriptorExpected => {
+          let text_state = state.text_state.content_apply_text_state_op(op)
+          guard pdf_viewer_ttf_font_object(document, resources, text_state.font)
+            is Some(object) else {
+            raise @core.CIDFontDescriptorExpected
+          }
+          let current_font = pdf_read_font_for_viewer(document, object)
+          {
+            state: { ..state, text_state: { ..text_state, current_font, }, },
+            entries: [],
+          }
+        }
+        error => raise error
+      }
+      (result, [])
+    }
     @content.Op_Tj(_)
     | @content.Op_TJ(_)
     | @content.Op_quote(_)
     | @content.Op_double_quote(_, _, _) => {
       let original_font = state.text_state.current_font
-      if original_font is @pdflite.PdfFontCIDKeyed(font) &&
-        font.encoding is @pdflite.PdfExternalCMap(_, parsed) &&
-        !original_font.content_is_vertical() {
-        return pdf_apply_cmap_text_op(state, font, parsed, op)
+      if original_font is @pdflite.PdfFontCIDKeyed(font) {
+        return pdf_apply_cid_text_op(state, font, op)
       }
       let layout = state.text_state.content_apply_text_op(
         original_font,

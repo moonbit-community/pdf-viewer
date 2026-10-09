@@ -4,10 +4,12 @@ The annotation baseline uses the local pdf.js checkout at revision
 `89b500f5e1d98ed89bb90211e45b28730b2d99ac`, pdflite `0.2.2`, and the native SVG
 CLI. It does not measure parity with pdf.js rendering.
 
-The suite currently contains 112 tests on each of wasm, wasm-gc, JavaScript, and
+The suite currently contains 133 tests on each of wasm, wasm-gc, JavaScript, and
 native. It includes 13 annotation tests, 17 CFF tests, 23 Type 1 tests, 5 CID
 layout tests, 9 variable-length CMap tests, 4 text-geometry tests, and 8
-text-clipping tests. These results cover the MoonBit package and CLI; they do
+text-clipping tests. The latest addition has 8 predefined-CMap tests, 8 vertical
+CID tests, 4 word-spacing tests and 1 missing-descriptor recovery test.
+These results cover the MoonBit package and CLI; they do
 not establish complete pdf.js compatibility.
 
 ## Reproduce
@@ -21,12 +23,15 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs cff
 moon run tools/corpus.mbtx reference/pdf.js/test/pdfs text_clip
 moon run tools/corpus.mbtx reference/pdf.js/test/pdfs issue15292
 moon run tools/corpus.mbtx reference/pdf.js/test/pdfs issue18117
+moon run tools/corpus.mbtx reference/pdf.js/test/pdfs vertical 1,2,3
+moon run tools/corpus.mbtx reference/pdf.js/test/pdfs 90ms_rksj
 ```
 
 The corpus runner creates a new `_build/corpus-*/` directory every time. Each
 entry in `report.json` includes the source filename, page number, status,
 process exit code, diagnostic output, generated SVG path, and explicit
-placeholder count. The runner also exercises the CLI's success, usage, invalid
+placeholder count. A comma-separated final argument selects multiple pages;
+page 1 remains the default. The runner also exercises the CLI's success, usage, invalid
 PDF, missing file, invalid/nonpositive/out-of-range page, and output-write
 failure paths. A failure or timeout makes the runner exit nonzero after saving
 the full report.
@@ -86,7 +91,8 @@ outline. `issue14462_reduced.pdf` produced
 first page; `issue18548_reduced.pdf` produced 4 procedure-form Type 1 outline
 paths. These pages were rendered as SVG and visually compared with Poppler at
 72 dpi. The unit tests cover the single-FD CID-keyed parser; multiple FDArray
-entries and complex predefined CMap recovery are still unsupported.
+entries remain unsupported. Predefined CMaps are now supported as described
+below; complex external-stream CMap inheritance remains pending.
 
 ## External CMap widths and real CID Type 1 sample
 
@@ -119,7 +125,7 @@ shortest-match segmentation, leading zeroes, local versus inherited Identity
 codespaces, CID widths and outlines, multi-codepoint ToUnicode mappings,
 consecutive operators, numeric TJ adjustments, quote line/spacing state,
 source-length-sensitive Tw, invalid/truncated input, selection, and clipping.
-All 112 tests pass on wasm, wasm-gc, JavaScript, and native.
+At that stage, all 112 tests passed on wasm, wasm-gc, JavaScript, and native.
 
 The real PDF.js fixture `issue18117.pdf` contains an embedded SourceHanSansTC
 TrueType font with a UTF-8 CMap, one-byte Latin text, a three-byte punctuation
@@ -140,13 +146,64 @@ not full-document visual conformance. A new Chromium screenshot of
 its body and footer placement remain unchanged. The new artifacts are in
 `_build/corpus-1791556939882/`.
 
-Limits: the new path applies to horizontal external CMaps whose codespaces
+Limits of that stage: the path applied to horizontal external CMaps whose codespaces
 survive pdflite's reader. Some four-byte ranges crossing the signed Int boundary
 can be dropped by pdflite `0.2.2`, such as `<00000000> <FFFFFFFF>`; recovering
-them, built-in CMaps, complex UseCMap inheritance, and vertical layout remain
-TODO. Source bytes are retained during layout but are not exposed as stable
-public byte-span metadata. Word spacing is corrected in this path; the other
-font paths have not yet been fully aligned.
+them and complex external UseCMap inheritance still remain TODO. Predefined
+CMaps, vertical layout and the other font paths' word spacing are now covered
+by the following stage. Source bytes are retained during layout but are not
+exposed as stable public byte-span metadata.
+
+## Adobe predefined CMaps, vertical layout and word spacing
+
+All **133/133 tests** pass on wasm, wasm-gc, JavaScript and native.
+`builtin_cmap_wbtest.mbt` checks all 168 pinned binary assets decode, verifies
+the PDF.js ETenms-B5 unit-fixture CID values and Japanese mappings, and checks
+CID-to-Unicode collection data. It also covers truncated binary input, local
+mapping priority, inherited codespaces/WMode, local WMode override and the
+public page path joining named CMaps to CID widths and TrueType outlines.
+The embedded assets contain mapping data, not font programs; Adobe's license
+is retained in `assets/cmaps/LICENSE`, and regeneration checks the pinned
+reference revision. Filtered CIDToGIDMap streams now decode before GID lookup.
+
+`cid_vertical_wbtest.mbt` has 8 tests for CID-indexed W2, DW2 defaults and
+origins, signed progression, source-length-sensitive Tw, Tc, numeric TJ,
+consecutive operators, quote line matrices, q/Q, clipping, selection,
+shear/scale/rise and negative font sizes. All CID paths now compute geometry
+directly; the previous viewer-side quad-direction repair was removed.
+`word_spacing_wbtest.mbt` has 4 additional tests for standard, simple and Type 3
+fonts, and named UTF8/UTF16/UTF32 CMaps. A two- or four-byte encoding of code
+32 does not receive Tw; changing a glyph's ToUnicode text does not change its
+source-code word-spacing decision.
+
+Real fixture runs on 2026-10-09:
+
+- `vertical.pdf`: **3/3 pages** converted, no explicit placeholders; artifacts
+  in `_build/corpus-1791560890434/`. Chromium and Poppler were compared at
+  144 dpi for all three pages. The two Japanese columns on page 1 have
+  comparable placement. Pages 2 and 3 are blank in both renderers, so they
+  provide a blank-page regression rather than additional vertical-text cases.
+- `90ms_rksj_h_sample.pdf`: **1/1 page** converted, no explicit placeholders;
+  artifacts in `_build/corpus-1791560558842/`. The SVG contains
+  `日本語テスト` at the CID-derived advances. Chromium and Poppler were
+  visually compared at 144 dpi; both ASCII and Japanese lines are visible
+  with comparable placement. The non-embedded CIDFont omits FontDescriptor:
+  `font_recovery_wbtest.mbt` verifies recovery of text and widths without
+  mutating the source object. Default metrics remain an explicit approximation,
+  and the SVG's fallback font appearance depends on the host environment.
+- First-page conversion regressions passed for `issue18117.pdf` (1/1,
+  `_build/corpus-1791560967470/`), `issue15292.pdf` (1/1,
+  `_build/corpus-1791560982581/`), `cid*.pdf` (2/2,
+  `_build/corpus-1791560983718/`), `cff*.pdf` (1/1,
+  `_build/corpus-1791560984996/`) and `text_clip_cff_cid.pdf` (1/1,
+  `_build/corpus-1791560985460/`). No explicit placeholders were emitted.
+
+These are structural regressions, conversion checks and manual Poppler spot
+checks. They are **not an automated PDF.js pixel comparison or a visual
+compatibility percentage**. Remaining CMap limits include reader-lost
+unsigned four-byte ranges and local codespace priority in complex stream
+UseCMap inheritance. General missing-ToUnicode/font recovery and diagnostics,
+standard/system fonts and stable public source-byte spans remain pending.
 
 ## Focused annotation regressions
 

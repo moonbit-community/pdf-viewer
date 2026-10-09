@@ -718,9 +718,14 @@ test "CID-keyed Type 1 does not guess unknown CMap character codes" {
 
   let unknown_predefined = @pdflite.PdfCIDKeyedFont::{
     ..identity,
-    encoding: @pdflite.PdfPredefinedCMap(name("/90ms-RKSJ-H")),
+    encoding: @pdflite.PdfPredefinedCMap(name("/Unknown-Viewer-CMap")),
   }
   assert_eq(pdf_viewer_cid_of_charcode(unknown_predefined, 0x41), None)
+  let known_predefined = @pdflite.PdfCIDKeyedFont::{
+    ..identity,
+    encoding: @pdflite.PdfPredefinedCMap(name("/90ms-RKSJ-H")),
+  }
+  assert_eq(pdf_viewer_cid_of_charcode(known_predefined, 0x41), Some(264))
 
   let parsed : @pdflite.PdfParsedCMap = {
     map: [],

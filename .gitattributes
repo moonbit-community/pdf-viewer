@@ -1,0 +1,2 @@
+# Preserve the upstream Adobe license verbatim, including its two trailing spaces.
+assets/cmaps/LICENSE whitespace=-blank-at-eol

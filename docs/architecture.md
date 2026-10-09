@@ -46,9 +46,10 @@ Embedded TrueType fonts have a second rendering path. The viewer reads the
 `CIDToGIDMap`, and lowers simple or composite glyph outlines into SVG paths.
 This is needed for CID fonts whose embedded program has no browser-usable
 Unicode `cmap`; the original font data is still emitted as a resource for
-hosts that can use it. Vertical writing quads are corrected at the viewer
-boundary because PDF vertical advance is negative in user space while the
-current pdflite layout helper stores its positive magnitude.
+hosts that can use it. Filtered CIDToGIDMap streams are decoded before glyph
+lookup. Vertical geometry is computed from the same text matrix and signed
+advances as painting and clipping; no separate quad-direction correction is
+applied afterwards.
 
 Text paint geometry is carried separately as `glyph_transform`: a one-em,
 y-up glyph coordinate system mapped to PDF page coordinates, including CTM,
@@ -71,29 +72,43 @@ supported. Single-FD CID-keyed Type 1 programs are also decoded from Binary/Hex
 `StartData`, including CIDMap, SubrMap, `lenIV`, and empty-CID fallback.
 Counted `1 array` FDArray declarations and headers without an FDArray
 declaration are supported; other FDArray declaration forms use text fallback.
-Multiple FDArray entries and complex CMap-to-CID recovery remain on the text
-fallback path.
+Multiple FDArray entries remain on the text fallback path. CMap-to-CID mapping
+is shared with the TrueType and CFF paths.
 
-`cid_mapping.mbt` resolves Identity and explicit external CMap entries without
-using ToUnicode values as glyph CIDs. Explicit entries and inherited Identity
-mappings take precedence over notdef fallback. An unmapped code without an
-inherited CMap uses CID 0. `text_layout.mbt` routes horizontal external-CMap
+`cid_mapping.mbt` resolves Identity, Adobe predefined and explicit external
+CMap entries without using ToUnicode values as glyph CIDs. Explicit entries
+and inherited mappings take precedence over notdef fallback. An unmapped code
+without an inherited CMap uses CID 0. `text_layout.mbt` routes all CID text
 operators through `cmap_text.mbt`. It decodes the reader's codespaces from one
 to four bytes, choosing the shortest match and comparing four-byte ranges as
-unsigned values. Codespaces inherit Identity's two-byte range only when no
-local ranges exist. Invalid or truncated codes consume one byte and preserve
-following text.
+unsigned values. Named inherited codespaces are used when no local ranges
+exist. Invalid or truncated codes consume one byte and preserve following text.
 
-`/W` and `/DW` are indexed by the mapped CID. A temporary font and synthetic
-two-byte code provide each glyph's geometry through pdflite's layout API;
-the original code and source bytes drive Unicode extraction, and only a
-source one-byte 0x20 applies word spacing. The original parsed font remains
-unchanged. One layout pass provides the
+`cid_geometry.mbt` indexes `/W`, `/DW`, `/W2` and `/DW2` by the mapped CID and
+computes placement directly using pdflite's matrix/metric types. Default
+vertical origins use half the horizontal width; vertical displacement retains
+the sign of W2/DW2 independently of that width. The original code and source
+bytes drive Unicode extraction, and only a source one-byte 0x20 applies word
+spacing. The original parsed font remains unchanged. One layout pass provides the
 entries, glyph transforms, selection bounds, text clips, and next text matrix,
 including consecutive `Tj`, `TJ` adjustments, and quote operators. The public
 Int charcode preserves the bit pattern of unsigned four-byte values; original
-byte spans remain internal. Built-in CMaps, complex inheritance, reader-lost
-codespaces, and full vertical metrics remain outside this correction.
+byte spans remain internal. Complex external-stream inheritance and
+reader-lost codespaces remain outside this correction.
+
+`binary_cmap.mbt` decodes the binary CMap format from the pinned PDF.js
+reference. `builtin_cmap_assets.mbt` embeds 168 Adobe mapping assets, with
+licenses retained in `assets/cmaps/`; `tools/cmap_assets.mbtx` regenerates them
+after checking the reference revision. `builtin_cmap.mbt` loads and caches
+individual maps on demand, follows named inheritance for CID lookup,
+codespaces and WMode, and supplies Adobe CID-to-Unicode data when ToUnicode is
+absent. Local mappings and WMode take priority over the named base.
+
+`font_recovery.mbt` retains the normal reader path and catches only a missing
+CID FontDescriptor error. A local shadow dictionary provides fallback metrics
+for that font; source document objects are not mutated. This lets malformed,
+non-embedded CID fonts retain text and widths without claiming to recover the
+original font's ascent, descent or appearance. Other reader errors propagate.
 
 Text rendering modes 4–7 collect glyph outlines while a text object is read;
 the combined path becomes active at `ET`. Later text-object clips are
@@ -132,8 +147,9 @@ outside the current SVG lowering.
 
 The remaining implementation stages are ordered by the visible compatibility gap:
 
-1. Built-in CMap-to-CID mapping, complex CMap inheritance, full vertical/font
-   metrics, and system-font fallback policy;
+1. A standalone browser viewer, DOM cursor selection and an automated PDF.js
+   comparison harness, followed by complex CMap inheritance, font metrics and
+   system-font fallback policy;
 2. CTM-preserving path/image geometry, complete group-level mask compositing, and pixel-level
    Gouraud interpolation for mesh triangles;
 3. complete annotation appearance and form/widget layers;
@@ -182,6 +198,6 @@ Each stage should add a narrow fixture from the pinned pdf.js corpus under
 output before adding pixel or browser-level assertions. `tools/corpus.mbtx`
 builds and runs the native CLI with per-file timeouts and fresh artifact paths,
 checks error exit codes and SVG creation, and writes a JSON report. These are
-first-page conversion checks, not visual conformance tests. The measured result
+selected-page conversion checks (page 1 by default), not visual conformance tests. The measured result
 and known failures are recorded in `docs/validation.md`; a browser pixel-diff
 harness has not been claimed or added yet.

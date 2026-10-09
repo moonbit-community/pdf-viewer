@@ -1078,162 +1078,6 @@ fn pdf_transparency_group_of_form(
 }
 
 ///|
-/// `pdflite` exposes the glyph placement that its text layer computes. A PDF
-/// vertical writing mode advances by `-w1` in user space, while the compact
-/// layout helper currently stores the positive magnitude. Correct the emitted
-/// quads in the viewer so Identity-V pages retain the visual order expected by
-/// pdf.js without changing the dependency's public model.
-priv struct PdfViewerVerticalRun {
-  anchor_x : Double
-  anchor_y : Double
-  previous_x : Double
-  previous_y : Double
-  direction_x : Double?
-  direction_y : Double?
-  distance : Double
-}
-
-///|
-fn pdf_viewer_correct_vertical_glyphs(
-  state : @pdflite.PdfContentOperatorState,
-  glyphs : Array[@pdflite.PdfContentTextGlyphPlacement],
-  run : PdfViewerVerticalRun?,
-) -> (Array[@pdflite.PdfContentTextGlyphPlacement], PdfViewerVerticalRun?) {
-  if !state.text_state.current_font.content_is_vertical() {
-    return (glyphs, run)
-  }
-  let output : Array[@pdflite.PdfContentTextGlyphPlacement] = Array(
-    capacity=glyphs.length(),
-  )
-  let mut current_run = run
-  for glyph in glyphs {
-    let box = glyph.bounding_box
-    let raw_x = box.x1
-    let raw_y = box.y1
-    match current_run {
-      None => {
-        output.push(glyph)
-        current_run = Some({
-          anchor_x: raw_x,
-          anchor_y: raw_y,
-          previous_x: raw_x,
-          previous_y: raw_y,
-          direction_x: None,
-          direction_y: None,
-          distance: pdf_viewer_vertical_glyph_advance(state, glyph),
-        })
-      }
-      Some(previous) => {
-        let direction = match (previous.direction_x, previous.direction_y) {
-          (Some(x), Some(y)) => Some((x, y))
-          _ => {
-            let delta_x = raw_x - previous.previous_x
-            let delta_y = raw_y - previous.previous_y
-            let length = (delta_x * delta_x + delta_y * delta_y).sqrt()
-            if length > 0.000001 {
-              Some((-delta_x / length, -delta_y / length))
-            } else {
-              None
-            }
-          }
-        }
-        let (dx, dy) = match direction {
-          Some((direction_x, direction_y)) => {
-            let target_x = previous.anchor_x + direction_x * previous.distance
-            let target_y = previous.anchor_y + direction_y * previous.distance
-            (target_x - raw_x, target_y - raw_y)
-          }
-          None => (0.0, 0.0)
-        }
-        output.push({
-          ..glyph,
-          bounding_box: {
-            x0: box.x0 + dx,
-            y0: box.y0 + dy,
-            x1: box.x1 + dx,
-            y1: box.y1 + dy,
-            x2: box.x2 + dx,
-            y2: box.y2 + dy,
-            x3: box.x3 + dx,
-            y3: box.y3 + dy,
-          },
-        })
-        current_run = Some({
-          ..previous,
-          previous_x: raw_x,
-          previous_y: raw_y,
-          direction_x: match direction {
-            Some(value) => Some(value.0)
-            None => None
-          },
-          direction_y: match direction {
-            Some(value) => Some(value.1)
-            None => None
-          },
-          distance: previous.distance +
-          pdf_viewer_vertical_glyph_advance(state, glyph),
-        })
-      }
-    }
-  }
-  (output, current_run)
-}
-
-///|
-fn pdf_viewer_vertical_run_reset(op : @content.PdfContentOp) -> Bool {
-  match op {
-    @content.Op_BT
-    | @content.Op_ET
-    | @content.Op_Tf(_, _)
-    | @content.Op_Td(_, _)
-    | @content.Op_TD(_, _)
-    | @content.Op_Tm(_)
-    | @content.Op_Tstar
-    | @content.Op_quote(_)
-    | @content.Op_double_quote(_, _, _)
-    | @content.Op_Do(_) => true
-    _ => false
-  }
-}
-
-///|
-fn pdf_viewer_vertical_glyph_advance(
-  state : @pdflite.PdfContentOperatorState,
-  glyph : @pdflite.PdfContentTextGlyphPlacement,
-) -> Double {
-  match state.text_state.current_font {
-    @pdflite.PdfFontCIDKeyed(font) => {
-      let cid = pdf_viewer_ttf_cid_of_charcode(font, glyph.charcode)
-      let width = for entry in font.composite.cid_widths2 {
-        if entry.0 == cid {
-          break Some(entry.1.width)
-        }
-      } nobreak {
-        None
-      }
-      match width {
-        Some(value) =>
-          value / 1000.0 * state.text_state.font_size +
-          state.text_state.character_spacing
-        None =>
-          if glyph.width != 0.0 {
-            glyph.width * 2.0 * state.text_state.font_size +
-            state.text_state.character_spacing
-          } else {
-            match font.composite.cid_default_width2 {
-              [value, ..] =>
-                value / 1000.0 * state.text_state.font_size +
-                state.text_state.character_spacing
-              [] => glyph.advance_y
-            }
-          }
-      }
-    }
-    _ => glyph.advance_y
-  }
-}
-
-///|
 /// Track whether a PDF content stream explicitly changed either painting
 /// colour. `pdflite`'s compact initial path state uses white as a placeholder,
 /// while PDF's default non-stroking and stroking colours are black. Keeping
@@ -1290,14 +1134,10 @@ fn pdf_collected_entries_of_ops(
   let mut soft_mask_stack : Array[PdfCollectedSoftMask?] = []
   let mut fill_color_explicit = initial_fill_color_explicit
   let mut stroke_color_explicit = initial_stroke_color_explicit
-  let mut vertical_run : PdfViewerVerticalRun? = None
   let mut fill_color_stack : Array[Bool] = []
   let mut stroke_color_stack : Array[Bool] = []
   let output : Array[PdfCollectedEntry] = []
   for op in ops {
-    if pdf_viewer_vertical_run_reset(op) {
-      vertical_run = None
-    }
     match op {
       @content.Op_Do(name) =>
         match document.content_form_xobject_ops(resources, name) {
@@ -1357,13 +1197,9 @@ fn pdf_collected_entries_of_ops(
             }
           }
           None => {
-            let (result, raw_glyphs) = pdf_apply_op_for_viewer(
+            let (result, glyphs) = pdf_apply_op_for_viewer(
               document, state, resources, op,
             )
-            let (glyphs, next_vertical_run) = pdf_viewer_correct_vertical_glyphs(
-              state, raw_glyphs, vertical_run,
-            )
-            vertical_run = next_vertical_run
             let mut glyph_index = 0
             for entry in result.entries {
               let emitted_entry = match glyphs.get(glyph_index) {
@@ -1495,13 +1331,9 @@ fn pdf_collected_entries_of_ops(
         state = result.state
       }
       _ => {
-        let (result, raw_glyphs) = pdf_apply_op_for_viewer(
+        let (result, glyphs) = pdf_apply_op_for_viewer(
           document, state, resources, op,
         )
-        let (glyphs, next_vertical_run) = pdf_viewer_correct_vertical_glyphs(
-          state, raw_glyphs, vertical_run,
-        )
-        vertical_run = next_vertical_run
         if op is @content.Op_BT {
           pending_text_clip.clear()
         }
@@ -1613,7 +1445,7 @@ fn pdf_items_of_page(
         let (advance_x, advance_y, vertical) = match collected.text_glyph {
           Some(glyph) => {
             let font = collected.state.text_state.current_font
-            (glyph.advance_x, glyph.advance_y, font.content_is_vertical())
+            (glyph.advance_x, glyph.advance_y, pdf_font_is_vertical(font))
           }
           None => (0.0, 0.0, false)
         }
@@ -2479,7 +2311,7 @@ fn pdf_type3_outline_of_glyph(
       match document.lookup_direct(pdf_name_key(font_name), fonts) {
         None => None
         Some(font_object) =>
-          match document.read_font(font_object) {
+          match pdf_read_font_for_viewer(document, font_object) {
             @pdflite.PdfFontSimple(simple) =>
               match simple.fonttype {
                 @pdflite.PdfSimpleFontType::PdfType3(data) => {

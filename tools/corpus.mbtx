@@ -5,6 +5,7 @@ import {
   "moonbitlang/async/shell",
   "moonbitlang/core/debug",
   "moonbitlang/core/env",
+  "moonbitlang/core/string",
   "moonbitlang/core/encoding/utf8",
 }
 
@@ -24,14 +25,15 @@ async fn render_case(
   executable : String,
   input : String,
   output : String,
+  page : Int,
 ) -> CaseResult {
-  let result = @shell.Cmd(executable, [input, output, "1"]).output(
+  let result = @shell.Cmd(executable, [input, output, page.to_string()]).output(
     timeout_ms=15000,
   ) catch {
     @async.TimeoutError =>
       return {
         file: input,
-        page: 1,
+        page,
         status: "timeout",
         exit_code: None,
         svg_path: None,
@@ -41,7 +43,7 @@ async fn render_case(
     error =>
       return {
         file: input,
-        page: 1,
+        page,
         status: "runner-error",
         exit_code: None,
         svg_path: None,
@@ -52,7 +54,7 @@ async fn render_case(
   let message = result.stdout() + result.stderr()
   let failed : CaseResult = {
     file: input,
-    page: 1,
+    page,
     status: "failed",
     exit_code: Some(result.exit_code()),
     svg_path: None,
@@ -84,6 +86,19 @@ async fn main {
     "reference/pdf.js/test/pdfs"
   }
   let prefix = if args.length() > 2 { args[2] } else { "annotation" }
+  if args.length() > 4 {
+    fail("usage: corpus.mbtx [corpus] [prefix] [pages, e.g. 1,2,3]")
+  }
+  let pages : Array[Int] = []
+  for value in (if args.length() > 3 { args[3] } else { "1" }).split(",") {
+    let page = @string.parse_int(value)
+    if page < 1 {
+      fail("Page numbers must be positive")
+    }
+    if !pages.contains(page) {
+      pages.push(page)
+    }
+  }
   @shell.Cmd("moon", ["build", "--target", "native", "cmd/main"]).run()
   let executable = "_build/native/debug/build/cmd/main/main.exe"
   // Each invocation gets a fresh output directory. A stale SVG can never
@@ -111,7 +126,7 @@ async fn main {
       )
     }
   }
-  let smoke = render_case(executable, valid, output_dir + "/blank.svg")
+  let smoke = render_case(executable, valid, output_dir + "/blank.svg", 1)
   if smoke.status != "rendered" {
     fail("CLI failed to render a valid blank PDF: \{smoke.message}")
   }
@@ -122,19 +137,22 @@ async fn main {
     if !name.has_prefix(prefix) || !name.has_suffix(".pdf") {
       continue
     }
-    let result = render_case(
-      executable,
-      corpus + "/" + name,
-      output_dir + "/" + name + ".page-1.svg",
-    )
-    results.push(result)
-    if result.status == "rendered" {
-      rendered += 1
-      if result.placeholders > 0 {
-        with_placeholders += 1
+    for page in pages {
+      let result = render_case(
+        executable,
+        corpus + "/" + name,
+        output_dir + "/" + name + ".page-\{page}.svg",
+        page,
+      )
+      results.push(result)
+      if result.status == "rendered" {
+        rendered += 1
+        if result.placeholders > 0 {
+          with_placeholders += 1
+        }
+      } else {
+        println("\{result.status}: \{name} page \{page}: \{result.message}")
       }
-    } else {
-      println("\{result.status}: \{name}: \{result.message}")
     }
   }
   if results.is_empty() {
@@ -150,19 +168,19 @@ async fn main {
     "corpus": corpus,
     "revision": revision,
     "prefix": prefix,
-    "page": 1,
+    "pages": pages,
     "timeout_ms": 15000,
     "total": results.length(),
     "rendered": rendered,
     "rendered_with_placeholders": with_placeholders,
     "failed_or_timeout": results.length() - rendered,
-    "scope": "First-page CLI/SVG smoke test; does not measure visual fidelity",
+    "scope": "Selected-page CLI/SVG smoke test; does not measure visual fidelity",
     "results": results,
   }
   let report_path = output_dir + "/report.json"
   @fs.write_file(report_path, report.stringify(indent=2))
   println(
-    "\{rendered}/\{results.length()} first pages produced SVG; \{with_placeholders} include placeholders.",
+    "\{rendered}/\{results.length()} selected pages produced SVG; \{with_placeholders} include placeholders.",
   )
   println("Report: \{report_path}")
   if rendered != results.length() {

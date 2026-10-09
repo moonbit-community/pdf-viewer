@@ -673,6 +673,9 @@ fn pdf_viewer_ttf_cid_to_gid(
   charcode : Int,
 ) -> Int raise @core.PdfError {
   let cid = pdf_viewer_ttf_cid_of_charcode(font, charcode)
+  if cid < 0 || cid > 65535 {
+    return 0
+  }
   match document.lookup_direct(pdf_name_key("/DescendantFonts"), font_object) {
     Some(@syntax.PdfArray(descendants)) =>
       match descendants.get(0) {
@@ -682,7 +685,7 @@ fn pdf_viewer_ttf_cid_to_gid(
             Some(@syntax.PdfNameObject(name)) if name ==
               pdf_name_key("/Identity") => cid
             Some(@syntax.PdfStreamObject(_) as map_object) => {
-              let bytes = map_object.stream_bytes()
+              let bytes = document.pdf_decode_stream(map_object).stream_bytes()
               let offset = cid * 2
               match pdf_viewer_ttf_u16(bytes[:], offset) {
                 Some(value) => value
@@ -753,7 +756,7 @@ fn pdf_truetype_path_of_pdf_glyph(
     Some(value) => value
     None => return None
   }
-  let font = document.read_font(font_object)
+  let font = pdf_read_font_for_viewer(document, font_object)
   let glyph_index = match font {
     @pdflite.PdfFontSimple(
       { fonttype: @pdflite.PdfSimpleFontType::PdfTrueType, .. }

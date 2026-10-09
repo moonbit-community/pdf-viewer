@@ -3,6 +3,8 @@ fn cid_layout_test_document(
   contents : String,
   cmap? : String,
   tounicode? : String,
+  widths2? : String = "[]",
+  default_width2? : String = "[880 -1000]",
 ) -> PdfViewerDocument raise {
   let binary = type1_test_cid_binary([
     type1_test_page_charstring(),
@@ -26,7 +28,7 @@ fn cid_layout_test_document(
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
     annotation_test_stream("", contents),
     "<< /Type /Font /Subtype /Type0 /BaseFont /CIDLayout /Encoding 8 0 R /DescendantFonts [6 0 R] /ToUnicode 10 0 R >>",
-    "<< /Type /Font /Subtype /CIDFontType0 /BaseFont /CIDLayout /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /DW 700 /W [0 [400 500 300] 65 [100 100 100 100]] /FontDescriptor 7 0 R >>",
+    "<< /Type /Font /Subtype /CIDFontType0 /BaseFont /CIDLayout /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /DW 700 /W [0 [400 500 300] 65 [100 100 100 100]] /W2 \{widths2} /DW2 \{default_width2} /FontDescriptor 7 0 R >>",
     "<< /Type /FontDescriptor /FontName /CIDLayout /Flags 4 /FontBBox [0 0 1000 1000] /Ascent 1000 /Descent 0 /ItalicAngle 0 /StemV 80 /FontFile 9 0 R >>",
     annotation_test_stream("", cmap),
     annotation_test_stream("/Filter /ASCIIHexDecode", font_hex),

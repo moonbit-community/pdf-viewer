@@ -22,10 +22,15 @@
   flex/seac 和常见 Type 2 charstring 运算；对嵌入的单字节 Type 1 字体解析 eexec/PFB、
   charstring、subroutine、seac 和 flex，并使用同一轮廓绘制；CID-keyed Type 1 支持
   单 FD 的 Binary/Hex `StartData`、CIDMap、SubrMap 和 `lenIV`，多 FD 字体仍使用回退；
-- 对 reader 已解析的水平外部 CMap，按 codespace 最短匹配切分 1–4 字节字符码，再按
-  映射后的 CID 读取 `/W` 和 `/DW`。每个字形用临时字体复用 pdflite 的几何计算，保留
-  原始字符码和 ToUnicode 多字符映射；连续 `Tj`、`TJ` 调整和换行引号共享文字推进，
-  只有原始单字节 `0x20` 应用 `Tw`。绘制、选择边界和文字裁剪采用同一份 glyph placement；
+- 所有 CID 字体共用文字布局主路径。外部和预定义 CMap 按 codespace 最短匹配切分
+  1–4 字节字符码，再按 CID 读取 `/W`、`/DW`、`/W2` 和 `/DW2`；纵排保留垂直原点
+  和带符号的推进。连续 `Tj`、`TJ` 调整、引号及 `q/Q` 共享真实 text matrix，只有
+  原始单字节 `0x20` 应用 `Tw`。绘制、选择边界和文字裁剪采用同一份 glyph placement；
+- 内置固定 PDF.js 版本的 168 份 Adobe binary CMap，按名称延迟解码并缓存，支持
+  CID 映射、UseCMap、codespace、WMode 和缺少 ToUnicode 时的 Adobe CID→Unicode。
+  这些资产是映射数据，包含来源和再分发许可，不包含字体程序；
+- 对未嵌入 CID 字体缺少 FontDescriptor 的情况，使用局部默认 descriptor 恢复文本
+  与宽度，不改变源 PDF 对象。默认 metrics 属于回退，字形外观仍依赖宿主字体；
 - 文字保留实际的 `glyph_transform`（CTM、text matrix、字号、水平缩放、rise 和基线）；
   TrueType 轮廓按 em 绘制，不再把字体总包围盒压进单字的 advance box。SVG 普通文字
   也使用同一矩阵和 alphabetic baseline，避免 FreeText 外观中的文字落到裁剪区域之外；
@@ -107,9 +112,11 @@ moon run tools/corpus.mbtx
 
 ```bash
 moon run tools/corpus.mbtx reference/pdf.js/test/pdfs annotation-highlight
+moon run tools/corpus.mbtx reference/pdf.js/test/pdfs vertical 1,2,3
 ```
 
-每次运行创建新的 `_build/corpus-*/`，保存 SVG 和逐文件 `report.json`。验证同时检查
+第四个参数可以用逗号指定要检查的页码；默认仍为第一页。
+每次运行创建新的 `_build/corpus-*/`，保存 SVG 和逐页 `report.json`。验证同时检查
 退出码和新输出，存在失败或超时就返回非零。`data-pdf-placeholder="true"` 仅标记明确的
 渲染占位。没有占位不代表内容完整，也不代表像素一致；当前结果和失败文件见
 [`docs/validation.md`](docs/validation.md)。
@@ -136,8 +143,8 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs annotation-highlight
 十进制页码；这与 pdf.js 返回 `null` 的约定不同。optional-content API 目前读取配置，
 还不能通过切换图层改变渲染结果。
 
-这不是声称已经达到 pdf.js 的覆盖率。预定义 CMap 到 CID 的映射、复杂 CMap 继承及
-reader 未保留的 codespace、完整纵排 metrics、完整字体 metrics 和系统字体 fallback、
+这不是声称已经达到 pdf.js 的覆盖率。复杂外部 CMap 继承及
+reader 未保留的 codespace、完整字体 metrics 和标准/系统字体 fallback、
 soft mask 的完整组合成语义、透明组的完整 backdrop/knockout 合成、uncolored/复杂 tiling
 pattern、mesh 的最终像素级 Gouraud 合成、完整 annotation appearance/form 行为仍是后续工作；
 当前 API 会先把可解析内容的页面位置和类型留在

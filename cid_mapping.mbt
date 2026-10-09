@@ -5,14 +5,16 @@ fn pdf_viewer_cid_of_charcode(
   charcode : Int,
 ) -> Int? {
   match font.encoding {
-    @pdflite.PdfPredefinedCMap(_) =>
-      if charcode >= 0 &&
-        charcode <= 0xFFFF &&
-        (font.encoding.is_identity_h() || font.encoding.is_identity_v()) {
-        Some(charcode)
+    @pdflite.PdfPredefinedCMap(name) => {
+      let key = pdf_cmap_name_text(name)
+      if font.encoding.is_identity_h() || font.encoding.is_identity_v() {
+        pdf_builtin_cmap_cid(key, charcode)
+      } else if pdf_builtin_cmap(key) is Some(_) {
+        Some(pdf_builtin_cmap_cid(key, charcode).unwrap_or(0))
       } else {
         None
       }
+    }
     @pdflite.PdfExternalCMap(_, parsed) => {
       let cid = for (code, cid) in parsed.cid_map {
         if code == charcode {
@@ -25,13 +27,12 @@ fn pdf_viewer_cid_of_charcode(
         Some(cid) => Some(cid)
         None => {
           match parsed.usecmap {
-            Some(name) if name ==
-              @core.pdf_name_of_bytes(@utf8.encode("/Identity-H")) ||
-              name == @core.pdf_name_of_bytes(@utf8.encode("/Identity-V")) =>
-              if charcode >= 0 && charcode <= 0xFFFF {
-                return Some(charcode)
+            Some(name) =>
+              if pdf_builtin_cmap_cid(pdf_cmap_name_text(name), charcode)
+                is Some(cid) {
+                return Some(cid)
               }
-            _ => ()
+            None => ()
           }
           for (code, cid) in parsed.notdef_map {
             if code == charcode {

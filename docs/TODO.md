@@ -10,35 +10,35 @@
 
 ## 还差多少
 
-当前明确跟踪 **50 项，分为 14 个能力领域；完成 1 项，剩余 49 项**。
-剩余项按优先级分为 P0 22 项、P1 25 项、P2 2 项；其中部分已有基础实现。
+当前明确跟踪 **50 项，分为 14 个能力领域；完成 4 项，剩余 46 项**。
+剩余项按优先级分为 P0 19 项、P1 25 项、P2 2 项；其中部分已有基础实现。
 这些项大小不等，
 有的只是一个语义修正，有的需要完整解码器或合成器，不能把条目数换算成完成百分比。
-本轮完成 F-01 的水平外部 CMap 主路径；T-03 在这条路径中也已修正，但其它字体与纵排
-尚未全面验证，因此仍保留为待办。
+已完成 F-01（水平外部 CMap）、F-02（Adobe 预定义 CMap）、F-04（CID 纵排）
+和 T-03（编码相关字距）。复杂外部 CMap 继承和 reader 丢弃的范围仍由 F-03 跟踪。
 
 现在有可运行的 native CLI、页面模型和 SVG 输出，尚没有独立的浏览器 viewer。
-112 个测试在四个后端通过，真实 PDF 有转换检查和少量 Chromium/Poppler 视觉抽查，
+133 个测试在四个后端通过，真实 PDF 有转换检查和少量 Chromium/Poppler 视觉抽查，
 **没有自动 PDF.js 像素对比，因而还不能给出可信的视觉兼容率**。
 转换成功、没有占位、测试通过，都不能单独证明没有漏画或排版错误。
 基线细节见 [validation.md](validation.md)。
 
-| 领域 | 当前已有 | 主要缺口 | 对应待办 |
-| --- | --- | --- | --- |
-| 文档载入 | bytes 读取、页树、部分压缩对象恢复 | 密码入口、恢复覆盖、增量读取 | R-01 至 R-03 |
-| 页面/API | 页面模型、viewport、旋转、显示列表 | 页面边界语义、宿主生命周期 | P-01 至 P-02 |
-| 字体/编码 | TrueType、CFF、单字节及单 FD CID Type 1 轮廓；水平外部变长 CMap | 内置 CMap、复杂继承、字体恢复和回退 | F-02 至 F-08 |
-| 文字 | glyph transform、字符级边界、矩形选择、文字裁剪 | 完整纵排、阅读顺序、空格和来源映射 | T-01 至 T-04、F-04 |
-| 矢量 | 常见路径、虚线、显式 clip、SVG 输出 | 非均匀描边、精确 raster 输出 | G-01 至 G-03 |
-| 图片 | JPEG、raw/inline 图片、常见 mask | JPX/JBIG2 解码、inline CCITT、完整样本语义 | I-01 至 I-04 |
-| 色彩 | 常见设备色彩和近似转换 | ICC、校准色彩、专色与 overprint | C-01 至 C-03 |
-| 透明合成 | alpha、部分 blend、组标记、常见 soft mask | backdrop、knockout、精确 mask/blend | M-01 至 M-03 |
-| pattern/shading | 彩色路径 tiling、shading 1–7 的部分输出 | uncolored/复杂 tiling、逐像素插值 | H-01 至 H-03 |
-| 批注/只读表单 | AP 外观、基本几何、字段元数据、简单 widget | 无 AP 的完整排版、交互层和子类型覆盖 | A-01 至 A-04 |
-| 导航/图层 | outline、labels、attachments、OCG、metadata 读取 | destination 导航、图层实际过滤、浏览器展示 | D-01 至 D-03 |
-| 浏览器体验 | 可消费的模型和 SVG | 独立应用、cursor 选择、搜索、多页浏览 | U-01 至 U-05 |
-| 可访问性/XFA | structure tree 读取 | 可访问的 DOM、只读 XFA 页面 | X-01 至 X-02 |
-| 验证/性能 | 四后端测试、CLI corpus runner | 像素基线、Worker/取消/缓存、大文件与 CI | V-01 至 V-03 |
+| 领域 | 当前已有 | 主要缺口 | 剩余项数 | 对应项目 |
+| --- | --- | --- | ---: | --- |
+| 文档载入 | bytes 读取、页树、部分压缩对象恢复 | 密码入口、恢复覆盖、增量读取 | 3 | R-01 至 R-03 |
+| 页面/API | 页面模型、viewport、旋转、显示列表 | 页面边界语义、宿主生命周期 | 2 | P-01 至 P-02 |
+| 字体/编码 | TrueType、CFF、Type 1 轮廓；外部变长 CMap；168 份 Adobe CMap；CID 纵排 | 复杂继承、字体恢复、标准/系统字体回退 | 5 | F-01 至 F-08 |
+| 文字 | glyph transform、字符级边界、矩形选择、文字裁剪、编码相关字距 | 阅读顺序、bidi、空格和来源映射、恢复诊断 | 3 | T-01 至 T-04 |
+| 矢量 | 常见路径、虚线、显式 clip、SVG 输出 | 非均匀描边、精确 raster 输出 | 3 | G-01 至 G-03 |
+| 图片 | JPEG、raw/inline 图片、常见 mask | JPX/JBIG2 解码、inline CCITT、完整样本语义 | 4 | I-01 至 I-04 |
+| 色彩 | 常见设备色彩和近似转换 | ICC、校准色彩、专色与 overprint | 3 | C-01 至 C-03 |
+| 透明合成 | alpha、部分 blend、组标记、常见 soft mask | backdrop、knockout、精确 mask/blend | 3 | M-01 至 M-03 |
+| pattern/shading | 彩色路径 tiling、shading 1–7 的部分输出 | uncolored/复杂 tiling、逐像素插值 | 3 | H-01 至 H-03 |
+| 批注/只读表单 | AP 外观、基本几何、字段元数据、简单 widget | 无 AP 的完整排版、交互层和子类型覆盖 | 4 | A-01 至 A-04 |
+| 导航/图层 | outline、labels、attachments、OCG、metadata 读取 | destination 导航、图层实际过滤、浏览器展示 | 3 | D-01 至 D-03 |
+| 浏览器体验 | 可消费的模型和 SVG | 独立应用、cursor 选择、搜索、多页浏览 | 5 | U-01 至 U-05 |
+| 可访问性/XFA | structure tree 读取 | 可访问的 DOM、只读 XFA 页面 | 2 | X-01 至 X-02 |
+| 验证/性能 | 四后端测试、可指定多页的 CLI corpus runner | 像素基线、Worker/取消/缓存、大文件与 CI | 3 | V-01 至 V-03 |
 
 “当前已有”只描述实现基础。除非待办满足验收条件并有证据，不把整个领域标为完成。
 
@@ -61,9 +61,9 @@
 ## 字体与编码
 
 - [x] F-01 / P0：贯通 reader 已解析的水平外部 CMap 的 1–4 字节 codespace 切分、原始字符串、CID 宽度、ToUnicode、Tj/TJ/引号及裁剪；覆盖混合长度、四字节高位和损坏输入。9 个新增测试及真实 `issue18117.pdf` 的绘制抽查通过，见 [validation.md](validation.md#variable-length-horizontal-external-cmaps)。纵排、内置 CMap 与 reader 丢弃的范围由 F-02 至 F-04 跟踪。
-- [ ] F-02 / P0：支持常用 Adobe 预定义 CMap 到 CID 的准确映射及相关字体绘制；不能把 Unicode 值直接当作 CID/GID。
+- [x] F-02 / P0：支持常用 Adobe 预定义 CMap 到 CID 的准确映射及相关字体绘制。嵌入固定版本的 168 份 binary CMap，按需解码并缓存；贯通继承 codespace/WMode、CID 宽度、CIDToGIDMap 解压和 Adobe CID→Unicode。8 个 CMap 测试和真实 `90ms_rksj_h_sample.pdf` 的绘制抽查通过；资产来源与许可见 `assets/cmaps/`，验证见 [validation.md](validation.md#adobe-predefined-cmaps-vertical-layout-and-word-spacing)。外部 stream 的复杂继承由 F-03 跟踪。
 - [ ] F-03 / P0：补齐复杂 UseCMap 继承、缺失 codespace、映射优先级与未定义字符的恢复；遵守 reader 已解析的继承关系。pdflite `0.2.2` 的 signed Int 范围校验还会丢弃部分跨高位边界的四字节范围（如 `<00000000> <FFFFFFFF>`），viewer 解码器尚不能恢复这类缺失的 codespace。
-- [ ] F-04 / P0：统一纵排的 W2/DW2、垂直原点、负向推进、TJ 调整与 character/word spacing；绘制、裁剪和选择一致。
+- [x] F-04 / P0：统一纵排的 W2/DW2、垂直原点、带符号推进、TJ 调整与 character/word spacing；绘制、裁剪和选择共用同一 glyph placement。8 个纵排测试通过，覆盖 Identity/外部/预定义 CMap、连续操作、q/Q、引号、rise、剪切、负字号和选择/裁剪；真实 `vertical.pdf` 三页完成转换及 Chromium/Poppler 抽查，见 [validation.md](validation.md#adobe-predefined-cmaps-vertical-layout-and-word-spacing)。
 - [ ] F-05 / P1：扩大 TrueType cmap/encoding、symbol 字体、composite 与损坏字体恢复覆盖；明确轮廓模式和浏览器字体模式的差异。
 - [ ] F-06 / P1：扩大 Type 1/CFF 的 FontMatrix、缺字、损坏 charstring 和特殊字体程序覆盖；失败不造成整页空白。
 - [ ] F-07 / P0：提供可复现且许可明确的标准 14 字体替代与 metrics；字形、advance 和粗斜体匹配。
@@ -73,7 +73,7 @@
 
 - [ ] T-01 / P0：补阅读顺序、bidi、ligature、组合字符、空格和换行归并；保持文本与 glyph 对应关系。
 - [ ] T-02 / P1：补字符码/CID/GID、原始 byte span、文本 run/段落与 selection source 的稳定映射；长文本可定位回源。
-- [ ] T-03 / P0：全面对齐 Tw 的编码语义：只有单字节 0x20 应用 word spacing，不能仅检查数值 charcode == 32。水平外部 CMap 已修正，并测试同值、不同长度的空格；其它字体和纵排仍待处理。
+- [x] T-03 / P0：全面对齐 Tw 的编码语义：只有原始单字节 0x20 应用 word spacing。所有 CID 字体共用按 byte length 判定的主路径；4 个独立字距测试及外部 CMap/纵排测试覆盖 standard、simple、Type 3、Identity 与预定义 UTF8/UTF16/UTF32。ToUnicode 把别的字符映射为空格也不会触发 Tw，见 [validation.md](validation.md#adobe-predefined-cmaps-vertical-layout-and-word-spacing)。
 - [ ] T-04 / P1：统一损坏字符串、未知字符、缺失 ToUnicode/metrics 的回退和诊断；绘制与提取失败不能静默丢失全部文字。
 
 ## 绘制、图片与色彩
@@ -123,9 +123,9 @@
 
 ## 推荐推进顺序
 
-1. T-03、F-04：在已完成 F-01 的基础上，统一其它文字路径的字距与纵排，减少缺字、重叠和选择错位。
-2. V-01、U-01、U-02：建立能独立检查和操作的浏览器体验，以及可重复的 PDF.js 对照。
-3. F-02、F-07、I-01、I-02、C-01：补最常见的字体、图像和颜色覆盖缺口。
+1. V-01、U-01、U-02：建立能独立检查和操作的浏览器体验，以及可重复的 PDF.js 对照。
+2. F-03、F-07、F-08：补复杂 CMap 与字体回退，稳定文字绘制。
+3. I-01、I-02、C-01：补图像和颜色覆盖缺口。
 4. G-01、G-03、M-01 至 M-03、H-01/H-03：补 SVG 近似无法解决的精确绘制与合成。
 5. A、D、U 的剩余条目，再扩大 reader、性能、可访问性和 XFA 覆盖。
 

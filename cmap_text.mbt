@@ -67,6 +67,10 @@ fn pdf_cmap_unicode_of_code(
   if !code.valid {
     return "\uFFFD"
   }
+  if font.composite.cid_fontdescriptor.tounicode is None &&
+    pdf_cid_collection_unicode(font, code.charcode) is Some(text) {
+    return text
+  }
   let codepoints = match font.composite.cid_fontdescriptor.tounicode {
     Some(entries) => {
       let mapping = for (charcode, bytes) in entries {
@@ -117,10 +121,51 @@ fn pdf_cmap_glyph_entry(
 }
 
 ///|
-fn pdf_apply_cmap_text_op(
+fn pdf_decode_cid_codes(
+  font : @pdflite.PdfCIDKeyedFont,
+  bytes : BytesView,
+) -> Array[PdfDecodedCMapCode] {
+  if font.encoding is @pdflite.PdfExternalCMap(_, parsed) {
+    if parsed.codespaces.is_empty() && parsed.usecmap is Some(name) {
+      return pdf_decode_cmap_codes(
+        {
+          ..parsed,
+          codespaces: pdf_builtin_cmap_codespaces(pdf_cmap_name_text(name)),
+        },
+        bytes,
+      )
+    }
+    return pdf_decode_cmap_codes(parsed, bytes)
+  }
+  if font.encoding is @pdflite.PdfPredefinedCMap(name) {
+    let spaces = pdf_builtin_cmap_codespaces(pdf_cmap_name_text(name))
+    if !spaces.is_empty() {
+      return pdf_decode_cmap_codes(pdf_cmap_with_codespaces(spaces), bytes)
+    }
+  }
+  let codes : Array[PdfDecodedCMapCode] = []
+  let mut offset = 0
+  while offset < bytes.length() {
+    let valid = bytes.length() - offset >= 2
+    let length = if valid { 2 } else { 1 }
+    codes.push({
+      charcode: if valid {
+        (bytes[offset].to_int() << 8) | bytes[offset + 1].to_int()
+      } else {
+        0
+      },
+      bytes: bytes[offset:offset + length],
+      valid,
+    })
+    offset += length
+  }
+  codes
+}
+
+///|
+fn pdf_apply_cid_text_op(
   state : @pdflite.PdfContentOperatorState,
   font : @pdflite.PdfCIDKeyedFont,
-  parsed : @pdflite.PdfParsedCMap,
   op : @content.PdfContentOp,
 ) -> (
   @pdflite.PdfContentOperatorResourceResult,
@@ -137,43 +182,24 @@ fn pdf_apply_cmap_text_op(
   }
   let codes : Array[PdfDecodedCMapCode] = []
   let glyphs : Array[@pdflite.PdfContentTextGlyphPlacement] = []
-  let proxy_fonts : Map[Int, @pdflite.PdfFont] = Map([])
   let mut text_matrix = layout.text_matrix
   let original_font = @pdflite.PdfFontCIDKeyed(font)
+  let vertical = pdf_font_is_vertical(original_font)
   for element in elements {
     match element {
       @syntax.PdfString(bytes) =>
-        for code in pdf_decode_cmap_codes(parsed, bytes) {
+        for code in pdf_decode_cid_codes(font, bytes) {
           let cid = pdf_viewer_cid_of_charcode(font, code.charcode).unwrap_or(0)
-          let proxy = match proxy_fonts.get(cid) {
-            Some(font) => font
-            None => {
-              let width = original_font.content_width_of_charcode(cid).0
-              let proxy = @pdflite.PdfFontCIDKeyed({
-                ..font,
-                composite: {
-                  ..font.composite,
-                  cid_widths: [(0, width), (32, width)],
-                },
-              })
-              proxy_fonts[cid] = proxy
-              proxy
-            }
-          }
-          // Synthetic two-byte codes only provide geometry. Only a source
-          // one-byte 0x20 applies Tw; original codes/bytes stay on the entry.
-          let proxy_bytes = if code.bytes.length() == 1 && code.bytes[0] == 0x20 {
-            b"\x00\x20"
-          } else {
-            b"\x00\x00"
-          }
-          let result = proxy.content_text_layout_of_bytes(proxy_bytes, {
+          let glyph = pdf_layout_cid_glyph(font, cid, code, {
             ..layout,
             text_matrix,
           })
-          glyphs.push({ ..result.glyphs[0], charcode: code.charcode, })
+          glyphs.push(glyph)
           codes.push(code)
-          text_matrix = result.text_matrix
+          text_matrix = @geometry.transform_matrix_compose(
+            text_matrix,
+            @geometry.transform_translate(glyph.advance_x, glyph.advance_y),
+          )
         }
       @syntax.PdfReal(_) | @syntax.PdfInteger(_) => {
         let value = match element {
@@ -181,11 +207,18 @@ fn pdf_apply_cmap_text_op(
           @syntax.PdfInteger(value) => value.to_double()
           _ => 0.0
         }
-        let result = original_font.content_text_layout_of_tj_array(
-          [@syntax.PdfReal(value)],
-          { ..layout, text_matrix, },
+        let adjustment = -value / 1000.0 * layout.font_size
+        text_matrix = @geometry.transform_matrix_compose(
+          text_matrix,
+          if vertical {
+            @geometry.transform_translate(0.0, adjustment)
+          } else {
+            @geometry.transform_translate(
+              adjustment * layout.horizontal_scaling,
+              0.0,
+            )
+          },
         )
-        text_matrix = result.text_matrix
       }
       _ => ()
     }
