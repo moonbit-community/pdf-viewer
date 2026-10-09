@@ -40,9 +40,9 @@ fn pdf_layout_cid_glyph(
   cid : Int,
   code : PdfDecodedCMapCode,
   layout : @pdflite.PdfContentTextLayout,
+  vertical : Bool,
 ) -> @pdflite.PdfContentTextGlyphPlacement {
   let original = @pdflite.PdfFontCIDKeyed(font)
-  let vertical = pdf_font_is_vertical(original)
   let horizontal_width = pdf_cid_horizontal_width(font, cid)
   let width = horizontal_width / 1000.0
   let (w1y, vx, vy) = if vertical {

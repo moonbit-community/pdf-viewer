@@ -25,6 +25,56 @@ fn cmap_text_test_page(contents : String) -> PdfPageModel raise {
 }
 
 ///|
+fn cmap_text_test_high_page(contents : String) -> PdfPageModel raise {
+  cid_layout_test_document(
+    contents,
+    cmap="/CMapType 1 def /WMode 0 def\n" +
+      "1 begincodespacerange <F0000000> <FFFFFFFF> endcodespacerange\n" +
+      "1 begincidchar <F0010203> 1 endcidchar",
+    tounicode="1 beginbfchar <F0010203> <0041> endbfchar",
+  )
+  .page(1)
+  .unwrap()
+}
+
+///|
+test "viewer CMap recovery keeps unsigned four-byte ranges and lazy CID ranges" {
+  let recovered = pdf_viewer_parse_cmap(
+    @utf8.encode(
+      "1 begincodespacerange <F0000000> <FFFFFFFF> endcodespacerange " +
+      "1 begincidrange <F0000000> <FFFFFFFF> 7 endcidrange",
+    )[:],
+  )
+  assert_eq(recovered.codespaces.length(), 1)
+  assert_eq(recovered.codespaces[0].length, 4)
+  assert_eq(recovered.codespaces[0].first.reinterpret_as_uint(), 0xF0000000U)
+  assert_eq(recovered.codespaces[0].last.reinterpret_as_uint(), 0xFFFFFFFFU)
+  assert_eq(recovered.cid_entries.length(), 1)
+  assert_eq(
+    pdf_viewer_cmap_lookup(
+      recovered.cid_entries[:],
+      0xF0000001U.reinterpret_as_int(),
+    ),
+    Some(8),
+  )
+}
+
+///|
+test "viewer CMap recovery restores text after pdflite drops high codespace" {
+  let page = cmap_text_test_high_page("BT /F1 10 Tf 20 50 Td <F0010203> Tj ET")
+  let text = page.text_content().items
+  assert_eq(text.length(), 1)
+  assert_eq([ for item in text => item.text ], ["A"])
+  assert_eq(text[0].charcode.reinterpret_as_uint(), 0xF0010203U)
+  assert_eq(text[0].advance_x, 5.0)
+  assert_true(
+    pdf_render_page_svg(page, 1.0, 0).contains(
+      "data-pdf-font-outline=\"type1\"",
+    ),
+  )
+}
+
+///|
 test "CMap codespaces select one through four bytes using unsigned bounds" {
   let parsed = @pdflite.pdf_parse_cmap_data(
     @utf8.encode(cmap_text_test_mixed_cmap()),

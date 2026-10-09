@@ -6,13 +6,14 @@ CLI. That conversion baseline does not measure parity with pdf.js rendering.
 The automated selected-page visual baseline below now measures actual output
 against the same pinned PDF.js build.
 
-The suite currently contains 153 tests on each of wasm, wasm-gc, JavaScript, and
+The suite currently contains 155 tests on each of wasm, wasm-gc, JavaScript, and
 native. It includes 13 annotation tests, 17 CFF tests, 25 Type 1 tests, 5 CID
 layout tests, 9 variable-length CMap tests, 4 text-geometry tests, and 8
 text-clipping tests plus one mixed-paint scaling regression. The latest addition has 8 predefined-CMap tests, 8 vertical
-CID tests, 4 word-spacing tests and 1 missing-descriptor recovery test. The
-browser/text-layer stage adds 4 geometry/range tests, 1 public-API test and
-3 checked documentation examples, plus a separate Chromium interaction suite.
+CID tests, 4 word-spacing tests, 1 missing-descriptor recovery test, and 2
+viewer-side external-CMap recovery tests. The browser/text-layer stage adds 4
+geometry/range tests, 1 public-API test and 3 checked documentation examples,
+plus a separate Chromium interaction suite.
 Seven additional pixel-classifier tests cover blank/identical images,
 missing paint, small and large shifts, color differences, alpha compositing,
 unequal viewport dimensions and allocation bounds. These results cover the
@@ -163,13 +164,33 @@ not full-document visual conformance. A new Chromium screenshot of
 its body and footer placement remain unchanged. The new artifacts are in
 `_build/corpus-1791556939882/`.
 
-Limits of that stage: the path applied to horizontal external CMaps whose codespaces
-survive pdflite's reader. Some four-byte ranges crossing the signed Int boundary
-can be dropped by pdflite `0.2.2`, such as `<00000000> <FFFFFFFF>`; recovering
-them and complex external UseCMap inheritance still remain TODO. Predefined
-CMaps, vertical layout and the other font paths' word spacing are now covered
-by the following stage. Source bytes are retained during layout but are not
-exposed as stable public byte-span metadata.
+Limits of that stage: the normal parsed-CMap path still depends on codespaces
+surviving pdflite's reader, and source bytes are not always available to the
+viewer recovery path. Predefined CMaps, vertical layout and the other font
+paths' word spacing are now covered by the following stage. Source bytes are
+retained during layout but are not exposed as stable public byte-span metadata.
+
+## External CMap reader-loss recovery
+
+`cmap_recovery.mbt` parses decoded external CMap streams independently when
+pdflite has rejected part of the signed integer range. It keeps codespaces and
+CID ranges as unsigned values, stores broad ranges without expanding them,
+recursively composes indirect `/UseCMap` streams, and applies local mappings
+before inherited mappings. `notdef` entries and WMode are recovered as well.
+The recovered mapping is used by CID text segmentation, CID-indexed widths,
+vertical layout, Adobe CID-to-Unicode lookup, and Type 1/CFF/TrueType outline
+selection.
+
+`cmap_text_wbtest.mbt` adds two focused regressions: a legal
+`<F0000000> <FFFFFFFF>` codespace with a lazy four-byte `cidrange`, and a
+public page path whose high-bit code is otherwise lost by the reader. The
+selected corpus smoke run
+`_build/corpus-1791571276960/report.json` converts pages 1, 7 and 14 of
+`tracemonkey.pdf` with **3/3 rendered**, **0 failures**, and **0 placeholders**.
+This is recovery and conversion evidence, not a complete F-03 parity claim.
+High-range ToUnicode recovery, source streams unavailable to the viewer,
+malformed CMap diagnostics, and real corpus fixtures for indirect UseCMap
+inheritance remain open.
 
 ## Adobe predefined CMaps, vertical layout and word spacing
 
@@ -373,7 +394,7 @@ failed selected page. The diagnostic shift is recorded explicitly and is
 absent from the default manifest. These checks are separate from the 19
 standalone viewer interaction checks.
 
-After the zoom-clip correction, all **153/153** tests passed on wasm,
+After the zoom-clip correction and CMap recovery, all **155/155** tests passed on wasm,
 wasm-gc, JavaScript and native, and the standalone Chromium suite again
 passed all **19** interactions. The latter report and screenshots are in
 `_build/browser-test-1791566968073/`.

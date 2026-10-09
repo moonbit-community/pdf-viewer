@@ -1173,13 +1173,15 @@ fn pdf_type1_run_charstring(
 
 ///|
 fn pdf_type1_glyph_name(
+  document : @pdflite.PdfDocument,
   font : PdfType1Font,
   pdf_font : @pdflite.PdfFont,
   charcode : Int,
 ) -> String? {
   match pdf_font {
     @pdflite.PdfFontCIDKeyed(cid_font) =>
-      match pdf_viewer_cid_of_charcode(cid_font, charcode) {
+      match
+        pdf_viewer_cid_of_charcode_with_document(document, cid_font, charcode) {
         Some(cid) if cid >= 0 => {
           let name = if cid == 0 { ".notdef" } else { "cid" + cid.to_string() }
           match font.charstrings.get(name) {
@@ -1378,7 +1380,8 @@ fn pdf_type1_path_of_pdf_glyph(
       }
     }
   }
-  let glyph_name = match pdf_type1_glyph_name(font, pdf_font, charcode) {
+  let glyph_name = match
+    pdf_type1_glyph_name(document, font, pdf_font, charcode) {
     Some(value) => value
     None => return None
   }

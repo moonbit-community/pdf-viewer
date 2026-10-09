@@ -20,7 +20,7 @@
 复杂外部 CMap 继承和 reader 丢弃的范围仍由 F-03 跟踪。
 
 现在有可运行的 native CLI、页面模型、SVG 输出和独立的浏览器 viewer。
-153 个测试在四个后端通过，浏览器有 19 项交互检查。自动 PDF.js 对照现已测量
+155 个测试在四个后端通过，浏览器有 19 项交互检查。自动 PDF.js 对照现已测量
 9 份 PDF 的 14 个页面/旋转组合：全部得到报告，11 个组合存在像素或文本差异。
 这些是按特性挑选的样本，**仍不能给出可信的视觉兼容率**。
 转换成功、没有占位、测试通过，都不能单独证明没有漏画或排版错误。
@@ -65,7 +65,7 @@
 
 - [x] F-01 / P0：贯通 reader 已解析的水平外部 CMap 的 1–4 字节 codespace 切分、原始字符串、CID 宽度、ToUnicode、Tj/TJ/引号及裁剪；覆盖混合长度、四字节高位和损坏输入。9 个新增测试及真实 `issue18117.pdf` 的绘制抽查通过，见 [validation.md](validation.md#variable-length-horizontal-external-cmaps)。纵排、内置 CMap 与 reader 丢弃的范围由 F-02 至 F-04 跟踪。
 - [x] F-02 / P0：支持常用 Adobe 预定义 CMap 到 CID 的准确映射及相关字体绘制。嵌入固定版本的 168 份 binary CMap，按需解码并缓存；贯通继承 codespace/WMode、CID 宽度、CIDToGIDMap 解压和 Adobe CID→Unicode。8 个 CMap 测试和真实 `90ms_rksj_h_sample.pdf` 的绘制抽查通过；资产来源与许可见 `assets/cmaps/`，验证见 [validation.md](validation.md#adobe-predefined-cmaps-vertical-layout-and-word-spacing)。外部 stream 的复杂继承由 F-03 跟踪。
-- [ ] F-03 / P0：补齐复杂 UseCMap 继承、缺失 codespace、映射优先级与未定义字符的恢复；遵守 reader 已解析的继承关系。pdflite `0.2.2` 的 signed Int 范围校验还会丢弃部分跨高位边界的四字节范围（如 `<00000000> <FFFFFFFF>`），viewer 解码器尚不能恢复这类缺失的 codespace。
+- [ ] F-03 / P0：补齐复杂 UseCMap 继承、缺失 codespace、映射优先级与未定义字符的恢复；遵守 reader 已解析的继承关系。viewer 现在会在外部 CMap stream 的源字节可取得时独立恢复无符号 1–4 字节 codespace、惰性 `cidrange`、`cidchar`/`notdef`、命名和间接 `UseCMap`、WMode 以及本地映射优先级，并把结果接入文字切分、CID 宽度和 Type 1/CFF/TrueType 轮廓。该子集有 2 个回归测试和 `tracemonkey.pdf` 的 3 页无占位转换记录，但 ToUnicode 的高位范围、源 stream 不可取得的情况，以及复杂继承的真实 PDF.js corpus 覆盖仍未完成，因此本项保持未勾选。
 - [x] F-04 / P0：统一纵排的 W2/DW2、垂直原点、带符号推进、TJ 调整与 character/word spacing；绘制、裁剪和选择共用同一 glyph placement。8 个纵排测试通过，覆盖 Identity/外部/预定义 CMap、连续操作、q/Q、引号、rise、剪切、负字号和选择/裁剪；真实 `vertical.pdf` 三页完成转换及 Chromium/Poppler 抽查，见 [validation.md](validation.md#adobe-predefined-cmaps-vertical-layout-and-word-spacing)。
 - [ ] F-05 / P1：扩大 TrueType cmap/encoding、symbol 字体、composite 与损坏字体恢复覆盖；明确轮廓模式和浏览器字体模式的差异。
 - [ ] F-06 / P1：扩大 Type 1/CFF 的 FontMatrix、缺字、损坏 charstring 和特殊字体程序覆盖；失败不造成整页空白。已修正 NimbusRom、CMR/CMSY、CMTT 的 fallback family 和 medium/slant 后缀，并让 Type 1 `endchar` 残留操作数与 `setcurrentpoint` 遵循 PDF.js 的恢复语义；新增两项回归测试。自动基线中的 `issue14462_reduced.pdf` 和 `tracemonkey.pdf` 仍暴露未解析 glyph 与 raster 差异。

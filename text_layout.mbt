@@ -35,7 +35,7 @@ fn pdf_apply_op_for_viewer(
     | @content.Op_double_quote(_, _, _) => {
       let original_font = state.text_state.current_font
       if original_font is @pdflite.PdfFontCIDKeyed(font) {
-        return pdf_apply_cid_text_op(state, font, op)
+        return pdf_apply_cid_text_op(document, state, font, op)
       }
       let layout = state.text_state.content_apply_text_op(
         original_font,

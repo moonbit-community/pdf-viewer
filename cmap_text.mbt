@@ -63,12 +63,14 @@ fn pdf_decode_cmap_codes(
 fn pdf_cmap_unicode_of_code(
   font : @pdflite.PdfCIDKeyedFont,
   code : PdfDecodedCMapCode,
+  recovery : PdfViewerCMapRecovery?,
 ) -> String {
   if !code.valid {
     return "\uFFFD"
   }
   if font.composite.cid_fontdescriptor.tounicode is None &&
-    pdf_cid_collection_unicode(font, code.charcode) is Some(text) {
+    pdf_cid_collection_unicode_with_recovery(font, code.charcode, recovery)
+    is Some(text) {
     return text
   }
   let codepoints = match font.composite.cid_fontdescriptor.tounicode {
@@ -106,12 +108,13 @@ fn pdf_cmap_glyph_entry(
   font : @pdflite.PdfCIDKeyedFont,
   code : PdfDecodedCMapCode,
   glyph : @pdflite.PdfContentTextGlyphPlacement,
+  recovery : PdfViewerCMapRecovery?,
 ) -> @pdflite.PdfContentJsonEntry {
   {
     object: @pdflite.PdfContentGlyphObject(
       code.charcode,
       @utf8.decode_lossy(code.bytes),
-      pdf_cmap_unicode_of_code(font, code),
+      pdf_cmap_unicode_of_code(font, code, recovery),
     ),
     state: @pdflite.PdfContentStateGlyph(
       state.text_state.content_glyph_state(state.clipping_path),
@@ -124,18 +127,24 @@ fn pdf_cmap_glyph_entry(
 fn pdf_decode_cid_codes(
   font : @pdflite.PdfCIDKeyedFont,
   bytes : BytesView,
+  recovery : PdfViewerCMapRecovery?,
 ) -> Array[PdfDecodedCMapCode] {
-  if font.encoding is @pdflite.PdfExternalCMap(_, parsed) {
-    if parsed.codespaces.is_empty() && parsed.usecmap is Some(name) {
-      return pdf_decode_cmap_codes(
-        {
-          ..parsed,
-          codespaces: pdf_builtin_cmap_codespaces(pdf_cmap_name_text(name)),
-        },
-        bytes,
-      )
+  match pdf_viewer_cmap_effective_parsed(font, recovery) {
+    Some(parsed) => {
+      if parsed.codespaces.is_empty() && parsed.usecmap is Some(name) {
+        return pdf_decode_cmap_codes(
+          {
+            ..parsed,
+            codespaces: pdf_builtin_cmap_codespaces(pdf_cmap_name_text(name)),
+          },
+          bytes,
+        )
+      }
+      if !parsed.codespaces.is_empty() {
+        return pdf_decode_cmap_codes(parsed, bytes)
+      }
     }
-    return pdf_decode_cmap_codes(parsed, bytes)
+    None => ()
   }
   if font.encoding is @pdflite.PdfPredefinedCMap(name) {
     let spaces = pdf_builtin_cmap_codespaces(pdf_cmap_name_text(name))
@@ -164,6 +173,7 @@ fn pdf_decode_cid_codes(
 
 ///|
 fn pdf_apply_cid_text_op(
+  document : @pdflite.PdfDocument,
   state : @pdflite.PdfContentOperatorState,
   font : @pdflite.PdfCIDKeyedFont,
   op : @content.PdfContentOp,
@@ -184,16 +194,26 @@ fn pdf_apply_cid_text_op(
   let glyphs : Array[@pdflite.PdfContentTextGlyphPlacement] = []
   let mut text_matrix = layout.text_matrix
   let original_font = @pdflite.PdfFontCIDKeyed(font)
-  let vertical = pdf_font_is_vertical(original_font)
+  let recovery = pdf_viewer_cmap_recovery_for_font(document, font)
+  let vertical = pdf_viewer_font_is_vertical_with_recovery(
+    original_font, recovery,
+  )
   for element in elements {
     match element {
       @syntax.PdfString(bytes) =>
-        for code in pdf_decode_cid_codes(font, bytes) {
-          let cid = pdf_viewer_cid_of_charcode(font, code.charcode).unwrap_or(0)
-          let glyph = pdf_layout_cid_glyph(font, cid, code, {
-            ..layout,
-            text_matrix,
-          })
+        for code in pdf_decode_cid_codes(font, bytes, recovery) {
+          let cid = pdf_viewer_cid_of_charcode_with_recovery(
+            font,
+            code.charcode,
+            recovery,
+          ).unwrap_or(0)
+          let glyph = pdf_layout_cid_glyph(
+            font,
+            cid,
+            code,
+            { ..layout, text_matrix, },
+            vertical,
+          )
           glyphs.push(glyph)
           codes.push(code)
           text_matrix = @geometry.transform_matrix_compose(
@@ -226,7 +246,7 @@ fn pdf_apply_cid_text_op(
   let next_state = { ..state, text_state: { ..text_state, text_matrix, }, }
   let entries = [
     for index, glyph in glyphs => {
-      pdf_cmap_glyph_entry(next_state, font, codes[index], glyph)
+      pdf_cmap_glyph_entry(next_state, font, codes[index], glyph, recovery)
     }
   ]
   ({ state: next_state, entries, }, glyphs)

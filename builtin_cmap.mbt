@@ -115,16 +115,19 @@ fn pdf_cmap_with_codespaces(
 }
 
 ///|
-fn pdf_cid_collection_unicode(
+fn pdf_cid_collection_unicode_with_recovery(
   font : @pdflite.PdfCIDKeyedFont,
   charcode : Int,
+  recovery : PdfViewerCMapRecovery?,
 ) -> String? {
   let info = font.composite.cid_system_info
   if info.registry != b"Adobe" {
     return None
   }
   let ordering = @utf8.decode_lossy(info.ordering)
-  let cid = pdf_viewer_cid_of_charcode(font, charcode).unwrap_or(0)
+  let cid = pdf_viewer_cid_of_charcode_with_recovery(font, charcode, recovery).unwrap_or(
+    0,
+  )
   match pdf_builtin_cmap_unicode("Adobe-" + ordering + "-UCS2", cid) {
     Some(bytes) =>
       Some(

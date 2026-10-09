@@ -655,14 +655,14 @@ fn pdf_viewer_ttf_embedded_bytes(
 }
 
 ///|
-fn pdf_viewer_ttf_cid_of_charcode(
+fn pdf_viewer_ttf_cid_of_charcode_with_document(
+  document : @pdflite.PdfDocument,
   font : @pdflite.PdfCIDKeyedFont,
   charcode : Int,
 ) -> Int {
-  match pdf_viewer_cid_of_charcode(font, charcode) {
-    Some(cid) => cid
-    None => charcode
-  }
+  pdf_viewer_cid_of_charcode_with_document(document, font, charcode).unwrap_or(
+    charcode,
+  )
 }
 
 ///|
@@ -672,7 +672,9 @@ fn pdf_viewer_ttf_cid_to_gid(
   font : @pdflite.PdfCIDKeyedFont,
   charcode : Int,
 ) -> Int raise @core.PdfError {
-  let cid = pdf_viewer_ttf_cid_of_charcode(font, charcode)
+  let cid = pdf_viewer_ttf_cid_of_charcode_with_document(
+    document, font, charcode,
+  )
   if cid < 0 || cid > 65535 {
     return 0
   }

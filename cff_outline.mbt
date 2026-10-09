@@ -192,7 +192,7 @@ fn pdf_cff_path_of_pdf_glyph(
     }
   }
   let glyph_id = match
-    pdf_cff_glyph_for_pdf_charcode(font, pdf_font, charcode) {
+    pdf_cff_glyph_for_pdf_charcode(document, font, pdf_font, charcode) {
     Some(value) => value
     None => return None
   }

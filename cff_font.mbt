@@ -785,6 +785,7 @@ fn pdf_cff_glyph_for_string(font : PdfCffFont, wanted : String) -> Int? {
 
 ///|
 fn pdf_cff_glyph_for_pdf_charcode(
+  document : @pdflite.PdfDocument,
   font : PdfCffFont,
   pdf_font : @pdflite.PdfFont,
   charcode : Int,
@@ -792,7 +793,9 @@ fn pdf_cff_glyph_for_pdf_charcode(
   if font.cid {
     match pdf_font {
       @pdflite.PdfFontCIDKeyed(cid_font) => {
-        let cid = pdf_viewer_ttf_cid_of_charcode(cid_font, charcode)
+        let cid = pdf_viewer_ttf_cid_of_charcode_with_document(
+          document, cid_font, charcode,
+        )
         // CFF charset stores CIDs, not GIDs. CIDToGIDMap only belongs to
         // CIDFontType2; a sparse CIDFontType0 charset must be searched.
         for index in 0..<font.charset.length() {
