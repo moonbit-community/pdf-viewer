@@ -86,6 +86,19 @@ pub fn PdfBounds::to_json(Self) -> Json
 #deprecated
 pub fn PdfBounds::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfByteSpan {
+  start : Int
+  end : Int
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfByteSpan::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfByteSpan::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfByteSpan::to_json(Self) -> Json
+#deprecated
+pub fn PdfByteSpan::to_repr(Self) -> @debug.Repr
+
 pub(all) struct PdfDestination {
   kind : String
   name : String?
@@ -237,6 +250,7 @@ pub fn PdfPageModel::text_content(Self) -> PdfTextContent
 pub fn PdfPageModel::text_diagnostics(Self) -> Array[PdfTextDiagnostic]
 pub fn PdfPageModel::text_layer(Self, scale? : Double, rotation? : Int) -> PdfTextLayer
 pub fn PdfPageModel::text_sources(Self) -> Array[PdfTextSourceRange]
+pub fn PdfPageModel::text_structure(Self) -> PdfTextStructure
 #deprecated
 pub fn PdfPageModel::to_json(Self) -> Json
 #deprecated
@@ -392,6 +406,22 @@ pub fn PdfSoftMaskResource::to_json(Self) -> Json
 #deprecated
 pub fn PdfSoftMaskResource::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfTextByteSpan {
+  stream_index : Int
+  object_number : Int?
+  decoded_stream_span : PdfByteSpan
+  file_span : PdfByteSpan?
+  encoded_stream_span : PdfByteSpan?
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfTextByteSpan::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextByteSpan::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextByteSpan::to_json(Self) -> Json
+#deprecated
+pub fn PdfTextByteSpan::to_repr(Self) -> @debug.Repr
+
 pub(all) struct PdfTextContent {
   items : Array[PdfTextItem]
   text : String
@@ -521,6 +551,37 @@ pub fn PdfTextLayerItem::to_json(Self) -> Json
 #deprecated
 pub fn PdfTextLayerItem::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfTextLexicalSource {
+  item_index : Int
+  logical_source : PdfTextSourceRange?
+  string_source : PdfTextStringSource?
+  spans : Array[PdfTextByteSpan]
+  failure : String?
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfTextLexicalSource::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextLexicalSource::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextLexicalSource::to_json(Self) -> Json
+#deprecated
+pub fn PdfTextLexicalSource::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfTextParagraph {
+  start : Int
+  end : Int
+  bounds : PdfBounds
+  runs : Array[PdfTextRun]
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfTextParagraph::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextParagraph::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextParagraph::to_json(Self) -> Json
+#deprecated
+pub fn PdfTextParagraph::to_repr(Self) -> @debug.Repr
+
 pub(all) struct PdfTextProvenance {
   source : PdfTextSourceRange
   string_source : PdfTextStringSource?
@@ -558,6 +619,23 @@ pub fn PdfTextRangeSelection::to_json(Self) -> Json
 #deprecated
 pub fn PdfTextRangeSelection::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfTextRun {
+  start : Int
+  end : Int
+  font : String
+  vertical : Bool
+  bounds : PdfBounds
+  sources : Array[PdfTextSourceRange]
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfTextRun::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextRun::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextRun::to_json(Self) -> Json
+#deprecated
+pub fn PdfTextRun::to_repr(Self) -> @debug.Repr
+
 pub(all) struct PdfTextSourceRange {
   item_index : Int
   start : Int
@@ -593,6 +671,19 @@ pub fn PdfTextStringSource::to_json(Self) -> Json
 #deprecated
 pub fn PdfTextStringSource::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfTextStructure {
+  text : String
+  paragraphs : Array[PdfTextParagraph]
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfTextStructure::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextStructure::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextStructure::to_json(Self) -> Json
+#deprecated
+pub fn PdfTextStructure::to_repr(Self) -> @debug.Repr
+
 pub(all) struct PdfTransparencyGroup {
   id : String
   isolated : Bool
@@ -613,6 +704,7 @@ pub struct PdfViewerDocument {
   pages : Array[@page.PdfPage]
   optional_content_state : PdfOptionalContentState?
   font_fallbacks : Array[PdfFontFallback]
+  // private fields
 }
 pub fn PdfViewerDocument::attachment_bytes(Self, Int) -> Bytes? raise @core.PdfError
 pub fn PdfViewerDocument::attachment_manifest_json(Self) -> Json raise @core.PdfError
@@ -644,6 +736,7 @@ pub fn PdfViewerDocument::struct_tree_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::summary_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::text_content(Self, Int) -> PdfTextContent? raise @core.PdfError
 pub fn PdfViewerDocument::text_diagnostics(Self, Int) -> Array[PdfTextDiagnostic]? raise @core.PdfError
+pub fn PdfViewerDocument::text_lexical_sources(Self, Int) -> Array[PdfTextLexicalSource]? raise @core.PdfError
 pub fn PdfViewerDocument::text_provenance(Self, Int) -> Array[PdfTextProvenance]? raise @core.PdfError
 pub fn PdfViewerDocument::with_font_fallbacks(Self, Array[PdfFontFallback]) -> Self
 pub fn PdfViewerDocument::with_optional_content_state(Self, PdfOptionalContentState) -> Self

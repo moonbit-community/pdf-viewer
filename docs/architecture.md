@@ -271,9 +271,26 @@ hook is opt-in: `text_provenance_collect.mbt` uses the existing CMap decoder and
 tracks stream-reference scopes, Form invocation paths and the active font
 object through Tf, gs, q/Q and implicit Form frames. `text_provenance_fonts.mbt`
 reuses the existing TrueType/CFF/Type1 selectors, with a local program cache per
-inspection. No file lexical offsets or host-font GIDs are inferred. Empty
+inspection. This decoded-operand API does not infer file lexical offsets or host-font GIDs. Empty
 copied glyphs stay outside logical sources; their bytes still contribute to
 following operand offsets. Public page and text records remain unchanged.
+`text_lexical.mbt` adds `text_lexical_sources(n)` using pdflite's syntax lexer,
+object parser and content-op parser. Escapes/hex spelling are checked against
+the decoded operands and every operator is checked against the interpreter's
+parse; inline-image EI candidates are accepted only by that parser. Glyphs
+with empty copied strings retain origins here. A lazy stream's backing bytes
+must match the original input before its encoded payload span is exposed;
+file glyph spans additionally require no filters and identity crypt. Compressed
+and encrypted streams retain decoded spelling and, when known, the whole encoded
+payload range. In-memory replacement streams cannot claim original offsets.
+The opt-in adapter bounds decoded input to 8 MiB, operations and mapped bytes
+to 262,144, and inline-image candidates to 128; unverified spans have an explicit
+failure instead of preventing rendering. The original input is retained by
+reference, without an additional byte copy.
+`text_structure.mbt` groups the same logical glyphs into font/baseline runs and
+geometrically inferred paragraphs. Their UTF-16 ranges and source items join to
+selection/search; separators have no fabricated glyph owner. This view does not
+claim tagged-PDF semantics or change the original display list.
 `text_diagnostics.mbt` exposes observed render fallbacks and replacement text;
 the document-level method additionally reads CMap recovery diagnostics in each
 collected resource scope, retaining the resource path and immediate stream

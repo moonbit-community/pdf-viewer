@@ -1,6 +1,7 @@
 ///|
 priv struct PdfCollectedTextSource {
   string_source : PdfTextStringSource
+  content_objects : Array[@syntax.PdfObject]
   font_object : @syntax.PdfObject?
   charcode : Int
 }
@@ -8,6 +9,7 @@ priv struct PdfCollectedTextSource {
 ///|
 priv struct PdfTextCollectScope {
   content_streams : Array[Int?]
+  content_objects : Array[@syntax.PdfObject]
   form_path : Array[PdfTextFormInvocation]
   mut font_object : @syntax.PdfObject?
   font_stack : Array[@syntax.PdfObject?]
@@ -31,6 +33,7 @@ fn pdf_text_scope_for_page(
 ) -> PdfTextCollectScope {
   {
     content_streams: page.content.map(pdf_text_object_number),
+    content_objects: page.content,
     form_path: [],
     font_object: None,
     font_stack: [],
@@ -50,13 +53,15 @@ fn pdf_text_scope_for_form(
   operator_index : Int,
 ) -> PdfTextCollectScope? {
   guard parent is Some(parent) else { return None }
-  let number = match
+  let object = match
     document.lookup_direct(pdf_name_key("/XObject"), resources) {
-    Some(objects) => objects.lookup_immediate(name).bind(pdf_text_object_number)
+    Some(objects) => objects.lookup_immediate(name)
     None => None
   }
+  let number = object.bind(pdf_text_object_number)
   Some({
     content_streams: [number],
+    content_objects: object.map(object => [object]).unwrap_or([]),
     form_path: [
       ..parent.form_path,
       {
@@ -169,6 +174,7 @@ fn pdf_collect_text_string_sources(
     for code in codes {
       let byte_end = byte_start + code.bytes.length()
       output.push({
+        content_objects: scope.content_objects,
         string_source: {
           content_streams: scope.content_streams,
           form_path: scope.form_path,

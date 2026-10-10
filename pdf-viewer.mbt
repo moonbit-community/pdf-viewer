@@ -429,6 +429,7 @@ pub(all) struct PdfTextContent {
 /// A parsed, read-only PDF document.
 pub struct PdfViewerDocument {
   source_length : Int
+  priv source_bytes : Bytes
   document : @pdflite.PdfDocument
   pages : Array[@page.PdfPage]
   optional_content_state : PdfOptionalContentState?
@@ -501,6 +502,7 @@ fn pdf_viewer_document_of_parsed_document(
   }
   {
     source_length: bytes.length(),
+    source_bytes: bytes,
     document,
     pages,
     optional_content_state: None,
@@ -1304,6 +1306,7 @@ fn pdf_collected_entries_of_ops(
   let text_source_scope = Some(
     text_source_scope.unwrap_or({
       content_streams: [],
+      content_objects: [],
       form_path: [],
       font_object: None,
       font_stack: [],

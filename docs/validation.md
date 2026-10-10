@@ -278,14 +278,49 @@ PNG SHA-256 values equal the `81b42d3` report in
 `_build/visual-test-1791645717953/`; the existing ten pixel/text differences
 from PDF.js remain. Generated browser JS grows from **12,316,533 to 12,334,904
 bytes**, and `gzip -c` from **2,795,296 to 2,797,759 bytes** (**2,463 bytes**).
-This is artifact size, not page-load performance. File lexical spans, text
-run/paragraph structure and broader font/recovery parity keep T-02/A1 open.
+This is artifact size, not page-load performance. At that checkpoint file
+lexical spans and run/paragraph structure were still pending; they are supplied
+by the additional APIs below. Broader font/recovery parity remains in A1.
 
 ```bash
 moon run --target native cmd/text_provenance -- input.pdf /tmp/page-1-text.json 1
 moon run tools/text_provenance_corpus.mbtx tools/font_post_cases.json
 moon run tools/visual_test.mbtx tools/font_post_cases.json '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 ```
+
+### File spelling, empty glyph origins and text structure
+
+`text_lexical_sources(n)` returns paint-order glyph origins, including empty
+copied glyphs. It reuses pdflite's lexer/parser and checks literal/octal/hex
+spellings against the decoded charcode bytes. TJ member indices, quote
+operators, concatenated streams and repeated Form invocation paths retain
+their identity. Inline-image boundaries are validated with the resource-aware
+parser, including a regression with `EI` inside actual image bytes.
+
+The original input must match the lazy stream's backing bytes before exposing
+an encoded payload range. Unfiltered/unencrypted streams additionally expose
+exact file spelling ranges; compressed or encrypted streams expose decoded
+spelling, with no fake per-glyph file offset. In-memory replacement streams
+cannot masquerade as original file positions. Unverified locations and the
+adapter's input/mapping/candidate limits return an explicit failure. These
+are location limits, not a new rendering limit.
+
+`text_structure()` groups the same logical sources into font/baseline runs and
+geometric paragraphs. Run/paragraph ranges preserve UTF-16 ligatures and
+surrogate pairs; inferred separator gaps remain without byte owners. The
+existing logical provenance records and page/text records are unchanged.
+
+Fifteen new regressions cover escaping, odd hex nibbles, variable-width codes,
+Forms, cross-stream operators, empty copies, inline images, compression,
+three password algorithms, optional-content visibility, replacement streams,
+run/font boundaries, source joins and textless pages. All four backends pass
+**337/337**, with the same 24 existing warnings; interface generation,
+formatting and all-target checks pass. The native inspector now checks lexical
+and run/paragraph joins as well as the existing byte/CID/GID relationships.
+The final guarded ten-file replay in
+`_build/text-provenance-1791653263952/` located **5,409/5,409 glyphs**, with no
+invalid codes or source mismatch. This completes T-02's source/structure path without claiming
+semantic paragraph recognition for arbitrary PDFs.
 
 ### Active font bindings in Forms and graphics state
 

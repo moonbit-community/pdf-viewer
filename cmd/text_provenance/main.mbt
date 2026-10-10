@@ -9,6 +9,8 @@ fn main {
 fn inspect(
   page : @pdf.PdfPageModel,
   provenance : Array[@pdf.PdfTextProvenance],
+  lexical : Array[@pdf.PdfTextLexicalSource],
+  source_length : Int,
 ) -> Json {
   let errors : Array[String] = []
   let text = page.text_content().text
@@ -98,6 +100,80 @@ fn inspect(
   if captured != provenance.length() {
     errors.push("some logical text glyphs have no decoded string source")
   }
+  let mut located = 0
+  let mut file_spans = 0
+  let mut empty_copies = 0
+  let by_item : Map[Int, @pdf.PdfTextProvenance] = Map([])
+  for item in provenance {
+    by_item[item.source.item_index] = item
+  }
+  for item in lexical {
+    if item.failure is Some(reason) {
+      errors.push(
+        "unverified lexical source for item \{item.item_index}: " + reason,
+      )
+      continue
+    }
+    located += 1
+    match item.logical_source {
+      Some(source) =>
+        match by_item.get(item.item_index) {
+          Some(origin) if origin.source == source &&
+            origin.string_source == item.string_source => ()
+          _ =>
+            errors.push(
+              "lexical and logical source disagree for item \{item.item_index}",
+            )
+        }
+      None => empty_copies += 1
+    }
+    for span in item.spans {
+      let decoded = span.decoded_stream_span
+      if decoded.start < 0 || decoded.end <= decoded.start {
+        errors.push("invalid decoded-stream lexical span")
+      }
+      if span.encoded_stream_span is Some(encoded) &&
+        (
+          encoded.start < 0 ||
+          encoded.end < encoded.start ||
+          encoded.end > source_length
+        ) {
+        errors.push("encoded-stream span exceeds the input file")
+      }
+      if span.file_span is Some(file) {
+        file_spans += 1
+        match span.encoded_stream_span {
+          Some(encoded) if file.start == encoded.start + decoded.start &&
+            file.end == encoded.start + decoded.end &&
+            file.end <= encoded.end => ()
+          _ =>
+            errors.push(
+              "file lexical span does not belong to its original stream",
+            )
+        }
+      }
+    }
+  }
+  let structure = page.text_structure()
+  let structured_sources : Array[@pdf.PdfTextSourceRange] = []
+  let mut run_count = 0
+  for paragraph in structure.paragraphs {
+    for run in paragraph.runs {
+      run_count += 1
+      if run.start < paragraph.start || run.end > paragraph.end {
+        errors.push("run exceeds its paragraph")
+      }
+      for source in run.sources {
+        if source.start < run.start || source.end > run.end {
+          errors.push("glyph exceeds its run")
+        }
+        structured_sources.push(source)
+      }
+    }
+  }
+  if structure.text != text || structured_sources != page.text_sources() {
+    errors.push("structured runs do not preserve logical source order")
+  }
   {
     "passed": errors.is_empty(),
     "logical_glyphs": provenance.length(),
@@ -107,6 +183,11 @@ fn inspect(
     "cid_mappings": cids,
     "gid_mappings": gids,
     "glyph_names": names,
+    "located_glyphs": located,
+    "empty_copied_glyphs": empty_copies,
+    "file_lexical_spans": file_spans,
+    "text_runs": run_count,
+    "paragraphs": structure.paragraphs.length(),
     "font_objects": ToJson::to_json(fonts),
     "font_program_objects": ToJson::to_json(programs),
     "errors": ToJson::to_json(errors),
@@ -122,13 +203,15 @@ fn run() -> Int {
   }
   try {
     let number = if args.length() == 4 { @string.parse_int(args[3]) } else { 1 }
-    let viewer = @pdf.open_document(@fs.read_file_to_bytes(args[1]))
+    let bytes = @fs.read_file_to_bytes(args[1])
+    let viewer = @pdf.open_document(bytes)
     guard viewer.page(number) is Some(page) else {
       println("text_provenance: page \{number} does not exist")
       return 1
     }
     let provenance = viewer.text_provenance(number).unwrap()
-    let checks = inspect(page, provenance)
+    let lexical = viewer.text_lexical_sources(number).unwrap()
+    let checks = inspect(page, provenance, lexical, bytes.length())
     let report : Json = {
       "file": args[1],
       "page": number,
@@ -136,6 +219,8 @@ fn run() -> Int {
       "text": page.text_content().text,
       "checks": checks,
       "provenance": ToJson::to_json(provenance),
+      "lexical_sources": ToJson::to_json(lexical),
+      "text_structure": ToJson::to_json(page.text_structure()),
     }
     @fs.write_string_to_file(args[2], report.stringify(indent=2))
     println(checks.stringify())

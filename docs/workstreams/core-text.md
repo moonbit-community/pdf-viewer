@@ -57,12 +57,17 @@ TODO 范围：R-02、F-03、F-05、F-06、F-07、T-01、T-02、T-04。
   AFM/PDF Widths 仍负责定位；嵌入程序和显式宿主 override 保留优先级。
   绘制/裁剪/复制共享 WinAnsi bullet 默认值，Differences 和 ToUnicode 各司其职。
   11 项回归和 16 个真实页面通过；整页描边/栅格化差异仍在视觉报告中保留。
+- `text_lexical_sources(n)` 复用 pdflite lexer/parser，将原字符码连接到 literal/hex
+  词法拼写、内容流和 Form 调用；空复制字形也有来源。未压缩/未加密且 backing
+  bytes 与原输入一致时才给文件偏移；压缩/加密流保留解码位置和完整原流范围。
+  `text_structure()` 按共同的逻辑顺序提供 run/几何段落及其 UTF-16/source ranges。
+  15 项新回归、四后端 337/337 和 10 份真实字体样本的来源检查通过。
 - 用独立 `.mbtx` probe 验证 `mizchi/font`：缺 cmap 的 PDF 子集和裸 Type 1
   程序仍不可用，复合字形剪切/点对齐/缩放偏移与 fixture 预期不符，因此未替换
   当前字体恢复路径。真实对照和回归记录见 [validation.md](../validation.md#a1-fonts-unicode-and-reading-order)。
 
-这些进展没有勾选整个 TODO。后续仍需字体库扩展、其它 cmap/post 格式和损坏字体覆盖、
-复杂 bidi/表格/旋转布局、PDF 文件词法 byte span 与 run/段落来源，以及统一恢复策略和真实
+F-07 和 T-02 已达到各自主路径验收；其余项目继续保持未勾选。后续仍需字体库扩展、其它 cmap/post 格式和损坏字体覆盖、
+复杂 bidi/表格/旋转布局，以及统一恢复策略和真实
 UseCMap/reader 损坏样本。跨方向边界目前保留显式空白，不推断额外空格；
 无法核对的 bidi 置换保留内容流顺序。
 
