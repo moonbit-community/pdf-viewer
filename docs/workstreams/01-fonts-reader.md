@@ -4,6 +4,14 @@ TODO：R-02、F-03、F-05、F-06、F-07、T-04
 
 状态：待分配实现切片。共同规则见 [PARALLEL.md](../PARALLEL.md)。
 
+## 复用策略
+
+先按 [生态候选](../codec-candidates.md#字体与-unicode) 验证 `mizchi/font@0.7.4`
+的 `parse_font` 和按 GID 的轮廓/metrics。PDF charcode/CID/GID、Widths、FontMatrix
+继续由现有适配层处理；不使用 Unicode cmap 代替 CIDToGIDMap。裸 CFF、Type 1、
+缺表子集和损坏字体分别核查，不能把 OpenType-CFF 支持当成它们都已覆盖。
+reader/CMap/AFM 先复用 pdflite 和已有资产；只有确认的缺口才扩展本地解析算法。
+
 ## 负责范围
 
 补 viewer-local 损坏文档/字体/CMap 恢复，保留正常 pdflite reader 路径。
@@ -39,8 +47,9 @@ F-07 的 metrics/host family/display filtering 辅助块目前也在主文件里
 
 ## 推荐首轮切片
 
-定位并修复 `issue14462_reduced.pdf` / `tracemonkey.pdf` 已测量的 Type 1/CFF
-失败 glyph，优先只改字体解析/轮廓文件。为每个修复保留可复现的 charstring
+先用相同 font bytes/GID 比较现有实现与候选库，记录能直接替换的路径和
+需要扩接口/保留现有恢复的分支。再定位 `issue14462_reduced.pdf` / `tracemonkey.pdf`
+已测量的 Type 1/CFF 失败 glyph。为适配或具体缺口修复保留可复现的 charstring
 回归和真实页面输出；不要把合法 reader 恢复或 host font 替换当成轮廓已对齐。
 F-03 的真实 UseCMap corpus 缺口需单独寻找，不能只补合成测试就勾选。
 

@@ -29,10 +29,14 @@ pattern 的图像采样由 W3 提供算法，`patterns.mbt`/`mesh.mbt` 接入归
 
 ## 推荐首轮切片
 
-先按 [Mooncakes 解码候选](../codec-candidates.md) 核查/验证现成库，
+先按 [生态解码候选](../codec-candidates.md) 核查/验证现成库，
 再修 JPEG + SMask + Matte 的 `issue13931.pdf`，然后处理 colour-key 边缘。
 已确认 `mizchi/image` 与 `walkzzz/image` 有纯 MoonBit baseline JPEG 解码；
-JPX 也有 `trkbt10/jpeg2000` 候选。先跑真实 fixture 和目标/性能核查，
+JPX 的 `trkbt10/jpeg2000@0.2.0` 已核查源码/API，但当前公开 `decode` 有
+component0 输出路径，all-components 位于 internal，不能直接当 RGB/RGBA 使用。
+先验证灰度/彩色 fixture，优先扩展该库的公共多组件/布局 API，再做 PDF JPX 适配。
+JBIG2 继续查现有库及绑定/移植方案，不默认从零写 decoder。
+先跑真实 fixture 和目标/性能核查，
 能复用的解码器直接适配，只有确认的缺口才安排扩展或自研。
 普通 JPEG 的压缩字节预览已存在，新增的像素路径需要真正在 alpha/Matte
 合成中使用；不能只增加 decoder 文件或用浏览器保留原图就宣称完成。

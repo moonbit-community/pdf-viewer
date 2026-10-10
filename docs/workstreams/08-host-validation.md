@@ -4,6 +4,15 @@ TODO：R-03、P-02、U-05、V-02、V-03
 
 状态：待分配实现切片。共同规则见 [PARALLEL.md](../PARALLEL.md)。
 
+## 复用策略
+
+Worker/MessageChannel、AbortController、Fetch/Streams/Range、IntersectionObserver
+与 ResizeObserver 优先用浏览器 API；宿主 JS 可直接使用，MoonBit JS 绑定可评估
+`mizchi/js_web`，不要重造线程/网络层或为了可见页检测引入整套 GUI。
+已有 async 和公共 runner 继续复用。项目负责任务代次、缓存预算、页面生命周期
+和 PDF 按需数据接口；Range transport 不等于 pdflite 已支持分段读取。
+版本/核查边界见 [生态候选](../codec-candidates.md#xml宿主与完整阅读器)。
+
 ## 负责范围
 
 完善独立浏览器的生命周期与性能，同时维护公共构建/交互/视觉验证入口。

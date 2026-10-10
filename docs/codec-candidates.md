@@ -1,8 +1,22 @@
-# Mooncakes 图像解码候选
+# 生态复用候选与接入边界
 
 核查日期：2026-10-10。先复用/验证现成 MoonBit 包，再决定需要补的分支。
-本次只检索 registry、下载源码和查询 API；没有给 viewer 增加依赖或接入 decoder，
-没有把包的自述测试数量当作本项目的测试/视觉证据。
+本文件从图像解码扩展到字体、文字、绘制、色彩和宿主；对应
+[TODO 的复用表](TODO.md#先复用再补-pdf-适配) 与各工作模块。
+核查包括 registry/上游文档、下载源码及公开 API；没有给 viewer 增加依赖或接入新能力，
+没有把包的自述测试数量当作本项目的测试/视觉证据。pdflite 是已经集成的依赖，
+其尚未被 viewer 使用的写入 API 也不能记为编辑功能完成。
+
+## 核查状态与选择规则
+
+- **已有依赖**：优先使用 pdflite、async、x 和 viewer 已有实现，避免同一项目出现两套 reader、色彩或采样逻辑。
+- **文档候选**：确认包/接口存在，还没有验证源码、编译或项目样本。
+- **源码/API 已核查**：记录所需入口和已知限制，仍需最小接入验证；不是已选定依赖。
+- **可接入**：所需目标编译、真实 fixture、输出约定和性能验证通过后再决定，并把版本固定到依赖配置。
+
+候选不够用时，先评估扩展现有库或薄绑定，再记录需要自研的具体分支。
+不为验证一种底层能力引入整套 GUI/应用框架。native C FFI 与额外 Wasm 模块分别
+验证构建/部署，不能默认等价于本项目的 wasm、wasm-gc、js、native 四后端支持。
 
 ## JPEG
 
@@ -43,10 +57,97 @@ moon ide doc 'decode_jpeg_pure'
 
 ## JPEG2000 / JPX
 
-registry 还存在 [trkbt10/jpeg2000](https://mooncakes.io/docs/trkbt10/jpeg2000@0.2.0)，
-0.2.0，Apache-2.0，描述为 T.800-2015 JPEG2000 decoder。
-目前只确认包存在，尚未验证 JP2/J2K、PDF colour/alpha、目标和真实样本覆盖。
-I-01 首先核查这个候选，不能预设必须从零实现，也不能仅凭包描述勾选。
+[trkbt10/jpeg2000](https://mooncakes.io/docs/trkbt10/jpeg2000@0.2.0)，
+0.2.0，Apache-2.0；[上游源码](https://github.com/trkbt10/jpeg2000_mbt)。
+已下载源码，核对 `src/decode.mbt`、`types.mbt` 和内部 decoder API：
+
+- 公开 `decode(Bytes) -> ImageData raise DecodeError`，返回尺寸、组件数量、位深、符号和 bytes。
+- 输入提取器接受 raw codestream，也会提取 JP2 的 `jp2c`；这不代表 JP2 色彩/alpha box 已被完整解释。
+- 当前根入口调用的 `decode_samples` 有 `component0:raster:le` 输出路径；根 `ImageData` 不保留 `sample_layout`。
+  内部另有 all-components 接口，但属于 `internal` package，不能把它当作本项目可稳定导入的公共 API。
+
+因此不能直接将 `data` 当作 RGB/RGBA。I-01 先用灰度和彩色 JPX fixture 验证，
+优先向现有库扩展公共多组件/布局 API；再核对组件采样、MCT、signed/位深、
+JP2 colour/alpha、PDF `/SMaskInData`、支持的编码 profile、目标和内存限制。
+只确认包存在或只有 component0 输出时不勾选 I-01，不预设要从零实现整个 JPEG2000。
+
+## JBIG2
+
+尚未确认可直接接入的 MoonBit decoder。下一步继续查 Mooncakes/上游实现，
+并比较成熟解码器的绑定、移植或公共 API 扩展；只安排确定缺失的分支。
+[jbig2dec](https://github.com/ArtifexSoftware/jbig2dec) 可作为能力/接口比较对象，
+但其[许可为 AGPL-3.0-or-later](https://github.com/ArtifexSoftware/jbig2dec/blob/master/LICENSE)，
+本项目尚未选用。需分别核对 globals/page stream、segment、Mask、资源限额、许可与交付目标，
+不能把 native decoder 存在写成浏览器 MoonBit 解码已解决。
+
+## 字体与 Unicode
+
+| 包 | 版本/许可与核查状态 | 可复用能力 | 本项目的适配与限制 |
+| --- | --- | --- | --- |
+| [mizchi/font](https://mooncakes.io/docs/mizchi/font@0.7.4) | 0.7.4，Apache-2.0；源码/公开 `.mbti` 已核查 | `parse_font(Bytes)`，`TTFont::glyph_outline(gid)` / `glyph_metrics(gid)`；TrueType 与 OpenType-CFF 轮廓 | 先验证 GID 适配、composite/symbol 和真实缺字；PDF widths/FontMatrix/CID 映射仍由 viewer/pdflite 提供；不能将 OTF-CFF 支持推广为裸 CFF/Type 1 支持 |
+| [moonbit-community/bidi](https://mooncakes.io/docs/moonbit-community/bidi@0.5.2) | 0.5.2，Apache-2.0；源码/公开 `.mbti` 已核查 | UAX #9 的 `process`、levels 和 `reorder` 字符置换 | indices 对应 `Array[Char]`，不是 UTF-16 offset；保留 char→UTF-16→glyph/source 映射；PDF 已定位文字的逻辑还原、多栏和表格需要适配 |
+| [moonbit-community/normalization](https://mooncakes.io/docs/moonbit-community/normalization@0.5.2) | 0.5.2，Apache-2.0；上游文档/API 已核查，未跑源码/接入验证 | NFC/NFD/NFKC/NFKD、Unicode 数据 | 搜索 normalization-to-source 及组合/展开后的范围映射仍需维护；不替换原文或 PDF glyph 编码 |
+
+`mizchi/font` 的 `parse_font` 识别 sfnt/WOFF/TTC 等封装；当前 parser 还要求
+`head/maxp/hhea/hmtx/cmap` 等表。PDF 子集字体可能缺表，裸 CFF 也不具有这些表，
+需要 fixture 证明可用，或扩展库的输入接口，而不是直接删除现有解析器。
+调用按 GID 的入口，不用 ToUnicode/`char_outline` 替代 PDF 的 CIDToGIDMap，
+也不用通用文字 layout 改写 PDF 已规定的字距与位置。
+
+`bidi.reorder_string` 输出视觉顺序且会做镜像；不能直接拿它作为逻辑复制文本，
+也不能重复重排已由 PDF 定位的字形。W2 应复用 levels/置换与 Unicode 分类，
+结合来源和几何验证混合方向、控制字符、surrogate 与 ligature。
+
+## 绘制与合成
+
+| 候选 | 核查状态 | 优先用途 | 不可直接假定的能力 |
+| --- | --- | --- | --- |
+| 浏览器 SVG / Canvas 2D | 现有 SVG 已由浏览器绘制；Canvas 尚未接入 | 路径、变换、clip、图像、基础 blend 与 surface；宿主 JS 可直接用 API | PDF 路径中途 CTM、non-isolated/knockout、overprint、soft-mask BC/TR；需逐项真实对照 |
+| [mizchi/svg](https://mooncakes.io/docs/mizchi/svg@0.2.3) | 0.2.3；上游文档/API 已核查 | `PathCommand`、Transform、低层 raster primitives、CPU SVG 渲染与 mask/clip 等能力 | 上游记录仍有 SVG WPT 缺口；不是完整 PDF compositor，也不自动解决提前序列化时丢失的 PDF 状态 |
+| [bobzhang/vg](https://mooncakes.io/docs/bobzhang/vg@0.3.0) / [上游 vg](https://github.com/moonbit-community/vg) | registry 0.3.0 与上游 main 绘制源码已核查；发布版差异待验证 | 向量命令、路径/paint 与 SVG/Canvas 输出适配候选 | 上游 `draw.mbt` 的部分描边/混合输出采用近似；需先验证，不能直接承诺精确 CTM 或全部 PDF blend |
+| [klaseca/skia-sys](https://mooncakes.io/docs/klaseca/skia-sys@0.1.1) | 0.1.1；上游文档/API 已核查 | native Skia 绘制/混合绑定候选；应用层优先核查同项目高层封装 | 包不携带 native artifacts，需兼容 mono/skia 头文件、`libSkiaSharp` 与构建 hook；不是现成 js/wasm 后端 |
+
+W5/W6 先让候选重放一组 CTM、clip、blend、group、pattern、mesh fixture，
+记录哪些 primitive 可以直接用，再决定后端和局部补充。结构化路径、原始色彩、
+资源和作用域由 PDF 适配层保留；只把已有 SVG 字符串送入另一个 renderer 无法补回这些信息。
+通用曲线光栅化、blend 公式、渐变/三角插值不默认自研；PDF group/patch 等缺口单列。
+
+## ICC 与颜色
+
+[enanandesu/icc](https://mooncakes.io/docs/enanandesu/icc@0.1.1)，0.1.1，Apache-2.0，
+已下载源码：`parse_from_bytes(Bytes) -> Map[String, String] raise ParseError`。
+它读取 profile 的元数据，未提供 profile→profile 像素转换/LUT 引擎。
+可评估用于 profile 诊断；根 package 还导入 fs，浏览器目标仍需验证。
+**不能以这个包存在为依据勾选 C-01。**
+
+[LittleCMS](https://github.com/mm2/Little-CMS) 是已有的 ICC 转换引擎（MIT，C 实现）。
+W4 优先评估 native 薄绑定与浏览器额外 Wasm 模块的成本和输出差异，
+目前未确认或接入 MoonBit 四后端通用绑定。ICCBased 的 Range/alternate、
+PDF 色彩状态与资源缓存仍需 viewer 适配；专色/overprint 不等同于 ICC 转 RGB。
+
+## XML、宿主与完整阅读器
+
+| 复用对象 | 核查状态 | 对应工作 |
+| --- | --- | --- |
+| [moonbit-community/XMLParser](https://mooncakes.io/docs/moonbit-community/XMLParser@0.2.5) | 核查版本 0.2.5，Apache-2.0；上游文档/API 已核查 | XFA XML 解析候选；模板/数据绑定、分页与布局另做适配，不将 XML 解析算为 XFA 完成 |
+| [mizchi/js_web](https://mooncakes.io/docs/mizchi/js_web@0.13.1) | 0.13.1；上游文档/API 已核查 | Worker/MessagePort、Fetch/Streams 等 JS 绑定候选；已有宿主 JS 可直接用浏览器 API，无需为此强制加包 |
+| pdflite 0.2.2（已有依赖） | 本地 `pkg.generated.mbti` 已核查 | reader/CMap/AFM/structure tree、批注模型；`pdf_write_document` 和增量 writer 可用于后续编辑保存，不另写 serializer |
+| 既有 Chromium/MoonBit/视觉 runner | 已有主路径，验证见 [validation.md](validation.md) | V-03 复用 runner 接 CI；不用为扩大 fixture 重建测试框架 |
+
+原生 DOM 的 input/select、Pointer Events、Canvas、ARIA、IntersectionObserver
+分别承担表单输入、笔迹/命中、宿主绘制、可访问性和可见页检测。
+项目负责 PDF 字段/批注语义、来源映射、任务代次、缓存预算与保存重开。
+writer 可写对象和批注不等于已经有表单编辑器或数字签名；后续路线见
+[完整阅读器接入](TODO.md#完整阅读器的后续接入)。
+
+本轮新增的源码下载命令（只下载到忽略的 `.repos/`，未改变依赖配置）：
+
+```bash
+moon fetch --no-update moonbit-community/bidi@0.5.2
+moon fetch --no-update mizchi/font@0.7.4
+moon fetch --no-update trkbt10/jpeg2000@0.2.0
+moon fetch --no-update enanandesu/icc@0.1.1
+```
 
 ## W3 的下一步
 

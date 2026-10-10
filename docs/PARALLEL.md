@@ -11,7 +11,22 @@
 这些是工作边界，还不是 8 个已隔离的 MoonBit package。
 当前多数实现位于同一个根 package，文件之间共享私有函数；
 `pdf-viewer.mbt` 的模型/内容收集器和 `svg.mbt` 的输出入口仍有多方依赖。
-可以并行实现各自的算法、适配和回归，共用入口由集成 Agent 顺序接入。
+可以并行验证候选依赖、实现 PDF 适配和回归，共用入口由集成 Agent 顺序接入。
+
+最终产品目标包含批注编辑、表单填写和签名；本次 8 个模块对应的是只读基线的
+33 个剩余项。后续编辑/保存接入见 [TODO](TODO.md#完整阅读器的后续接入)，不混入当前计数。
+
+## 复用优先的交付约定
+
+每个模块的第一份交付先给出依赖核查/最小接入结果，再决定需要自研的分支。
+逐项映射见 [TODO 复用表](TODO.md#先复用再补-pdf-适配)，版本和源码/API 限制见
+[生态复用候选](codec-candidates.md)。不把模块名解释成要从零写字体库、codec、
+Unicode 算法、rasterizer 或 ICC 引擎。
+
+最小验证记录输入/输出与公共 API、所需目标、真实 fixture、耗时/内存和已知差异。
+有候选但未跑验证记为“待验证”；内部接口或编码分支不够用时，先比较扩展现有库
+和绑定成本，再把具体缺口交给集成 Agent 记录。PDF 资源、状态、来源索引和恢复
+语义仍由本项目适配；通用算法通过回归后逐步复用，不一次删除已工作的路径。
 
 ## 模块清单
 
@@ -38,14 +53,15 @@ W7 的 DOM 层依赖 W8 的页面挂载/释放，XFA 和 range 读取放在后�
 
 | 阶段 | 三条可并行的工作线 | 集成 Agent 的职责 |
 | --- | --- | --- |
-| 第一轮 | W1 的 Type 1/CFF/TrueType 真实缺字恢复；W3 的 JPEG + SMask + Matte；W4 的 ICC/CMYK 转换核心 | 接入共同色彩/图片调用，保留现有字体/文字行为，复跑对应视觉样本 |
-| 第二轮 | W2 的文字来源映射与 bidi；W5 的完整 CTM 描边/像素绘制；W8 的生命周期与页面调度 | 顺序接入 collector、公共模型和 bridge；核对 index/坐标/取消语义 |
-| 第三轮 | W6 的透明合成与 shading；W7 的只读表单/批注；W1/W4 的剩余真实覆盖 | 合成器/几何/色彩联合验证，接入 annotation DOM |
+| 第一轮 | W1 验证 `mizchi/font` 按 GID 轮廓/真实缺字；W2 验证 `bidi` 字符→来源映射；W3 验证现成 JPEG 解码的 SMask/Matte | 固定候选数据约定，接入通过验证的适配，复跑对应真实样本 |
+| 第二轮 | W5/W6 联合比较 Canvas/绘图库的 CTM/clip/blend；W4 评估 ICC 引擎与目标适配；W8 用宿主 API 做生命周期/页面调度 | 确定共用绘制后端、buffer/颜色/alpha 和目标；顺序接入 collector/bridge |
+| 第三轮 | W3 验证/扩展 JPX 公共多组件 API并评估 JBIG2；W7 的只读表单/批注；W1/W4 的剩余真实覆盖 | 用选定依赖接入图像、颜色和 annotation DOM，明确仍需补的 PDF 语义 |
+| 第四轮 | W6 适配 group/soft mask/pattern/patch；W2 完善多栏/ARIA；W8 扩大性能/CI | 合成器/几何/色彩联合验证；通用算法只实现核查后的缺口 |
 | 后续 | 扩大 reader/font corpus、网络 range、XFA、性能压力与 CI | 按依赖安排，不把高工作量项目当作短任务一次完成 |
 
-第一轮刻意限制任务切片：W1 先修改字体解析文件，W3 修改图片文件，
-W4 修改色彩文件。例如 W4 的 overprint 依赖 W6，不能与 ICC 转换一起
-宣布整项完成；W6 可先开发合成算法，但页面像素接入需要 W5 的绘制基础。
+首轮先用独立 probe/fixture 验证依赖，避免先扩大自己的 parser/raster 算法。
+W4 的 overprint 依赖 W6，不能与 ICC 转换一起宣布整项完成；W6 先验证
+后端已提供的合成 primitive，页面像素接入仍需要 W5 的结构化绘制基础。
 每轮只登记实际运行的任务，不把这张建议表当成已经分配或完成的工作。
 
 ## 文件负责人和集成边界
@@ -55,7 +71,7 @@ W4 修改色彩文件。例如 W4 的 overprint 依赖 W6，不能与 ICC 转换
 | `pdf-viewer.mbt`、`page_model.mbt`、`svg.mbt`、`text_layout.mbt`、`text_clipping.mbt` | 集成 Agent | 模块 Agent 给出需要修改的函数/字段与局部补丁，由集成 Agent 串行接入；不要多人同时编辑这些入口 |
 | `cmd/browser/bridge.mbt`、`web/viewer.js`、`web/viewer.css`、`web/index.html` | W8 | W2/W7 提供数据与独立 DOM/helper 文件，W8 接入页面生命周期和事件 |
 | `image_colour.mbt`、`images.mbt`、`image_alpha.mbt`、`image_sampling.mbt` | W3 | W4 提供色彩转换实现；W6 提供 Form/group 合成；两者不分别重写图片路径 |
-| `colour.mbt`、新增 ICC/专色实现 | W4 | 提供共享转换函数，W3/W6 调用；改变返回值语义时先同步消费者 |
+| `colour.mbt`、新增 ICC 引擎适配/专色语义 | W4 | 提供共享转换函数，W3/W6 调用；改变返回值语义时先同步消费者 |
 | `masks.mbt`、`patterns.mbt`、`mesh.mbt` | W6 | 图像 payload/采样由 W3 提供，几何/像素后端由 W5 提供 |
 | `text_order.mbt`、`text_layer.mbt`、`search.mbt` | W2 | 来源数据接入由集成 Agent 协调 W1；浏览器入口由 W8 接入 |
 | `annotations.mbt`、`annotations_svg.mbt` | W7 | 字体布局复用 W1/W2，AP collector/renderer 入口经集成 Agent 接入 |
@@ -64,7 +80,7 @@ W4 修改色彩文件。例如 W4 的 overprint 依赖 W6，不能与 ICC 转换
 | `tools/visual_cases.json`、既有 browser/visual runner、`tools/pixels/`、CI | W8 | 每个模块可新增自己的 fixture manifest 和 `.mbtx` 诊断；公共 runner/清单由 W8 合并 |
 | 模块内专用测试/任务说明 | 对应模块 Agent | 新测试按特性分文件；大型 `pdf-viewer_*test.mbt` 的共同 fixture/旧断言由集成 Agent 修改 |
 
-W1 的专用文件清单见其任务说明；W5 优先新增几何/像素实现文件，
+W1 的专用文件清单见其任务说明；W5 优先新增候选后端适配/几何状态文件，
 再由集成 Agent 修改既有入口。以上默认负责人可按一轮实际任务交接，
 但每个共享文件在同一时间只有一个写入者。
 协调是 Agent 之间交接，不要求用户逐次批准普通实现选择。
@@ -81,15 +97,17 @@ W1 的专用文件清单见其任务说明；W5 优先新增几何/像素实现�
 - 新像素后端必须明确 buffer 的格式、stride、alpha 约定与 clip/group 作用域；W5/W6 先统一这些接口，再接入复杂合成。
 - 库能力保持 MoonBit 主路径，宿主 JS 负责浏览器布局/事件/调度。PDF.js 只用于对照，不能成为 viewer 的实际渲染器。
 - 不修改 `reference/pdf.js`、`.mooncakes` 依赖或 `office.mbt`，不接入 OpenSeek；资产需记录来源和许可。
-- 解码器、色彩引擎等基础能力先检索 Mooncakes/成熟库并验证覆盖；可复用时优先适配现成实现，只对确认的缺口安排自研。图片候选见 [codec-candidates.md](codec-candidates.md)。
+- 字体、Unicode、codec、色彩引擎和基础绘制先检索已有依赖/Mooncakes/成熟库并验证覆盖；可复用时优先适配现成实现，只对确认的缺口安排自研。候选见 [codec-candidates.md](codec-candidates.md)。
+- Worker/网络/可见页检测/输入控件优先用浏览器 API；不为一个 primitive 引入整套 GUI。native FFI/额外 Wasm 模块须明确目标和构建成本，不记成四后端通用能力。
 
 这些是必须共同维持的行为约定，并未声称新 API/后端已经存在。
 具体新增接口由负责模块提出，集成 Agent 核对消费者后落实到代码与 `.mbti`。
 
 ## 基线、工作区与验证
 
-当前 HEAD 是 `a2d155e`，但真实开发基线包含大量尚未提交的字体、色彩、
-图像、文字和浏览器修改。**只从这个 HEAD 创建 worktree 会丢掉当前能力**。
+最初拆分时的历史基线是 `a2d155e` 加未提交修改；2026-10-10 生态复用核查开始时
+HEAD 已为 `fac0e2c`，工作区干净。启动实现时重新记录 HEAD 和 tracked/untracked
+状态，不沿用旧的“当前 HEAD”描述；存在未提交能力时，单从 HEAD 创建 worktree 会遗漏它们。
 
 可以先在同一个工作区按上面的文件负责人规则协作；需要隔离 worktree 时，
 集成 Agent 先保存包含 tracked/untracked 文件的完整基线快照并记录来源，
@@ -99,7 +117,7 @@ W1 的专用文件清单见其任务说明；W5 优先新增几何/像素实现�
 刚开始编写的 JPEG 解析器暂存于
 [`drafts/jpeg-parser.mbt.txt`](drafts/jpeg-parser.mbt.txt)。它缺少 scan decoder、
 IDCT、像素展开、测试和 image adapter，**未编译、未接入、未验证**。
-W3 可选择复用或重写；草稿不计入完成度。暂存后 `moon check --target all`
+W3 先验证生态 codec，草稿仅作缺口参考，不恢复为默认自研路线；草稿不计入完成度。暂存后 `moon check --target all`
 通过，保留 24 条既有 warnings。
 
 每个模块交付：改动文件、TODO 子范围、测试命令和结果、真实对照样本/报告、
@@ -128,8 +146,10 @@ git diff --check
 
 ## 交给 Agent 的公共提示
 
-> 只在 `/workspace/OfficeViewer/pdf-viewer` 内工作。先读 `AGENTS.md`、
+> 只在本仓库根目录及其子目录内工作。先读 `AGENTS.md`、
 > `docs/TODO.md`、`docs/PARALLEL.md` 和本模块任务说明，再遵循 MoonBit skills。
+> 先核查 `docs/codec-candidates.md` 的相关候选，提交最小接入验证与具体缺口，
+> 优先复用已有依赖/生态库/宿主 API，不能默认从零编写通用算法。
 > 只实现本轮明确分配的切片，维持约定的公共模型和来源索引。
 > 在自己的文件内实现并添加必要回归；共享入口交给集成 Agent 串行接入。
 > 不修改上游/依赖，不接入 OpenSeek，不提交或推送。

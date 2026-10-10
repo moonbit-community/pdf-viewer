@@ -4,6 +4,15 @@ TODO：T-01、T-02、X-01、X-02
 
 状态：待分配实现切片。共同规则见 [PARALLEL.md](../PARALLEL.md)。
 
+## 复用策略
+
+Unicode UBA 优先接 `moonbit-community/bidi@0.5.2`，normalization 优先接
+`moonbit-community/normalization@0.5.2`，不另写通用 Unicode 算法/数据表。
+`bidi` indices 是 Char 索引，需要映射到 UTF-16 和源 glyph；视觉重排/镜像字符串
+不能直接当作逻辑复制结果。PDF 几何阅读顺序、多栏和来源区间仍由本模块适配。
+XFA 的 XML 部分先用 `moonbit-community/XMLParser`；ARIA 用 DOM 原生语义。
+核查状态与限制见 [生态候选](../codec-candidates.md)。
+
 ## 负责范围
 
 完善逻辑文字索引和来源映射，让复制、选择、搜索和可访问的 DOM 使用一致语义。
@@ -20,7 +29,7 @@ paint-order item index 已与 reading order 分离；这一约定必须保留。
 ## 文件边界
 
 本模块维护 `text_order.mbt`、`text_layer.mbt`、`search.mbt`、
-文字范围/排序专用测试，并可新增来源索引、bidi、structure/XFA 实现文件。
+文字范围/排序专用测试，并可新增来源索引、bidi 库适配、structure/XFA 实现文件。
 PDF 字符切分与字体 lookup 由 W1 提供，不自行重写其 parser。
 `pdf-viewer.mbt`、`page_model.mbt`、`text_layout.mbt` 的 source 字段接入
 由集成 Agent处理；浏览器共用文件归 W8。
@@ -34,8 +43,9 @@ XFA 涉及独立 XML/布局路径，是后期大任务，不作为顺便补充�
 
 ## 推荐切片与依赖
 
-先和 W1/集成 Agent落实来源数据约定，再完善 bidi 与 normalization-to-source
-映射；多栏排序以真实样本验证。新算法可独立开发，最终必须进入
+先和 W1/集成 Agent落实来源数据约定，用混合方向/surrogate fixture 验证现成
+bidi 的 levels/置换和 normalization-to-source 映射；再补 PDF 逻辑还原与多栏排序。
+库适配可独立验证，最终必须进入
 text content、selection、search 和 DOM，而不是多出一个未被使用的索引。
 既有字距、纵排、隐藏 OCG、旋转与跨页选择应保留行为。
 来源 sidecar/API 优先保留宿主可构造的公共 record 兼容性；未知 GID/原文件偏移

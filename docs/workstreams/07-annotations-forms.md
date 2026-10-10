@@ -4,6 +4,15 @@ TODO：A-01、A-02、A-03、A-04
 
 状态：待分配实现切片。共同规则见 [PARALLEL.md](../PARALLEL.md)。
 
+## 复用策略
+
+字段/批注数据先用 pdflite；排版复用 W1 的字体 metrics、W2 的文字边界，
+输入和命中用原生 DOM 控件/Pointer Events。项目保留 AP/DA/DR、字段继承和打印外观。
+后续批注编辑、表单填写、签名保存先复用 pdflite writer/增量写入，
+不另写 PDF serializer；接入与重开验收见 [完整阅读器路线](../TODO.md#完整阅读器的后续接入)。
+当前四个 ID 仍是只读基线，不能把 writer API 存在算为编辑/保存已完成。
+API 核查见 [既有依赖与宿主候选](../codec-candidates.md#xml宿主与完整阅读器)。
+
 ## 负责范围
 
 让批注与字段具有可靠的只读外观和命中/导航体验。保持现有 AP 内容流优先
@@ -31,7 +40,8 @@ TODO：A-01、A-02、A-03、A-04
 
 先完成 A-02 无 AP 文本/FreeText 排版，这项直接影响核心预览；
 使用真实 DA/DR 与继承字段，而不是固定字号和任意居中。
-再补 choice/button 状态和 DOM。无需提供字段编辑、保存或执行 PDF JavaScript。
+再补 choice/button 状态和 DOM。本轮四项先验收只读显示；后续编辑/保存属于完整
+阅读器目标，另拆任务接现成 writer；文档 JavaScript 不在当前任务内。
 现有 `field_options : Array[String]` 未保留 choice 的 export/display 配对，
 A-03 需要扩元数据或 sidecar，并经集成 Agent 处理公开模型兼容性。
 

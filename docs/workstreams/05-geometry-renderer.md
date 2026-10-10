@@ -4,6 +4,14 @@ TODO：G-01、G-02、G-03
 
 状态：待分配实现切片。共同规则见 [PARALLEL.md](../PARALLEL.md)。
 
+## 复用策略
+
+先比较浏览器 Canvas 2D、`mizchi/svg`/`bobzhang/vg` 基础绘制，native 可评估
+Skia 绑定；候选限制见 [绘制与合成](../codec-candidates.md#绘制与合成)。
+通用路径 raster、曲线/渐变和 clip primitive 优先复用；本模块保留 PDF CTM/path
+状态与后端适配。现成库可能同样采用描边近似，必须用真实 fixture 决定，
+不把换库直接记成 G-01/G-03 完成。
+
 ## 负责范围
 
 处理完整 CTM 下的路径/文字描边、dash、clip/hairline 和确定性的像素绘制基础。
@@ -14,11 +22,12 @@ TODO：G-01、G-02、G-03
 | --- | --- |
 | G-01 | 完整 affine 的椭圆笔画、非均匀缩放/剪切、文字 stroke、dash 的路径语义 |
 | G-02 | hairline/miter/退化路径、填充规则、clip 时机和多层 Form 的边界 |
-| G-03 | 可验证像素绘制后端，覆盖 SVG 表达不足的语义；Canvas/WebGL 以实测决定 |
+| G-03 | 验证/适配现成像素绘制后端，覆盖 SVG 表达不足的语义；以实测决定，不默认新写 rasterizer |
 
 ## 文件边界与依赖
 
-优先新增几何/描边/像素实现与专用测试，公共 `PdfPathItem`、collector、
+优先新增后端适配、结构化 CTM/path 状态与专用测试；几何算法只补核查后的缺口。
+公共 `PdfPathItem`、collector、
 `text_clipping.mbt` 和 `svg.mbt` 修改经集成 Agent接入。
 坐标计算与 glyph transform 可复用 `text_geometry.mbt`，需要修改该文件时
 先在本轮文件负责人表登记，避免和 W1 的字体几何修复交叉。
@@ -33,10 +42,11 @@ W4 负责颜色语义，W3 负责图像像素与采样；本模块不另建解�
 
 ## 推荐切片
 
-先保留绘制时完整 CTM，修复非均匀/剪切 stroke，新增实际 PDF fixture。
+先与 W6 用实际 PDF fixture 比较候选的 CTM/clip/blend 输出和目标成本，
+保留绘制时完整 CTM 后接可复用 primitive，再修复不支持的非均匀/剪切 stroke。
 路径创建过程中 CTM 可改变，不能简单给整个路径套上最后一次 transform。
 `vector-effect` 或平均 stroke-width 也不能替代完整 PDF 笔画语义。
-像素后端可同时开发基础 primitive，但主路径接入和 W6 接口需协调。
+像素后端先适配现成 primitive，主路径接入和 W6 接口需协调。
 
 ## 验证与交付
 

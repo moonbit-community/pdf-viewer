@@ -4,6 +4,13 @@ TODO：M-01、M-02、M-03、H-01、H-02、H-03
 
 状态：待分配实现切片。共同规则见 [PARALLEL.md](../PARALLEL.md)。
 
+## 复用策略
+
+与 W5 先验证 [绘制候选](../codec-candidates.md#绘制与合成) 已提供的 surface、clip、
+blend、渐变/网格插值；不另建通用 compositor/raster 栈。PDF non-isolated/knockout、
+soft-mask BC/TR、pattern 资源/矩阵与 Coons/tensor patch 适配仍需核查。
+明确候选能覆盖的分支，先评估扩接口或局部补充，不因库支持 blend 就勾选整组透明语义。
+
 ## 负责范围
 
 补组级透明合成、完整 blend/soft mask、复杂 pattern 与逐像素 shading。
@@ -22,7 +29,8 @@ image-local SMask/Matte 属于 W3；ExtGState/Form/group 的 mask 属于本模�
 ## 文件边界与依赖
 
 本模块维护 `masks.mbt`、`patterns.mbt`、`mesh.mbt` 及专用测试；
-可新增 compositor/blend/group/raster-shading 的独立算法文件。
+可新增后端合成适配、PDF group/mask/pattern 状态文件；通用 blend/raster-shading
+算法仅在确认依赖缺口后新增。
 `pdf-viewer.mbt` 的 group/paint state、`svg.mbt` 和新像素入口经集成 Agent接入。
 调用 W3 的图像样本与采样、W4 的转换、W5 的 surface/clip/draw primitives。
 
@@ -31,8 +39,9 @@ W5 的 CTM 与像素后端是最终组级绘制的依赖。与 W5 先固定 buff
 
 ## 推荐切片
 
-可先独立开发具有解析预期值的 blend/group 算法及小 surface tests，
-或补已有 pattern/shading 的资源解析。接入页面后才扩大真实对照。
+先用具有解析预期值的小 surface fixture 验证后端 blend/group 契约，
+再接 PDF group/backdrop/mask 适配或补 pattern/shading 资源解析。
+通用算法缺口单列，接入页面后才扩大真实对照。
 六项工作量很大，一轮只分配 group/blend、soft mask 或 shading 中的一个切片。
 需要更多并发时可再按这三组拆分，但 collector 与 compositor 仍只有一个写入者。
 
