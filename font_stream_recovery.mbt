@@ -197,6 +197,7 @@ fn pdf_font_with_recovered_tounicode(
   object : @syntax.PdfObject,
   font : @pdflite.PdfFont,
 ) -> @pdflite.PdfFont {
+  let font = pdf_standard14_font_for_viewer(font)
   match font {
     @pdflite.PdfFontSimple(
       { fontdescriptor: Some({ tounicode: Some(_), .. }), .. }

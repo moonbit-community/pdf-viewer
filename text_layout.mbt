@@ -96,9 +96,25 @@ fn pdf_apply_op_for_viewer(
         op,
       )
       let next_state = { ..state, text_state: layout.text_state, }
+      let unicode = if original_font is @pdflite.PdfFontStandard(_) {
+        pdf_viewer_tounicode_recovery_for_font(document, font_object)
+      } else {
+        None
+      }
       let entries = [
         for glyph in layout.glyphs => {
-          next_state.content_text_glyph_entry(original_font, glyph)
+          let entry = next_state.content_text_glyph_entry(original_font, glyph)
+          let text = unicode.bind(map => {
+            pdf_viewer_unicode_text_with_recovery(map, glyph.charcode)
+          })
+          match (entry.object, text) {
+            (@pdflite.PdfContentGlyphObject(name, code, _), Some(text)) =>
+              {
+                ..entry,
+                object: @pdflite.PdfContentGlyphObject(name, code, text),
+              }
+            _ => entry
+          }
         }
       ]
       ({ state: next_state, entries, }, layout.glyphs)

@@ -12,7 +12,9 @@ After checking out the pinned revision, run `npm ci` and `npx gulp generic`
 inside `reference/pdf.js`. The runner verifies both the checkout revision
 and the loaded PDF.js build, serves CMaps/standard fonts/wasm only from this
 local reference, and records fixture hashes and the host font environment.
-These reference assets are not bundled with the viewer's static deployment.
+The viewer bundles its own pinned CMap and Standard 14 font data; provenance
+and redistribution terms are in `assets/cmaps/` and `assets/standard14/`.
+The oracle serves its separate copies from this reference checkout.
 
 Useful comparison areas:
 

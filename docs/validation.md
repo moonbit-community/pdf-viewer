@@ -1062,6 +1062,49 @@ TrueType family on its document-local `@font-face` name.
 
 ## Standard 14 fonts and host fallback
 
+The deterministic Standard 14 path now bundles the unmodified programs from
+the pinned PDF.js reference: ten Foxit raw CFF programs and four Liberation
+Sans TrueType programs. `assets/standard14/inventory.json` records byte lengths
+and SHA-256 hashes; the Foxit and Liberation licenses are retained alongside it.
+The existing CFF/TrueType outline readers paint and clip each selected glyph,
+while PDF Widths and pdflite's AFM data retain responsibility for advances.
+Embedded PDF programs win. An explicit `PdfFontFallback` continues to request
+host text and carries the existing host/clip diagnostic when appropriate.
+
+Runtime WinAnsi encodings fill the six undefined slots with `/bullet`, as the
+pinned PDF.js table does. Explicit Differences override those defaults;
+ToUnicode independently determines copied text, including Standard-font
+ToUnicode streams that pdflite's Standard-font extractor does not consult.
+The source font dictionary is unchanged. Copied control characters are retained
+in the model; SVG labels omit characters disallowed by XML 1.0. Symbol and
+ZapfDingbats use their face-specific implicit encodings and pinned CFF outlines.
+
+Eleven new regressions cover all 14 programs, clipping, affine placement,
+encoding/GID versus Unicode, embedded-program precedence, explicit fallback,
+Symbol Differences, controls and the WinAnsi bullet defaults. The four-backend
+suite passes **322/322**. Public interfaces are unchanged.
+
+```sh
+moon run tools/standard14_assets.mbtx
+moon run tools/visual_test.mbtx tools/standard14_cases.json '<chromium>'
+moon run tools/visual_test.mbtx tools/font_post_cases.json '<chromium>'
+```
+
+`_build/visual-test-1791652285671/` measured **16/16**, with no failures or
+runtime exceptions. Its manifest sets `use_system_fonts: false` so both sides
+use the pinned replacement programs, rather than allowing PDF.js to choose a
+different installed font. The 14 Standard-font pages have **116,689–128,412**
+pixels above tolerance 8; `issue17147.pdf` has **1,001**, and `tracemonkey.pdf`
+has **199,680**. The viewport dimensions and transforms agree. Glyph ink and
+table positions are visible on all pages; the comparison still exposes thicker
+SVG table strokes and outline-versus-font rasterization. This completes the
+deterministic font/AFM/encoding path for F-07, not whole-page pixel parity or A2's
+stroke/raster work. The separate ten-file font replay in
+`_build/visual-test-1791652385352/` measured **10/10** without failures and retains
+its existing PDF.js differences.
+
+The following records the earlier host-only implementation and its baseline.
+
 Standard 14 resources now carry the AFM data needed by the viewer: the 1000-unit
 em size, ascent, descent, cap height and character widths. BaseFont names with a
 subset prefix are canonicalized before this lookup, so an unembedded
@@ -1086,9 +1129,10 @@ characters in the SVG (`NUL_COUNT=0`). In the Standard 14 visual run,
 `_build/visual-test-1791590079766/`, the Standard 14 pages differ from PDF.js by
 129,822–169,878 pixels above channel tolerance 8. The remaining differences are
 the expected host glyph outlines, rasterization and Symbol/ZapfDingbats coverage,
-not a missing AFM advance path. A machine with different installed fonts will
+not a missing AFM advance path. A machine with different installed fonts would
 produce different pixels; exact PDF.js parity would require a licensed,
-deterministic font program or an outline renderer, so F-07 remains open.
+deterministic font program or an outline renderer. That path is now supplied
+by the pinned programs described above.
 
 ## Text search
 

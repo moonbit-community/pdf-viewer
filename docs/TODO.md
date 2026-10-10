@@ -1,6 +1,6 @@
 # PDF.js 对齐 TODO
 
-更新日期：2026-10-10。最终产品目标是完整阅读器，包括批注编辑、表单填写和签名。
+更新日期：2026-10-11。最终产品目标是完整阅读器，包括批注编辑、表单填写和签名。
 本文件的 **50 项是只读渲染与浏览基线**；编辑、保存和签名在后面的扩展路线单列，
 尚未纳入这 50 项统计。Office viewer、OpenSeek 接入和文档 JavaScript 执行不在当前任务内。
 
@@ -15,27 +15,27 @@
 
 ## 还差多少
 
-当前明确跟踪 **50 项，分为 14 个能力领域；完成 17 项，剩余 33 项**。
-按条目数量看是 **17/50（34%）**，但这只是清单进度，不是 PDF.js 的视觉兼容率。
-剩余项按优先级分为 P0 14 项、P1 17 项、P2 2 项；其中部分已有基础实现。
+当前明确跟踪 **50 项，分为 14 个能力领域；完成 18 项，剩余 32 项**。
+按条目数量看是 **18/50（36%）**，但这只是清单进度，不是 PDF.js 的视觉兼容率。
+剩余项按优先级分为 P0 13 项、P1 17 项、P2 2 项；其中部分已有基础实现。
 这些项大小不等，
 有的只是一个语义修正，有的需要接入解码器或合成器并补 PDF 适配，所以不能把
-34% 当成实际兼容率，也不能按 33 项全部从零开发估算工作量。
+36% 当成实际兼容率，也不能按 32 项全部从零开发估算工作量。
 
-按阶段看，P0 一共有 23 项，已经完成 9 项，仍有 14 项会直接影响通用文档的字形、图像、颜色、合成或图层可见性；P1 一共有 25 项，已经完成 8 项，仍有 17 项主要影响真实文档覆盖和完整的只读工作流；P2 的 2 项都未开始，分别是网络 range/增量读取和 XFA。完成剩余 P0 并重新跑扩大的 PDF.js 样本后，才能判断核心渲染是否达到可发布的高保真门槛；完成 P1 后，才接近完整的独立只读 viewer；P2 是大文件和特殊文档覆盖，不计入核心静态 PDF 门槛。
+按阶段看，P0 一共有 23 项，已经完成 10 项，仍有 13 项会直接影响通用文档的字形、图像、颜色、合成或图层可见性；P1 一共有 25 项，已经完成 8 项，仍有 17 项主要影响真实文档覆盖和完整的只读工作流；P2 的 2 项都未开始，分别是网络 range/增量读取和 XFA。完成剩余 P0 并重新跑扩大的 PDF.js 样本后，才能判断核心渲染是否达到可发布的高保真门槛；完成 P1 后，才接近完整的独立只读 viewer；P2 是大文件和特殊文档覆盖，不计入核心静态 PDF 门槛。
 
 按交付门槛展开，剩余功能可以这样看：
 
 | 交付门槛 | 必须完成的剩余项目 | 结论 |
 | --- | --- | --- |
-| 核心高保真渲染 | P0：F-03、F-07、T-01、G-01、G-03、I-01、I-02、C-01、M-01 至 M-03、H-01、H-03、A-02 | 完成前不能称为 PDF.js 级通用渲染器；这些项目会造成缺字、错位、漏图或明显颜色/合成错误 |
+| 核心高保真渲染 | P0：F-03、T-01、G-01、G-03、I-01、I-02、C-01、M-01 至 M-03、H-01、H-03、A-02 | 完成前不能称为 PDF.js 级通用渲染器；这些项目会造成缺字、错位、漏图或明显颜色/合成错误 |
 | 可发布的独立只读 viewer | 上述 P0 + P1：R-02、P-02、F-05 至 F-06、T-02、T-04、G-02、I-04、C-03、H-02、A-01、A-03 至 A-04、U-05、X-01、V-02 至 V-03 | 完成后才覆盖主要真实文档和完整的浏览器只读工作流 |
 | 大文件与特殊格式 | P2：R-03、X-02 | 解决 range/增量读取和 XFA；不影响当前静态 PDF 核心门槛 |
 
 计数边界：这 50 项统计的是当前核心对齐主路径。OCG 的 usage、RBGroups、Locked
 控制的 UI 语义和浏览器图层面板尚未完成，也没有单独的 UI 条目；它们属于
-浏览器产品扩展，因此暂不计入 33 项剩余。如果把图层面板也
-定义为必须的 PDF.js UI，需要另加一个 P1 条目，剩余数会变为 34 项。
+浏览器产品扩展，因此暂不计入 32 项剩余。如果把图层面板也
+定义为必须的 PDF.js UI，需要另加一个 P1 条目，剩余数会变为 33 项。
 
 已完成 F-01（水平外部 CMap）、F-02（Adobe 预定义 CMap）、F-04（CID 纵排）和 I-03（inline image 解码路径）
 和 T-03（编码相关字距），以及 U-01（独立浏览器）、U-02（cursor 选择层）
@@ -56,7 +56,7 @@ mask 处理；它们扩大 H-01/I-04 的覆盖，但这两项仍未完成。合�
 [validation.md](validation.md#calibrated-colours-and-original-image-samples)。
 
 现在有可运行的 native CLI、页面模型、SVG 输出和独立的浏览器 viewer。
-当前 221 个测试在四个后端通过，浏览器有 33 项交互检查。自动 PDF.js 对照已经测量
+当前 322 个测试在四个后端通过，浏览器有 33 项交互检查。自动 PDF.js 对照已经测量
 20 份 PDF 的 57 个页面/旋转组合：全部得到报告，55 个组合存在像素或文本差异。
 这些是按特性挑选的样本，**仍不能给出可信的视觉兼容率**。
 转换成功、没有占位、测试通过，都不能单独证明没有漏画或排版错误。
@@ -69,7 +69,7 @@ JPEG + SMask + Matte、color-key 边缘和复杂合成仍待完成，不能据�
 
 按实际风险看，当前离“高保真只读预览”最近的阻塞项主要集中在三组：
 
-- **文字可靠性**：复杂外部 CMap、标准 14 字体，以及阅读顺序和损坏文本诊断（F-03、F-07、T-01、T-04）。
+- **文字可靠性**：复杂外部 CMap、阅读顺序和损坏文本诊断（F-03、T-01、T-04）。标准 14 已使用固定字体程序，整页描边/栅格化差异继续测量。
 - **像素渲染**：完整 CTM 描边、可验证的像素后端、JPX/JBIG2、ICC 色彩、透明组和 mesh shading（G-01、G-03、I-01 至 I-02、C-01、M-01 至 M-03、H-03）。
 - **可用工作流**：Worker、虚拟化、内存控制和批注/链接交互（U-05、A-04）；搜索主路径已经完成，但阅读顺序和更复杂的文本归并仍由 T-01 跟踪。
 
@@ -79,7 +79,7 @@ JPEG + SMask + Matte、color-key 边缘和复杂合成仍待完成，不能据�
 | --- | --- | --- | ---: | --- |
 | 文档载入 | bytes 读取、页树、密码入口、部分压缩对象恢复 | 损坏文档恢复覆盖、增量读取 | 2 | R-02、R-03 |
 | 页面/API | 页面模型、viewport、旋转、边界和 UserUnit、显示列表 | 宿主生命周期、错误分类和资源释放 | 1 | P-02 |
-| 字体/编码 | TrueType、CFF、Type 1 轮廓；外部变长 CMap；168 份 Adobe CMap；CID 纵排；宿主字体回退入口；Standard 14 AFM 与编码显示策略 | 复杂继承、字体恢复、Standard 14 的宿主字形像素一致性 | 4 | F-03、F-05 至 F-07 |
+| 字体/编码 | TrueType、CFF、Type 1 轮廓；外部变长 CMap；168 份 Adobe CMap；CID 纵排；宿主字体回退入口；Standard 14 固定程序、AFM、编码与裁剪 | 复杂继承、字体恢复、扩展 cmap/post 与损坏程序覆盖 | 3 | F-03、F-05 至 F-06 |
 | 文字 | glyph transform、字符级边界、矩形选择、文字裁剪、编码相关字距 | 阅读顺序、bidi、空格和来源映射、恢复诊断 | 3 | T-01、T-02、T-04 |
 | 矢量 | 常见路径、虚线、显式 clip、SVG 输出 | 非均匀描边、精确 raster 输出 | 3 | G-01 至 G-03 |
 | 图片 | JPEG、raw/inline 图片、inline CCITT、ImageMask、原始 1/2/4/8/16-bit 样本和 Decode、raw color-key/SMask/Matte、affine 图片采样 | JPX/JBIG2 解码、encoded-image mask/Matte、color-key 边缘和大图 | 3 | I-01、I-02、I-04 |
@@ -98,7 +98,7 @@ JPEG + SMask + Matte、color-key 边缘和复杂合成仍待完成，不能据�
 
 每项先检查已有依赖、Mooncakes 和成熟底层库，做最小接入验证，再安排实现。
 候选版本、源码/API 核查、已知限制见 [生态复用候选](codec-candidates.md)。
-以下覆盖全部 33 个剩余 ID；“有候选”不代表已经接入或满足验收。
+以下覆盖全部 32 个剩余 ID，并保留已完成字体资产的复用记录；“有候选”不代表已经接入或满足验收。
 
 | 剩余 TODO | 优先复用的能力 | 本项目保留的工作 |
 | --- | --- | --- |
@@ -150,7 +150,7 @@ JPEG + SMask + Matte、color-key 边缘和复杂合成仍待完成，不能据�
 - [x] F-04 / P0：统一纵排的 W2/DW2、垂直原点、带符号推进、TJ 调整与 character/word spacing；绘制、裁剪和选择共用同一 glyph placement。8 个纵排测试通过，覆盖 Identity/外部/预定义 CMap、连续操作、q/Q、引号、rise、剪切、负字号和选择/裁剪；真实 `vertical.pdf` 三页完成转换及 Chromium/Poppler 抽查，见 [validation.md](validation.md#adobe-predefined-cmaps-vertical-layout-and-word-spacing)。
 - [ ] F-05 / P1：已用 `mizchi/font` 0.7.4 按 GID 读取真实子集和自制复合字形，确认缺 cmap/裸 Type 1 与复合轮廓限制，保留现有恢复路径；单独接入其 cmap 0/4/6/12 和 post 名称接口，补 Windows Unicode/Symbol、MacRoman、非 BMP 选表、post 1/2、自定义字形名及 Unicode 平台名称优先级、边界和缓存限额。TrueType 按 Encoding/Differences 选字形，未知名称且无可用 post 时尝试显式 ToUnicode 恢复，复制文本仍独立；复合轮廓补点对齐和 scaled offset，检查 glyph 边界、递归和点数。其它 cmap/post 格式、symbol/composite 与损坏字体、浏览器加载结果仍需扩大覆盖，见 [A1 验证](validation.md#a1-fonts-unicode-and-reading-order)。
 - [ ] F-06 / P1：扩大 Type 1/CFF 的 FontMatrix、缺字、损坏 charstring 和特殊字体程序覆盖；失败不造成整页空白。已修正 NimbusRom、CMR/CMSY、CMTT 的 fallback family 和 medium/slant 后缀，并让 Type 1 `endchar` 残留操作数与 `setcurrentpoint` 遵循 PDF.js 的恢复语义；新增两项回归测试。simple font 非法/缺失 `/Widths` 现在通过 viewer-local shadow dictionary 恢复，保留有效宽度，并用 `/MissingWidth` 或 Standard 14 AFM 补齐；不修改源对象。3 项恢复回归通过，真实 `issue17147.pdf` 已从 `FontWidthsExpected` 失败变为可测量，但仍有 1,001 个超容差像素。自动基线中的 `issue14462_reduced.pdf` 和 `tracemonkey.pdf` 仍暴露未解析 glyph 与 raster 差异。
-- [ ] F-07 / P0：标准 14 字体的主路径已经接入 pdflite AFM metrics（`units_per_em`、ascent/descent、cap height 和 widths）到 `PdfFontResource`，subset 前缀可识别，pdflite 的 AFM advance 继续负责粗体/斜体定位；SVG 显示层按 PDF.js 语义过滤 C0、未定义 C1 和 `.notdef`，而页面文本模型保留原始控制码；Symbol/ZapfDingbats 使用宿主字体栈 `Standard Symbols PS`/`D050000L` 并保留 generic fallback。白盒回归和真实 `standard_fonts.pdf` 14 页输出已覆盖，SVG 控制字符检查为 `NUL_COUNT=0`。本项仍未勾选，因为 viewer 不携带 PDF.js 的 Foxit 字体程序，宿主缺少对应字体时无法承诺与 PDF.js 的字形轮廓和像素完全一致；视觉差异及缺字诊断见 [validation.md](validation.md#standard-14-fonts-and-host-fallback)。
+- [x] F-07 / P0：携带固定 PDF.js 版本的 10 个 Foxit CFF 和 4 个 Liberation Sans TrueType 程序，来源、许可和 SHA-256 保存在 `assets/standard14/`。复用现有轮廓读取器完成标准 14 的绘制和裁剪，AFM/PDF Widths 保持定位；subset 名称、Symbol/Zapf、WinAnsi bullet 默认槽、Differences、ToUnicode 独立复制、嵌入程序优先与显式宿主 override 均有回归。11 项新测试及四后端 322/322 通过；强制 PDF.js 使用同一套固定字体程序的 16/16 真实页对照无测量失败，另复跑 10 份字体样本。标准字体页仍有 116,689–128,412 个超容差像素，包含表格描边和字形栅格化差异；本项完成确定性字体路径，不表示 A2 整页像素已对齐。证据见 [validation.md](validation.md#standard-14-fonts-and-host-fallback)。
 - [x] F-08 / P1：提供宿主字体解析/注入入口及系统字体回退策略；`PdfFontFallback` 和 `PdfViewerDocument::with_font_fallbacks` 接受资源名或 `/BaseFont` 到 CSS 字体族的映射，嵌入 TrueType/OpenType 仍优先使用文档字节；JS bridge 的 `set_font_fallbacks(json)` 清空页面缓存后重新使用该策略。宿主只提供本机/已许可字体，不把字体文件放入 viewer；库层回归和 Chromium bridge 检查见 [validation.md](validation.md#host-font-fallback-policy)。
 
 ## 文字与选择模型

@@ -69,3 +69,4 @@ process or a PDF.js runtime.
 
 Licensed under the [Apache License 2.0](LICENSE).
 Bundled CMap data retains its [upstream attribution and license](assets/cmaps/README.md).
+Bundled Standard 14 replacement fonts retain their [font licenses and provenance](assets/standard14/README.md).

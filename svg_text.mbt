@@ -54,6 +54,9 @@ fn pdf_svg_text_can_join(previous : PdfTextItem, current : PdfTextItem) -> Bool 
 /// those source codes in textContent while its canvas renderer does not paint
 /// arbitrary Unicode fallback glyphs for them.
 fn pdf_svg_display_text(page : PdfPageModel, item : PdfTextItem) -> String {
+  if item.type3_outline is Some(outline) && !outline.is_empty() {
+    return item.text
+  }
   for font in page.fonts {
     if font.name == item.font {
       let standard_font = match font.standard_font {
@@ -71,6 +74,29 @@ fn pdf_svg_display_text(page : PdfPageModel, item : PdfTextItem) -> String {
 }
 
 ///|
+/// XML labels retain copied text while omitting characters XML 1.0 cannot
+/// serialize. The extraction/source model still contains those characters.
+fn pdf_svg_xml_text(text : String) -> String {
+  let output = StringBuilder()
+  for char in text.iter() {
+    let code = char.to_int()
+    if code == 9 ||
+      code == 10 ||
+      code == 13 ||
+      (
+        code >= 32 &&
+        code <= 0x10FFFF &&
+        !(code >= 0xD800 && code <= 0xDFFF) &&
+        code != 0xFFFE &&
+        code != 0xFFFF
+      ) {
+      output.write_char(char)
+    }
+  }
+  output.to_string()
+}
+
+///|
 fn pdf_svg_text(
   output : StringBuilder,
   page : PdfPageModel,
@@ -85,12 +111,20 @@ fn pdf_svg_text(
     false
   }
   if has_outline {
+    let label = StringBuilder()
+    for item in items {
+      label.write_string(pdf_svg_xml_text(pdf_svg_display_text(page, item)))
+    }
+    output.write_string(
+      "<g><title>" + pdf_escape_xml(label.to_string()) + "</title>",
+    )
     for item in items {
       match item.type3_outline {
         Some(_) => pdf_svg_outline_text(output, page, item, scale)
         None => pdf_svg_text(output, page, [item], scale)
       }
     }
+    output.write_string("</g>")
     return
   }
   let first = items[0]

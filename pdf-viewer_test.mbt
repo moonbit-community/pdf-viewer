@@ -262,8 +262,8 @@ test "viewer renders inspectable SVG" {
   let svg = viewer.render_svg(1, scale=1.5) catch { _ => None }
   guard svg is Some(svg) else { fail("page 1 should render") }
   assert_true(svg.has_prefix("<svg"))
-  assert_true(svg.contains(">Hello</text>"))
-  assert_true(svg.contains("dominant-baseline=\"alphabetic\""))
+  assert_true(svg.contains(">Hello</title>"))
+  assert_true(svg.contains("data-pdf-font-outline=\"standard14:Helvetica\""))
   assert_true(svg.contains("viewBox"))
 }
 

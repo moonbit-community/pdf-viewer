@@ -52,6 +52,11 @@ TODO 范围：R-02、F-03、F-05、F-06、F-07、T-01、T-02、T-04。
   不再在 Form 的资源表中按旧名字重查。页面字体资源从实际绑定注册，同名且不同对象
   使用稳定的局部别名；ExtGState 使用与 Tf 相同的 metrics/校验和恢复。
   常规绘制跟踪字体绑定，字符串 bytes 来源仍按需采集；6 项专用回归通过。
+- Standard 14 使用固定 PDF.js 版本的 10 个 Foxit CFF 和 4 个 Liberation Sans
+  TrueType 程序，来源、许可和 SHA-256 见 `assets/standard14/`。复用现有轮廓读取器，
+  AFM/PDF Widths 仍负责定位；嵌入程序和显式宿主 override 保留优先级。
+  绘制/裁剪/复制共享 WinAnsi bullet 默认值，Differences 和 ToUnicode 各司其职。
+  11 项回归和 16 个真实页面通过；整页描边/栅格化差异仍在视觉报告中保留。
 - 用独立 `.mbtx` probe 验证 `mizchi/font`：缺 cmap 的 PDF 子集和裸 Type 1
   程序仍不可用，复合字形剪切/点对齐/缩放偏移与 fixture 预期不符，因此未替换
   当前字体恢复路径。真实对照和回归记录见 [validation.md](../validation.md#a1-fonts-unicode-and-reading-order)。

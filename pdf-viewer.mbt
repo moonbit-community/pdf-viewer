@@ -1149,6 +1149,7 @@ fn pdf_collected_entries_of_page(
   page : @page.PdfPage,
   optional_content_view? : PdfOptionalContentView? = None,
   collect_text_sources? : Bool = false,
+  font_fallbacks? : ArrayView[PdfFontFallback] = [],
 ) -> Array[PdfCollectedEntry] raise @core.PdfError {
   let rectangle = document.parse_rectangle(page.mediabox)
   let initial = @pdflite.pdf_content_initial_operator_state(
@@ -1172,7 +1173,9 @@ fn pdf_collected_entries_of_page(
     false,
     false,
     optional_content_view~,
-    text_source_scope=Some(pdf_text_scope_for_page(page, collect_text_sources)),
+    text_source_scope=Some(
+      pdf_text_scope_for_page(page, collect_text_sources, font_fallbacks~),
+    ),
   )
 }
 
@@ -1305,6 +1308,7 @@ fn pdf_collected_entries_of_ops(
       font_object: None,
       font_stack: [],
       collect_sources: false,
+      font_fallbacks: [],
     }),
   )
   let mut state = initial
@@ -1590,6 +1594,13 @@ fn pdf_collected_entries_of_ops(
               result.state,
               text_source_scope.bind(scope => scope.font_object),
               glyphs[:],
+              use_standard14=!pdf_standard14_uses_host_fallback(
+                document,
+                result.state.text_state.current_font,
+                text_source_scope.bind(scope => scope.font_object),
+                result.state.text_state.font,
+                text_source_scope.unwrap().font_fallbacks[:],
+              ),
             ),
           )
         }
@@ -1665,6 +1676,7 @@ fn pdf_items_of_page(
     document,
     page,
     optional_content_view~,
+    font_fallbacks=page_fonts.map(scope => scope.fallbacks[:]).unwrap_or([]),
   )
   let items : Array[PdfPageItem] = Array(capacity=collected_entries.length())
   let cff_fonts : Map[Int, PdfCffFont?] = Map([])
@@ -1777,7 +1789,7 @@ fn pdf_items_of_page(
               height,
             )
         }
-        let glyph_outline = match type1_outline {
+        let truetype_outline = match type1_outline {
           Some(value) => Some(value)
           None =>
             pdf_truetype_outline_of_pdf_glyph(
@@ -1797,6 +1809,30 @@ fn pdf_items_of_page(
             ) catch {
               _ => None
             }
+        }
+        let glyph_outline = match truetype_outline {
+          Some(value) => Some(value)
+          None if !pdf_standard14_uses_host_fallback(
+              document,
+              collected.state.text_state.current_font,
+              collected.font_object,
+              state.font,
+              page_fonts.map(scope => scope.fallbacks[:]).unwrap_or([]),
+            ) =>
+            pdf_standard14_outline_of_pdf_glyph(
+              collected.state.text_state.current_font,
+              charcode,
+              glyph_matrix,
+              state.rendering_mode,
+              fill_color,
+              stroke_color,
+              paint.fill_alpha,
+              paint.stroke_alpha,
+              origin_x,
+              origin_y,
+              height,
+            )
+          None => None
         }
         items.push(
           PdfPageItem::Text({

@@ -872,6 +872,7 @@ fn pdf_viewer_ttf_paint_path(
   stroke_color : String,
   fill_alpha : Double,
   stroke_alpha : Double,
+  outline_kind? : String = "truetype",
 ) -> String {
   let fill = if pdf_text_mode_fills(rendering_mode) {
     fill_color
@@ -896,7 +897,9 @@ fn pdf_viewer_ttf_paint_path(
   fill_alpha.to_string() +
   "\" stroke-opacity=\"" +
   stroke_alpha.to_string() +
-  "\" data-pdf-font-outline=\"truetype\"/>"
+  "\" data-pdf-font-outline=\"" +
+  pdf_escape_xml(outline_kind) +
+  "\"/>"
 }
 
 ///|

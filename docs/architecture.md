@@ -163,7 +163,7 @@ intersected, and the collector saves/restores them with `q/Q`. Form XObjects
 inherit the active clip while keeping their local text clips inside the Form.
 Each text-object clip is resolved once and shared by subsequent page items.
 The current path reconstruction covers CFF, single-byte and single-FD CID-keyed
-Type 1, and embedded TrueType outlines;
+Type 1, embedded TrueType and bundled Standard 14 outlines;
 when a glyph outline cannot be decoded, the renderer leaves that clip
 unavailable instead of treating the missing glyph as an empty path. Type 3
 fonts do not contribute to this clip, as required by PDF text semantics.

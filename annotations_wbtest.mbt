@@ -213,7 +213,7 @@ test "appearance fonts use their own resource dictionaries" {
     contents=text,
     resources="<< /Font << /F1 9 0 R >> >>",
   )
-  assert_true(page.fonts[0].family.contains("Nimbus Sans"))
+  assert_eq(page.fonts[0].standard_font, Some("Helvetica"))
   guard page.annotations[0].appearance is Some(first) else {
     fail("first AP missing")
   }
@@ -221,12 +221,10 @@ test "appearance fonts use their own resource dictionaries" {
     fail("second AP missing")
   }
   assert_true(
-    first.svg.contains(
-      "font-family=\"Nimbus Mono PS, Liberation Mono, monospace\"",
-    ),
+    first.svg.contains("data-pdf-font-outline=\"standard14:Courier\""),
   )
   assert_true(
-    second.svg.contains("font-family=\"Nimbus Roman, Liberation Serif, serif\""),
+    second.svg.contains("data-pdf-font-outline=\"standard14:Times-Roman\""),
   )
 }
 
@@ -264,17 +262,13 @@ test "nested appearance Forms retain their own fonts and outer transparency grou
     fail("missing AP")
   }
   assert_true(
-    appearance.svg.contains(
-      "font-family=\"Nimbus Mono PS, Liberation Mono, monospace\"",
-    ),
+    appearance.svg.contains("data-pdf-font-outline=\"standard14:Courier\""),
   )
   assert_true(
-    appearance.svg.contains(
-      "font-family=\"Nimbus Roman, Liberation Serif, serif\"",
-    ),
+    appearance.svg.contains("data-pdf-font-outline=\"standard14:Times-Roman\""),
   )
-  assert_true(appearance.svg.contains(">A</text>"))
-  assert_true(appearance.svg.contains(">B</text>"))
+  assert_true(appearance.svg.contains(">A</title>"))
+  assert_true(appearance.svg.contains(">B</title>"))
   assert_true(appearance.svg.contains("data-pdf-group-isolated=\"true\""))
   assert_true(appearance.svg.contains("data-pdf-group-knockout=\"true\""))
   assert_true(appearance.svg.contains("isolation:isolate"))

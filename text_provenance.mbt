@@ -65,6 +65,7 @@ pub fn PdfViewerDocument::text_provenance(
       self.optional_content_state,
     ),
     collect_text_sources=true,
+    font_fallbacks=self.font_fallbacks[:],
   )
   let programs : Map[Int, PdfTextFontProgram?] = Map([])
   let output : Array[PdfTextProvenance] = []

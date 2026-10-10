@@ -1,0 +1,47 @@
+///|
+import {
+  "moonbitlang/pdflite@0.2.2",
+  "moonbitlang/pdflite@0.2.2/core",
+  "moonbitlang/pdflite@0.2.2/syntax",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+  "moonbitlang/x@0.5.5/fs",
+}
+
+///|
+fn main raise {
+  let args = @env.args()
+  let document = @pdflite.pdf_read_document_from_bytes(
+    @fs.read_file_to_bytes(args[1]),
+  )
+  for entry in document.list_fonts([1]) {
+    let font = document.read_font(entry.font)
+    let encoding = match font {
+      @pdflite.PdfFontStandard(data) => data.encoding
+      @pdflite.PdfFontSimple(simple) => simple.encoding
+      _ => continue
+    }
+    let table = encoding.table()
+    let subset = table.filter(pair => {
+      pair.0 < 33 || (pair.0 >= 125 && pair.0 < 160)
+    })
+    let report : Json = {
+      "resource": entry.name,
+      "base_font": entry.basefont,
+      "font_kind": font.debug_name(),
+      "encoding": ToJson::to_json(encoding),
+      "names": Json::array(
+        [
+          for pair in subset => {
+            Json::array([
+              Json::number(pair.0.to_double()),
+              Json::string(@utf8.decode_lossy(pair.1.bytes())),
+            ])
+          }
+        ],
+      ),
+    }
+    println(report.stringify())
+  }
+}

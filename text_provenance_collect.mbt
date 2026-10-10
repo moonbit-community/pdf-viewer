@@ -12,6 +12,7 @@ priv struct PdfTextCollectScope {
   mut font_object : @syntax.PdfObject?
   font_stack : Array[@syntax.PdfObject?]
   collect_sources : Bool
+  font_fallbacks : Array[PdfFontFallback]
 }
 
 ///|
@@ -26,6 +27,7 @@ fn pdf_text_object_number(object : @syntax.PdfObject) -> Int? {
 fn pdf_text_scope_for_page(
   page : @page.PdfPage,
   collect_sources : Bool,
+  font_fallbacks? : ArrayView[PdfFontFallback] = [],
 ) -> PdfTextCollectScope {
   {
     content_streams: page.content.map(pdf_text_object_number),
@@ -33,6 +35,9 @@ fn pdf_text_scope_for_page(
     font_object: None,
     font_stack: [],
     collect_sources,
+    font_fallbacks: [
+      for fallback in font_fallbacks => fallback
+    ],
   }
 }
 
@@ -65,6 +70,7 @@ fn pdf_text_scope_for_form(
     // frames. Mirror these too, so unmatched Q recovery keeps the same font.
     font_stack: [..parent.font_stack, parent.font_object],
     collect_sources: parent.collect_sources,
+    font_fallbacks: parent.font_fallbacks,
   })
 }
 

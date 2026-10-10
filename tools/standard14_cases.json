@@ -1,0 +1,10 @@
+{
+  "reference_revision": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+  "scale": 2,
+  "use_system_fonts": false,
+  "cases": [
+    { "file": "standard_fonts.pdf", "pages": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], "rotations": [0], "features": ["standard-14-fonts", "bundled-programs", "metrics", "encoding"] },
+    { "file": "issue17147.pdf", "pages": [1], "rotations": [0], "features": ["standard-14-fonts", "font-metrics-recovery"] },
+    { "file": "tracemonkey.pdf", "pages": [1], "rotations": [0], "features": ["embedded-type1", "standard-14-fonts", "multi-column"] }
+  ]
+}
