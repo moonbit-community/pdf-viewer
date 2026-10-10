@@ -84,7 +84,7 @@ JP2 colour/alpha、PDF `/SMaskInData`、支持的编码 profile、目标和内�
 
 | 包 | 版本/许可与核查状态 | 可复用能力 | 本项目的适配与限制 |
 | --- | --- | --- | --- |
-| [mizchi/font](https://mooncakes.io/docs/mizchi/font@0.7.4) | 0.7.4，Apache-2.0；native probe 实测，尚未接入 viewer | `parse_font(Bytes)`，`TTFont::glyph_outline(gid)` / `glyph_metrics(gid)`；TrueType 与 OpenType-CFF 轮廓 | 两份缺 cmap 的真实子集和裸 Type 1 输入解析失败；复合字形剪切、点对齐、scaled offset 未通过 authored fixture；保留现有恢复分支，先评估扩展库 |
+| [mizchi/font](https://mooncakes.io/docs/mizchi/font@0.7.4) | 0.7.4，Apache-2.0；已固定接入独立 cmap 接口，四后端回归通过；完整字体解析仍为 probe | `parse_cmap(BinaryReader, Int)` 支持 0/4/6/12；`parse_font(Bytes)`、按 GID 取轮廓/metrics | cmap 前加 PDF 选表、边界/展开限额和缓存；完整 parser 的缺 cmap/裸 Type 1、复合轮廓限制仍需保留现有恢复分支 |
 | [moonbit-community/bidi](https://mooncakes.io/docs/moonbit-community/bidi@0.5.2) | 0.5.2，Apache-2.0；已固定接入，四后端回归通过 | UAX #9 的 `process`、levels 和 `reorder` 字符置换 | code point→glyph item 映射核对几何和内容流顺序；不直接改绘制文本；复杂 inverse bidi、表格和旋转布局仍有限制 |
 | [moonbit-community/normalization](https://mooncakes.io/docs/moonbit-community/normalization@0.5.2) / [ucd](https://mooncakes.io/docs/moonbit-community/ucd@0.5.2) | 均为 0.5.2，Apache-2.0；已固定接入，四后端回归通过 | Unicode 16 NFKD、大小写映射和字符分类 | 分解/兼容展开/组合符号重排保留原文 UTF-16 来源；搜索策略额外折叠 ß、æ、œ，不承诺完整 locale/case-fold 语义；不改原文或 glyph 编码 |
 
@@ -93,6 +93,14 @@ JP2 colour/alpha、PDF `/SMaskInData`、支持的编码 profile、目标和内�
 需要 fixture 证明可用，或扩展库的输入接口，而不是直接删除现有解析器。
 调用按 GID 的入口，不用 ToUnicode/`char_outline` 替代 PDF 的 CIDToGIDMap，
 也不用通用文字 layout 改写 PDF 已规定的字距与位置。
+
+可单独使用的 `parse_cmap` 不要求完整 sfnt。viewer 选定一个有效 subtable 后，
+用库接受的 Unicode record header 调用该接口，原平台/encoding ID 仍用于 PDF
+和 MacRoman 语义。库的 BinaryReader 不检查边界，因此先验证格式 0/4/6/12
+的所有读取范围、段/组顺序和展开量；signed remainder 归一到 16 位，
+glyph ID 再与 maxp 核对。无可用表沿用恢复路径；有效表中的缺字保留 GID 0。
+缓存只保留 cmap，最多 8 项、1 MiB 源数据、262144 映射；单个 format 12
+最多展开 131072 个码位，超出时该表不可用。其它格式与更复杂字体恢复仍待推进。
 
 `bidi.reorder_string` 输出视觉顺序且会做镜像；不能直接拿它作为逻辑复制文本，
 也不能重复重排已由 PDF 定位的字形。A1 使用置换与 Unicode 分类，

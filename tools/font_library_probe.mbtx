@@ -8,6 +8,41 @@ import {
 }
 
 ///|
+/// Report original encoding records without asking parse_font to choose one.
+fn font_probe_cmap_records(
+  bytes : Bytes,
+  tables : Array[@font.TableInfo],
+) -> Array[Json] {
+  let records : Array[Json] = []
+  for table in tables {
+    if table.tag != "cmap" ||
+      table.offset < 0 ||
+      table.length < 4 ||
+      table.offset > bytes.length() - table.length {
+      continue
+    }
+    let data = bytes[table.offset:table.offset + table.length].to_owned()
+    let reader = @font.BinaryReader::at(data, 2)
+    let count = reader.read_uint16()
+    guard count <= (data.length() - 4) / 8 else { continue }
+    for index in 0..<count {
+      reader.seek(4 + index * 8)
+      let platform = reader.read_uint16()
+      let encoding = reader.read_uint16()
+      let offset = reader.read_uint32()
+      if offset >= 4 + count * 8 && offset <= data.length() - 2 {
+        records.push({
+          "platform": platform,
+          "encoding": encoding,
+          "format": reader.peek_uint16_at(offset),
+        })
+      }
+    }
+  }
+  records
+}
+
+///|
 /// Deliberately small, authored fixtures for GID/compound behavior. The font
 /// library builds the sfnt container; the PDF tests also decode these bytes.
 fn font_probe_rectangle(width : Int, height : Int) -> Bytes {
@@ -165,6 +200,7 @@ fn main raise {
         "table_tags": [
           for table in tables => table.tag
         ],
+        "cmap_records": font_probe_cmap_records(bytes, tables),
         "glyphs": glyphs,
         "synthetic_base64": if args[1] == "--synthetic" {
           Json::string(@base64.encode(bytes))
@@ -183,6 +219,7 @@ fn main raise {
             "table_tags": [
               for table in tables => table.tag
             ],
+            "cmap_records": font_probe_cmap_records(bytes, tables),
             "missing_required_tables": missing,
           } : Json).stringify(),
       )

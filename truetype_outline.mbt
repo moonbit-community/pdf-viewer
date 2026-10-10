@@ -771,6 +771,11 @@ fn pdf_viewer_ttf_simple_gid(
     .unwrap_or(false)
   let implicit = simple.encoding is @pdflite.PdfImplicitInFontFile
   if symbolic || implicit {
+    let cmap = match
+      pdf_viewer_ttf_cmap(bytes[:], symbolic || implicit, false) {
+      Some(cmap) => cmap
+      None => return charcode
+    }
     for
       code in [
         charcode,
@@ -778,12 +783,12 @@ fn pdf_viewer_ttf_simple_gid(
         charcode + 0xF100,
         charcode + 0xF200,
       ] {
-      match @pdflite.pdf_truetype_cmap_glyph(bytes[:], code) {
-        Some(gid) if gid > 0 => return gid
-        _ => ()
+      let gid = pdf_viewer_ttf_cmap_gid(bytes[:], cmap, code)
+      if gid > 0 {
+        return gid
       }
     }
-    return charcode
+    return 0
   }
   let glyph_font = @pdflite.PdfFontSimple({
     ..simple,
@@ -794,8 +799,18 @@ fn pdf_viewer_ttf_simple_gid(
   })
   let raw_bytes = glyph_font.content_bytes_of_charcode(charcode)
   match glyph_font.text_extractor().codepoints_of_text(raw_bytes[:]) {
-    [codepoint, ..] =>
-      @pdflite.pdf_truetype_cmap_glyph(bytes[:], codepoint).unwrap_or(charcode)
+    [codepoint, ..] => {
+      let cmap = match pdf_viewer_ttf_cmap(bytes[:], false, codepoint > 65535) {
+        Some(cmap) => cmap
+        None => return charcode
+      }
+      let code = if cmap.platform == 1 && cmap.encoding == 0 {
+        pdf_viewer_ttf_macroman_code(simple, codepoint).unwrap_or(-1)
+      } else {
+        codepoint
+      }
+      pdf_viewer_ttf_cmap_gid(bytes[:], cmap, code)
+    }
     [] => charcode
   }
 }

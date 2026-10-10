@@ -26,6 +26,9 @@ TODO 范围：R-02、F-03、F-05、F-06、F-07、T-01、T-02、T-04。
   通栏标题下面的多行双栏按栏读取。提取、搜索、选择和 text layer 共用顺序。
 - TrueType 绘制按 Encoding/Differences 或 symbol cmap 选 GID，ToUnicode 只决定
   提取文本；复合字形支持点对齐和 scaled offset，并检查 glyph 边界、递归和点数。
+- 已单独接入 `mizchi/font` 0.7.4 的 cmap 0/4/6/12 解码，补 Windows Unicode/
+  Symbol、MacRoman 与非 BMP 选表，验证读取边界和展开量，使用有上限的 cmap
+  缓存。MacRoman 反向映射仍复用 pdflite；有效表的缺字不再冒用原 charcode。
 - 新增 `text_sources()`、页面/文档 `text_diagnostics()`。来源保留 item、charcode、
   字体和 UTF-16 范围；CMap 诊断保留资源路径和直接 stream 对象号。
   ToUnicode 目标串允许多 scalar、内部空白和空串，源字符码仍限制为 1–4 字节，
@@ -34,7 +37,7 @@ TODO 范围：R-02、F-03、F-05、F-06、F-07、T-01、T-02、T-04。
   程序仍不可用，复合字形剪切/点对齐/缩放偏移与 fixture 预期不符，因此未替换
   当前字体恢复路径。真实对照和回归记录见 [validation.md](../validation.md#a1-fonts-unicode-and-reading-order)。
 
-这一批没有勾选整个 TODO。后续仍需字体库扩展、完整 cmap 选择和损坏字体覆盖、
+这一批没有勾选整个 TODO。后续仍需字体库扩展、其它 cmap 格式、post 表和损坏字体覆盖、
 复杂 bidi/表格/旋转布局、PDF byte span 与 CID/GID 来源，以及统一恢复策略和真实
 UseCMap/reader 损坏样本。跨方向边界目前保留显式空白，不推断额外空格；
 无法核对的 bidi 置换保留内容流顺序。

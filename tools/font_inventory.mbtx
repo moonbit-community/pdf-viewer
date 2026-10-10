@@ -34,6 +34,8 @@ async fn main {
     fonts.push({
       "name": font.name,
       "base_name": font.basefont,
+      "subtype": font.subtype,
+      "encoding": font.encoding,
       "path": data_path.map(Json::string).unwrap_or(Json::null()),
     })
   }

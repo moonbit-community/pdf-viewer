@@ -51,6 +51,18 @@ lookup. Vertical geometry is computed from the same text matrix and signed
 advances as painting and clipping; no separate quad-direction correction is
 applied afterwards.
 
+Simple TrueType fonts resolve Encoding/Differences separately from ToUnicode.
+The viewer selects a Windows Unicode/Symbol or MacRoman cmap before calling
+`mizchi/font` 0.7.4's standalone `parse_cmap` for formats 0/4/6/12. MacRoman
+glyph names use pdflite's reverse encoding lookup; supplementary scalars use
+full-repertoire Unicode tables. Declared table bounds, segment/range ordering,
+glyph IDs and expansion counts are checked before the library reads bytes.
+Missing mappings in a selected table remain GID 0; missing/unusable tables
+retain the existing raw-GID recovery. A bounded shared cache holds only cmap
+bytes and decoded mappings: eight entries, 1 MiB input and 262,144 mappings.
+It retains no complete font or PDF document. General font parsing and outlines
+still use the existing recovery paths because PDF subsets can omit tables.
+
 Text paint geometry is carried separately as `glyph_transform`: a one-em,
 y-up glyph coordinate system mapped to PDF page coordinates, including CTM,
 the per-glyph text matrix, font size, horizontal scale, rise, and vertical

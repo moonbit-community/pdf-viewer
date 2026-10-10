@@ -6,7 +6,7 @@ CLI. That conversion baseline does not measure parity with pdf.js rendering.
 The automated selected-page visual baseline below now measures actual output
 against the same pinned PDF.js build.
 
-The suite currently contains 250 tests on each of wasm, wasm-gc, JavaScript, and
+The suite currently contains 259 tests on each of wasm, wasm-gc, JavaScript, and
 native. It includes 13 annotation tests, 17 CFF tests, 25 Type 1 tests, 5 CID
 layout tests, 9 variable-length CMap tests, 4 text-geometry tests, and 8
 text-clipping tests, one mixed-paint scaling regression, and one tiling-pattern
@@ -35,7 +35,7 @@ are an additional diagnostic, not an exemption from full-page differences.
 
 ## A1 fonts, Unicode and reading order
 
-This batch adds 29 regressions: 7 Unicode-search, 6 mixed-direction/column,
+The first batch adds 29 regressions: 7 Unicode-search, 6 mixed-direction/column,
 7 TrueType-mapping/compound, 7 source/diagnostic and 2 CMap destination tests.
 `moon test --target all --diagnostic-limit 1` passed **250/250 on
 each backend**. `moon info && moon fmt` and the four-target check passed.
@@ -65,8 +65,8 @@ remain unchanged. Compound contours preserve shear, align unsigned parent/child
 point numbers, transform scaled offsets and validate glyph-local records,
 instructions, recursion and point count. These fixtures follow the
 [OpenType composite-glyph description](https://learn.microsoft.com/en-us/typography/opentype/spec/glyf#composite-glyph-description).
-The existing pdflite cmap reader still handles formats 0/4/6, with format 12 and
-platform/encoding selection pending.
+The follow-up now uses the standalone `mizchi/font` cmap reader for formats
+0/4/6/12; the whole-font parser and outline replacement remain separate work.
 
 `text_sources()` exposes glyph-owned half-open ranges in the logical
 `text_content().text`, font names and charcodes. Inferred separators have no
@@ -83,6 +83,40 @@ hex destinations. This avoids reporting valid multi-scalar ToUnicode values
 as malformed and retains lazy range increments; oversized source codes remain
 excluded.
 
+### Standalone cmap integration
+
+`mizchi/font` 0.7.4 is pinned in the root dependencies and used only for the
+validated standalone cmap path. PDF selection prefers Windows Unicode/Symbol,
+then MacRoman, with full-repertoire Unicode records for supplementary scalars;
+directory order no longer merges conflicting records. MacRoman reverse lookup
+reuses pdflite. Selected missing glyphs remain GID 0 instead of borrowing the
+raw character code. Absent/unusable cmap tables retain the recovery branch.
+
+Before calling the library, the adapter checks declared table/record lengths,
+format 4 array/range offsets, format 12 group ordering, Unicode/GID bounds and
+expansion limits. It corrects signed remainders to 16-bit glyph IDs and checks
+maxp. A shared cache retains cmap bytes only, with limits of 8 entries, 1 MiB
+input and 262,144 decoded mappings; each format 12 table can expand at most
+131,072 codepoints. Other cmap formats, post-table glyph-name recovery and
+broader damaged-font/host-loading behavior remain open.
+
+Nine additional tests cover supplementary glyph painting and clipping with
+independent ToUnicode, Unicode-platform format 12, conflicting/duplicate
+platform records, Symbol high-byte lookup, MacRoman glyph-name conversion,
+format 6 intervals, format 4 notdef holes/signed deltas, invalid GIDs,
+truncation, oversized/wrapped ranges and cache isolation/eviction. The final
+four-backend suite passed **259/259 on each backend**; `moon info && moon fmt`
+and `moon check --target all` passed. The public `.mbti` interface is unchanged
+by this follow-up. Probe output now records original cmap platform/encoding/
+format triples, and font inventory includes subtype and PDF encoding.
+
+The MacRoman adapter walks pdflite's existing encoding/forward extraction
+instead of calling the generic CID-capable reverse lookup, which otherwise
+links unrelated reverse CMap tables. Against the `100fc23` browser build,
+the final generated JS grows from 12,227,920 to 12,248,518 bytes; `gzip -c`
+grows from 2,782,919 to 2,785,682 bytes (**2,763 bytes**). This checks artifact
+size, not page-load performance; no shared build/visual runner was changed.
+
 ### Font candidate probe
 
 These commands extract original program bytes and call the candidate's public
@@ -97,6 +131,10 @@ moon run tools/font_library_probe.mbtx _build/a1-font-arabic/0.bin
 moon run tools/font_inventory.mbtx reference/pdf.js/test/pdfs/TrueType_without_cmap.pdf _build/a1-font-no-cmap
 moon run tools/font_library_probe.mbtx _build/a1-font-no-cmap/0.bin
 moon run tools/font_library_probe.mbtx --synthetic _build/a1-font-fixture.ttf
+moon run tools/font_inventory.mbtx reference/pdf.js/test/pdfs/issue4800.pdf _build/a1-font-issue4800
+moon run tools/font_library_probe.mbtx _build/a1-font-issue4800/0.bin
+moon run tools/font_inventory.mbtx reference/pdf.js/test/pdfs/mixedfonts.pdf _build/a1-font-mixedfonts
+moon run tools/font_library_probe.mbtx _build/a1-font-mixedfonts/3.bin
 ```
 
 `mizchi/font` 0.7.4 returns None for all three selected programs:
@@ -142,6 +180,35 @@ Its nonspace count is still 4,281 versus reference 4,295; the runner compares
 raw sequences without ligature/Unicode normalization. First nonspace mismatch
 moves from UTF-16 position 565 to 607, which alone is not a compatibility score.
 Paragraph separators, ligatures and font/raster differences remain.
+
+The cmap follow-up uses `tools/font_cmap_cases.json` at the same pinned
+reference. The eight-file report `_build/visual-test-1791639147626/` and
+isolated `100fc23` baseline
+`_build/a1-cmap-baseline/_build/visual-test-1791639224260/` both measured
+**8/8, 0 failures, 8 differences, 0 placeholders**. The additional simple-font
+sample `issue4800.pdf` was measured separately in
+`_build/visual-test-1791639404722/` versus
+`_build/a1-cmap-baseline/_build/visual-test-1791639404712/`: **1/1, 0 failures**.
+All nine before/after viewer screenshots have matching SHA-256 values.
+
+```bash
+moon run tools/visual_test.mbtx tools/font_cmap_cases.json /path/to/chromium
+```
+
+| Additional page 1 sample | Pixels above tolerance 8, before → after | Font coverage |
+| --- | ---: | --- |
+| complex_ttf_font.pdf | 72,427 → 72,427 | Two TrueType subsets without cmap retain recovery |
+| Embedded_font.pdf | 16,368 → 16,368 | OpenType-CFF CID path remains usable |
+| mixedfonts.pdf | 37,176 → 37,176 | Real DejaVuSans contains cmap 0/3/4, 0/4/12, 1/0/6, 3/1/4, 3/10/12 |
+| pattern_text_embedded_font.pdf | 207,762 → 207,762 | Existing CFF/pattern path retains its differences |
+| issue4800.pdf | 1,378 → 1,378 | Simple TrueType WinAnsi font uses Unicode 0/1 format 4 |
+
+Triples above mean platform/encoding/format. `mixedfonts.pdf` binds DejaVuSans
+as a CID font, so its unchanged rendering does not prove the simple-font cmap
+selection path. `issue4800.pdf` exercises that path with a real program;
+supplementary rendering and conflicting-platform behavior are covered by
+authored fixtures. Raw text still differs for the same selected files; these
+measurements do not establish PDF.js pixel parity or a performance score.
 
 
 ### Browser checks
