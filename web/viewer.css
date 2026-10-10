@@ -78,10 +78,14 @@ main:focus-visible {
 }
 .file-controls,
 .page-controls,
-.zoom-controls {
+.zoom-controls,
+.search-controls {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+.file-controls {
+  flex-wrap: wrap;
 }
 .file-controls {
   flex: 1;
@@ -110,6 +114,31 @@ main:focus-visible {
   padding: 0 4px;
   color: #6d7a8c;
 }
+.search-controls input[type="search"] {
+  width: 150px;
+  height: 32px;
+  border: 1px solid #d6dce5;
+  border-radius: 4px;
+  padding: 0 8px;
+  background: #fff;
+}
+.search-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: #68778d;
+  white-space: nowrap;
+  user-select: none;
+}
+.search-controls input[type="checkbox"] {
+  accent-color: #365d90;
+}
+#search-status {
+  min-width: 42px;
+  color: #68778d;
+  white-space: nowrap;
+  text-align: right;
+}
 #viewer {
   flex: 1;
   min-height: 0;
@@ -119,6 +148,12 @@ main:focus-visible {
 }
 #viewer.drag-over {
   background: #d8e4f5;
+}
+#viewer.page-mode #pages .page {
+  display: none;
+}
+#viewer.page-mode #pages .page.current-page {
+  display: block;
 }
 #pages {
   min-width: fit-content;
@@ -191,6 +226,13 @@ main:focus-visible {
 .text-layer ::-moz-selection {
   background: #71a1df80;
   color: transparent;
+}
+.text-layer .pdf-search-hit {
+  background: #facc1555;
+}
+.text-layer .pdf-search-active {
+  background: #f59e0b99;
+  outline: 1px solid #d97706;
 }
 #empty-state {
   text-align: center;
@@ -268,6 +310,143 @@ h1 {
   font-size: 13px;
   box-shadow: 0 3px 12px #28354826;
 }
+#sidebar {
+  position: fixed;
+  z-index: 10;
+  top: 60px;
+  bottom: 38px;
+  left: 0;
+  width: min(340px, 86vw);
+  overflow: auto;
+  background: #fafbfd;
+  border-right: 1px solid #cbd4e1;
+  box-shadow: 4px 0 16px #2835481f;
+}
+.sidebar-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  min-height: 44px;
+  padding: 6px 10px 6px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fafbfd;
+  border-bottom: 1px solid #d7dde7;
+}
+.sidebar-header strong {
+  font-size: 14px;
+  color: #354760;
+}
+#sidebar-close {
+  width: 30px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+}
+#sidebar-content {
+  padding: 8px 0 18px;
+}
+.sidebar-item {
+  width: 100%;
+  min-height: 34px;
+  display: block;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 7px 12px;
+  text-align: left;
+  color: #34455e;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-item:hover:enabled {
+  background: #e9eff8;
+}
+.sidebar-item:disabled {
+  color: #9aa5b5;
+}
+.sidebar-empty {
+  margin: 18px 16px;
+  color: #768398;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.thumbnail-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+}
+.thumbnail-preview {
+  width: 82px;
+  height: 106px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #d2d9e4;
+}
+.thumbnail-preview svg {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+}
+.thumbnail-label {
+  color: #4f6179;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.info-list {
+  display: grid;
+  grid-template-columns: minmax(70px, auto) 1fr;
+  gap: 7px 12px;
+  margin: 8px 16px 18px;
+  font-size: 12px;
+}
+.info-list dt {
+  color: #718096;
+}
+.info-list dd {
+  margin: 0;
+  color: #33435a;
+  overflow-wrap: anywhere;
+}
+.sidebar-section,
+.attachment-row {
+  margin: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #68778d;
+}
+.sidebar-section span,
+.attachment-row span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-section .sidebar-item,
+.attachment-row .sidebar-item {
+  width: auto;
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid #d6dce5;
+  border-radius: 4px;
+  background: #fff;
+}
+#sidebar-content h3 {
+  margin: 20px 16px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #65758c;
+}
 @media (max-width: 850px) {
   .toolbar {
     flex-wrap: wrap;
@@ -280,11 +459,18 @@ h1 {
   .file-controls {
     flex-basis: 100%;
   }
+  .search-controls {
+    flex-basis: 100%;
+  }
   #file-name {
     max-width: 70vw;
   }
   #viewer {
     padding: 18px 12px;
+  }
+  #sidebar {
+    top: 104px;
+    bottom: 38px;
   }
 }
 @media print {
@@ -298,7 +484,8 @@ h1 {
   }
   .toolbar,
   .status-bar,
-  #error {
+  #error,
+  #sidebar {
     display: none;
   }
   .page {

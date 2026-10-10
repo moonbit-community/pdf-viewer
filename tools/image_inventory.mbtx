@@ -1,0 +1,53 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/env",
+  "moonbitlang/pdflite",
+  "moonbitlang/pdflite/core",
+  "moonbitlang/pdflite/syntax",
+}
+
+///|
+fn name(text : String) -> @core.PdfName {
+  @core.pdf_name_of_bytes(@utf8.encode(text))
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  guard args.length() == 2 else {
+    fail("usage: image_inventory.mbtx <input.pdf>")
+  }
+  let bytes = @fs.read_file(args[1]).binary()
+  let document = @pdflite.pdf_read_document_from_bytes(bytes)
+  document.iter_objects((number, object) => {
+    if document.lookup_direct(name("/Subtype"), object)
+      is Some(@syntax.PdfNameObject(subtype)) && subtype == name("/Image") {
+      let fields : Map[String, Json] = { "object": Json::number(number.to_double()) }
+      for key in ["/Width", "/Height", "/BitsPerComponent", "/ColorSpace",
+                  "/Filter", "/Decode", "/ImageMask", "/SMask", "/Mask",
+                  "/Matte", "/Interpolate"] {
+        match object.lookup_immediate(name(key)) {
+          Some(value) => fields[key] = ToJson::to_json(value)
+          None => ()
+        }
+      }
+      let decoded = document.pdf_decode_stream_until_unknown(object) catch {
+        _ => object
+      }
+      match document.lookup_direct(name("/Filter"), decoded) {
+        None | Some(@syntax.PdfArray([])) => {
+          let bytes = decoded.stream_bytes()
+          fields["decoded_bytes"] = Json::number(bytes.length().to_double())
+          fields["first_samples"] = ToJson::to_json([
+            for i in 0..<bytes.length().min(32) => bytes[i].to_int()
+          ])
+        }
+        Some(filter) => fields["remaining_filter"] = ToJson::to_json(filter)
+      }
+      println(Json::object(fields).stringify())
+    }
+  })
+}

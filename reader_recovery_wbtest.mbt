@@ -124,3 +124,22 @@ test "compressed recovery rejects cyclic xref revisions" {
     _ => fail("cyclic xref must fail")
   }
 }
+
+///|
+test "page streams with comments after endstream remain visible through the reader" {
+  let contents = "0.2 0.5 0.8 rg 0 0 10 10 re f " +
+    "BT /F1 12 Tf 10 30 Td (endstream endobj) Tj ET"
+  let viewer = annotation_test_document([
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R " +
+    "/Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> >>",
+    annotation_test_stream("", contents) +
+    "\n% comment between stream and object terminators\n",
+  ])
+  let page = viewer.page(1).unwrap()
+  assert_eq(page.text, "endstream endobj")
+  guard page.items is [Path(path), ..] else { fail("dropped content path") }
+  assert_eq(path.fill_color, "#3380CC")
+  assert_true(page.render_svg().contains("endstream endobj"))
+}

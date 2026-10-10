@@ -1,6 +1,9 @@
 import {
   "moonbit-community/pdf-viewer" @pdf,
+  "moonbitlang/core/encoding/base64",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+  "moonbitlang/pdflite/core",
 }
 
 supported_targets = "js"
@@ -8,7 +11,18 @@ supported_targets = "js"
 options(
   link: {
     "js": {
-      "exports": ["open_pdf", "render_page", "select_text", "close_pdf"],
+      "exports": [
+        "open_pdf",
+        "open_pdf_with_password",
+        "set_font_fallbacks",
+        "render_page",
+        "select_text",
+        "search_pdf",
+        "document_info",
+        "download_attachment",
+        "download_metadata",
+        "close_pdf",
+      ],
       "format": "esm",
     },
   },

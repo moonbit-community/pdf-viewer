@@ -62,7 +62,7 @@ test "annotation colors retain normalized components and explicit transparency" 
   assert_eq(page.annotations.map(a => a.color), [
     Some("#FF8000"),
     Some("#808080"),
-    Some("#FF0000"),
+    Some("#FF2E17"),
     Some("none"),
     Some("#00FF00"),
   ])
@@ -213,15 +213,21 @@ test "appearance fonts use their own resource dictionaries" {
     contents=text,
     resources="<< /Font << /F1 9 0 R >> >>",
   )
-  assert_eq(page.fonts[0].family, "sans-serif")
+  assert_true(page.fonts[0].family.contains("Nimbus Sans"))
   guard page.annotations[0].appearance is Some(first) else {
     fail("first AP missing")
   }
   guard page.annotations[1].appearance is Some(second) else {
     fail("second AP missing")
   }
-  assert_true(first.svg.contains("font-family=\"monospace\""))
-  assert_true(second.svg.contains("font-family=\"serif\""))
+  assert_true(
+    first.svg.contains(
+      "font-family=\"Nimbus Mono PS, Liberation Mono, monospace\"",
+    ),
+  )
+  assert_true(
+    second.svg.contains("font-family=\"Nimbus Roman, Liberation Serif, serif\""),
+  )
 }
 
 ///|
@@ -257,8 +263,16 @@ test "nested appearance Forms retain their own fonts and outer transparency grou
   guard page.annotations[0].appearance is Some(appearance) else {
     fail("missing AP")
   }
-  assert_true(appearance.svg.contains("font-family=\"monospace\""))
-  assert_true(appearance.svg.contains("font-family=\"serif\""))
+  assert_true(
+    appearance.svg.contains(
+      "font-family=\"Nimbus Mono PS, Liberation Mono, monospace\"",
+    ),
+  )
+  assert_true(
+    appearance.svg.contains(
+      "font-family=\"Nimbus Roman, Liberation Serif, serif\"",
+    ),
+  )
   assert_true(appearance.svg.contains(">A</text>"))
   assert_true(appearance.svg.contains(">B</text>"))
   assert_true(appearance.svg.contains("data-pdf-group-isolated=\"true\""))

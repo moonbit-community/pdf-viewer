@@ -10,6 +10,7 @@
 ///     origin_y: 0.0,
 ///     width: 200.0,
 ///     height: 300.0,
+///     user_unit: 1.0,
 ///     rotation: 0,
 ///     fonts: [],
 ///     items: [],
@@ -37,7 +38,9 @@ fn pdf_render_page_svg(
 ) -> String raise @core.PdfError {
   let safe_scale = if scale <= 0.0 { 1.0 } else { scale }
   let normalized_rotation = pdf_normalize_rotation_strict(rotation)
+  let page = { ..page, rotation: normalized_rotation, }
   let viewport = page.viewport(scale=safe_scale, rotation=normalized_rotation)
+  let paint_scale = safe_scale * pdf_safe_user_unit(page.user_unit)
   let width = viewport.width
   let height = viewport.height
   let output = StringBuilder()
@@ -57,14 +60,14 @@ fn pdf_render_page_svg(
   output.write_string(
     "<g transform=\"" +
     pdf_svg_relative_viewport_transform(
-      page.width * safe_scale,
-      page.height * safe_scale,
+      page.width * paint_scale,
+      page.height * paint_scale,
       viewport.rotation,
     ) +
     "\">",
   )
-  pdf_svg_render_items(output, page, page.items[:], safe_scale, 0)
-  pdf_svg_annotations(output, page, safe_scale)
+  pdf_svg_render_items(output, page, page.items[:], paint_scale, 0)
+  pdf_svg_annotations(output, page, paint_scale)
   output.write_string("</g>")
   output.write_string("</svg>")
   output.to_string()
@@ -348,6 +351,28 @@ fn pdf_svg_text_can_join(previous : PdfTextItem, current : PdfTextItem) -> Bool 
 }
 
 ///|
+/// Keep source text in the page model for extraction and selection, but omit
+/// undefined Standard 14 codes when serializing SVG text nodes. PDF.js keeps
+/// those source codes in textContent while its canvas renderer does not paint
+/// arbitrary Unicode fallback glyphs for them.
+fn pdf_svg_display_text(page : PdfPageModel, item : PdfTextItem) -> String {
+  for font in page.fonts {
+    if font.name == item.font {
+      let standard_font = match font.standard_font {
+        Some(name) => pdf_standard_font_of_base_name("/" + name)
+        None => None
+      }
+      return pdf_standard14_display_text(
+        standard_font,
+        item.charcode,
+        item.text,
+      )
+    }
+  }
+  item.text
+}
+
+///|
 fn pdf_svg_text(
   output : StringBuilder,
   page : PdfPageModel,
@@ -387,7 +412,7 @@ fn pdf_svg_text(
       (item.quad.p1.x - page.origin_x) * scale
     }
     positions.write_string(position.to_string())
-    value.write_string(item.text)
+    value.write_string(pdf_svg_display_text(page, item))
   }
   let (x, y, transform) = if rotated {
     let anchor_x = (first.quad.p1.x - page.origin_x) * scale
@@ -669,7 +694,15 @@ fn pdf_svg_path(
   } else {
     "none"
   }
-  let stroke = if path.stroked { path.stroke_color } else { "none" }
+  let stroke = if path.stroked {
+    match path.stroke_pattern {
+      Some(pattern) if pattern.shading is None =>
+        "url(#pdf-stroke-pattern-" + path.index.to_string() + ")"
+      _ => path.stroke_color
+    }
+  } else {
+    "none"
+  }
   let transformed = pdf_transform_svg_path(path.svg_path, page.height, scale)
   let dash = if path.dash_array.length() == 0 {
     ""
@@ -860,9 +893,25 @@ fn pdf_svg_pattern_defs(
   path : PdfPathItem,
   scale : Double,
 ) -> Unit {
-  match path.pattern {
-    Some(pattern) => {
-      let id = "pdf-pattern-" + path.index.to_string()
+  for
+    (prefix, resource) in [
+      ("pdf-pattern-", path.pattern),
+      ("pdf-stroke-pattern-", path.stroke_pattern),
+    ] {
+    if resource is Some(pattern) && pattern.shading is None {
+      let id = prefix + path.index.to_string()
+      let tile_svg = if pattern.tile_parts.is_empty() {
+        pattern.tile_svg
+      } else {
+        pdf_pattern_parts_svg(
+          pattern.tile_parts[:],
+          pattern.bbox.min_x,
+          pattern.bbox.min_y,
+          pattern.bbox.max_y - pattern.bbox.min_y,
+          pattern.matrix,
+          scale,
+        )
+      }
       output.write_string(
         "<defs><pattern id=\"" +
         id +
@@ -871,13 +920,12 @@ fn pdf_svg_pattern_defs(
         "\" height=\"" +
         pattern.y_step.to_string() +
         "\" patternTransform=\"" +
-        pdf_svg_shading_transform(page, pattern.matrix, scale) +
+        pdf_svg_shading_transform(page, pattern.matrix, 1.0) +
         "\">" +
-        pattern.tile_svg +
+        tile_svg +
         "</pattern></defs>",
       )
     }
-    None => ()
   }
 }
 
@@ -939,12 +987,13 @@ fn pdf_svg_image(
                 "<image data-pdf-name=\"" +
                 pdf_escape_xml(item.name) +
                 "\" x=\"0\" y=\"0\" width=\"1\" height=\"1\" transform=\"" +
-                pdf_svg_visual_transform(page, item.quad, scale) +
+                pdf_svg_image_transform(page, item.quad, scale) +
                 "\" preserveAspectRatio=\"none\" href=\"" +
                 masked_data_uri +
                 "\" opacity=\"" +
                 item.fill_alpha.to_string() +
                 "\"" +
+                pdf_svg_image_sampling(resource, item.quad, scale) +
                 pdf_svg_blend_style(item.blend_mode) +
                 "/>",
               )
@@ -957,12 +1006,13 @@ fn pdf_svg_image(
                 "<image data-pdf-name=\"" +
                 pdf_escape_xml(item.name) +
                 "\" x=\"0\" y=\"0\" width=\"1\" height=\"1\" transform=\"" +
-                pdf_svg_visual_transform(page, item.quad, scale) +
+                pdf_svg_image_transform(page, item.quad, scale) +
                 "\" preserveAspectRatio=\"none\" href=\"" +
                 data_uri +
                 "\" opacity=\"" +
                 item.fill_alpha.to_string() +
                 "\"" +
+                pdf_svg_image_sampling(resource, item.quad, scale) +
                 pdf_svg_blend_style(item.blend_mode) +
                 "/>",
               )
@@ -994,12 +1044,16 @@ fn pdf_svg_masked_image(
     "<image data-pdf-name=\"" +
     pdf_escape_xml(item.name) +
     "\" x=\"0\" y=\"0\" width=\"1\" height=\"1\" transform=\"" +
-    pdf_svg_visual_transform(page, item.quad, scale) +
+    pdf_svg_image_transform(page, item.quad, scale) +
     "\" preserveAspectRatio=\"none\" href=\"" +
     mask_data_uri +
     "\" opacity=\"" +
     item.fill_alpha.to_string() +
     "\"" +
+    (match item.resource {
+      Some(resource) => pdf_svg_image_sampling(resource, item.quad, scale)
+      None => ""
+    }) +
     pdf_svg_blend_style(item.blend_mode) +
     "/>",
   )
@@ -1040,7 +1094,7 @@ fn pdf_svg_colored_mask_data_uri(
     width.to_string() +
     "\" height=\"" +
     height.to_string() +
-    "\" preserveAspectRatio=\"none\" href=\"" +
+    "\" preserveAspectRatio=\"none\" image-rendering=\"crisp-edges\" href=\"" +
     mask_data_uri +
     "\"/></mask></defs><rect x=\"0\" y=\"0\" width=\"" +
     width.to_string() +
@@ -1066,7 +1120,16 @@ fn pdf_svg_alpha_mask_data_uri(
 ) -> String {
   let (width, height) = match item.resource {
     Some(resource) =>
-      (resource.width.unwrap_or(1).max(1), resource.height.unwrap_or(1).max(1))
+      (
+        resource.width
+        .unwrap_or(1)
+        .max(1)
+        .max(resource.alpha_mask_width.unwrap_or(1)),
+        resource.height
+        .unwrap_or(1)
+        .max(1)
+        .max(resource.alpha_mask_height.unwrap_or(1)),
+      )
     None => (1, 1)
   }
   let mask_id = "pdf-alpha-mask-inner-" + item.index.to_string()
@@ -1088,13 +1151,13 @@ fn pdf_svg_alpha_mask_data_uri(
     width.to_string() +
     "\" height=\"" +
     height.to_string() +
-    "\" preserveAspectRatio=\"none\" href=\"" +
+    "\" preserveAspectRatio=\"none\" image-rendering=\"crisp-edges\" href=\"" +
     alpha_mask_data_uri +
     "\"/></mask></defs><image x=\"0\" y=\"0\" width=\"" +
     width.to_string() +
     "\" height=\"" +
     height.to_string() +
-    "\" preserveAspectRatio=\"none\" href=\"" +
+    "\" preserveAspectRatio=\"none\" image-rendering=\"crisp-edges\" href=\"" +
     data_uri +
     "\" mask=\"url(#" +
     mask_id +

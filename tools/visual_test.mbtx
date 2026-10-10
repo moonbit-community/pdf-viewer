@@ -387,6 +387,11 @@ let browser_bridge =
   #|       render_ms: performance.now() - start, viewport: result.layer.viewport,
   #|       text: result.layer.items.map(i => i.separator + i.text).join(''), layer: result.layer,
   #|       diagnostic_viewer_translation_x: diagnosticTranslateX,
+  #|       images: [...document.querySelectorAll('image')].map(element => ({
+  #|         name: element.getAttribute('data-pdf-name'), transform: element.getAttribute('transform'),
+  #|         sampling_attribute: element.getAttribute('image-rendering'), sampling_computed: getComputedStyle(element).imageRendering,
+  #|         mime_type: (element.getAttribute('href') || '').split(';')[0],
+  #|       })),
   #|       placeholders: document.querySelectorAll('[data-pdf-placeholder="true"]').length};
   #|   };
   #|   const base64 = bytes => {

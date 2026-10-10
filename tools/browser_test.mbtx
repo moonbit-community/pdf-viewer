@@ -292,6 +292,118 @@ async fn main {
     browser.check(
       "predefined CMap paints and exposes native DOM text", "document.querySelector('.text-layer').textContent.includes('日本語テスト') && document.querySelector('.paint-layer').querySelector('svg') !== null && document.getElementById('error').hidden",
     )
+    browser.check(
+      "font fallback bridge accepts host family mappings",
+      (
+        #| (async () => {
+        #|   const bridge = await import('./_generated/pdf.js');
+        #|   const result = JSON.parse(bridge.set_font_fallbacks(JSON.stringify([{pdf_name: 'Helvetica', family: 'Arial'}])));
+        #|   return result.ok && result.count === 1;
+        #| })()
+      ),
+    )
+    browser.check(
+      "search toolbar is enabled with document options",
+      "!document.getElementById('search-query').disabled && document.getElementById('search-case') !== null && document.getElementById('search-whole') !== null && document.getElementById('search-diacritic') !== null",
+    )
+    browser.check(
+      "search returns and highlights a source match",
+      (
+        #| (async () => {
+        #|   const input = document.getElementById('search-query');
+        #|   input.value = '日本語'; input.dispatchEvent(new Event('input', {bubbles: true}));
+        #|   await new Promise(r => requestAnimationFrame(r));
+        #|   return document.getElementById('search-status').textContent === '1 / 1' && document.querySelectorAll('.pdf-search-hit').length >= 1 && document.querySelector('.pdf-search-active') !== null;
+        #| })()
+      ),
+    )
+    browser.check(
+      "search result navigation keeps the active match",
+      "document.getElementById('search-next').disabled === false && document.getElementById('search-previous').disabled === false && document.getElementById('search-status').textContent === '1 / 1'",
+    )
+    browser.navigate(base + "/?file=/fixtures/nested_outline.pdf", 9)
+    browser.check(
+      "document bridge exposes outline and info",
+      (
+        #| (async () => {
+        #|   const bridge = await import('./_generated/pdf.js');
+        #|   const info = JSON.parse(bridge.document_info());
+        #|   return info.ok && info.outline.length > 0 && info.info.Pages === 9 && info.labels.length === 9;
+        #| })()
+      ),
+    )
+    ignore(browser.evaluate("document.getElementById('outline-toggle').click(); true"))
+    browser.check(
+      "outline panel renders local navigation entries",
+      "!document.getElementById('sidebar').hidden && document.getElementById('sidebar-title').textContent === '目录' && document.querySelectorAll('#sidebar-content .sidebar-item').length > 0",
+    )
+    browser.check(
+      "outline entry navigates to its destination",
+      (
+        #| (() => {
+        #|   const entry = [...document.querySelectorAll('#sidebar-content .sidebar-item')].find(button => !button.disabled);
+        #|   if (!entry) return false;
+        #|   entry.click();
+        #|   return document.getElementById('page-number').value !== '';
+        #| })()
+      ),
+    )
+    ignore(browser.evaluate("document.getElementById('thumbnail-toggle').click(); true"))
+    browser.check(
+      "thumbnail panel renders page previews",
+      "document.getElementById('sidebar-title').textContent === '缩略图' && document.querySelectorAll('.thumbnail-preview svg').length === 9",
+    )
+    ignore(browser.evaluate("document.getElementById('info-toggle').click(); true"))
+    browser.check(
+      "info panel exposes document fields and print control",
+      "document.getElementById('sidebar-title').textContent === '文档信息' && document.querySelector('.info-list') !== null && document.getElementById('print').disabled === false",
+    )
+    browser.navigate(base + "/?file=/fixtures/labelled_pages.pdf", 11)
+    browser.check(
+      "page labels remain available to the browser host",
+      (
+        #| (async () => {
+        #|   const bridge = await import('./_generated/pdf.js');
+        #|   const info = JSON.parse(bridge.document_info());
+        #|   return info.ok && info.labels.length === 11 && info.labels[0] !== '1';
+        #| })()
+      ),
+    )
+    browser.check(
+      "embedded XMP metadata can be downloaded",
+      (
+        #| (async () => {
+        #|   const bridge = await import('./_generated/pdf.js');
+        #|   const info = JSON.parse(bridge.document_info());
+        #|   const metadata = JSON.parse(bridge.download_metadata());
+        #|   return info.metadata.available && info.metadata.size > 0 && metadata.ok && metadata.data.length > 0;
+        #| })()
+      ),
+    )
+    ignore(browser.evaluate("document.getElementById('view-mode').value = 'page'; document.getElementById('view-mode').dispatchEvent(new Event('change')); true"))
+    browser.check(
+      "page mode keeps one page visible",
+      "document.getElementById('viewer').classList.contains('page-mode') && [...document.querySelectorAll('.page')].filter(page => getComputedStyle(page).display !== 'none').length === 1",
+    )
+    ignore(browser.evaluate("document.getElementById('next-page').click(); true"))
+    browser.check(
+      "page navigation writes browser history",
+      "location.hash === '#page=2' && document.getElementById('page-number').value === '2'",
+    )
+    browser.navigate(base + "/?file=/fixtures/attachment.pdf", 1)
+    browser.check(
+      "attachment manifest and download bytes are available",
+      (
+        #| (async () => {
+        #|   const bridge = await import('./_generated/pdf.js');
+        #|   const info = JSON.parse(bridge.document_info());
+        #|   const data = info.attachments.length ? JSON.parse(bridge.download_attachment(0)) : {ok: false};
+        #|   return info.ok && info.attachments.length > 0 && data.ok && data.data.length > 0;
+        #| })()
+      ),
+    )
+    browser.navigate(base + "/?file=/fixtures/90ms_rksj_h_sample.pdf", 1)
+    ignore(browser.evaluate("document.getElementById('search-query').value = ''; document.getElementById('search-query').dispatchEvent(new Event('input')); true"))
     browser.screenshot(output + "/japanese-viewer.png")
     browser.check(
       "cursor text layer has PDF item indices and affine glyph boxes", "[...document.querySelectorAll('.glyph')].every(g => g.dataset.item !== undefined && getComputedStyle(g).cursor === 'text' && g.getBoundingClientRect().height > 0)",

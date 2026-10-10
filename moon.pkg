@@ -7,7 +7,9 @@ import {
   "moonbitlang/pdflite",
   "moonbitlang/pdflite/content",
   "moonbitlang/pdflite/annotation",
+  "moonbitlang/pdflite/bookmark",
   "moonbitlang/pdflite/core",
+  "moonbitlang/pdflite/destination",
   "moonbitlang/pdflite/flate",
   "moonbitlang/pdflite/geometry",
   "moonbitlang/pdflite/page",
@@ -15,7 +17,9 @@ import {
   "moonbitlang/pdflite/reader",
   "moonbitlang/pdflite/shape",
   "moonbitlang/pdflite/syntax",
+  "moonbitlang/pdflite/font/afm",
   "moonbitlang/pdflite/font/truetype",
+  "moonbitlang/pdflite/ocg",
 }
 
 import {

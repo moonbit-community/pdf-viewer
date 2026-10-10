@@ -32,6 +32,7 @@ pub(all) struct PdfTextLayer {
 ///     origin_y: 0.0,
 ///     width: 200.0,
 ///     height: 300.0,
+///     user_unit: 1.0,
 ///     rotation: 0,
 ///     fonts: [],
 ///     items: [],
@@ -51,8 +52,9 @@ pub fn PdfPageModel::text_layer(
   let viewport = self.viewport(scale~, rotation~)
   let output : Array[PdfTextLayerItem] = []
   let mut previous : PdfTextItem? = None
-  for item in self.items {
-    guard item is Text(text) && !text.text.is_empty() else { continue }
+  let text_items = pdf_text_reading_order_of_page_items(self.items[:])
+  for text in text_items {
+    guard !text.text.is_empty() else { continue }
     let quad = text.quad
     let top_left = viewport.convert_to_viewport_point(quad.p1)
     let top_right = viewport.convert_to_viewport_point(quad.p2)
@@ -61,7 +63,7 @@ pub fn PdfPageModel::text_layer(
       item_index: text.index,
       text: text.text,
       separator: match previous {
-        Some(last) => pdf_text_layer_separator(last, text)
+        Some(last) => pdf_text_separator(last, text)
         None => ""
       },
       matrix: [
@@ -80,57 +82,6 @@ pub fn PdfPageModel::text_layer(
     previous = Some(text)
   }
   { page: self.number, viewport, items: output, }
-}
-
-///|
-/// Determine separators in the writing direction, independently of page
-/// rotation. This preserves vertical columns and rotated text; general reading
-/// order, bidi and paragraph reconstruction require a separate logical index.
-fn pdf_text_layer_separator(
-  previous : PdfTextItem,
-  current : PdfTextItem,
-) -> String {
-  if previous.vertical != current.vertical {
-    return "\n"
-  }
-  let first = previous.quad
-  let next = current.quad
-  let (dx, dy) = if previous.vertical {
-    (first.p0.x - first.p1.x, first.p0.y - first.p1.y)
-  } else {
-    (first.p2.x - first.p1.x, first.p2.y - first.p1.y)
-  }
-  let length = (dx * dx + dy * dy).sqrt()
-  if length < 0.000001 {
-    return ""
-  }
-  let unit_x = dx / length
-  let unit_y = dy / length
-  let delta_x = next.p1.x - first.p1.x
-  let delta_y = next.p1.y - first.p1.y
-  let cross = (delta_x * unit_y - delta_y * unit_x).abs()
-  let height_x = first.p0.x - first.p1.x
-  let height_y = first.p0.y - first.p1.y
-  let height = (height_x * height_x + height_y * height_y).sqrt()
-  let threshold = if previous.vertical {
-    let width_x = first.p2.x - first.p1.x
-    let width_y = first.p2.y - first.p1.y
-    (width_x * width_x + width_y * width_y).sqrt() * 0.5
-  } else {
-    height * 0.5
-  }
-  if cross > threshold.max(0.000001) {
-    return "\n"
-  }
-  let gap = delta_x * unit_x + delta_y * unit_y - length
-  if !previous.vertical &&
-    gap > height * 0.25 &&
-    !previous.text.has_suffix(" ") &&
-    !current.text.has_prefix(" ") {
-    " "
-  } else {
-    ""
-  }
 }
 
 ///|
@@ -160,6 +111,7 @@ pub(all) struct PdfTextRangeSelection {
 ///     origin_y: 0.0,
 ///     width: 200.0,
 ///     height: 300.0,
+///     user_unit: 1.0,
 ///     rotation: 0,
 ///     fonts: [],
 ///     items: [],
@@ -203,7 +155,7 @@ pub fn PdfPageModel::select_text(
       return None
     }
     if position > first {
-      output.write_string(pdf_text_layer_separator(items[position - 1], item))
+      output.write_string(pdf_text_separator(items[position - 1], item))
     }
     output.write_string(slice.to_owned())
     if !slice.is_empty() {

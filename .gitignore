@@ -3,6 +3,7 @@ _build/
 target/
 target
 .mooncakes/
+.repos/
 .moonagent/
 
 # The pdf.js checkout is a local comparison corpus. Keep the pinned revision

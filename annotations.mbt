@@ -481,6 +481,7 @@ fn pdf_annotation_appearance_of(
     origin_y: bbox.min_y,
     width,
     height,
+    user_unit: 1.0,
     rotation: 0,
     fonts: scope.fonts,
     items,

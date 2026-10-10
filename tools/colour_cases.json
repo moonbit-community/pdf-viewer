@@ -1,0 +1,13 @@
+{
+  "reference_revision": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+  "scale": 2,
+  "cases": [
+    { "file": "calgray.pdf", "pages": [1, 2, 3], "rotations": [0], "features": ["calgray", "gamma", "reader-recovery"] },
+    { "file": "calrgb.pdf", "pages": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17], "rotations": [0], "features": ["calrgb", "white-point", "black-point", "gamma", "matrix", "reader-recovery"] },
+    { "file": "function_based_shading_cmyk.pdf", "pages": [1, 2], "rotations": [0], "features": ["cmyk", "function-shading"] },
+    { "file": "issue10339_reduced.pdf", "pages": [1], "rotations": [0], "features": ["lab", "raw-image", "indexed"] },
+    { "file": "devicen.pdf", "pages": [1], "rotations": [0], "features": ["devicen", "tint-function"] },
+    { "file": "devicen-none-zero-domain.pdf", "pages": [1], "rotations": [0], "features": ["devicen", "none-colorant", "tint-domain"] },
+    { "file": "colorkeymask.pdf", "pages": [1], "rotations": [0], "features": ["raw-image", "color-key-mask"] }
+  ]
+}

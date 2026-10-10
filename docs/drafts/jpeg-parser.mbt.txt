@@ -1,0 +1,333 @@
+// INCOMPLETE DRAFT: not compiled, integrated, or validated. The scan decoder,
+// inverse DCT, linearization, tests, and image adapter still need implementation.
+// Kept outside the MoonBit source set while work is split between agents.
+// JPEG decoding adapted from PDF.js src/core/jpg.js at
+// 89b500f5e1d98ed89bb90211e45b28730b2d99ac (originally notmasteryet/jpgjs).
+// Copyright 2014 Mozilla Foundation. Licensed under Apache-2.0.
+// https://www.apache.org/licenses/LICENSE-2.0
+// This viewer implementation uses checked bounds and explicit allocation caps.
+
+///|
+priv suberror PdfJpegError {
+  InvalidJpeg(String)
+} derive(Debug)
+
+///|
+priv struct PdfJpegReader {
+  bytes : Bytes
+  mut position : Int
+}
+
+///|
+priv struct PdfJpegHuffman {
+  minimum : FixedArray[Int]
+  maximum : FixedArray[Int]
+  offsets : FixedArray[Int]
+  values : Bytes
+}
+
+///|
+priv struct PdfJpegComponent {
+  id : Int
+  h : Int
+  v : Int
+  quant_id : Int
+  blocks_per_line : Int
+  blocks_per_column : Int
+  stride : Int
+  data : FixedArray[Int16]
+  mut predictor : Int
+  mut dc : PdfJpegHuffman?
+  mut ac : PdfJpegHuffman?
+}
+
+///|
+priv struct PdfJpegFrame {
+  width : Int
+  height : Int
+  progressive : Bool
+  max_h : Int
+  max_v : Int
+  mcus_per_line : Int
+  mcus_per_column : Int
+  components : Array[PdfJpegComponent]
+}
+
+///|
+priv struct PdfJpegSamples {
+  width : Int
+  height : Int
+  components : Int
+  bytes : Bytes
+}
+
+///|
+let pdf_jpeg_zigzag : FixedArray[Int] = [
+  0, 1, 8, 16, 9, 2, 3, 10, 17, 24, 32, 25, 18, 11, 4, 5,
+  12, 19, 26, 33, 40, 48, 41, 34, 27, 20, 13, 6, 7, 14, 21, 28,
+  35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51,
+  58, 59, 52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63,
+]
+
+///|
+fn PdfJpegReader::byte(self : PdfJpegReader) -> Int raise PdfJpegError {
+  guard self.position < self.bytes.length() else {
+    raise InvalidJpeg("truncated JPEG")
+  }
+  let value = self.bytes[self.position].to_int()
+  self.position += 1
+  value
+}
+
+///|
+fn PdfJpegReader::word(self : PdfJpegReader) -> Int raise PdfJpegError {
+  let high = self.byte()
+  (high << 8) | self.byte()
+}
+
+///|
+fn PdfJpegReader::segment(self : PdfJpegReader) -> PdfJpegReader raise PdfJpegError {
+  let length = self.word()
+  guard length >= 2 && length - 2 <= self.bytes.length() - self.position else {
+    raise InvalidJpeg("invalid JPEG segment length")
+  }
+  let end = self.position + length - 2
+  let bytes = self.bytes[self.position:end].to_bytes()
+  self.position = end
+  { bytes, position: 0 }
+}
+
+///|
+fn PdfJpegReader::marker(self : PdfJpegReader) -> Int raise PdfJpegError {
+  guard self.byte() == 255 else {
+    raise InvalidJpeg("expected JPEG marker")
+  }
+  for ;; {
+    let value = self.byte()
+    if value != 255 {
+      guard value != 0 else { raise InvalidJpeg("stuffed byte outside scan") }
+      return value
+    }
+  }
+}
+
+///|
+fn pdf_jpeg_huffman(
+  lengths : FixedArray[Int],
+  values : Bytes,
+) -> PdfJpegHuffman raise PdfJpegError {
+  let minimum = FixedArray::make(17, -1)
+  let maximum = FixedArray::make(17, -1)
+  let offsets = FixedArray::make(17, 0)
+  let mut code = 0
+  let mut offset = 0
+  for length in 1..=16 {
+    let count = lengths[length - 1]
+    guard code + count <= 1 << length else {
+      raise InvalidJpeg("oversubscribed Huffman table")
+    }
+    if count > 0 {
+      minimum[length] = code
+      maximum[length] = code + count - 1
+      offsets[length] = offset
+    }
+    offset += count
+    code = (code + count) << 1
+  }
+  guard offset > 0 && offset == values.length() else {
+    raise InvalidJpeg("empty or truncated Huffman table")
+  }
+  { minimum, maximum, offsets, values }
+}
+
+///|
+fn pdf_jpeg_frame(
+  segment : PdfJpegReader,
+  progressive : Bool,
+) -> PdfJpegFrame raise PdfJpegError {
+  guard segment.byte() == 8 else {
+    raise InvalidJpeg("only 8-bit DCT JPEG is supported")
+  }
+  let height = segment.word()
+  let width = segment.word()
+  let count = segment.byte()
+  guard width > 0 && height > 0 &&
+    width.to_double() * height.to_double() <= 16777216.0 &&
+    (count is (1 | 3 | 4)) else {
+    raise InvalidJpeg("unsupported JPEG dimensions or component count")
+  }
+  let specifications : Array[(Int, Int, Int, Int)] = []
+  let mut max_h = 0
+  let mut max_v = 0
+  for _ in 0..<count {
+    let id = segment.byte()
+    let sampling = segment.byte()
+    let h = sampling >> 4
+    let v = sampling & 15
+    let quant_id = segment.byte()
+    guard h > 0 && h <= 4 && v > 0 && v <= 4 && quant_id < 16 &&
+      !specifications.any(spec => spec.0 == id) else {
+      raise InvalidJpeg("invalid JPEG component")
+    }
+    specifications.push((id, h, v, quant_id))
+    max_h = max_h.max(h)
+    max_v = max_v.max(v)
+  }
+  let mcus_per_line = (width + 8 * max_h - 1) / (8 * max_h)
+  let mcus_per_column = (height + 8 * max_v - 1) / (8 * max_v)
+  let components : Array[PdfJpegComponent] = []
+  let mut allocated = 0
+  for (id, h, v, quant_id) in specifications {
+    let blocks_per_line = (((width + 7) / 8) * h + max_h - 1) / max_h
+    let blocks_per_column = (((height + 7) / 8) * v + max_v - 1) / max_v
+    // Match PDF.js' padded block-row stride, including its spare column.
+    let stride = blocks_per_line + 1
+    let size = 64 * (mcus_per_line * h + 1) * mcus_per_column * v
+    guard size <= 67108864 - allocated else {
+      raise InvalidJpeg("JPEG coefficient allocation limit")
+    }
+    allocated += size
+    components.push({
+      id, h, v, quant_id, blocks_per_line, blocks_per_column, stride,
+      data: FixedArray::make(size, 0), predictor: 0, dc: None, ac: None,
+    })
+  }
+  { width, height, progressive, max_h, max_v, mcus_per_line,
+    mcus_per_column, components }
+}
+
+///|
+/// Decode JPEG to original colour components (Gray, RGB or CMYK), before
+/// the PDF image's /Decode, colour-key mask, colour space and /Matte stages.
+/// YCbCr/YCCK are converted according to APP14 and /ColorTransform. Exif
+/// orientation is intentionally ignored: the PDF's CTM determines placement.
+fn pdf_jpeg_decode(
+  bytes : Bytes,
+  width? : Int,
+  height? : Int,
+  color_transform? : Int = -1,
+) -> PdfJpegSamples raise PdfJpegError {
+  let reader : PdfJpegReader = { bytes, position: 0 }
+  // Inline DCT streams may have leading junk before SOI.
+  for ;; {
+    guard reader.position + 1 < bytes.length() else {
+      raise InvalidJpeg("JPEG SOI not found")
+    }
+    if bytes[reader.position] == 255 && bytes[reader.position + 1] == 216 {
+      break
+    }
+    reader.position += 1
+  }
+  reader.position += 2
+  let quantization : FixedArray[FixedArray[Int]?] = FixedArray::make(16, None)
+  let dc_tables : FixedArray[PdfJpegHuffman?] = FixedArray::make(16, None)
+  let ac_tables : FixedArray[PdfJpegHuffman?] = FixedArray::make(16, None)
+  let mut frame : PdfJpegFrame? = None
+  let mut restart_interval = 0
+  let mut adobe_transform : Int? = None
+  let mut scans = 0
+  for ;; {
+    let marker = reader.marker()
+    if marker == 217 { break }
+    let segment = reader.segment()
+    match marker {
+      219 => {
+        while segment.position < segment.bytes.length() {
+          let specification = segment.byte()
+          let precision = specification >> 4
+          guard precision <= 1 else { raise InvalidJpeg("invalid DQT precision") }
+          let table = FixedArray::make(64, 0)
+          for k in 0..<64 {
+            let value = if precision == 0 { segment.byte() } else { segment.word() }
+            guard value > 0 else { raise InvalidJpeg("zero quantization value") }
+            table[pdf_jpeg_zigzag[k]] = value
+          }
+          quantization[specification & 15] = Some(table)
+        }
+      }
+      192 | 193 | 194 => {
+        guard frame is None else { raise InvalidJpeg("multiple JPEG frames") }
+        frame = Some(pdf_jpeg_frame(segment, marker == 194))
+      }
+      196 => {
+        while segment.position < segment.bytes.length() {
+          let specification = segment.byte()
+          guard specification >> 4 <= 1 else { raise InvalidJpeg("invalid DHT class") }
+          let lengths = FixedArray::make(16, 0)
+          let mut count = 0
+          for k in 0..<16 {
+            lengths[k] = segment.byte()
+            count += lengths[k]
+          }
+          guard count <= 256 && count <= segment.bytes.length() - segment.position else {
+            raise InvalidJpeg("invalid DHT symbol count")
+          }
+          let values = segment.bytes[segment.position:segment.position + count].to_bytes()
+          segment.position += count
+          let table = Some(pdf_jpeg_huffman(lengths, values))
+          if specification >> 4 == 0 {
+            dc_tables[specification & 15] = table
+          } else {
+            ac_tables[specification & 15] = table
+          }
+        }
+      }
+      221 => restart_interval = segment.word()
+      238 =>
+        if segment.bytes.length() >= 12 && segment.bytes[:5] == b"Adobe" {
+          adobe_transform = Some(segment.bytes[11].to_int())
+        }
+      218 => {
+        guard frame is Some(frame) else { raise InvalidJpeg("scan before frame") }
+        let count = segment.byte()
+        guard count > 0 && count <= frame.components.length() else {
+          raise InvalidJpeg("invalid scan component count")
+        }
+        let components : Array[PdfJpegComponent] = []
+        for _ in 0..<count {
+          let id = segment.byte()
+          let table_spec = segment.byte()
+          guard frame.components.find(component => component.id == id)
+            is Some(component) && !components.any(component => component.id == id) else {
+            raise InvalidJpeg("invalid scan component selector")
+          }
+          component.dc = dc_tables[table_spec >> 4]
+          component.ac = ac_tables[table_spec & 15]
+          components.push(component)
+        }
+        let start = segment.byte()
+        let end = segment.byte()
+        let approximation = segment.byte()
+        guard start <= end && end <= 63 && approximation >> 4 <= 13 &&
+          approximation & 15 <= 13 &&
+          (if frame.progressive {
+             (start == 0 && end == 0) || (start > 0 && count == 1)
+           } else { start == 0 && end == 63 && approximation == 0 }) else {
+          raise InvalidJpeg("invalid JPEG scan parameters")
+        }
+        pdf_jpeg_decode_scan(reader, frame, components, restart_interval,
+          start, end, approximation >> 4, approximation & 15)
+        scans += 1
+      }
+      224..=239 | 254 => () // Application metadata and comments.
+      _ => raise InvalidJpeg("unsupported JPEG marker \{marker}")
+    }
+  }
+  guard frame is Some(frame) && scans > 0 else {
+    raise InvalidJpeg("JPEG has no decoded scan")
+  }
+  let scratch : FixedArray[Int16] = FixedArray::make(64, 0)
+  for component in frame.components {
+    guard quantization[component.quant_id] is Some(table) else {
+      raise InvalidJpeg("missing JPEG quantization table")
+    }
+    for row in 0..<component.blocks_per_column {
+      for col in 0..<component.blocks_per_line {
+        pdf_jpeg_inverse(component.data, 64 * (component.stride * row + col),
+          table, scratch)
+      }
+    }
+  }
+  pdf_jpeg_linearize(frame, width.unwrap_or(frame.width),
+    height.unwrap_or(frame.height), adobe_transform, color_transform)
+}

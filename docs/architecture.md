@@ -130,10 +130,13 @@ unavailable instead of treating the missing glyph as an empty path. Type 3
 fonts do not contribute to this clip, as required by PDF text semantics.
 
 `PdfPageModel::viewport` follows pdf.js' `PageViewport` affine matrix,
-including nonzero media-box origins. The SVG renderer uses the equivalent
-relative transform after subtracting the page origin from display-list
-coordinates, so the public viewport matrix and rendered page stay in the same
-coordinate convention.
+including nonzero page origins and `/UserUnit`. The requested `scale` remains
+separate from the public `user_unit` field, while matrix coefficients and
+dimensions use their product. The SVG renderer uses the equivalent relative
+transform after subtracting the page origin from display-list coordinates, so
+the public viewport matrix and rendered page stay in the same coordinate
+convention. Invalid or disjoint CropBox values fall back to the effective
+MediaBox, and malformed MediaBox values use the PDF.js letter-size fallback.
 
 The current renderer has several concrete compatibility improvements: it emits the pdf.js-style
 full viewport matrix, lowers path-only coloured tiling patterns to SVG `pattern` definitions,
@@ -156,14 +159,62 @@ flags, including a `group_path` for nested Forms. SVG maps isolated groups to
 non-isolated backdrops and knockout. Exact backdrop and knockout pixel compositing remains
 outside the current SVG lowering.
 
+Colour conversion lives in `colour.mbt`. Paints carry the declared
+`PdfColourSpace`; component count never selects a conversion implicitly.
+The content adapter resolves `CS/cs` in the active resource scope, initializes
+that space's default samples and keeps `SCN/scn` fill/stroke pattern slots
+independent. Pattern cells and Form soft masks use the same viewer content
+collector as pages, including nested Form scopes. Paths expose separate
+`pattern` and `stroke_pattern` resources. SVG lowers tiling strokes, while
+shading-pattern strokes and complex pattern text/compositing remain pending.
+
+CalGray, CalRGB and Lab use the pinned PDF.js curves, primary-matrix column
+order and output transforms. CalRGB includes white-point normalization and
+black-point compensation. CMYK uses PDF.js' fitted SWOP fallback; ICCBased
+uses its declared alternate, not an ICC profile engine. Indexed lookup values
+are expanded into their base space's component ranges. Separation/DeviceN
+tint functions are prepared before repeated image/mesh sample conversion.
+Rendering intent is not applied, matching the pinned PDF.js canvas behavior.
+
+For raw images, `image_colour.mbt` asks pdflite to decode filters/predictors,
+then reads byte-aligned rows of 1/2/4/8/16-bit original samples. Colour-key
+mask comparisons happen before `/Decode` and conversion; the output is an
+RGB/RGBA PNG. Encoded JPEG/JPX/JBIG2 and ImageMask retain their separate paths.
+Matte, exact resampling, encoded-image colour management and large-image
+allocation policies are still open. Viewer reader recovery also tolerates
+legal comments between `endstream` and `endobj` when page content was dropped,
+using declared stream lengths and the active xref chain rather than scanning
+old revisions for deleted content. The raw-byte recovery is skipped for
+authenticated encrypted documents with unresolved page contents.
+
 The standalone browser shell lives in `web/`, with a MoonBit JS bridge in
 `cmd/browser/`. PDF bytes are decoded entirely by the MoonBit/pdflite module;
 the JavaScript shell handles file input, DOM mounting and native browser
-selection. `open_pdf`, `render_page`, `select_text` and `close_pdf` are the
-small JS export surface. Page models are cached until close/reopen, and
+selection. `open_pdf`, `render_page`, `select_text`, `search_pdf`, `document_info`,
+`download_attachment`, `download_metadata` and `close_pdf` are the JS bridge
+surface. Page models are cached until close/reopen, and
 embedded font families receive page prefixes so multiple SVGs do not replace
 each other's @font-face rules. Rendering an already decoded page uses
 `PdfPageModel::render_svg`.
+
+The browser document panel consumes one `document_info` response containing
+flattened outline destinations, display page labels, Info fields, attachment
+metadata and XMP availability. Attachment and XMP bytes are requested by
+index/on demand and converted to local browser downloads. Local outline targets
+scroll to their one-based page; unresolved or remote targets stay disabled.
+The shell also exposes thumbnails, print, continuous/single-page modes and a
+`#page=N` history state. Repainting still eagerly rebuilds every mounted page;
+worker scheduling and virtualization remain a performance TODO.
+
+`PdfViewerDocument::search` consumes the same page text/content model as
+selection. It returns source UTF-16 offsets, original matched text, source item
+indices and a union bounds rectangle. Case, whole-word and common Latin
+diacritic options are applied in a normalized search string, while each
+normalized code unit retains its source interval so expansions such as `ß` to
+`ss` never leak normalized offsets into the public result. The browser maps the
+item indices to its transparent text layer for result highlighting and emits
+`pdf-search-change`; exact character-range painting, full Unicode normalization,
+reading order/bidi and asynchronous search remain future work.
 
 `text_layer.mbt` maps the actual glyph quads through the public viewport and
 retains source item indices. A layer item carries a unit-square affine matrix;
@@ -211,7 +262,9 @@ The remaining implementation stages are ordered by the visible compatibility gap
 4. Canvas/WebGL output and incremental page loading for large documents.
 
 The complete feature backlog and acceptance rules live in
-[`TODO.md`](TODO.md). Multiple-FD CID-keyed Type 1 is an extension rather than
+[`TODO.md`](TODO.md). Ownership, shared-model integration boundaries and eight
+agent workstreams are recorded in [`PARALLEL.md`](PARALLEL.md); these are work
+boundaries, not eight isolated MoonBit packages. Multiple-FD CID-keyed Type 1 is an extension rather than
 a parity requirement: the pinned PDF.js Type 1 parser also supports only one FD.
 
 Annotation parsing and SVG lowering live in `annotations.mbt` and
@@ -236,10 +289,20 @@ on-state and checked state. The current fallback is a simple read-only display;
 it does not implement `/DA`/`/DR` layout, multiline/comb/password formatting,
 choice selection or export mappings, editing, or JavaScript actions.
 
-Document navigation/metadata JSON methods adapt pdflite reader outputs without
-claiming the pdf.js JSON schema. Page labels provide a decimal fallback even
-when pdf.js would return null. Reading optional-content configuration does not
-yet filter the display list by layer visibility.
+Document navigation/metadata methods adapt pdflite reader outputs without
+claiming the pdf.js JSON schema. The viewer resolves both the legacy catalog
+`/Dests` dictionary and the `/Names` `/Dests` name tree into `PdfDestination`.
+It preserves the view parameters of `XYZ`/`Fit`-family destinations, maps local
+page objects to one-based page numbers, and marks remote targets instead of
+silently treating them as local. `named_destinations`, `named_destination`,
+`destination_for_page`, and `outline_navigation_json` are library-level APIs;
+the browser adapter consumes them for its directory and information panels.
+Page labels provide a decimal fallback even when pdf.js would return null. Optional-content
+configuration is applied during display-list collection: `/OC` marked content,
+common OCMD policies and Form `/OC` entries are resolved against the selected
+`PdfOptionalContentState`, so hidden paint never reaches the page model or text
+selection. Usage-category controls and a browser layer panel remain host
+features.
 
 The current SVG path already handles image XObjects and inline images. Inline payloads
 are collected with `parse_content_ops_with_resources`, including images nested in Form

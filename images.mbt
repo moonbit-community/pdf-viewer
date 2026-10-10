@@ -39,6 +39,44 @@ fn pdf_image_resource_of_object(
 ) -> PdfImageResource raise @core.PdfError {
   let width = pdf_image_dimension(document, xobject, "/Width")
   let height = pdf_image_dimension(document, xobject, "/Height")
+  let interpolate = pdf_image_interpolate(document, xobject)
+  let (alpha_mask_width, alpha_mask_height) = match
+    pdf_image_alpha_source(document, xobject) {
+    Some((mask, _)) =>
+      (
+        pdf_image_dimension(document, mask, "/Width"),
+        pdf_image_dimension(document, mask, "/Height"),
+      )
+    None => (None, None)
+  }
+  match pdf_image_colour_png(document, resources, xobject) {
+    Some((raw_width, raw_height, png, alpha_integrated)) =>
+      return {
+        name,
+        mime_type: "image/png",
+        data_uri: Some(pdf_image_data_uri("image/png", png)),
+        mask_data_uri: None,
+        alpha_mask_data_uri: if alpha_integrated {
+          None
+        } else {
+          pdf_image_alpha_mask_data_uri(document, resources, xobject)
+        },
+        width: Some(raw_width),
+        height: Some(raw_height),
+        interpolate,
+        alpha_mask_width: if alpha_integrated {
+          None
+        } else {
+          alpha_mask_width
+        },
+        alpha_mask_height: if alpha_integrated {
+          None
+        } else {
+          alpha_mask_height
+        },
+      }
+    None => ()
+  }
   let image = document.get_image_24bpp(resources, xobject)
   let mask_data_uri = if pdf_image_object_is_mask(document, xobject) {
     pdf_image_mask_data_uri(image)
@@ -59,6 +97,9 @@ fn pdf_image_resource_of_object(
         alpha_mask_data_uri,
         width,
         height,
+        interpolate,
+        alpha_mask_width,
+        alpha_mask_height,
       }
     @pdflite.PdfJPEG2000(data, _) =>
       {
@@ -69,6 +110,9 @@ fn pdf_image_resource_of_object(
         alpha_mask_data_uri,
         width,
         height,
+        interpolate,
+        alpha_mask_width,
+        alpha_mask_height,
       }
     @pdflite.PdfJBIG2(data, _, _) =>
       {
@@ -79,6 +123,9 @@ fn pdf_image_resource_of_object(
         alpha_mask_data_uri,
         width,
         height,
+        interpolate,
+        alpha_mask_width,
+        alpha_mask_height,
       }
     @pdflite.PdfRawImage(raw_width, raw_height, layout, data) => {
       let png = match color_key_mask {
@@ -96,6 +143,9 @@ fn pdf_image_resource_of_object(
         alpha_mask_data_uri,
         width: Some(raw_width),
         height: Some(raw_height),
+        interpolate,
+        alpha_mask_width,
+        alpha_mask_height,
       }
     }
   }
@@ -109,6 +159,9 @@ fn pdf_image_resource_of_object(
         alpha_mask_data_uri: None,
         width,
         height,
+        interpolate,
+        alpha_mask_width: None,
+        alpha_mask_height: None,
       }
     None => resource
   }
@@ -132,9 +185,8 @@ fn pdf_image_object_is_mask(
 
 ///|
 /// Read a colour-key `/Mask [min max ...]` array. The ranges are compared
-/// after pdflite has decoded the image into RGB samples, which covers the
-/// DeviceRGB and DeviceGray images used by the corpus while keeping the
-/// browser-facing resource independent from PDF dictionary objects.
+/// in the original integer sample space by `pdf_image_colour_png`. The
+/// legacy encoded-image path has not yet gained sample-space mask decoding.
 fn pdf_image_color_key_mask(
   document : @pdflite.PdfDocument,
   image : @syntax.PdfObject,
@@ -173,14 +225,9 @@ fn pdf_image_alpha_mask_data_uri(
   resources : @syntax.PdfObject,
   image : @syntax.PdfObject,
 ) -> String? {
-  let mask_object = match
-    document.lookup_direct(pdf_image_name("/SMask"), image) {
-    Some(value) => Some(value)
-    None =>
-      match document.lookup_direct(pdf_image_name("/Mask"), image) {
-        Some(@syntax.PdfArray(_)) | None => None
-        Some(value) => Some(value)
-      }
+  let mask_object = match pdf_image_alpha_source(document, image) {
+    Some((value, _)) => Some(value)
+    None => None
   }
   match mask_object {
     Some(mask_object) => {
@@ -410,8 +457,14 @@ fn pdf_inline_image_resource_of(
   name : String,
   dictionary : @syntax.PdfObject,
   data : Bytes,
+  decode_parms? : @syntax.PdfObject? = None,
 ) -> PdfImageResource? {
   try {
+    let dictionary = match decode_parms {
+      Some(value) =>
+        dictionary.add_dict_entry(pdf_image_name("/DecodeParms"), value)
+      None => dictionary
+    }
     let image_dictionary = dictionary.add_dict_entry(
       pdf_image_name("/Length"),
       @syntax.PdfInteger(data.length()),
@@ -451,7 +504,8 @@ fn pdf_image_data_uri(mime_type : String, data : Bytes) -> String {
 ///|
 /// Convert decoded PDF pixels to a simple PNG with filter type 0 scanlines.
 /// This deliberately keeps the encoder small and deterministic; pdflite has
-/// already handled PDF filters, colour spaces, predictors, and decode arrays.
+/// already handled PDF filters, predictors, and decode arrays on the legacy
+/// image/mask path. Raw colour samples use the viewer's colour converter.
 fn pdf_png_of_raw_image(
   width : Int,
   height : Int,

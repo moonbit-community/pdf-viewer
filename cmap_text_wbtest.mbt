@@ -75,6 +75,310 @@ test "viewer CMap recovery restores text after pdflite drops high codespace" {
 }
 
 ///|
+test "viewer recovers high-range ToUnicode mappings lazily" {
+  let recovered = pdf_viewer_parse_cmap(
+    @utf8.encode(
+      "1 beginbfrange <80000000> <FFFFFFFF> <00000000> endbfrange " +
+      "2 beginbfchar <F0010203> <D83DDE00> <F0010204> <00660069> endbfchar " +
+      "1 beginbfrange <0041> <0043> [<0061> <0062> <0063>] endbfrange",
+    )[:],
+  )
+  assert_eq(recovered.unicode_entries.length(), 6)
+  assert_eq(
+    pdf_viewer_unicode_lookup(
+      recovered.unicode_entries[:],
+      0xF0010203U.reinterpret_as_int(),
+    ),
+    Some(b"\xD8\x3D\xDE\x00"),
+  )
+  assert_eq(
+    pdf_viewer_unicode_lookup(
+      recovered.unicode_entries[:],
+      0xF0010204U.reinterpret_as_int(),
+    ),
+    Some(b"\x00\x66\x00\x69"),
+  )
+  assert_eq(
+    pdf_viewer_unicode_lookup(
+      recovered.unicode_entries[:],
+      0xFFFFFFFFU.reinterpret_as_int(),
+    ),
+    Some(b"\x7F\xFF\xFF\xFF"),
+  )
+  assert_eq(
+    pdf_viewer_unicode_lookup(recovered.unicode_entries[:], 0x43),
+    Some(b"\x00\x63"),
+  )
+}
+
+///|
+test "odd-byte ToUnicode destinations are decoded as UTF-16BE" {
+  assert_eq(pdf_viewer_tounicode_text(b"A"), Some("A"))
+  assert_eq(pdf_viewer_tounicode_text(b"\xF0"), Some("\u00F0"))
+}
+
+///|
+test "recovered ToUnicode takes precedence over CID collection fallback" {
+  let document = cid_layout_test_document(
+    "BT /F1 10 Tf <F0010203> Tj ET",
+    cmap="/CMapType 1 def /WMode 0 def\n" +
+      "1 begincodespacerange <F0000000> <FFFFFFFF> endcodespacerange\n" +
+      "1 begincidchar <F0010203> 843 endcidchar",
+    tounicode="1 beginbfrange <F0010203> <F0010205> <D83DDE00> endbfrange",
+  )
+  let page = document.pages[0]
+  let font_object = pdf_viewer_ttf_font_object(
+    document.document,
+    page.resources,
+    "/F1",
+  ).unwrap()
+  let font = match pdf_read_font_for_viewer(document.document, font_object) {
+    @pdflite.PdfFontCIDKeyed(font) => font
+    _ => fail("expected the CID test font")
+  }
+  let font_with_collection_fallback = {
+    ..font,
+    composite: {
+      ..font.composite,
+      cid_system_info: {
+        ..font.composite.cid_system_info,
+        ordering: b"Japan1",
+      },
+    },
+  }
+  let font_without_reader_map = {
+    ..font_with_collection_fallback,
+    composite: {
+      ..font_with_collection_fallback.composite,
+      cid_fontdescriptor: {
+        ..font_with_collection_fallback.composite.cid_fontdescriptor,
+        tounicode: None,
+      },
+    },
+  }
+  let initial = @pdflite.pdf_content_initial_operator_state(
+    0.0, 0.0, 200.0, 200.0,
+  )
+  let state = {
+    ..initial,
+    text_state: {
+      ..initial.text_state,
+      font: "/F1",
+      font_size: 10.0,
+      current_font: @pdflite.PdfFontCIDKeyed(font_without_reader_map),
+    },
+  }
+  let (result, _) = pdf_apply_cid_text_op(
+    document.document,
+    state,
+    font_without_reader_map,
+    page.resources,
+    @content.Op_Tj(b"\xF0\x01\x02\x03"),
+  )
+  guard result.entries[0].object is @pdflite.PdfContentGlyphObject(_, _, text) else {
+    fail("expected a recovered CID glyph entry")
+  }
+  assert_eq(text, @utf8.decode(b"\xF0\x9F\x98\x80"))
+}
+
+///|
+test "partial ToUnicode falls back to the Adobe CID collection map" {
+  let document = cid_layout_test_document(
+    "BT /F1 10 Tf <F0010203> Tj ET",
+    cmap="/CMapType 1 def /WMode 0 def\n" +
+      "1 begincodespacerange <F0000000> <FFFFFFFF> endcodespacerange\n" +
+      "1 begincidchar <F0010203> 843 endcidchar",
+    tounicode="1 beginbfchar <F0010204> <0042> endbfchar",
+  )
+  let page = document.pages[0]
+  let font_object = pdf_viewer_ttf_font_object(
+    document.document,
+    page.resources,
+    "/F1",
+  ).unwrap()
+  let font = match pdf_read_font_for_viewer(document.document, font_object) {
+    @pdflite.PdfFontCIDKeyed(font) => font
+    _ => fail("expected the CID test font")
+  }
+  let font_with_collection_fallback = {
+    ..font,
+    composite: {
+      ..font.composite,
+      cid_system_info: {
+        ..font.composite.cid_system_info,
+        ordering: b"Japan1",
+      },
+    },
+  }
+  let initial = @pdflite.pdf_content_initial_operator_state(
+    0.0, 0.0, 200.0, 200.0,
+  )
+  let state = {
+    ..initial,
+    text_state: {
+      ..initial.text_state,
+      font: "/F1",
+      font_size: 10.0,
+      current_font: @pdflite.PdfFontCIDKeyed(font_with_collection_fallback),
+    },
+  }
+  let (result, _) = pdf_apply_cid_text_op(
+    document.document,
+    state,
+    font_with_collection_fallback,
+    page.resources,
+    @content.Op_Tj(b"\xF0\x01\x02\x03"),
+  )
+  guard result.entries[0].object is @pdflite.PdfContentGlyphObject(_, _, text) else {
+    fail("expected a CID collection fallback entry")
+  }
+  assert_eq(text, "\u3042")
+}
+
+///|
+test "named ToUnicode UseCMap recovers reader-dropped Adobe Unicode entries" {
+  let document = cid_layout_test_document(
+    "BT /F1 10 Tf <034B> Tj ET",
+    cmap="/CMapType 1 def /WMode 0 def\n" +
+      "1 begincodespacerange <0000> <FFFF> endcodespacerange\n" +
+      "1 begincidchar <034B> 843 endcidchar",
+    tounicode="/Adobe-Japan1-UCS2 usecmap",
+  )
+  let page = document.pages[0]
+  let font_object = pdf_viewer_ttf_font_object(
+    document.document,
+    page.resources,
+    "/F1",
+  ).unwrap()
+  let to_unicode_stream = document.document
+    .lookup_direct(pdf_name_key("/ToUnicode"), font_object)
+    .unwrap()
+  let to_unicode_source = @utf8.decode_lossy(
+    document.document.pdf_decode_stream(to_unicode_stream).stream_bytes()[:],
+  ) catch {
+    _ => fail("expected the ToUnicode stream to decode")
+  }
+  assert_true(to_unicode_source.contains("Adobe-Japan1-UCS2"))
+  let unicode_recovery = pdf_viewer_tounicode_recovery_for_font(
+    document.document,
+    page.resources,
+    "/F1",
+  ).unwrap()
+  assert_eq(unicode_recovery.usecmap, Some(pdf_name_key("/Adobe-Japan1-UCS2")))
+  assert_eq(
+    pdf_viewer_unicode_text_with_recovery(unicode_recovery, 843),
+    Some("\u3042"),
+  )
+  let font = match pdf_read_font_for_viewer(document.document, font_object) {
+    @pdflite.PdfFontCIDKeyed(font) => font
+    _ => fail("expected the CID test font")
+  }
+  let font_without_reader_map = {
+    ..font,
+    composite: {
+      ..font.composite,
+      cid_fontdescriptor: {
+        ..font.composite.cid_fontdescriptor,
+        tounicode: None,
+      },
+    },
+  }
+  let initial = @pdflite.pdf_content_initial_operator_state(
+    0.0, 0.0, 200.0, 200.0,
+  )
+  let state = {
+    ..initial,
+    text_state: {
+      ..initial.text_state,
+      font: "/F1",
+      font_size: 10.0,
+      current_font: @pdflite.PdfFontCIDKeyed(font_without_reader_map),
+    },
+  }
+  let (result, _) = pdf_apply_cid_text_op(
+    document.document,
+    state,
+    font_without_reader_map,
+    page.resources,
+    @content.Op_Tj(b"\x03\x4B"),
+  )
+  guard result.entries[0].object is @pdflite.PdfContentGlyphObject(_, _, text) else {
+    fail("expected a recovered named ToUnicode glyph entry")
+  }
+  assert_eq(text, "\u3042")
+}
+
+///|
+test "reader-loss recovery composes indirect UseCMap streams locally first" {
+  let document = cid_layout_test_document(
+    "BT /F1 10 Tf <F0010203> Tj ET",
+    cmap="1 begincidchar <F0010203> 2 endcidchar",
+    tounicode="1 beginbfchar <F0010203> <0042> endbfchar",
+    cmap_parent="/CMapType 1 def /WMode 0 def\n" +
+      "1 begincodespacerange <F0000000> <FFFFFFFF> endcodespacerange\n" +
+      "1 begincidchar <F0010203> 1 endcidchar",
+    tounicode_parent="1 beginbfchar <F0010203> <0041> endbfchar",
+  )
+  let page = document.pages[0]
+  let font_object = pdf_viewer_ttf_font_object(
+    document.document,
+    page.resources,
+    "/F1",
+  ).unwrap()
+  let font = match pdf_read_font_for_viewer(document.document, font_object) {
+    @pdflite.PdfFontCIDKeyed(font) => font
+    _ => fail("expected the CID test font")
+  }
+  let (object_number, parsed) = match font.encoding {
+    @pdflite.PdfExternalCMap(number, parsed) => (number, parsed)
+    _ => fail("expected an external CMap")
+  }
+  let font_without_reader_tables = {
+    ..font,
+    encoding: @pdflite.PdfExternalCMap(object_number, {
+      ..parsed,
+      map: [],
+      cid_map: [],
+      notdef_map: [],
+      codespaces: [],
+      usecmap: None,
+      wmode: None,
+    }),
+    composite: {
+      ..font.composite,
+      cid_fontdescriptor: {
+        ..font.composite.cid_fontdescriptor,
+        tounicode: None,
+      },
+    },
+  }
+  let initial = @pdflite.pdf_content_initial_operator_state(
+    0.0, 0.0, 200.0, 200.0,
+  )
+  let state = {
+    ..initial,
+    text_state: {
+      ..initial.text_state,
+      font: "/F1",
+      font_size: 10.0,
+      current_font: @pdflite.PdfFontCIDKeyed(font_without_reader_tables),
+    },
+  }
+  let (result, glyphs) = pdf_apply_cid_text_op(
+    document.document,
+    state,
+    font_without_reader_tables,
+    page.resources,
+    @content.Op_Tj(b"\xF0\x01\x02\x03"),
+  )
+  guard result.entries[0].object is @pdflite.PdfContentGlyphObject(_, _, text) else {
+    fail("expected a recovered CID glyph entry")
+  }
+  assert_eq(text, "B")
+  assert_eq(glyphs[0].advance_x, 3.0)
+}
+
+///|
 test "CMap codespaces select one through four bytes using unsigned bounds" {
   let parsed = @pdflite.pdf_parse_cmap_data(
     @utf8.encode(cmap_text_test_mixed_cmap()),
@@ -234,4 +538,63 @@ test "mixed-length CMap text clipping preserves three and four byte CID mapping"
       "M 20 150 L 25 150 L 25 143 L 20 143 M 25 150 L 30 150 L 30 143 L 25 143",
     ),
   )
+}
+
+///|
+test "CMap recovery reports malformed tokens and incomplete sections" {
+  let recovery = pdf_viewer_parse_cmap(b"<GG> 1 begincidchar <41> 7")
+  assert_eq(recovery.diagnostics.malformed_tokens, 1)
+  assert_eq(recovery.diagnostics.incomplete_sections, ["cidchar"])
+  assert_true(recovery.source_available)
+}
+
+///|
+test "CMap recovery keeps reader fallback when source stream is unavailable" {
+  let document = @pdflite.pdf_document_empty()
+  let recovery = pdf_viewer_cmap_recovery_of_object(
+    document,
+    @syntax.PdfIndirect(99),
+    Map([]),
+  ).unwrap()
+  assert_false(recovery.source_available)
+  assert_true(recovery.diagnostics.source_unavailable)
+  assert_eq(recovery.diagnostics.incomplete_sections, [])
+}
+
+///|
+test "CMap recovery cuts indirect UseCMap cycles and records the reason" {
+  let document = @pdflite.pdf_document_empty()
+  let name_use_cmap = @core.pdf_name_of_bytes(@utf8.encode("/UseCMap"))
+  let body_one = b"1 begincidchar <41> 1 endcidchar"
+  let body_two = b"1 begincidchar <42> 2 endcidchar"
+  let stream_one = @syntax.pdf_stream(
+    @syntax.PdfDictionary([
+      (
+        @core.pdf_name_of_bytes(@utf8.encode("/Length")),
+        @syntax.PdfInteger(body_one.length()),
+      ),
+      (name_use_cmap, @syntax.PdfIndirect(2)),
+    ]),
+    @syntax.StreamGot(body_one),
+  )
+  let stream_two = @syntax.pdf_stream(
+    @syntax.PdfDictionary([
+      (
+        @core.pdf_name_of_bytes(@utf8.encode("/Length")),
+        @syntax.PdfInteger(body_two.length()),
+      ),
+      (name_use_cmap, @syntax.PdfIndirect(1)),
+    ]),
+    @syntax.StreamGot(body_two),
+  )
+  document.add_object_given_number(1, stream_one)
+  document.add_object_given_number(2, stream_two)
+  let recovery = pdf_viewer_cmap_recovery_of_object(
+    document,
+    @syntax.PdfIndirect(1),
+    Map([]),
+  ).unwrap()
+  assert_true(recovery.diagnostics.usecmap_cycle)
+  assert_eq(pdf_viewer_cmap_lookup(recovery.cid_entries[:], 0x41), Some(1))
+  assert_eq(pdf_viewer_cmap_lookup(recovery.cid_entries[:], 0x42), Some(2))
 }

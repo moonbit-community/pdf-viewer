@@ -1,0 +1,153 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+///|
+fn field(value : Json, name : String) -> Json {
+  match value {
+    Object(fields) => fields.get(name).unwrap_or(Json::null())
+    _ => Json::null()
+  }
+}
+
+///|
+struct ColourSamples {
+  file : String
+  page : Int
+  samples : Int
+  pixels_per_sample : Int
+  exact_changed : Int
+  changed_above_tolerance : Int
+  max_channel_error : Int
+  nonflat_samples : Int
+} derive(ToJson)
+
+///|
+/// Measure flat interiors of the pinned CalGray/CalRGB/Lab fixture swatches.
+/// This isolates colour conversion from the labels and rasterized edges;
+/// the full-page visual report remains authoritative for page differences.
+async fn main {
+  let args = @env.args()
+  guard args.length() == 2 else {
+    fail("usage: colour_samples.mbtx <visual-report-directory>")
+  }
+  let directory = args[1]
+  let report = @json.parse(@fs.read_file(directory + "/report.json").text())
+  guard field(report, "reference_revision") ==
+    Json::string("89b500f5e1d98ed89bb90211e45b28730b2d99ac") &&
+    field(report, "scale") == Json::number(2) &&
+    field(report, "results") is Array(results) else {
+    fail("Swatch coordinates require the pinned fixtures at scale 2")
+  }
+  let summaries : Array[ColourSamples] = []
+  for result in results {
+    guard field(result, "file") is String(file) &&
+      (
+        file == "calgray.pdf" ||
+        file == "calrgb.pdf" ||
+        file == "issue10339_reduced.pdf"
+      ) &&
+      field(result, "page") is Number(page, ..) &&
+      field(result, "rotation") == Json::number(0) else {
+      continue
+    }
+    let (source_width, source_height) = if file == "issue10339_reduced.pdf" {
+      (560, 300)
+    } else {
+      (1700, 2200)
+    }
+    let pixels = field(result, "pixels")
+    guard field(pixels, "width") == Json::number(source_width.to_double()) &&
+      field(pixels, "height") == Json::number(source_height.to_double()) &&
+      field(pixels, "dimensions_match") == Json::boolean(true) else {
+      fail("Unexpected fixture dimensions")
+    }
+    let stem = directory + "/" + file + ".page-\{page.to_int()}.rotation-0"
+    let reference = @fs.read_file(stem + ".reference.rgba").binary()
+    let viewer = @fs.read_file(stem + ".viewer.rgba").binary()
+    guard reference.length() == source_width * source_height * 4 &&
+      viewer.length() == reference.length() else {
+      fail("Missing full RGBA capture")
+    }
+    let points : Array[(Int, Int)] = []
+    if file == "issue10339_reduced.pdf" {
+      for board in 0..<2 {
+        for row in 0..<2 {
+          for column in 0..<3 {
+            points.push((50 + board * 260 + column * 80, 50 + row * 120))
+          }
+        }
+      }
+    } else {
+      let (columns, rows, step) = if file == "calgray.pdf" {
+        (4, 5, 400)
+      } else {
+        (8, 10, 200)
+      }
+      for row in 0..<rows {
+        for column in 0..<columns {
+          points.push(
+            (50 + column * step + step / 4, 150 + row * step + step / 4),
+          )
+        }
+      }
+    }
+    let mut exact_changed = 0
+    let mut changed_above_tolerance = 0
+    let mut max_channel_error = 0
+    let mut nonflat_samples = 0
+    for (x, y) in points {
+      // Top-left quarter of each swatch, away from text and boundaries.
+      let first = (y * source_width + x) * 4
+      let mut flat = true
+      for dy in 0..<16 {
+        for dx in 0..<16 {
+          let offset = ((y + dy) * source_width + x + dx) * 4
+          let mut error = 0
+          for channel in 0..<3 {
+            let a = reference[offset + channel].to_int()
+            let b = viewer[offset + channel].to_int()
+            error = error.max((a - b).abs())
+            if a != reference[first + channel].to_int() ||
+              b != viewer[first + channel].to_int() {
+              flat = false
+            }
+          }
+          max_channel_error = max_channel_error.max(error)
+          if error > 0 {
+            exact_changed += 1
+          }
+          if error > 8 {
+            changed_above_tolerance += 1
+          }
+        }
+      }
+      if !flat {
+        nonflat_samples += 1
+      }
+    }
+    let summary : ColourSamples = {
+      file,
+      page: page.to_int(),
+      samples: points.length(),
+      pixels_per_sample: 256,
+      exact_changed,
+      changed_above_tolerance,
+      max_channel_error,
+      nonflat_samples,
+    }
+    summaries.push(summary)
+    println(ToJson::to_json(summary).stringify())
+  }
+  guard !summaries.is_empty() else {
+    fail("No measured calibrated-colour pages")
+  }
+  @fs.write_file(
+    directory + "/colour-samples.json",
+    ToJson::to_json(summaries).stringify(indent=2),
+  )
+}

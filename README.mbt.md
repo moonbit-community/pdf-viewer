@@ -9,10 +9,16 @@
 - 使用 `moonbitlang/pdflite` 从 PDF bytes 建立文档和页面模型；
 - 以一基页码访问页面，暴露 `PdfPageModel`、`PdfTextContent` 和 paint-order
   display list；
-- 计算带缩放和旋转的 `PdfViewport`，旋转语义与 pdf.js 的顺时针页面旋转一致；
+- 按 PDF.js 语义求 CropBox/MediaBox 有效交集，保留非零页面原点和 `/UserUnit`；
+  计算带缩放和旋转的 `PdfViewport`，旋转语义与 pdf.js 的顺时针页面旋转一致，
+  实际矩阵和 SVG 尺寸使用 `scale * user_unit`；
 - 将文字、矢量路径、图片和渐变输出为自包含 SVG；JPEG、原始像素图片和 inline image
   会转成浏览器可用的 data URL。JPEG2000、JBIG2 会保留原始媒体类型和 bytes，是否能
   在浏览器中显示取决于宿主解码器；
+- 依据声明的颜色空间转换 DeviceGray/RGB/CMYK、CalGray、CalRGB、Lab、Indexed 和
+  Separation/DeviceN tint。路径、文字、渐变和原始图片共用转换；原始图片按
+  1/2/4/8/16-bit 样本、行 padding 和 `/Decode` 处理，color-key `/Mask` 在原始整数
+  样本中比较。CMYK 使用 PDF.js 的 SWOP 拟合回退，ICCBased 目前仍只使用 alternate；
 - 保留文字原始四边形，遇到旋转文字时按 glyph 方向生成 SVG transform；路径 display
   list 保留线帽、连接方式和虚线参数；
 - 对嵌入 TrueType 的 `glyf/loca` 轮廓做 viewer 侧解析，支持简单字形和常见 composite
@@ -50,14 +56,17 @@
   单选按钮的 `button_value` / `button_checked` 与共享的父字段值分开表示；完整表单
   排版、`/DA`、多行、comb、choice export/display 映射仍待实现；
 - 提供 outline、page labels、attachments、optional content、structure tree、info 和
-  metadata 读取入口；JSON 保留 pdflite 的 schema，尚未适配为 pdf.js 的返回结构；
+  metadata 读取入口；独立浏览器已提供目录、信息、页标签和附件/XMP 下载面板；JSON
+  保留 pdflite 的 schema，尚未适配为 pdf.js 的返回结构；
 - 跟踪 ExtGState 的填充/描边透明度和 SVG 可表达的 blend mode；
 - 读取 Form XObject 的 `/Group /Transparency` 边界，把 isolated/non-isolated、knockout
   标记和嵌套 `group_path` 带入 display list；SVG 对 isolated 组使用 `isolation:isolate`，
   并保留 data 属性供后续 Canvas/WebGL compositor 使用；
-- 对常见的彩色、路径型 tiling pattern 生成 SVG `<pattern>`，应用 pattern matrix，并把
-  多段显式 clipping 以浏览器可工作的嵌套 clipPath 表达；uncolored pattern、复杂 Form
-  资源和 soft mask 仍未覆盖；PatternType 2 shading pattern 会解析为 mesh 并裁剪到原始路径；
+- 对路径型彩色和 uncolored tiling pattern 生成 SVG `<pattern>`，应用调用处的基础
+  色彩和 pattern matrix；填充的 `pattern` 和描边的 `stroke_pattern` 独立保留，单元和
+  嵌套 Form 按各自资源解析颜色。多段显式 clipping 以嵌套 clipPath 表达；复杂单元的
+  文字、透明组和重复边界仍待补齐。PatternType 2 的填充会解析为 mesh 并裁剪到原始
+  路径，shading pattern 的描边尚未实现；
 - 解析 PDF ShadingType 4/5/6/7 的二进制 mesh stream，支持 Gouraud、Coons patch 和
   tensor patch 的三角化。`PdfMeshTriangle` 保留每个顶点的 PDF-space 坐标和颜色；SVG
   后端用 barycentric 微三角近似 Gouraud 插值，Canvas/WebGL 宿主可以直接使用原始顶点颜色做
@@ -65,8 +74,8 @@
 - 支持 PDF ImageMask、普通 `/Mask` color-key、图片 `/SMask`，以及常见的 Form soft
   mask；mask 会在图片的局部坐标系中合成，再交给页面 affine transform。Form mask 已处理
   `/BBox`、`/S /Alpha`、`/S /Luminosity` 和常见 `/TR` transfer function，资源字典会随
-  Form 继承。浏览器不支持的 inline CCITT mask、复杂 backdrop/knockout 合成、backdrop
-  色彩空间和部分 JPEG2000/JBIG2 mask 仍保留为占位或依赖宿主解码器；
+  Form 继承，路径的填充和描边分别转换颜色。inline CCITT 已通过 pdflite 解码为 PNG；
+  复杂 backdrop/knockout 合成、backdrop 色彩空间和 JPEG2000/JBIG2 mask 仍未补齐；
 - 提供 native CLI，方便用真实 PDF 调试，而不需要先接入浏览器。
 - 提供独立浏览器 viewer，本地文件和拖放载入、多页滚动、缩放、旋转、下载可用。
   页面正文有透明 DOM text layer，原生 cursor 拖选、复制、Shift＋方向键和文档全选
@@ -164,6 +173,7 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs vertical 1,2,3
 | pdf.js 概念 | 本项目当前 API |
 | --- | --- |
 | `getDocument(data)` | `open_document(bytes)` |
+| password callback | `open_document_with_passwords(bytes, user_password~, owner_password~)`；错误密码抛出稳定的 `SoftError` |
 | `PDFDocumentProxy.numPages` | `PdfViewerDocument::page_count()` |
 | `PDFDocumentProxy.getPage(n)` | `PdfViewerDocument::page(n)` |
 | `PDFPageProxy.getViewport({ scale, rotation })` | `PdfPageModel::viewport(scale~, rotation~)` (`matrix` and SVG transform included) |
@@ -172,17 +182,43 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs vertical 1,2,3
 | cursor selection → source glyphs | `PdfPageModel::select_text(start_item, start_offset, end_item, end_offset)` |
 | `PDFPageProxy.getOperatorList()` | `PdfViewerDocument::operator_list(n)` |
 | `PDFPageProxy.render(...)` | `PdfViewerDocument::render_svg(n, scale~)` / `render_svg_with_rotation(...)` / cached `PdfPageModel::render_svg(...)` |
+| `PDFFindController`-style text search | `PdfViewerDocument::search(query, options~)`; browser bridge `search_pdf` |
+| named/explicit destination | `named_destinations()` / `named_destination(name)` / `destination_for_page(page_number)` |
+| outline entries with navigation | `outline_navigation_json()` |
+| document outline/info/attachments in browser | `document_info()` / `download_attachment(index)` / `download_metadata()` |
 
 文档读取补充 API：`outline_json()`、`page_labels_json()`、`page_labels()`、
 `attachments_json()`、`optional_content_json()`、`struct_tree_json()`、`info_json()`、
-`metadata_bytes()`。其中 `page_labels()` 始终返回每页的显示标签，没有标签树时使用一基
-十进制页码；这与 pdf.js 返回 `null` 的约定不同。optional-content API 目前读取配置，
-还不能通过切换图层改变渲染结果。
+`attachment_manifest_json()`、`attachment_bytes(index)`、`metadata_bytes()`、
+`named_destinations()`、`named_destination(name)`、
+`destination_for_page(page_number)` 和 `outline_navigation_json()`。其中 `page_labels()` 始终返回每页的显示标签，没有标签树时使用一基
+十进制页码；这与 pdf.js 返回 `null` 的约定不同。optional-content API 读取配置并参与
+display-list 过滤；使用 `with_optional_content_state(pdf_optional_content_state(on=[...], off=[...]))`
+可以按 pdflite 的 OCG 对象号切换显示，隐藏内容不会进入文本、选择或 SVG。浏览器图层面板和
+usage/RBGroups 等交互语义仍是后续图层工作。
+
+宿主可以用 `PdfFontFallback` 和 `with_font_fallbacks([...])` 为未嵌入字体指定本机 CSS
+字体族；嵌入的 TrueType/OpenType 程序仍优先使用文档内字节。浏览器 bridge 还导出
+`set_font_fallbacks(json)`，JSON 项形如 `{"pdf_name":"Helvetica","family":"Arial"}`，
+可选 `weight`/`style` 只影响文字层的 CSS 元数据。viewer 不携带宿主字体文件，也不把字体
+文件写入文档或下载结果。
+
+destination API 把 PDF 内部跳转转换为 viewer 自有的 `PdfDestination`。它保留
+`XYZ`/`Fit` 族的视图参数、当前文档的一基页码和 `resolved` 状态；指向其他文件的
+destination 保留 `remote_page` 并设置 `remote`，宿主可以据此决定是否打开外部文件。
+这些 API 目前提供解析和结构化数据，独立浏览器已把本地目录目标接到滚动定位；annotation
+link layer 和远程 destination 的宿主策略仍待后续工作。
+
+加密文档在没有密码或密码错误时不会进入页面树；调用
+`open_document_with_passwords` 可传入用户密码或所有者密码。当前回归覆盖 40-bit
+ARC4、128-bit ARC4 和 AESV2，浏览器 viewer 在本地弹出密码提示并在错误后重试；密码只在
+浏览器内存中传递。
 
 这不是声称已经达到 pdf.js 的覆盖率。复杂外部 CMap 继承及
-reader 未保留的 codespace、完整字体 metrics 和标准/系统字体 fallback、
-soft mask 的完整组合成语义、透明组的完整 backdrop/knockout 合成、uncolored/复杂 tiling
-pattern、mesh 的最终像素级 Gouraud 合成、完整 annotation appearance/form 行为仍是后续工作；
+reader 未保留的 codespace、完整字体 metrics 和标准 14 字体替代、
+ICC 色彩管理、soft mask 的完整组合成语义、透明组的完整 backdrop/knockout 合成、
+tiling pattern 的精确矩阵/裁剪和复杂单元、mesh 的最终像素级 Gouraud 合成、完整
+annotation appearance/form 行为仍是后续工作；
 当前 API 会先把可解析内容的页面位置和类型留在
 display list 中，避免宿主丢失结构化信息。现阶段 SVG 输出适合调试和建立回归基线，不能
 当作 pdf.js 的像素级替代品。
@@ -197,8 +233,10 @@ MoonBit 宿主可用 `reinterpret_as_uint()` 取得无符号值。原始 byte sp
 浏览器在 `#viewer` 上发出 `pdf-selection-change`，`event.detail` 包含
 `file: { name, path }`、归并的 `text` 和每页的 `ranges`；选区清空时为 `null`。
 本地文件的 `path` 为浏览器能获得的文件名，URL 载入保留传入的 URL。
-这只是独立 viewer 的来源信息，未接入 OpenSeek。阅读顺序/bidi、批注与表单的 DOM 层、
-全文搜索、缩略图、打印、Worker/取消和大文件内存上限继续由 TODO 跟踪。
+这只是独立 viewer 的来源信息，未接入 OpenSeek。搜索结果通过 `pdf-search-change` 事件提供
+查询词和几何丰富的结果；当前浏览器按 source item 高亮并滚动到活动结果。阅读顺序/bidi、
+完整 Unicode normalization、批注与表单的 DOM 层、Worker/取消和大文件内存上限继续由
+TODO 跟踪；缩略图和基础打印入口已经提供。
 
 旋转参数按 pdf.js 规则只接受 `0/90/180/270`（允许等价的负数和大于 360 的整数）；
 SVG 渲染遇到其它角度会返回 `PageRotationExpected`，不会静默近似成另一个角度。

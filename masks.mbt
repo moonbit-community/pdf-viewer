@@ -42,10 +42,24 @@ fn pdf_form_mask_data_uri(
     max_x: bbox.max_x,
     max_y: bbox.max_y,
   }
+  let initial = @pdflite.pdf_content_initial_operator_state(
+    rectangle.min_x,
+    rectangle.min_y,
+    rectangle.max_x,
+    rectangle.max_y,
+  )
   let entries = try
     Some(
-      @pdflite.pdf_content_entries_of_ops_recursive(
-        document, rectangle, resources, ops,
+      pdf_collected_entries_of_ops(
+        document,
+        initial,
+        resources,
+        ops,
+        initial.clipping_path,
+        None,
+        [],
+        false,
+        false,
       ),
     )
   catch {
@@ -80,7 +94,6 @@ fn pdf_form_mask_data_uri(
     pdf_svg_form_mask_entry(
       output,
       document,
-      resources,
       entry,
       bbox.min_x,
       bbox.min_y,
@@ -143,14 +156,14 @@ fn pdf_form_mask_resources(
 fn pdf_svg_form_mask_entry(
   output : StringBuilder,
   document : @pdflite.PdfDocument,
-  resources : @syntax.PdfObject,
-  entry : @pdflite.PdfContentJsonEntry,
+  collected : PdfCollectedEntry,
   bbox_min_x : Double,
   bbox_min_y : Double,
   bbox_height : Double,
   luminosity : Bool,
   transfer_map : Array[Int]?,
 ) -> Unit {
+  let entry = collected.entry
   match entry.object {
     @pdflite.PdfContentPathObject(drawn) => {
       let bounds = pdf_bounds_of_quad(entry.bounding_box)
@@ -162,32 +175,57 @@ fn pdf_svg_form_mask_entry(
         bounds,
       )
       if path != "" {
-        let colour = if luminosity {
+        let (fill_colour, stroke_colour) = if luminosity {
           match entry.state {
             @pdflite.PdfContentStatePath(state) =>
-              if drawn.filled {
-                pdf_colour_hex(state.colour_non_stroke)
-              } else {
-                "#000000"
-              }
-            _ => "#000000"
+              (
+                if collected.fill_color_explicit {
+                  pdf_colour_hex_in_space(
+                    state.colourspace_non_stroke,
+                    state.colour_non_stroke,
+                    document=Some(document),
+                  )
+                } else {
+                  "#000000"
+                },
+                if collected.stroke_color_explicit {
+                  pdf_colour_hex_in_space(
+                    state.colourspace_stroke,
+                    state.colour_stroke,
+                    document=Some(document),
+                  )
+                } else {
+                  "#000000"
+                },
+              )
+            _ => ("#000000", "#000000")
           }
         } else {
-          "#ffffff"
+          ("#ffffff", "#ffffff")
         }
-        let colour = match transfer_map {
-          Some(table) if table.length() >= 256 =>
-            if colour.to_lower() == "#ffffff" {
-              pdf_transfer_mask_colour(1.0, Some(table))
-            } else if colour.to_lower() == "#000000" {
-              pdf_transfer_mask_colour(0.0, Some(table))
-            } else {
-              colour
-            }
-          _ => colour
+        let transfer_colour = fn(colour : String) {
+          match transfer_map {
+            Some(table) if table.length() >= 256 =>
+              if colour.to_lower() == "#ffffff" {
+                pdf_transfer_mask_colour(1.0, Some(table))
+              } else if colour.to_lower() == "#000000" {
+                pdf_transfer_mask_colour(0.0, Some(table))
+              } else {
+                colour
+              }
+            _ => colour
+          }
         }
-        let fill = if drawn.filled { colour } else { "none" }
-        let stroke = if drawn.stroked { colour } else { "none" }
+        let fill = if drawn.filled {
+          transfer_colour(fill_colour)
+        } else {
+          "none"
+        }
+        let stroke = if drawn.stroked {
+          transfer_colour(stroke_colour)
+        } else {
+          "none"
+        }
         output.write_string(
           "<path d=\"" +
           path +
@@ -227,7 +265,8 @@ fn pdf_svg_form_mask_entry(
       )
     }
     @pdflite.PdfContentImageObject(name) =>
-      match pdf_image_resource_of_resources(document, resources, name) {
+      match
+        pdf_image_resource_of_resources(document, collected.resources, name) {
         Some(resource) =>
           match resource.data_uri {
             Some(data_uri) => {
@@ -240,7 +279,13 @@ fn pdf_svg_form_mask_entry(
               output.write_string(
                 "<image x=\"0\" y=\"0\" width=\"1\" height=\"1\" transform=\"" +
                 transform +
-                "\" preserveAspectRatio=\"none\" href=\"" +
+                "\" preserveAspectRatio=\"none\"" +
+                pdf_svg_image_sampling(
+                  resource,
+                  pdf_quad_of_box(entry.bounding_box),
+                  1.0,
+                ) +
+                " href=\"" +
                 data_uri +
                 "\"/>",
               )

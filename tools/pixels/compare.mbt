@@ -14,7 +14,7 @@ pub fn Raster::from_rgba(rgba : Bytes, width : Int, height : Int) -> Raster? {
   // Bound allocation and validate before multiplying untrusted dimensions.
   guard width <= 16777216 / height else { return None }
   guard rgba.length() == width * height * 4 else { return None }
-  Some({ rgba, width, height })
+  Some({ rgba, width, height, })
 }
 
 ///|
@@ -76,7 +76,11 @@ fn Raster::pixel(self : Raster, x : Int, y : Int) -> (Int, Int, Int) {
 
 ///|
 fn maximum(a : Int, b : Int) -> Int {
-  if a > b { a } else { b }
+  if a > b {
+    a
+  } else {
+    b
+  }
 }
 
 ///|
@@ -91,8 +95,8 @@ fn Raster::near_color(
   y : Int,
   color : (Int, Int, Int),
 ) -> Bool {
-  for dy in -1..=1 {
-    for dx in -1..=1 {
+  for dy in -1..<=1 {
+    for dx in -1..<=1 {
       if difference(color, self.pixel(x + dx, y + dy)) <= 8 {
         return true
       }
@@ -103,10 +107,18 @@ fn Raster::near_color(
 
 ///|
 fn expand(bounds : Array[Int], x : Int, y : Int) -> Unit {
-  if x < bounds[0] { bounds[0] = x }
-  if y < bounds[1] { bounds[1] = y }
-  if x + 1 > bounds[2] { bounds[2] = x + 1 }
-  if y + 1 > bounds[3] { bounds[3] = y + 1 }
+  if x < bounds[0] {
+    bounds[0] = x
+  }
+  if y < bounds[1] {
+    bounds[1] = y
+  }
+  if x + 1 > bounds[2] {
+    bounds[2] = x + 1
+  }
+  if y + 1 > bounds[3] {
+    bounds[3] = y + 1
+  }
 }
 
 ///|
@@ -114,7 +126,10 @@ fn expand(bounds : Array[Int], x : Int, y : Int) -> Unit {
 /// Yellow means both colors occur within the other image's 1px neighborhood;
 /// red means they do not. Yellow is a diagnostic candidate, never proof of
 /// antialiasing: even a shifted thin line can be yellow. Raw counts remain.
-pub fn compare(reference : Raster, viewer : Raster) -> PixelComparison raise PixelError {
+pub fn compare(
+  reference : Raster,
+  viewer : Raster,
+) -> PixelComparison raise PixelError {
   let width = maximum(reference.width, viewer.width)
   let height = maximum(reference.height, viewer.height)
   guard width <= 16777216 / height else { raise CombinedRasterTooLarge }
@@ -141,12 +156,24 @@ pub fn compare(reference : Raster, viewer : Raster) -> PixelComparison raise Pix
       let error = difference(a, b)
       let a_ink = difference(a, (255, 255, 255)) > 24
       let b_ink = difference(b, (255, 255, 255)) > 24
-      if a_ink { reference_ink += 1 }
-      if b_ink { viewer_ink += 1 }
-      if a_ink || b_ink { union_ink += 1 }
-      if a_ink && !b_ink { missing_ink += 1 }
-      if !a_ink && b_ink { extra_ink += 1 }
-      if error > 0 { exact += 1 }
+      if a_ink {
+        reference_ink += 1
+      }
+      if b_ink {
+        viewer_ink += 1
+      }
+      if a_ink || b_ink {
+        union_ink += 1
+      }
+      if a_ink && !b_ink {
+        missing_ink += 1
+      }
+      if !a_ink && b_ink {
+        extra_ink += 1
+      }
+      if error > 0 {
+        exact += 1
+      }
       max_error = maximum(max_error, error)
       let dr = (a.0 - b.0).to_double()
       let dg = (a.1 - b.1).to_double()
@@ -174,21 +201,40 @@ pub fn compare(reference : Raster, viewer : Raster) -> PixelComparison raise Pix
     }
   }
   let stats : PixelStats = {
-    width, height, pixels,
-    dimensions_match: reference.width == viewer.width && reference.height == viewer.height,
+    width,
+    height,
+    pixels,
+    dimensions_match: reference.width == viewer.width &&
+    reference.height == viewer.height,
     exact_changed: exact,
     changed_above_tolerance: changed,
     neighborhood_matched: nearby,
     outside_neighborhood: structural,
-    reference_ink, viewer_ink, union_ink, missing_ink, extra_ink,
+    reference_ink,
+    viewer_ink,
+    union_ink,
+    missing_ink,
+    extra_ink,
     changed_fraction: changed.to_double() / pixels.to_double(),
     outside_neighborhood_fraction: structural.to_double() / pixels.to_double(),
-    changed_over_union_ink: if union_ink == 0 { 0.0 } else { changed.to_double() / union_ink.to_double() },
+    changed_over_union_ink: if union_ink == 0 {
+      0.0
+    } else {
+      changed.to_double() / union_ink.to_double()
+    },
     mean_absolute_error: absolute_error / (pixels.to_double() * 3.0),
     root_mean_square_error: (squared_error / (pixels.to_double() * 3.0)).sqrt(),
     max_channel_error: max_error,
-    changed_bounds: if changed == 0 { None } else { Some(bounds) },
-    outside_neighborhood_bounds: if structural == 0 { None } else { Some(structural_bounds) },
+    changed_bounds: if changed == 0 {
+      None
+    } else {
+      Some(bounds)
+    },
+    outside_neighborhood_bounds: if structural == 0 {
+      None
+    } else {
+      Some(structural_bounds)
+    },
   }
-  { stats, heatmap: Bytes::from_array(heatmap[:]) }
+  { stats, heatmap: Bytes::from_array(heatmap[:]), }
 }

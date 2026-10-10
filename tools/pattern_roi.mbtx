@@ -1,0 +1,91 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/string",
+}
+
+///|
+struct RoiStats {
+  pixels : Int
+  exact_changed : Int
+  changed_above_tolerance : Int
+  mean_absolute_error : Double
+  changed_bounds : Array[Int]?
+} derive(ToJson)
+
+///|
+async fn main {
+  let args = @env.args()
+  guard args.length() == 8 else {
+    fail("usage: pattern_roi.mbtx <reference.rgba> <viewer.rgba> <x> <y> <width> <height> <source-width>")
+  }
+  let x = @string.parse_int(args[3])
+  let y = @string.parse_int(args[4])
+  let width = @string.parse_int(args[5])
+  let height = @string.parse_int(args[6])
+  let source_width = @string.parse_int(args[7])
+  let reference = @fs.read_file(args[1]).binary()
+  let viewer = @fs.read_file(args[2]).binary()
+  guard width > 0 && height > 0 && source_width > 0 else {
+    fail("ROI dimensions must be positive")
+  }
+  guard reference.length() == viewer.length() && reference.length() % 4 == 0 &&
+    source_width <= reference.length() / 4 else {
+    fail("RGBA files must have equal lengths compatible with source-width")
+  }
+  let source_height = reference.length() / (source_width * 4)
+  guard x >= 0 && y >= 0 && width <= source_width && height <= source_height &&
+    x <= source_width - width && y <= source_height - height else {
+    fail("ROI must fit within the RGBA image")
+  }
+  let changed_bounds = [width, height, 0, 0]
+  let mut exact_changed = 0
+  let mut changed = 0
+  let mut absolute_error = 0.0
+  for row in 0..<height {
+    for column in 0..<width {
+      let reference_start = ((y + row) * source_width + x + column) * 4
+      let viewer_start = reference_start
+      let dr =
+        reference[reference_start].to_int() - viewer[viewer_start].to_int()
+      let dg =
+        reference[reference_start + 1].to_int() -
+        viewer[viewer_start + 1].to_int()
+      let db =
+        reference[reference_start + 2].to_int() -
+        viewer[viewer_start + 2].to_int()
+      let error = dr.abs().max(dg.abs()).max(db.abs())
+      absolute_error += dr.abs().to_double() + dg.abs().to_double() +
+      db.abs().to_double()
+      if error > 0 {
+        exact_changed += 1
+      }
+      if error > 8 {
+        changed += 1
+        if column < changed_bounds[0] {
+          changed_bounds[0] = column
+        }
+        if row < changed_bounds[1] {
+          changed_bounds[1] = row
+        }
+        if column + 1 > changed_bounds[2] {
+          changed_bounds[2] = column + 1
+        }
+        if row + 1 > changed_bounds[3] {
+          changed_bounds[3] = row + 1
+        }
+      }
+    }
+  }
+  let pixels = width * height
+  let stats : RoiStats = {
+    pixels,
+    exact_changed,
+    changed_above_tolerance: changed,
+    mean_absolute_error: absolute_error / (pixels.to_double() * 3.0),
+    changed_bounds: if changed == 0 { None } else { Some(changed_bounds) },
+  }
+  println(ToJson::to_json(stats).stringify())
+}

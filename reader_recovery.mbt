@@ -245,7 +245,7 @@ fn pdf_recovery_object(
     [101, 110, 100, 115, 116, 114, 101, 97, 109],
     @core.ParseEndStreamExpected,
   )
-  @syntax.pdf_cursor_drop_whitespace(cursor)
+  pdf_recovery_drop_trivia(cursor)
   @reader.pdf_cursor_consume_ascii(
     cursor,
     [101, 110, 100, 111, 98, 106],
@@ -254,5 +254,61 @@ fn pdf_recovery_object(
   {
     ..parsed,
     object: @syntax.pdf_stream(parsed.object, @syntax.StreamGot(data)),
+  }
+}
+
+///|
+/// A comment is legal between endstream and endobj. pdflite 0.2.2's stream
+/// reader drops that otherwise-valid object, even with a correct /Length.
+fn pdf_recovery_drop_trivia(cursor : @core.ByteCursor) -> Unit {
+  for ;; {
+    @syntax.pdf_cursor_drop_whitespace(cursor)
+    if cursor.peek_byte() != 37 {
+      break
+    }
+    ignore(@syntax.pdf_cursor_lex_comment(cursor))
+  }
+}
+
+///|
+fn pdf_reader_has_dropped_page_contents(
+  document : @pdflite.PdfDocument,
+) -> Bool {
+  for number in document.object_numbers() {
+    let object = document.lookup_object_or_null(number)
+    if object.lookup_immediate(pdf_name_key("/Type")) ==
+      Some(@syntax.PdfNameObject(pdf_name_key("/Page"))) {
+      match object.lookup_immediate(pdf_name_key("/Contents")) {
+        Some(contents) =>
+          if pdf_reader_has_dropped_content_reference(document, contents, 0) {
+            return true
+          }
+        None => ()
+      }
+    }
+  }
+  false
+}
+
+///|
+fn pdf_reader_has_dropped_content_reference(
+  document : @pdflite.PdfDocument,
+  object : @syntax.PdfObject,
+  depth : Int,
+) -> Bool {
+  if depth >= 32 {
+    return false
+  }
+  match object {
+    @syntax.PdfIndirect(number) => {
+      let resolved = document.lookup_object_or_null(number)
+      resolved == @syntax.PdfNull ||
+      pdf_reader_has_dropped_content_reference(document, resolved, depth + 1)
+    }
+    @syntax.PdfArray(items) =>
+      items.any(item => {
+        pdf_reader_has_dropped_content_reference(document, item, depth + 1)
+      })
+    _ => false
   }
 }

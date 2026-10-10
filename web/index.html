@@ -18,6 +18,9 @@
           hidden
         />
         <span id="file-name" title="">未打开文档</span>
+        <button id="outline-toggle" type="button" disabled>目录</button>
+        <button id="thumbnail-toggle" type="button" disabled>缩略图</button>
+        <button id="info-toggle" type="button" disabled>信息</button>
       </div>
       <div class="page-controls">
         <button id="previous-page" title="上一页" aria-label="上一页" disabled>
@@ -51,7 +54,27 @@
         <button id="rotate" title="顺时针旋转" aria-label="顺时针旋转" disabled>
           ↻
         </button>
+        <select id="view-mode" aria-label="页面模式" disabled>
+          <option value="scroll">连续</option>
+          <option value="page">单页</option>
+        </select>
       </div>
+      <div class="search-controls" role="search" aria-label="搜索文档">
+        <input
+          id="search-query"
+          type="search"
+          placeholder="搜索文档"
+          aria-label="搜索文档"
+          disabled
+        />
+        <button id="search-previous" title="上一个结果" aria-label="上一个结果" disabled>↑</button>
+        <button id="search-next" title="下一个结果" aria-label="下一个结果" disabled>↓</button>
+        <label title="区分大小写"><input id="search-case" type="checkbox" disabled /> Aa</label>
+        <label title="只匹配完整单词"><input id="search-whole" type="checkbox" disabled /> 词</label>
+        <label title="忽略变音符号"><input id="search-diacritic" type="checkbox" checked disabled /> é</label>
+        <span id="search-status" aria-live="polite"></span>
+      </div>
+      <button id="print" title="打印" aria-label="打印" disabled>打印</button>
       <button id="download" disabled>下载</button>
     </header>
     <main id="viewer" tabindex="0" aria-label="PDF 文档" aria-busy="false">
@@ -64,6 +87,13 @@
       </section>
       <div id="pages"></div>
     </main>
+    <aside id="sidebar" aria-label="文档导航" hidden>
+      <div class="sidebar-header">
+        <strong id="sidebar-title">目录</strong>
+        <button id="sidebar-close" type="button" title="关闭面板" aria-label="关闭面板">×</button>
+      </div>
+      <div id="sidebar-content"></div>
+    </aside>
     <footer class="status-bar">
       <span id="status" role="status" aria-live="polite">就绪</span>
       <span id="selection-status"></span>

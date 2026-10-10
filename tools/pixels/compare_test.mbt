@@ -1,5 +1,9 @@
 ///|
-fn raster(width : Int, height : Int, ink : (Int, Int) -> Bool) -> @pixels.Raster {
+fn raster(
+  width : Int,
+  height : Int,
+  ink : (Int, Int) -> Bool,
+) -> @pixels.Raster {
   let rgba = Bytes::makei(width * height * 4, index => {
     let pixel = index / 4
     if index % 4 == 3 || !ink(pixel % width, pixel / width) {

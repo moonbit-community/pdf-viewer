@@ -9,6 +9,7 @@ priv enum PdfViewerCMapToken {
   PdfViewerCMapHex(Bytes, UInt)
   PdfViewerCMapWord(Bytes)
   PdfViewerCMapInteger(Int)
+  PdfViewerCMapInvalid
 }
 
 ///|
@@ -19,10 +20,28 @@ priv struct PdfViewerCMapEntry {
 }
 
 ///|
+priv struct PdfViewerUnicodeEntry {
+  first : UInt
+  last : UInt
+  unicode : Bytes
+}
+
+///|
+priv struct PdfViewerCMapDiagnostics {
+  mut malformed_tokens : Int
+  incomplete_sections : Array[String]
+  usecmap_cycle : Bool
+  source_unavailable : Bool
+}
+
+///|
 priv struct PdfViewerCMapRecovery {
   codespaces : Array[@pdflite.PdfCMapCodeSpace]
   cid_entries : Array[PdfViewerCMapEntry]
   notdef_entries : Array[PdfViewerCMapEntry]
+  unicode_entries : Array[PdfViewerUnicodeEntry]
+  diagnostics : PdfViewerCMapDiagnostics
+  source_available : Bool
   mut usecmap : @core.PdfName?
   mut wmode : Int?
 }
@@ -108,15 +127,29 @@ fn pdf_viewer_cmap_tokens(data : BytesView) -> Array[PdfViewerCMapToken] {
       if stop < data.length() {
         match pdf_viewer_cmap_hex_value(data[start:stop]) {
           Some((bytes, value)) => output.push(PdfViewerCMapHex(bytes, value))
-          None => ()
+          None => output.push(PdfViewerCMapInvalid)
         }
         index = stop + 1
         continue
       }
+      output.push(PdfViewerCMapInvalid)
+      index = data.length()
+      continue
     }
     if data[index] is (b'[' | b']') {
       output.push(PdfViewerCMapWord(data[index:index + 1].to_owned()))
       index += 1
+      continue
+    }
+    if data[index] is b'/' {
+      let start = index
+      index += 1
+      while index < data.length() &&
+            !pdf_viewer_cmap_delimiter(data[index].to_int()) &&
+            data[index] != b'%' {
+        index += 1
+      }
+      output.push(PdfViewerCMapWord(data[start:index].to_owned()))
       continue
     }
     let start = index
@@ -183,17 +216,122 @@ fn pdf_viewer_cmap_char_entry(
 }
 
 ///|
+fn pdf_viewer_unicode_entry(
+  tokens : Array[PdfViewerCMapToken],
+  index : Int,
+) -> (UInt, Bytes, Int)? {
+  match (tokens.get(index), tokens.get(index + 1)) {
+    (Some(PdfViewerCMapHex(_, code)), Some(PdfViewerCMapHex(bytes, _))) =>
+      Some((code, bytes, index + 2))
+    _ => None
+  }
+}
+
+///|
+
+///|
+fn pdf_viewer_parse_unicode_entries(
+  tokens : Array[PdfViewerCMapToken],
+  output : Array[PdfViewerUnicodeEntry],
+  start : Int,
+  end_word : String,
+) -> (Int, Bool) {
+  let mut index = start
+  while index < tokens.length() {
+    if pdf_viewer_cmap_word_is(tokens[index], end_word) {
+      return (index + 1, true)
+    }
+    match pdf_viewer_unicode_entry(tokens, index) {
+      Some((code, unicode, next)) => {
+        output.push({ first: code, last: code, unicode, })
+        index = next
+      }
+      None => index += 1
+    }
+  }
+  (index, false)
+}
+
+///|
+fn pdf_viewer_parse_unicode_ranges(
+  tokens : Array[PdfViewerCMapToken],
+  output : Array[PdfViewerUnicodeEntry],
+  start : Int,
+) -> (Int, Bool) {
+  let mut index = start
+  while index < tokens.length() {
+    if pdf_viewer_cmap_word_is(tokens[index], "endbfrange") {
+      return (index + 1, true)
+    }
+    match (tokens.get(index), tokens.get(index + 1), tokens.get(index + 2)) {
+      (
+        Some(PdfViewerCMapHex(first_bytes, first)),
+        Some(PdfViewerCMapHex(last_bytes, last)),
+        Some(PdfViewerCMapHex(unicode, _)),
+      ) if first_bytes.length() == last_bytes.length() && first <= last => {
+        output.push({ first, last, unicode, })
+        index += 3
+      }
+      (
+        Some(PdfViewerCMapHex(first_bytes, first)),
+        Some(PdfViewerCMapHex(last_bytes, last)),
+        Some(PdfViewerCMapWord(open)),
+      ) if first_bytes.length() == last_bytes.length() &&
+        first <= last &&
+        open[:] == b"[" => {
+        index += 3
+        let mut source = first
+        let mut exhausted = false
+        while index < tokens.length() &&
+              !pdf_viewer_cmap_word_is(tokens[index], "]") {
+          match tokens[index] {
+            PdfViewerCMapHex(unicode, _) if !exhausted && source <= last => {
+              output.push({ first: source, last: source, unicode, })
+              if source == last {
+                exhausted = true
+              } else {
+                source += 1U
+              }
+            }
+            _ => ()
+          }
+          index += 1
+        }
+        if index < tokens.length() {
+          index += 1
+        }
+      }
+      _ => index += 1
+    }
+  }
+  (index, false)
+}
+
+///|
 fn pdf_viewer_parse_cmap(data : BytesView) -> PdfViewerCMapRecovery {
   let tokens = pdf_viewer_cmap_tokens(data)
   let output = PdfViewerCMapRecovery::{
     codespaces: [],
     cid_entries: [],
     notdef_entries: [],
+    unicode_entries: [],
+    diagnostics: {
+      malformed_tokens: 0,
+      incomplete_sections: [],
+      usecmap_cycle: false,
+      source_unavailable: false,
+    },
+    source_available: true,
     usecmap: None,
     wmode: None,
   }
   let mut index = 0
   let mut previous_name : @core.PdfName? = None
+  for token in tokens {
+    if token is PdfViewerCMapInvalid {
+      output.diagnostics.malformed_tokens += 1
+    }
+  }
   while index < tokens.length() {
     let token = tokens[index]
     if pdf_viewer_cmap_word_is(token, "usecmap") {
@@ -204,8 +342,10 @@ fn pdf_viewer_parse_cmap(data : BytesView) -> PdfViewerCMapRecovery {
     }
     if pdf_viewer_cmap_word_is(token, "begincodespacerange") {
       index += 1
+      let mut closed = false
       while index < tokens.length() {
         if pdf_viewer_cmap_word_is(tokens[index], "endcodespacerange") {
+          closed = true
           index += 1
           break
         }
@@ -224,13 +364,45 @@ fn pdf_viewer_parse_cmap(data : BytesView) -> PdfViewerCMapRecovery {
           _ => index += 1
         }
       }
+      if !closed {
+        output.diagnostics.incomplete_sections.push("codespacerange")
+      }
+      previous_name = None
+      continue
+    }
+    if pdf_viewer_cmap_word_is(token, "beginbfchar") {
+      let (next, closed) = pdf_viewer_parse_unicode_entries(
+        tokens,
+        output.unicode_entries,
+        index + 1,
+        "endbfchar",
+      )
+      index = next
+      if !closed {
+        output.diagnostics.incomplete_sections.push("bfchar")
+      }
+      previous_name = None
+      continue
+    }
+    if pdf_viewer_cmap_word_is(token, "beginbfrange") {
+      let (next, closed) = pdf_viewer_parse_unicode_ranges(
+        tokens,
+        output.unicode_entries,
+        index + 1,
+      )
+      index = next
+      if !closed {
+        output.diagnostics.incomplete_sections.push("bfrange")
+      }
       previous_name = None
       continue
     }
     if pdf_viewer_cmap_word_is(token, "begincidchar") {
       index += 1
+      let mut closed = false
       while index < tokens.length() {
         if pdf_viewer_cmap_word_is(tokens[index], "endcidchar") {
+          closed = true
           index += 1
           break
         }
@@ -242,13 +414,18 @@ fn pdf_viewer_parse_cmap(data : BytesView) -> PdfViewerCMapRecovery {
           None => index += 1
         }
       }
+      if !closed {
+        output.diagnostics.incomplete_sections.push("cidchar")
+      }
       previous_name = None
       continue
     }
     if pdf_viewer_cmap_word_is(token, "begincidrange") {
       index += 1
+      let mut closed = false
       while index < tokens.length() {
         if pdf_viewer_cmap_word_is(tokens[index], "endcidrange") {
+          closed = true
           index += 1
           break
         }
@@ -260,13 +437,18 @@ fn pdf_viewer_parse_cmap(data : BytesView) -> PdfViewerCMapRecovery {
           _ => index += 1
         }
       }
+      if !closed {
+        output.diagnostics.incomplete_sections.push("cidrange")
+      }
       previous_name = None
       continue
     }
     if pdf_viewer_cmap_word_is(token, "beginnotdefchar") {
       index += 1
+      let mut closed = false
       while index < tokens.length() {
         if pdf_viewer_cmap_word_is(tokens[index], "endnotdefchar") {
+          closed = true
           index += 1
           break
         }
@@ -278,13 +460,18 @@ fn pdf_viewer_parse_cmap(data : BytesView) -> PdfViewerCMapRecovery {
           None => index += 1
         }
       }
+      if !closed {
+        output.diagnostics.incomplete_sections.push("notdefchar")
+      }
       previous_name = None
       continue
     }
     if pdf_viewer_cmap_word_is(token, "beginnotdefrange") {
       index += 1
+      let mut closed = false
       while index < tokens.length() {
         if pdf_viewer_cmap_word_is(tokens[index], "endnotdefrange") {
+          closed = true
           index += 1
           break
         }
@@ -295,6 +482,9 @@ fn pdf_viewer_parse_cmap(data : BytesView) -> PdfViewerCMapRecovery {
           }
           _ => index += 1
         }
+      }
+      if !closed {
+        output.diagnostics.incomplete_sections.push("notdefrange")
       }
       previous_name = None
       continue
@@ -345,7 +535,7 @@ let pdf_viewer_cmap_recovery_cache : Map[String, PdfViewerCMapRecovery?] = Map([
 
 ///|
 fn pdf_viewer_cmap_recovery_cached(bytes : Bytes) -> PdfViewerCMapRecovery {
-  let key = @utf8.decode_lossy(bytes[:])
+  let key = @base64.encode(bytes)
   match pdf_viewer_cmap_recovery_cache.get(key) {
     Some(Some(value)) => value
     Some(None) =>
@@ -353,6 +543,14 @@ fn pdf_viewer_cmap_recovery_cached(bytes : Bytes) -> PdfViewerCMapRecovery {
         codespaces: [],
         cid_entries: [],
         notdef_entries: [],
+        unicode_entries: [],
+        diagnostics: {
+          malformed_tokens: 0,
+          incomplete_sections: [],
+          usecmap_cycle: false,
+          source_unavailable: true,
+        },
+        source_available: false,
         usecmap: None,
         wmode: None,
       }
@@ -387,6 +585,23 @@ fn pdf_viewer_cmap_compose_recovery(
   for entry in current.notdef_entries {
     notdef_entries.push(entry)
   }
+  let unicode_entries : Array[PdfViewerUnicodeEntry] = Array(
+    capacity=inherited.unicode_entries.length() +
+      current.unicode_entries.length(),
+  )
+  for entry in inherited.unicode_entries {
+    unicode_entries.push(entry)
+  }
+  for entry in current.unicode_entries {
+    unicode_entries.push(entry)
+  }
+  let incomplete_sections : Array[String] = []
+  for section in inherited.diagnostics.incomplete_sections {
+    incomplete_sections.push(section)
+  }
+  for section in current.diagnostics.incomplete_sections {
+    incomplete_sections.push(section)
+  }
   {
     codespaces: if current.codespaces.is_empty() {
       inherited.codespaces
@@ -395,6 +610,17 @@ fn pdf_viewer_cmap_compose_recovery(
     },
     cid_entries,
     notdef_entries,
+    unicode_entries,
+    diagnostics: {
+      malformed_tokens: current.diagnostics.malformed_tokens +
+      inherited.diagnostics.malformed_tokens,
+      incomplete_sections,
+      usecmap_cycle: current.diagnostics.usecmap_cycle ||
+      inherited.diagnostics.usecmap_cycle,
+      source_unavailable: current.diagnostics.source_unavailable ||
+      inherited.diagnostics.source_unavailable,
+    },
+    source_available: current.source_available,
     usecmap: match current.usecmap {
       Some(_) => current.usecmap
       None => inherited.usecmap
@@ -404,6 +630,47 @@ fn pdf_viewer_cmap_compose_recovery(
       None => inherited.wmode
     },
   }
+}
+
+///|
+fn pdf_viewer_unicode_with_increment(
+  unicode : Bytes,
+  increment : UInt,
+) -> Bytes? {
+  let output = unicode.to_array()
+  let mut carry = increment
+  let mut index = output.length()
+  while index > 0 && carry > 0U {
+    index -= 1
+    let sum = output[index].to_int() + (carry & 0xFFU).reinterpret_as_int()
+    output[index] = (sum & 0xFF).to_byte()
+    carry = (carry >> 8) + (sum >> 8).reinterpret_as_uint()
+  }
+  if carry == 0U {
+    Some(Bytes::from_array(output))
+  } else {
+    None
+  }
+}
+
+///|
+fn pdf_viewer_unicode_lookup(
+  entries : ArrayView[PdfViewerUnicodeEntry],
+  code : Int,
+) -> Bytes? {
+  let value = code.reinterpret_as_uint()
+  let mut index = entries.length() - 1
+  while index >= 0 {
+    let entry = entries[index]
+    if value >= entry.first && value <= entry.last {
+      return pdf_viewer_unicode_with_increment(
+        entry.unicode,
+        value - entry.first,
+      )
+    }
+    index -= 1
+  }
+  None
 }
 
 ///|
@@ -418,7 +685,21 @@ fn pdf_viewer_cmap_recovery_of_object(
   }
   if number >= 0 {
     if seen.contains(number) {
-      return None
+      return Some({
+        codespaces: [],
+        cid_entries: [],
+        notdef_entries: [],
+        unicode_entries: [],
+        diagnostics: {
+          malformed_tokens: 0,
+          incomplete_sections: [],
+          usecmap_cycle: true,
+          source_unavailable: false,
+        },
+        source_available: true,
+        usecmap: None,
+        wmode: None,
+      })
     }
     seen[number] = true
   }
@@ -428,7 +709,22 @@ fn pdf_viewer_cmap_recovery_of_object(
     value => Some(value)
   }
   match bytes {
-    None => None
+    None =>
+      Some({
+        codespaces: [],
+        cid_entries: [],
+        notdef_entries: [],
+        unicode_entries: [],
+        diagnostics: {
+          malformed_tokens: 0,
+          incomplete_sections: [],
+          usecmap_cycle: false,
+          source_unavailable: true,
+        },
+        source_available: false,
+        usecmap: None,
+        wmode: None,
+      })
     Some(bytes) => {
       let current = pdf_viewer_cmap_recovery_cached(bytes)
       let base = match document.direct(object) {
@@ -473,6 +769,8 @@ fn pdf_viewer_cid_of_charcode_with_recovery(
   recovery : PdfViewerCMapRecovery?,
 ) -> Int? {
   match recovery {
+    Some(cmap) if !cmap.source_available =>
+      pdf_viewer_cid_of_charcode(font, charcode)
     Some(cmap) => {
       match pdf_viewer_cmap_lookup(cmap.cid_entries[:], charcode) {
         Some(cid) => return Some(cid)

@@ -1,7 +1,13 @@
 import {
   open_pdf,
+  open_pdf_with_password,
+  set_font_fallbacks,
   render_page,
   select_text,
+  search_pdf,
+  document_info,
+  download_attachment,
+  download_metadata,
   close_pdf,
 } from "./_generated/pdf.js";
 
@@ -14,11 +20,15 @@ const state = {
   filePath: "",
   count: 0,
   labels: [],
+  documentInfo: null,
+  sidebarMode: null,
+  viewMode: "scroll",
   scale: 1,
   rotation: 0,
   generation: 0,
   selection: null,
   selectionRange: null,
+  search: { query: "", results: [], active: -1 },
   pending: false,
 };
 const measure = document.createElement("canvas").getContext("2d");
@@ -31,12 +41,27 @@ const enabledControls = [
   "zoom-out",
   "zoom-in",
   "rotate",
+  "view-mode",
+  "search-query",
+  "search-previous",
+  "search-next",
+  "search-case",
+  "search-whole",
+  "search-diacritic",
   "download",
+  "print",
+  "outline-toggle",
+  "thumbnail-toggle",
+  "info-toggle",
 ];
 
 function checked(serialized) {
   const value = JSON.parse(serialized);
-  if (!value.ok) throw new Error(value.error);
+  if (!value.ok) {
+    const error = new Error(value.error);
+    error.code = value.code || "pdf-error";
+    throw error;
+  }
   return value;
 }
 
@@ -65,14 +90,333 @@ function pageElement(number) {
 function updatePageButtons(number) {
   $("previous-page").disabled = number <= 1;
   $("next-page").disabled = number >= state.count;
+  const label = state.labels[number - 1] || String(number);
+  $("page-number").title = `第 ${number} 页（${label}）`;
 }
 
-function goToPage(number) {
+function pageLabel(number) {
+  return state.labels[number - 1] || String(number);
+}
+
+function updateLocation(number, push = false) {
+  if (!state.count) return;
+  const url = new URL(location.href);
+  url.hash = `page=${number}`;
+  const method = push ? "pushState" : "replaceState";
+  history[method]({ page: number }, "", url);
+}
+
+function locationPage() {
+  const value = new URL(location.href).hash.match(/^#page=(\d+)$/)?.[1];
+  const page = Number(value);
+  return page >= 1 && page <= state.count ? page : 1;
+}
+
+function closeSidebar() {
+  state.sidebarMode = null;
+  $("sidebar").hidden = true;
+}
+
+function sidebarButton(label, className = "") {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `sidebar-item ${className}`.trim();
+  button.textContent = label;
+  return button;
+}
+
+function renderOutline() {
+  const content = $("sidebar-content");
+  content.replaceChildren();
+  const entries = state.documentInfo?.outline || [];
+  if (!entries.length) {
+    content.append(Object.assign(document.createElement("p"), {
+      className: "sidebar-empty",
+      textContent: "此文档没有目录",
+    }));
+    return;
+  }
+  for (const entry of entries) {
+    const destination = entry.destination || {};
+    const button = sidebarButton(entry.title || "未命名条目");
+    button.style.paddingLeft = `${12 + Math.min(8, Number(entry.level) || 0) * 16}px`;
+    button.title = destination.page
+      ? `第 ${destination.page} 页`
+      : "此条目没有可定位的本地页面";
+    button.disabled = !destination.page || destination.remote;
+    button.addEventListener("click", () => {
+      if (destination.page) goToPage(destination.page, { pushHistory: true });
+    });
+    content.append(button);
+  }
+}
+
+function renderInfoPanel() {
+  const content = $("sidebar-content");
+  content.replaceChildren();
+  const info = state.documentInfo?.info || {};
+  const rows = [
+    ["标题", info.Title],
+    ["作者", info.Author],
+    ["主题", info.Subject],
+    ["创建者", info.Creator],
+    ["生成器", info.Producer],
+    ["页数", info.Pages ?? state.count],
+    ["版本", Array.isArray(info.Version) ? info.Version.join(".") : info.Version],
+  ];
+  const list = document.createElement("dl");
+  list.className = "info-list";
+  for (const [label, value] of rows) {
+    if (value === undefined || value === null || value === "") continue;
+    const term = document.createElement("dt");
+    term.textContent = label;
+    const detail = document.createElement("dd");
+    detail.textContent = typeof value === "string" ? value : JSON.stringify(value);
+    list.append(term, detail);
+  }
+  if (!list.children.length) {
+    list.append(Object.assign(document.createElement("dd"), {
+      className: "sidebar-empty",
+      textContent: "此文档没有公开的 Info 字段",
+    }));
+  }
+  content.append(list);
+
+  const metadata = state.documentInfo?.metadata;
+  const metadataRow = document.createElement("div");
+  metadataRow.className = "sidebar-section";
+  const metadataLabel = document.createElement("span");
+  metadataLabel.textContent = metadata?.available
+    ? `XMP metadata · ${metadata.size} bytes`
+    : "没有嵌入 XMP metadata";
+  metadataRow.append(metadataLabel);
+  if (metadata?.available) {
+    const download = sidebarButton("下载 XMP");
+    download.addEventListener("click", () => downloadMetadata());
+    metadataRow.append(download);
+  }
+  content.append(metadataRow);
+
+  const attachments = state.documentInfo?.attachments || [];
+  const heading = document.createElement("h3");
+  heading.textContent = `附件（${attachments.length}）`;
+  content.append(heading);
+  if (!attachments.length) {
+    content.append(Object.assign(document.createElement("p"), {
+      className: "sidebar-empty",
+      textContent: "此文档没有嵌入附件",
+    }));
+  }
+  for (const attachment of attachments) {
+    const row = document.createElement("div");
+    row.className = "attachment-row";
+    const text = document.createElement("span");
+    text.textContent = `${attachment.name} · ${attachment.size} bytes`;
+    text.title = attachment.description || attachment.name;
+    row.append(text);
+    const download = sidebarButton("下载");
+    download.disabled = !attachment.available;
+    download.addEventListener("click", () => downloadAttachment(attachment));
+    row.append(download);
+    content.append(row);
+  }
+}
+
+function renderThumbnails() {
+  const content = $("sidebar-content");
+  content.replaceChildren();
+  const limit = Math.min(state.count, 200);
+  for (let number = 1; number <= limit; number++) {
+    const button = sidebarButton("");
+    button.classList.add("thumbnail-item");
+    button.dataset.page = number;
+    button.setAttribute("aria-label", `第 ${pageLabel(number)} 页`);
+    button.addEventListener("click", () => goToPage(number, { pushHistory: true }));
+    try {
+      const result = checked(render_page(number, 0.12, 0));
+      const preview = document.createElement("div");
+      preview.className = "thumbnail-preview";
+      preview.innerHTML = result.svg;
+      button.append(preview, Object.assign(document.createElement("span"), {
+        className: "thumbnail-label",
+        textContent: pageLabel(number),
+      }));
+    } catch (error) {
+      button.textContent = `第 ${pageLabel(number)} 页`;
+      showError(error);
+    }
+    content.append(button);
+  }
+  if (state.count > limit) {
+    content.append(Object.assign(document.createElement("p"), {
+      className: "sidebar-empty",
+      textContent: `仅显示前 ${limit} 页缩略图`,
+    }));
+  }
+}
+
+function showSidebar(mode) {
+  state.sidebarMode = mode;
+  $("sidebar").hidden = false;
+  $("sidebar-title").textContent =
+    mode === "outline" ? "目录" : mode === "thumbnails" ? "缩略图" : "文档信息";
+  if (mode === "outline") renderOutline();
+  else if (mode === "thumbnails") renderThumbnails();
+  else renderInfoPanel();
+}
+
+function refreshSidebar() {
+  if (state.sidebarMode) showSidebar(state.sidebarMode);
+}
+
+function downloadBytes(data, filename, type = "application/octet-stream") {
+  const binary = atob(data);
+  const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([bytes], { type }));
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+function downloadAttachment(attachment) {
+  try {
+    const result = checked(download_attachment(attachment.index));
+    downloadBytes(result.data, attachment.name || "attachment.bin");
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function downloadMetadata() {
+  try {
+    const result = checked(download_metadata());
+    downloadBytes(result.data, "metadata.xmp", "application/rdf+xml");
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function clearSearch() {
+  state.search = { query: "", results: [], active: -1 };
+  $("search-query").value = "";
+  $("search-status").textContent = "";
+  $("search-previous").disabled = true;
+  $("search-next").disabled = true;
+  for (const glyph of pages.querySelectorAll(".pdf-search-hit, .pdf-search-active")) {
+    glyph.classList.remove("pdf-search-hit", "pdf-search-active");
+  }
+  viewer.dispatchEvent(new CustomEvent("pdf-search-change", { detail: null }));
+}
+
+function highlightSearchResults() {
+  const byPageAndItem = new Map();
+  for (const result of state.search.results) {
+    for (const item of result.item_indices) {
+      const key = `${result.page}:${item}`;
+      const values = byPageAndItem.get(key) || [];
+      values.push(result);
+      byPageAndItem.set(key, values);
+    }
+  }
+  for (const glyph of pages.querySelectorAll(".glyph")) {
+    const key = `${glyph.closest(".page")?.dataset.page}:${glyph.dataset.item}`;
+    const matches = byPageAndItem.get(key) || [];
+    glyph.classList.toggle("pdf-search-hit", matches.length > 0);
+    glyph.classList.toggle(
+      "pdf-search-active",
+      state.search.active >= 0 &&
+        matches.includes(state.search.results[state.search.active]),
+    );
+  }
+}
+
+function scrollToSearchResult() {
+  const result = state.search.results[state.search.active];
+  if (!result) return;
+  const page = pageElement(result.page);
+  const item = page?.querySelector(`[data-item="${result.item_indices[0]}"]`);
+  item?.scrollIntoView({ block: "center", inline: "nearest" });
+}
+
+function updateSearchStatus() {
+  const count = state.search.results.length;
+  $("search-status").textContent = count
+    ? `${state.search.active + 1} / ${count}`
+    : state.search.query
+      ? "无结果"
+      : "";
+  $("search-previous").disabled = count === 0;
+  $("search-next").disabled = count === 0;
+}
+
+function jumpSearch(delta) {
+  const count = state.search.results.length;
+  if (!count) return;
+  state.search.active = (state.search.active + delta + count) % count;
+  highlightSearchResults();
+  updateSearchStatus();
+  scrollToSearchResult();
+}
+
+function performSearch() {
+  const query = $("search-query").value;
+  if (!query) {
+    clearSearch();
+    return;
+  }
+  try {
+    const response = checked(
+      search_pdf(
+        query,
+        $("search-case").checked,
+        $("search-whole").checked,
+        !$("search-diacritic").checked,
+      ),
+    );
+    state.search = {
+      query,
+      results: response.results || [],
+      active: response.results?.length ? 0 : -1,
+    };
+    highlightSearchResults();
+    updateSearchStatus();
+    scrollToSearchResult();
+    viewer.dispatchEvent(
+      new CustomEvent("pdf-search-change", {
+        detail: { query, results: state.search.results },
+      }),
+    );
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function goToPage(number, { pushHistory = false } = {}) {
   if (!state.count) return;
   number = Math.max(1, Math.min(state.count, number));
   $("page-number").value = number;
-  pageElement(number)?.scrollIntoView({ block: "start" });
+  updateLocation(number, pushHistory);
+  if (state.viewMode === "page") {
+    for (const page of pages.children) {
+      page.classList.toggle("current-page", Number(page.dataset.page) === number);
+    }
+  } else {
+    pageElement(number)?.scrollIntoView({ block: "start" });
+  }
   updatePageButtons(number);
+}
+
+function applyViewMode() {
+  viewer.classList.toggle("page-mode", state.viewMode === "page");
+  if (state.viewMode === "page") {
+    const current = selectedPageNumber();
+    for (const page of pages.children) {
+      page.classList.toggle("current-page", Number(page.dataset.page) === current);
+    }
+  } else {
+    for (const page of pages.children) page.classList.remove("current-page");
+  }
 }
 
 function measureWidth(text, item) {
@@ -218,9 +562,12 @@ async function repaint({ preserveSelection = true } = {}) {
         ?.querySelector(`[data-item="${savedRange.start.item}"]`)
         ?.scrollIntoView({ block: "nearest", inline: "nearest" });
     } else clearSelection();
+    highlightSearchResults();
+    applyViewMode();
     $("status").textContent =
       `${state.count} 页 · ${Math.round(state.scale * 100)}%`;
     updatePageButtons(currentPage);
+    updateLocation(currentPage);
   } catch (error) {
     showError(error);
   } finally {
@@ -236,21 +583,45 @@ async function loadFile(file, path = "") {
   try {
     const data = new Uint8Array(await file.arrayBuffer());
     if (generation !== state.generation) return;
-    const info = checked(open_pdf(data));
+    let info;
+    let passwordAttempt = null;
+    while (true) {
+      try {
+        info = checked(
+          passwordAttempt !== null
+            ? open_pdf_with_password(data, new TextEncoder().encode(passwordAttempt))
+            : open_pdf(data),
+        );
+        break;
+      } catch (error) {
+        if (error.code !== "password-required" && error.code !== "password-invalid")
+          throw error;
+        const password = window.prompt(
+          error.code === "password-invalid"
+            ? "密码不正确，请重新输入"
+            : "此 PDF 需要密码",
+        );
+        if (password === null) throw error;
+        passwordAttempt = password;
+      }
+    }
     state.file = file;
     state.fileName = file.name || "document.pdf";
     state.filePath = path || file.name || "document.pdf";
     state.count = info.pages;
     state.labels = info.labels;
+    state.documentInfo = checked(document_info());
     state.rotation = 0;
     state.selectionRange = null;
     state.selection = null;
+    clearSearch();
     $("file-name").textContent = state.fileName;
     $("file-name").title = state.filePath;
     $("page-count").textContent = `/ ${state.count}`;
-    $("page-number").value = 1;
+    $("page-number").value = locationPage();
     $("page-number").max = state.count;
     for (const id of enabledControls) $(id).disabled = false;
+    closeSidebar();
     await repaint({ preserveSelection: false });
   } catch (error) {
     showError(error);
@@ -418,13 +789,13 @@ viewer.addEventListener("drop", (event) => {
   if (event.dataTransfer.files[0]) loadFile(event.dataTransfer.files[0]);
 });
 $("previous-page").addEventListener("click", () =>
-  goToPage(selectedPageNumber() - 1),
+  goToPage(selectedPageNumber() - 1, { pushHistory: true }),
 );
 $("next-page").addEventListener("click", () =>
-  goToPage(selectedPageNumber() + 1),
+  goToPage(selectedPageNumber() + 1, { pushHistory: true }),
 );
 $("page-number").addEventListener("change", () =>
-  goToPage(selectedPageNumber()),
+  goToPage(selectedPageNumber(), { pushHistory: true }),
 );
 $("zoom").addEventListener("change", () => repaint());
 $("zoom-out").addEventListener("click", () => changeScale(1 / 1.25));
@@ -433,6 +804,22 @@ $("rotate").addEventListener("click", () => {
   state.rotation = (state.rotation + 90) % 360;
   repaint();
 });
+$("view-mode").addEventListener("change", (event) => {
+  state.viewMode = event.currentTarget.value;
+  applyViewMode();
+  if (state.viewMode === "page") pageElement(selectedPageNumber())?.scrollIntoView({ block: "start" });
+});
+$("outline-toggle").addEventListener("click", () =>
+  state.sidebarMode === "outline" ? closeSidebar() : showSidebar("outline"),
+);
+$("thumbnail-toggle").addEventListener("click", () =>
+  state.sidebarMode === "thumbnails" ? closeSidebar() : showSidebar("thumbnails"),
+);
+$("info-toggle").addEventListener("click", () =>
+  state.sidebarMode === "info" ? closeSidebar() : showSidebar("info"),
+);
+$("sidebar-close").addEventListener("click", closeSidebar);
+$("print").addEventListener("click", () => window.print());
 $("download").addEventListener("click", () => {
   const link = document.createElement("a");
   const url = URL.createObjectURL(state.file);
@@ -441,6 +828,22 @@ $("download").addEventListener("click", () => {
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
+$("search-query").addEventListener("input", performSearch);
+$("search-query").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    if (state.search.query === event.currentTarget.value) jumpSearch(1);
+    else performSearch();
+  } else if (event.key === "Escape") {
+    clearSearch();
+    event.currentTarget.blur();
+  }
+});
+$("search-previous").addEventListener("click", () => jumpSearch(-1));
+$("search-next").addEventListener("click", () => jumpSearch(1));
+for (const id of ["search-case", "search-whole", "search-diacritic"]) {
+  $(id).addEventListener("change", performSearch);
+}
 $("copy-selection").addEventListener("click", async () => {
   if (state.selection) {
     try {
@@ -530,7 +933,16 @@ viewer.addEventListener("scroll", () => {
     }
     $("page-number").value = best;
     updatePageButtons(best);
+    updateLocation(best);
   });
+});
+window.addEventListener("popstate", () => {
+  if (!state.count) return;
+  goToPage(locationPage());
+});
+window.addEventListener("hashchange", () => {
+  if (!state.count) return;
+  goToPage(locationPage());
 });
 let resizeTimer;
 window.addEventListener("resize", () => {

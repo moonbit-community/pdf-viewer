@@ -1,4 +1,24 @@
 ///|
+fn pdf_pattern_resource_of_paint(
+  document : @pdflite.PdfDocument,
+  resources : @syntax.PdfObject,
+  space : @pdflite.PdfColourSpace,
+  colour : @pdflite.PdfContentColourValues,
+  ctm : @geometry.TransformMatrix,
+) -> PdfPatternResource? {
+  guard space
+    is (@pdflite.PdfPattern | @pdflite.PdfPatternWithBaseColourSpace(_)) &&
+    colour is @pdflite.PdfContentColourNamed(name, values) else {
+    return None
+  }
+  match
+    pdf_pattern_resource_of(document, resources, name, Some(values), space) {
+    Some(resource) => Some(pdf_pattern_resource_with_ctm(resource, ctm))
+    None => None
+  }
+}
+
+///|
 /// Resolve a PDF `/Pattern` resource and lower a simple coloured tiling
 /// pattern to an SVG pattern cell. `pdflite` currently exposes tiling patterns
 /// as a placeholder, but its content parser can still walk the pattern stream;
@@ -8,6 +28,8 @@ fn pdf_pattern_resource_of(
   document : @pdflite.PdfDocument,
   resources : @syntax.PdfObject,
   name : String,
+  base_colour : Array[Double]?,
+  base_colour_space : @pdflite.PdfColourSpace,
 ) -> PdfPatternResource? {
   let patterns_name = pdf_image_name("/Pattern")
   let pattern_name = pdf_image_name(name)
@@ -15,7 +37,9 @@ fn pdf_pattern_resource_of(
     Some(patterns) =>
       match document.lookup_direct(pattern_name, patterns) {
         Some(pattern) =>
-          pdf_pattern_resource_of_object(document, resources, name, pattern)
+          pdf_pattern_resource_of_object(
+            document, resources, name, pattern, base_colour, base_colour_space,
+          )
         None => None
       }
     None => None
@@ -28,6 +52,8 @@ fn pdf_pattern_resource_of_object(
   page_resources : @syntax.PdfObject,
   name : String,
   pattern : @syntax.PdfObject,
+  base_colour : Array[Double]?,
+  base_colour_space : @pdflite.PdfColourSpace,
 ) -> PdfPatternResource? {
   match document.lookup_direct(pdf_image_name("/PatternType"), pattern) {
     Some(@syntax.PdfInteger(1)) => {
@@ -61,6 +87,20 @@ fn pdf_pattern_resource_of_object(
         return None
       }
       let matrix = pdf_pattern_matrix_or_identity(document, pattern)
+      let paint_type = pdf_pattern_number_or(
+        document, pattern, "/PaintType", 1.0,
+      )
+      let uncolored_colour = if paint_type == 2.0 {
+        Some(
+          pdf_colour_hex_in_space(
+            base_colour_space,
+            @pdflite.PdfContentColourFloats(base_colour.unwrap_or([])),
+            document=Some(document),
+          ),
+        )
+      } else {
+        None
+      }
       let pattern_resources = match
         document.lookup_direct(pdf_image_name("/Resources"), pattern) {
         Some(value) => value
@@ -77,18 +117,32 @@ fn pdf_pattern_resource_of_object(
         max_x: bbox.max_x,
         max_y: bbox.max_y,
       }
-      let entries = @pdflite.pdf_content_entries_of_ops_recursive(
-        document, rectangle, pattern_resources, ops,
+      let initial = @pdflite.pdf_content_initial_operator_state(
+        rectangle.min_x,
+        rectangle.min_y,
+        rectangle.max_x,
+        rectangle.max_y,
+      )
+      let entries = pdf_collected_entries_of_ops(
+        document,
+        initial,
+        pattern_resources,
+        ops,
+        initial.clipping_path,
+        None,
+        [],
+        false,
+        false,
       ) catch {
         _ => return None
       }
-      let tile_svg = pdf_pattern_tile_svg(
+      let (tile_svg, tile_parts) = pdf_pattern_tile_svg(
         document,
-        pattern_resources,
         entries,
         bbox.min_x,
         bbox.min_y,
         bbox.max_y - bbox.min_y,
+        uncolored_colour,
       )
       Some({
         name,
@@ -102,6 +156,7 @@ fn pdf_pattern_resource_of_object(
         y_step,
         matrix,
         tile_svg,
+        tile_parts,
         shading: None,
       })
     }
@@ -112,7 +167,14 @@ fn pdf_pattern_resource_of_object(
         None => return None
       }
       let shading = try
-        Some(pdf_shading_resource_of_object(document, name, shading_object))
+        Some(
+          pdf_shading_resource_of_object(
+            document,
+            name,
+            shading_object,
+            resources=page_resources,
+          ),
+        )
       catch {
         _ => None
       } noraise {
@@ -131,6 +193,7 @@ fn pdf_pattern_resource_of_object(
             // lowered as a clipped mesh.
             matrix,
             tile_svg: "",
+            tile_parts: [],
             shading: Some(value),
           })
         }
@@ -242,14 +305,16 @@ fn pdf_pattern_number_or(
 ///|
 fn pdf_pattern_tile_svg(
   document : @pdflite.PdfDocument,
-  resources : @syntax.PdfObject,
-  entries : ArrayView[@pdflite.PdfContentJsonEntry],
+  entries : ArrayView[PdfCollectedEntry],
   bbox_min_x : Double,
   bbox_min_y : Double,
   bbox_height : Double,
-) -> String {
-  let output = StringBuilder()
-  for entry in entries {
+  uncolored_colour : String?,
+) -> (String, Array[PdfPatternTilePart]) {
+  let parts : Array[PdfPatternTilePart] = []
+  for collected in entries {
+    let output = StringBuilder()
+    let entry = collected.entry
     match entry.object {
       @pdflite.PdfContentPathObject(drawn) => {
         let bounds = pdf_bounds_of_quad(entry.bounding_box)
@@ -265,13 +330,25 @@ fn pdf_pattern_tile_svg(
             entry.state {
             @pdflite.PdfContentStatePath(state) =>
               (
-                if drawn.filled {
-                  pdf_colour_hex(state.colour_non_stroke)
+                if drawn.filled && collected.fill_color_explicit {
+                  pdf_colour_hex_in_space(
+                    state.colourspace_non_stroke,
+                    state.colour_non_stroke,
+                    document=Some(document),
+                  )
+                } else if drawn.filled {
+                  "#000000"
                 } else {
                   "none"
                 },
-                if drawn.stroked {
-                  pdf_colour_hex(state.colour_stroke)
+                if drawn.stroked && collected.stroke_color_explicit {
+                  pdf_colour_hex_in_space(
+                    state.colourspace_stroke,
+                    state.colour_stroke,
+                    document=Some(document),
+                  )
+                } else if drawn.stroked {
+                  "#000000"
                 } else {
                   "none"
                 },
@@ -281,6 +358,16 @@ fn pdf_pattern_tile_svg(
                 state.dash_pattern.array,
               )
             _ => ("none", "none", 1.0, 0, 0, [])
+          }
+          let fill = if drawn.filled {
+            uncolored_colour.unwrap_or(fill)
+          } else {
+            "none"
+          }
+          let stroke = if drawn.stroked {
+            uncolored_colour.unwrap_or(stroke)
+          } else {
+            "none"
           }
           let dash_attribute = if dash.length() == 0 {
             ""
@@ -307,23 +394,13 @@ fn pdf_pattern_tile_svg(
         }
       }
       @pdflite.PdfContentImageObject(name) =>
-        match pdf_image_resource_of_resources(document, resources, name) {
+        match
+          pdf_image_resource_of_resources(document, collected.resources, name) {
           Some(resource) =>
             match resource.data_uri {
-              Some(data_uri) => {
+              Some(_) => {
                 let quad = pdf_quad_of_box(entry.bounding_box)
-                let transform = pdf_svg_pattern_image_transform(
-                  quad, bbox_min_x, bbox_min_y, bbox_height,
-                )
-                output.write_string(
-                  "<image data-pdf-name=\"" +
-                  pdf_escape_xml(name) +
-                  "\" x=\"0\" y=\"0\" width=\"1\" height=\"1\" transform=\"" +
-                  transform +
-                  "\" preserveAspectRatio=\"none\" href=\"" +
-                  data_uri +
-                  "\"/>",
-                )
+                parts.push(PdfPatternTilePart::Image(resource, quad))
               }
               None => ()
             }
@@ -331,8 +408,77 @@ fn pdf_pattern_tile_svg(
         }
       _ => ()
     }
+    let fragment = output.to_string()
+    if fragment != "" {
+      parts.push(PdfPatternTilePart::Svg(fragment))
+    }
+  }
+  (
+    pdf_pattern_parts_svg(
+      parts[:],
+      bbox_min_x,
+      bbox_min_y,
+      bbox_height,
+      [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+      1.0,
+    ),
+    parts,
+  )
+}
+
+///|
+fn pdf_pattern_parts_svg(
+  parts : ArrayView[PdfPatternTilePart],
+  bbox_min_x : Double,
+  bbox_min_y : Double,
+  bbox_height : Double,
+  matrix : Array[Double],
+  scale : Double,
+) -> String {
+  let output = StringBuilder()
+  for part in parts {
+    match part {
+      PdfPatternTilePart::Svg(fragment) => output.write_string(fragment)
+      PdfPatternTilePart::Image(resource, quad) =>
+        if resource.data_uri is Some(data_uri) {
+          let transform = pdf_svg_pattern_image_transform(
+            quad, bbox_min_x, bbox_min_y, bbox_height,
+          )
+          let sampled_quad = pdf_pattern_sample_quad(quad, matrix)
+          output.write_string(
+            "<image data-pdf-name=\"" +
+            pdf_escape_xml(resource.name) +
+            "\" x=\"0\" y=\"0\" width=\"1\" height=\"1\" transform=\"" +
+            transform +
+            "\" preserveAspectRatio=\"none\"" +
+            pdf_svg_image_sampling(resource, sampled_quad, scale) +
+            " href=\"" +
+            data_uri +
+            "\"/>",
+          )
+        }
+    }
   }
   output.to_string()
+}
+
+///|
+fn pdf_pattern_sample_quad(quad : PdfQuad, matrix : Array[Double]) -> PdfQuad {
+  if matrix.length() < 6 {
+    return quad
+  }
+  let transform = fn(point : PdfPoint) {
+    {
+      x: matrix[0] * point.x + matrix[2] * point.y + matrix[4],
+      y: matrix[1] * point.x + matrix[3] * point.y + matrix[5],
+    }
+  }
+  {
+    p0: transform(quad.p0),
+    p1: transform(quad.p1),
+    p2: transform(quad.p2),
+    p3: transform(quad.p3),
+  }
 }
 
 ///|

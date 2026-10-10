@@ -25,7 +25,7 @@ priv struct PdfMeshDecodeContext {
   bits_per_flag : Int
   decode : Array[Double]
   functions : Array[@pdflite.PdfFunction]
-  colourspace : @syntax.PdfObject
+  colourspace : PdfColourTransform
   component_count : Int
 }
 
@@ -37,9 +37,15 @@ fn pdf_mesh_triangles_of_shading(
   document : @pdflite.PdfDocument,
   shading_object : @syntax.PdfObject,
   colourspace : @syntax.PdfObject,
+  resources? : @syntax.PdfObject = @syntax.PdfNull,
 ) -> Array[PdfMeshTriangle] {
   try
-    pdf_mesh_triangles_of_shading_raise(document, shading_object, colourspace)
+    pdf_mesh_triangles_of_shading_raise(
+      document,
+      shading_object,
+      colourspace,
+      resources~,
+    )
   catch {
     _ => []
   } noraise {
@@ -52,6 +58,7 @@ fn pdf_mesh_triangles_of_shading_raise(
   document : @pdflite.PdfDocument,
   shading_object : @syntax.PdfObject,
   colourspace : @syntax.PdfObject,
+  resources? : @syntax.PdfObject = @syntax.PdfNull,
 ) -> Array[PdfMeshTriangle] raise @core.PdfError {
   let shading_type = match
     document.lookup_direct(pdf_mesh_name("/ShadingType"), shading_object) {
@@ -81,10 +88,13 @@ fn pdf_mesh_triangles_of_shading_raise(
     return []
   }
   let functions = pdf_mesh_functions(document, shading_object)
+  let parsed_space = pdf_read_colour_space_for_viewer(
+    document, resources, colourspace,
+  ).unwrap_or(@pdflite.PdfDeviceRGB)
   let component_count = if functions.length() > 0 {
     1
   } else {
-    pdf_mesh_colour_component_count(document, colourspace)
+    pdf_colour_component_ranges(parsed_space).length()
   }
   if decode.length() < 4 + component_count * 2 {
     return []
@@ -99,7 +109,7 @@ fn pdf_mesh_triangles_of_shading_raise(
     bits_per_flag,
     decode,
     functions,
-    colourspace,
+    colourspace: pdf_colour_transform(Some(document), parsed_space),
     component_count,
   }
   match shading_type {
@@ -179,59 +189,6 @@ fn pdf_mesh_functions(
         value => value
       }
     None => []
-  }
-}
-
-///|
-fn pdf_mesh_colour_component_count(
-  document : @pdflite.PdfDocument,
-  colourspace : @syntax.PdfObject,
-) -> Int {
-  let value = document.direct(colourspace)
-  match value {
-    @syntax.PdfNameObject(name) => {
-      let text = pdf_mesh_name_text(name).to_lower()
-      if text.contains("gray") {
-        1
-      } else if text.contains("cmyk") {
-        4
-      } else {
-        3
-      }
-    }
-    @syntax.PdfArray(values) =>
-      match values[0:] {
-        [@syntax.PdfNameObject(name), ..] => {
-          let text = pdf_mesh_name_text(name).to_lower()
-          if text.contains("gray") {
-            1
-          } else if text.contains("cmyk") {
-            4
-          } else if text.contains("iccbased") {
-            match values.get(1) {
-              Some(profile) =>
-                match document.lookup_direct(pdf_mesh_name("/N"), profile) {
-                  Some(@syntax.PdfInteger(value)) => value
-                  _ => 3
-                }
-              None => 3
-            }
-          } else {
-            3
-          }
-        }
-        _ => 3
-      }
-    _ => 3
-  }
-}
-
-///|
-fn pdf_mesh_name_text(name : @core.PdfName) -> String {
-  try @utf8.decode(name.bytes()[:]) catch {
-    _ => ""
-  } noraise {
-    value => value
   }
 }
 

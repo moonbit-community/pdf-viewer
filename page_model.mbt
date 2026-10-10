@@ -1,13 +1,11 @@
 ///|
 fn pdf_select_page(page : PdfPageModel, rectangle : PdfBounds) -> PdfSelection {
   let normalized = pdf_normalize_bounds(rectangle)
-  let selected : Array[Int] = []
   let text_items : Array[PdfTextItem] = []
   let mut selected_bounds : PdfBounds? = None
   for item in page.items {
     match item {
       PdfPageItem::Text(text) if pdf_bounds_intersect(text.bounds, normalized) => {
-        selected.push(text.index)
         text_items.push(text)
         selected_bounds = match selected_bounds {
           Some(current) => Some(pdf_bounds_union(current, text.bounds))
@@ -17,14 +15,16 @@ fn pdf_select_page(page : PdfPageModel, rectangle : PdfBounds) -> PdfSelection {
       _ => ()
     }
   }
+  let text_items = pdf_text_reading_order(text_items[:])
+  let indices = [ for item in text_items => item.index ]
   {
     page: page.number,
     bounds: match selected_bounds {
       Some(bounds) => bounds
       None => normalized
     },
-    text: pdf_join_selected_text(text_items),
-    item_indices: selected,
+    text: pdf_join_text_items(text_items[:]),
+    item_indices: indices,
   }
 }
 
@@ -89,40 +89,3 @@ fn pdf_bounds_union(a : PdfBounds, b : PdfBounds) -> PdfBounds {
 }
 
 ///|
-fn pdf_join_selected_text(items : ArrayView[PdfTextItem]) -> String {
-  let output = StringBuilder()
-  let mut previous : PdfTextItem? = None
-  for item in items {
-    match previous {
-      Some(last) => output.write_string(pdf_text_separator(last, item))
-      None => ()
-    }
-    output.write_string(item.text)
-    previous = Some(item)
-  }
-  output.to_string()
-}
-
-///|
-fn pdf_text_separator(previous : PdfTextItem, current : PdfTextItem) -> String {
-  let line_threshold = if previous.font_size > current.font_size {
-    previous.font_size * 0.8
-  } else {
-    current.font_size * 0.8
-  }
-  if previous.bounds.max_y - current.bounds.max_y > line_threshold {
-    "\n"
-  } else {
-    let gap = current.bounds.min_x - previous.bounds.max_x
-    let word_threshold = if previous.font_size > current.font_size {
-      previous.font_size * 0.25
-    } else {
-      current.font_size * 0.25
-    }
-    if gap > word_threshold {
-      " "
-    } else {
-      ""
-    }
-  }
-}

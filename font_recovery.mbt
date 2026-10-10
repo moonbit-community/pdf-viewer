@@ -7,6 +7,11 @@ fn pdf_read_font_for_viewer(
   object : @syntax.PdfObject,
 ) -> @pdflite.PdfFont raise @core.PdfError {
   document.read_font(object) catch {
+    @core.FontWidthsExpected
+    | @core.FontWidthExpected
+    | @core.FontFirstCharExpected
+    | @core.FontLastCharExpected =>
+      pdf_read_simple_font_with_recovered_metrics(document, object)
     @core.CIDFontDescriptorExpected => {
       let dictionary = document.direct(object)
       guard document.lookup_direct(pdf_name_key("/DescendantFonts"), dictionary)
@@ -63,4 +68,88 @@ fn pdf_read_font_for_viewer(
     }
     error => raise error
   }
+}
+
+///|
+/// PDF.js accepts partial simple-font width tables. Build a complete shadow
+/// table for the stricter reader, retaining valid widths, descriptor defaults
+/// and known Standard 14 metrics. Source dictionaries are never changed.
+fn pdf_read_simple_font_with_recovered_metrics(
+  document : @pdflite.PdfDocument,
+  object : @syntax.PdfObject,
+) -> @pdflite.PdfFont raise @core.PdfError {
+  let dictionary = document.direct(object)
+  guard document.is_simple_font(dictionary) else {
+    raise @core.FontWidthsExpected
+  }
+  let descriptor = document
+    .lookup_direct(pdf_name_key("/FontDescriptor"), dictionary)
+    .unwrap_or(dictionary)
+  let missing_width = match
+    document.lookup_direct(pdf_name_key("/MissingWidth"), descriptor) {
+    Some(value) => document.get_number(value) catch { _ => 0.0 }
+    None => 0.0
+  }
+  let missing_width = if missing_width.is_nan() || missing_width.is_inf() {
+    0.0
+  } else {
+    missing_width
+  }
+  let original_widths = document.lookup_direct(
+    pdf_name_key("/Widths"),
+    dictionary,
+  )
+  let standard = if original_widths is Some(@syntax.PdfArray(_)) {
+    None
+  } else {
+    match document.lookup_direct(pdf_name_key("/BaseFont"), dictionary) {
+      Some(@syntax.PdfNameObject(name)) =>
+        pdf_standard_font_of_base_name(pdf_annotation_name_text(name))
+      _ => None
+    }
+  }
+  let standard = match standard {
+    Some(font) =>
+      Some(
+        @pdflite.PdfFontStandard({
+          font,
+          encoding: document.read_encoding(dictionary),
+        }),
+      )
+    None => None
+  }
+  let first_char = match
+    document.lookup_direct(pdf_name_key("/FirstChar"), dictionary) {
+    Some(@syntax.PdfInteger(first)) if first >= 0 && first <= 255 => first
+    _ => 0
+  }
+  let widths : Array[@syntax.PdfObject] = []
+  for code in 0..<256 {
+    let default = match standard {
+      Some(font) => font.content_width_of_charcode(code).0
+      None => missing_width
+    }
+    let width = match original_widths {
+      Some(@syntax.PdfArray(values)) if code >= first_char =>
+        match values.get(code - first_char) {
+          Some(value) => document.get_number(value) catch { _ => default }
+          None => default
+        }
+      _ => default
+    }
+    widths.push(
+      @syntax.PdfReal(
+        if width.is_nan() || width.is_inf() {
+          default
+        } else {
+          width
+        },
+      ),
+    )
+  }
+  let recovered = dictionary
+    .add_dict_entry(pdf_name_key("/FirstChar"), @syntax.PdfInteger(0))
+    .add_dict_entry(pdf_name_key("/LastChar"), @syntax.PdfInteger(255))
+    .add_dict_entry(pdf_name_key("/Widths"), @syntax.PdfArray(widths))
+  document.read_font(recovered)
 }

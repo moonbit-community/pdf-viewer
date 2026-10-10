@@ -3,6 +3,8 @@ fn cid_layout_test_document(
   contents : String,
   cmap? : String,
   tounicode? : String,
+  cmap_parent? : String,
+  tounicode_parent? : String,
   widths2? : String = "[]",
   default_width2? : String = "[880 -1000]",
 ) -> PdfViewerDocument raise {
@@ -22,7 +24,27 @@ fn cid_layout_test_document(
     "1 begincodespacerange <0000> <FFFF> endcodespacerange\n" +
     "4 beginbfchar <0041> <0041> <0042> <0042> <0043> <0043> <0044> <0044> endbfchar\n",
   )
-  annotation_test_document([
+  let mut next_object = 11
+  let extra_objects : Array[String] = []
+  let cmap_use_cmap = match cmap_parent {
+    Some(parent) => {
+      let reference = "/UseCMap \{next_object} 0 R"
+      extra_objects.push(annotation_test_stream("", parent))
+      next_object += 1
+      reference
+    }
+    None => ""
+  }
+  let tounicode_use_cmap = match tounicode_parent {
+    Some(parent) => {
+      let reference = "/UseCMap \{next_object} 0 R"
+      extra_objects.push(annotation_test_stream("", parent))
+      next_object += 1
+      reference
+    }
+    None => ""
+  }
+  let objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
@@ -30,10 +52,14 @@ fn cid_layout_test_document(
     "<< /Type /Font /Subtype /Type0 /BaseFont /CIDLayout /Encoding 8 0 R /DescendantFonts [6 0 R] /ToUnicode 10 0 R >>",
     "<< /Type /Font /Subtype /CIDFontType0 /BaseFont /CIDLayout /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /DW 700 /W [0 [400 500 300] 65 [100 100 100 100]] /W2 \{widths2} /DW2 \{default_width2} /FontDescriptor 7 0 R >>",
     "<< /Type /FontDescriptor /FontName /CIDLayout /Flags 4 /FontBBox [0 0 1000 1000] /Ascent 1000 /Descent 0 /ItalicAngle 0 /StemV 80 /FontFile 9 0 R >>",
-    annotation_test_stream("", cmap),
+    annotation_test_stream(cmap_use_cmap, cmap),
     annotation_test_stream("/Filter /ASCIIHexDecode", font_hex),
-    annotation_test_stream("", tounicode),
-  ])
+    annotation_test_stream(tounicode_use_cmap, tounicode),
+  ]
+  for object in extra_objects {
+    objects.push(object)
+  }
+  annotation_test_document(objects)
 }
 
 ///|

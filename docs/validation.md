@@ -6,18 +6,193 @@ CLI. That conversion baseline does not measure parity with pdf.js rendering.
 The automated selected-page visual baseline below now measures actual output
 against the same pinned PDF.js build.
 
-The suite currently contains 155 tests on each of wasm, wasm-gc, JavaScript, and
+The suite currently contains 221 tests on each of wasm, wasm-gc, JavaScript, and
 native. It includes 13 annotation tests, 17 CFF tests, 25 Type 1 tests, 5 CID
 layout tests, 9 variable-length CMap tests, 4 text-geometry tests, and 8
-text-clipping tests plus one mixed-paint scaling regression. The latest addition has 8 predefined-CMap tests, 8 vertical
-CID tests, 4 word-spacing tests, 1 missing-descriptor recovery test, and 2
-viewer-side external-CMap recovery tests. The browser/text-layer stage adds 4
+text-clipping tests, one mixed-paint scaling regression, and one tiling-pattern
+transform-scaling regression. Earlier stages added 8 predefined-CMap tests,
+8 vertical-CID tests, 4 word-spacing tests, 1 missing-descriptor recovery
+test, and 11 viewer-side external-CMap/ToUnicode recovery tests. The
+browser/text-layer stage adds 4
 geometry/range tests, 1 public-API test and 3 checked documentation examples,
-plus a separate Chromium interaction suite.
+plus a separate Chromium interaction suite. The search stage adds source-range
+and diacritic-folding regressions plus browser toolbar checks.
 Seven additional pixel-classifier tests cover blank/identical images,
 missing paint, small and large shifts, color differences, alpha compositing,
 unequal viewport dimensions and allocation bounds. These results cover the
 MoonBit packages and CLI; they do not establish complete pdf.js compatibility.
+
+The colour stage adds 11 colour-space/state tests, 8 original-image-sample
+tests, 3 additional pattern regressions, 1 public independent fill/stroke
+pattern test and 1 stream-comment reader recovery test. `moon test --target
+all --diagnostic-limit 1` passed **209/209 on each backend**, and `moon check
+--target all` passed. The current standalone Chromium run passed all **33**
+interactions, with report/screenshots in `_build/browser-test-1791598489760/`.
+The expanded selected-page baseline in `_build/visual-test-1791598324155/`
+measured **57/57 combinations from 20 PDFs**, **0 failures**, and **55 with
+pixel or text differences**. Its calibrated-colour interior samples below
+are an additional diagnostic, not an exemption from full-page differences.
+
+## Parallel-work baseline
+
+The eight workstream briefs in [PARALLEL.md](PARALLEL.md) assign each of the
+33 remaining TODO IDs exactly once; the 17 completed IDs are unchanged.
+Two agents audited the font/text and render/host boundaries read-only. No
+feature implementation was delegated as part of this documentation split.
+The unfinished JPEG parser is retained as `docs/drafts/jpeg-parser.mbt.txt`,
+outside the compiled source set, and is not a completed decoder.
+
+After parking that draft, `moon info`, `moon fmt`, `moon check --target all`
+and `git diff --check` passed. Sequential tests on wasm, wasm-gc, JavaScript
+and native each passed **221/221**, with 24 existing deprecation warnings.
+This is a fresh build/test baseline for collaboration, not a new visual run;
+the image and browser reports below retain their original dates and coverage.
+
+## Image interpolation, raw alpha masks and malformed simple-font recovery
+
+`image_sampling.mbt` preserves `/Interpolate` and inline `/I`, uses the
+affine transform's singular values with PDF.js-compatible Float32 rounding,
+and selects image smoothing from the actual paint scale. Axis-aligned image
+edges are rounded independently with a minimum one-pixel extent. Pattern
+cells retain structured image parts so sampling is decided at page paint
+scale rather than only at cell-local scale. Rotation and shear keep their
+affine transforms.
+
+`image_alpha.mbt` reads raw 1/2/4/8/16-bit SMask and explicit ImageMask samples,
+including row padding, `/Decode` and malformed-size fallback to the parent.
+SMask takes precedence over `/Mask`; only an ImageMask stream acts as an
+explicit opacity mask. Image and mask are resized to their maximum dimensions
+using floor nearest-neighbor indexing. Raw `/Matte` is converted in the parent
+image colour space, then removed using clamped ties-to-even byte rounding;
+fully transparent pixels become white. The result is one RGBA PNG, avoiding
+a second alpha application through SVG.
+
+Simple fonts with missing/invalid `/Widths`, `/FirstChar` or `/LastChar` can
+now recover through a viewer-local shadow dictionary. Valid widths are
+retained; `/MissingWidth` or Standard 14 AFM metrics fill missing entries.
+The source dictionary is unchanged. `issue17147.pdf` consequently renders
+instead of failing with `FontWidthsExpected`.
+
+```bash
+moon test image_alpha_wbtest.mbt
+moon test image_sampling_wbtest.mbt
+moon test font_recovery_wbtest.mbt
+moon run tools/visual_test.mbtx tools/image_cases.json
+```
+
+The focused run `_build/visual-test-1791601213389/` measured **10/10 selected
+page/rotation combinations**, **0 failures**, **7 with pixel or text
+differences**, and **3 within recorded tolerance**. The image-alpha,
+image-sampling and font-recovery suites passed 6/6, 4/4 and 3/3 respectively;
+the complete suite passed **217/217 on each of the four backends**.
+
+| Sample | Rotation | Pixels above per-channel tolerance 8 | Finding |
+| --- | --- | ---: | --- |
+| `issue10339_reduced.pdf` | 0/90° | 0 / 0 | Lab raw image conversion and enlarged sampling agree with PDF.js |
+| `issue4246.pdf` | 0° | 0 | Higher-resolution raw alpha mask agrees with PDF.js |
+| `colorkeymask.pdf` | 0/90/180/270° | about 3,220 / 3,499 / 2,969 / 2,690 | Integer edge placement improves the earlier 4,288-pixel result; mask/edge differences remain |
+| `smaskdim.pdf` | 0° | about 5,130 | Includes annotation border/appearance differences; cannot attribute all errors to image masking |
+| `issue17147.pdf` | 0° | about 1,001 | Malformed simple-font width recovery makes the page measurable; residual output differs |
+| `issue13931.pdf` | 0° | about 38,378 | Encoded JPEG + SMask + Matte remains incorrect |
+
+This run supplements the earlier 57-combination baseline below. It does not
+replace its historical measurements or establish general visual compatibility.
+Encoded JPEG/JPX/JBIG2 sample decoding, encoded-image masks/Matte, colour-key
+edges, complete compositing and large-image scheduling keep I-04 open.
+
+## Calibrated colours and original image samples
+
+`colour.mbt` uses the declared PDF colour space for paths, text, images,
+gradient/mesh colours, pattern bases and Form-mask path paints. The conversion
+is adapted from the pinned PDF.js `colorspace.js`, with source/copyright
+attribution. It includes PDF.js' SWOP CMYK polynomial, CalGray's tone curve,
+CalRGB gamma/matrix/white-point/black-point handling and Lab's D50/D65 output
+curve. The PDF CalRGB Matrix is read in primary XYZ columns, and Lab Range is
+`[amin amax bmin bmax]`. Indexed lookup bytes expand into their base space's
+ranges. Tint functions are parsed once before repeated image or mesh samples.
+ICCBased still uses its alternate; no ICC profile/LUT engine is implemented.
+Overprint and encoded JPEG/JPX/JBIG2 colour management remain open.
+
+The viewer content adapter resolves named `CS/cs` in the current resource
+scope and initializes PDF default samples, including K=1 for DeviceCMYK and
+all tints=1 for Separation/DeviceN. Tests exercise path/text/shading colours,
+q/Q restoration, resource shadowing in Forms, CalGray pattern bases and
+calibrated fill/stroke in a Luminosity Form mask. Pattern cells and masks use
+the viewer collector, so they also receive these state corrections. The
+public `PdfPathItem.stroke_pattern` is separate from fill `pattern`, and the
+black-box fixture paints a red tiling fill and blue tiling stroke together,
+then a plain green fill without inheriting the active stroke pattern. Complex
+pattern text, shading-pattern strokes and complete mask/compositor semantics
+are still H/M work.
+
+`image_colour.mbt` lets pdflite decode supported filters/predictors, then reads
+original 1/2/4/8/16-bit samples with byte-aligned rows and big-endian 16-bit
+components. `/Decode` maps samples into the declared colour-space ranges.
+Colour-key `/Mask` compares the original integer components before either
+mapping or conversion. The image tests inspect PNG IDAT pixels after the
+PDF reader and filter path, including reverse Decode, CMYK, packed row
+padding, 16-bit RGB, Indexed CalGray and spot-colour tint. Matte, interpolation,
+encoded-image sample-space masks and large-image scheduling remain I-04.
+
+The real CalGray/CalRGB fixtures initially rendered blank because pdflite
+0.2.2 discards a stream with a legal comment between `endstream` and `endobj`.
+The viewer recovery layer now skips that trivia, respects `/Length` and the
+active xref chain, and does not recover raw encrypted content on this path.
+The regression embeds the text `endstream endobj` inside the actual stream,
+so scanning for those words cannot incorrectly terminate it. Dependencies
+were not modified.
+
+Reproduce the focused colour run and flat-colour diagnostic:
+
+```bash
+moon run tools/visual_test.mbtx tools/colour_cases.json
+moon run tools/colour_samples.mbtx _build/visual-test-<run>
+```
+
+`tools/colour_cases.json` selects 26 pages from 7 PDFs, all of which are also
+in the default manifest. `tools/colour_samples.mbtx` uses fixed coordinates
+for the pinned fixtures at scale 2. Each swatch contributes a flat 16×16
+interior, away from its labels and boundaries; dimensions and flatness are
+recorded. In `_build/visual-test-1791598324155/colour-samples.json`, **1,432
+swatches / 366,592 sampled RGB pixels** match PDF.js exactly, with zero
+nonflat samples: 60 CalGray swatches, 1,360 CalRGB swatches and 12 Lab swatches.
+This verifies the calibrated conversion path, not complete pages or all colour
+spaces. It supports completion of C-02 within the pinned PDF.js behavior:
+that reference ignores nondefault CalGray BlackPoint, Lab BlackPoint and
+canvas rendering intent (`/ri`); the viewer also ignores them.
+
+| Sample | Pages | Full-page pixels above tolerance 8 | Finding |
+| --- | --- | ---: | --- |
+| `calgray.pdf` | 1–3 | 20,886 / 22,805 / 20,736 | Swatch interiors exact; label/raster/text-order differences remain |
+| `calrgb.pdf` | 1–17 | 79,358–85,961 per page | All 1,360 sampled swatches exact across white/black points, gamma and matrix variations; pages still differ |
+| `issue10339_reduced.pdf` | 1 | 6,543 | Indexed Lab image interiors exact; upscaled boundaries are visibly smoothed instead of following `/Interpolate` |
+| `devicen.pdf` | 1 | 946 | Tint conversion reaches the real fixture; alternate colour/raster differences remain |
+| `devicen-none-zero-domain.pdf` | 1 | 25,600 | Visible differences in DeviceN/alternate colours; special-domain/colorant coverage and ICC conversion remain open |
+| `colorkeymask.pdf` | 1 | 4,288 | Original-sample mask path is used; final resampling/mask output still differs |
+| `function_based_shading_cmyk.pdf` | 1–2 | 149,598 / 8,639,970 | Function-based shading still has 3 / 6 placeholders; H-03 remains open |
+
+Before stream recovery, the 3-page diagnostic
+`_build/visual-test-1791597057764/` had **3,044,020** changed pixels for
+CalGray page 1 and **3,175,619** for CalRGB page 1, with **viewer_ink=0**.
+The corrected outputs are nonblank. That before/after measures recovery and
+conversion together; it is not evidence for the colour conversion in isolation.
+The swatch diagnostic above supplies the separate colour evidence.
+
+## Text reading order and separators
+
+`text_order_wbtest.mbt` exercises the page-level logical text index with a
+synthetic PDF whose second line is emitted before the first in the content
+stream. Public text content is ordered top-to-bottom, while the original paint
+display list and each glyph's stable item index remain unchanged. A second
+fixture places two glyphs on one baseline with a large geometric gap; copy,
+search text and the DOM text layer all expose one synthesized word space.
+
+The index detects strong Hebrew/Arabic ranges and orders a horizontal RTL line
+from its right edge. This is a deterministic first step toward PDF.js' `bidi`
+text chunks; it does not yet implement the full Unicode Bidirectional
+Algorithm, mixed-direction run reordering, table/column inference, or
+ligature/combining-character boundary metadata. The current suite reports
+**209/209** on all four backends after the subsequent colour regressions.
 
 ## Reproduce
 
@@ -43,6 +218,108 @@ moon run tools/browser_test.mbtx http://127.0.0.1:4312 /path/to/chromium
 
 `tools/build_web.mbtx` builds the MoonBit JS bridge and stages the static
 `web/` deployment. No PDF.js renderer is loaded by the viewer.
+
+## Page boundaries and UserUnit
+
+The page-model regressions cover a non-zero MediaBox origin, a CropBox that
+extends beyond it, disjoint and degenerate CropBox fallback, invalid UserUnit,
+viewport offset inversion, and SVG dimensions after applying
+`scale * user_unit`. The real PDF.js fixture `issue19176.pdf` declares an
+8.5 by 11 page with `/UserUnit 72`; the native SVG has a 612 by 792 viewBox.
+The selected PDF.js visual run `_build/visual-test-1791590079766/` measured
+that page at scale 2 with matching 1224 by 1584 viewport dimensions, affine
+matrix, text comparison, and **0 changed pixels**. This validates the page
+unit and device-pixel sizing path; it does not claim that every malformed page
+tree is recovered identically.
+
+The same MoonBit tests generate encrypted fixtures for 40-bit ARC4, 128-bit
+ARC4, and AESV2. Missing and wrong passwords fail with the stable viewer
+authentication error, user and owner passwords both open the 128-bit fixture,
+and successful reads expose the expected page text. Browser bridge and static
+build checks pass; the prompt/retry loop is kept browser-only, and a dedicated
+Chromium dialog test for an encrypted file remains a small follow-up.
+
+## Destinations and document navigation
+
+`pdf-viewer_test.mbt` builds a two-page navigation fixture containing a legacy
+catalog `/Dests` entry, a `/Names` `/Dests` name-tree entry, an explicit page
+destination and a remote destination. The regression checks local page-object
+resolution, `XYZ` parameters, one-based page numbers, name lookup with and
+without a leading slash, JSON serialization, outline navigation output and the
+remote-page boundary. The destination model also covers the `Fit` family in the
+viewer implementation (`Fit`, `FitH`, `FitV`, `FitR`, `FitB`, `FitBH`, `FitBV`).
+
+This validates the reader/viewer API boundary. The standalone browser now
+consumes local outline destinations in its directory panel and leaves remote
+targets disabled; annotation links remain a separate A-04 layer. A remote
+destination is reported with `remote: true` and is never used as a local scroll
+target.
+
+## Optional-content visibility
+
+`pdf-viewer_test.mbt` builds a real `/OCProperties` document with an OCG listed
+in `/OFF`, adds a `/Properties` alias and wraps the page content in `BDC /OC`.
+The default viewer produces an empty page display list and no extracted text or
+selection. `with_optional_content_state(pdf_optional_content_state(on=[object]))`
+selects the same object number and restores the text, operator list and cursor
+selection. The fixture is serialized and read again, so the check covers the
+pdflite reader/writer boundary rather than only an in-memory state.
+
+The content walk also covers common OCMD `/P` policies and nested `/VE`
+`And`/`Or`/`Not` expressions, and a Form XObject's `/OC` is evaluated before
+recursing into its operators. Usage dictionaries, radio-button groups, locked
+layer controls and a browser layer panel are not claimed by this test.
+
+## Inline image decode path
+
+`pdf-viewer_wbtest.mbt` now exercises inline images through the page-model path:
+each fixture is written into a PDF, read back, collected into a display list and
+converted to the browser-facing image resource. The regression set contains
+CCITT Group 4 with `K=-1`, CCITT Group 3 one-dimensional data with `K=0`, a
+one-bit raw image with `/Decode [1 0]`, a serialized `ImageMask`, and a Flate
+image whose `DecodeParms` uses PNG Predictor 12. The test reads the generated
+PNG with pdflite, inflates its IDAT payload and checks dimensions, row lengths
+and representative RGB/mask samples. This catches a missing filter parameter
+even when a data URI is still produced.
+
+The viewer keeps the `DecodeParms` value that pdflite attaches to
+`Op_InlineImage` and adds it to the transient image stream before calling
+the image adapter. That is the boundary needed for CCITT `/Columns`, `/Rows`
+and `/K`; the viewer does not duplicate the CCITT or predictor decoder. The
+four-backend suite at that stage was **182/182** on wasm, wasm-gc, JavaScript and native.
+I-01/I-02 still cover JPX/JBIG2; the new original-sample path above expands
+I-04's color-key coverage, while Matte, interpolation and encoded images remain open.
+
+## Uncolored tiling pattern base colour
+
+`pattern_wbtest.mbt` builds real PDF byte streams and checks that a
+`PaintType 2` path tile inherits the invocation colour for both fill and
+stroke. Synthetic cases cover DeviceGray, DeviceRGB and DeviceCMYK operands;
+a `PaintType 1` case confirms that its cell colour remains independent of the
+invocation colour. A scale-2 regression also checks that output scale is not
+applied both by the page paint and again by the pattern transform. This checks
+colour propagation and transform handling through the reader, content state
+and SVG pattern resource, not only the final string helper.
+
+The PDF.js fixture `tiling_patterns_variations.pdf` contains an uncolored P5
+pattern with two path fills. The viewer's generated cell uses `#CC3333`, the
+RGB base colour selected at the paint site. A scale-2 comparison exposed that
+the page paint and `patternTransform` both applied output scale; the pattern
+transform now retains PDF-to-page coordinates and lets the paint apply output
+scale once. The P5 300-by-300 pixel region at `(840, 900)` changed from 61,094
+to 4,176 pixels above tolerance 8 (the ROI includes the rectangle border).
+In `_build/visual-test-1791590079766/`, all 31 selected pages/rotations measured
+successfully; the full page has **27,076 pixels above tolerance 8**, down from
+169,803. The remaining differences include pattern matrix, clipping and edge
+cases; H-01 remains open until those are isolated and validated against PDF.js.
+
+Recheck the P5 region by setting `run_dir` to a visual-run directory:
+
+```bash
+run_dir=_build/visual-test-1791590079766
+sample=tiling_patterns_variations.pdf.page-1.rotation-0
+moon run tools/pattern_roi.mbtx "$run_dir/$sample.reference.rgba" "$run_dir/$sample.viewer.rgba" 840 900 300 300 1200
+```
 
 The corpus runner creates a new `_build/corpus-*/` directory every time. Each
 entry in `report.json` includes the source filename, page number, status,
@@ -179,18 +456,61 @@ recursively composes indirect `/UseCMap` streams, and applies local mappings
 before inherited mappings. `notdef` entries and WMode are recovered as well.
 The recovered mapping is used by CID text segmentation, CID-indexed widths,
 vertical layout, Adobe CID-to-Unicode lookup, and Type 1/CFF/TrueType outline
-selection.
+selection. For text extraction, a reader mapping wins; a matching mapping
+recovered from the source ToUnicode stream is next; missing codes then use the
+Adobe CID collection mapping before the reader's final fallback. Odd-length
+UTF-16BE destinations are padded to match PDF.js decoding behavior.
 
-`cmap_text_wbtest.mbt` adds two focused regressions: a legal
+`cmap_text_wbtest.mbt` covers a legal
 `<F0000000> <FFFFFFFF>` codespace with a lazy four-byte `cidrange`, and a
-public page path whose high-bit code is otherwise lost by the reader. The
+public page path whose high-bit code is otherwise lost by the reader. Additional
+tests cover high-range ToUnicode `bfchar`/`bfrange` and array mappings, lazy
+lookup, reader-map precedence over collection fallback, partial ToUnicode
+fallback, odd-byte destinations, and a synthetic PDF whose indirect child and
+parent CMap streams disagree on a mapping. A further synthetic PDF resolves
+named `/Adobe-Japan1-UCS2 usecmap` ToUnicode inheritance after the reader map is
+removed. With the reader tables removed, the viewer resolves the parent
+codespace and mapping, then correctly applies the child CID and ToUnicode
+entries. The
 selected corpus smoke run
 `_build/corpus-1791571276960/report.json` converts pages 1, 7 and 14 of
 `tracemonkey.pdf` with **3/3 rendered**, **0 failures**, and **0 placeholders**.
-This is recovery and conversion evidence, not a complete F-03 parity claim.
-High-range ToUnicode recovery, source streams unavailable to the viewer,
-malformed CMap diagnostics, and real corpus fixtures for indirect UseCMap
-inheritance remain open.
+The real `cidfont_cmap_overflow.pdf` also converted with **1/1 rendered** and
+**0 placeholders**. In `_build/visual-test-1791583678868/report.json`, its
+viewport and text match PDF.js, while **4,620 pixels differ** and all fall
+outside the diagnostic one-pixel neighborhood. This is an explicit unresolved
+visual case, not a completed rendering claim. Real corpus fixtures for indirect
+`UseCMap` inheritance, named ToUnicode inheritance, source streams unavailable
+to the viewer and malformed-CMap diagnostics remain open. Named Unicode
+fallback is currently demonstrated with a synthetic PDF only; it has no
+real-corpus coverage yet.
+
+The current recovery parser also has deterministic diagnostics for malformed
+hex tokens, unclosed `codespacerange`/mapping sections, unavailable source
+streams and indirect `UseCMap` cycles. When the source bytes cannot be decoded,
+the recovery result is marked unavailable and the viewer keeps pdflite's reader
+mapping instead of treating an empty local table as authoritative. Three new
+white-box tests exercise these states. They make the fallback behavior explicit,
+but the diagnostics are still internal and the real-corpus cases above remain
+open.
+
+### Corpus scan
+
+`tools/cmap_corpus.mbtx` scans the local PDF.js test corpus through the same
+pdflite reader boundary used by the viewer:
+
+```bash
+moon run --target native tools/cmap_corpus.mbtx reference/pdf.js/test/pdfs
+```
+
+The 2026-10-10 scan saw 990 PDF files. 976 documents were readable and 14 were
+rejected before font inspection. It found 17 external CMap font resources, all
+with decoded source streams, but no real text-body or dictionary `UseCMap` and
+no reader-dropped CMap. The report includes each external CMap's file, page,
+resource name and object number, plus the rejected file names. This is useful
+coverage for source-stream access and regression selection, but it does not
+replace a real indirect-inheritance sample; the synthetic parent/child,
+missing-source and cycle cases therefore remain explicit F-03 tests.
 
 ## Adobe predefined CMaps, vertical layout and word spacing
 
@@ -268,7 +588,7 @@ in the visual baseline below.
 
 ## Standalone browser and native cursor selection
 
-On 2026-10-10, all **141/141** MoonBit tests passed on wasm, wasm-gc,
+On 2026-10-10, all **209/209** MoonBit tests passed on wasm, wasm-gc,
 JavaScript and native. `text_layer_wbtest.mbt` verifies the layer matrix maps
 all four corners onto the public viewport for every quarter rotation and
 multiple scales, including nonzero page origins and affine shear. Cursor
@@ -277,9 +597,10 @@ UTF-16 surrogate boundaries, rotated baselines and vertical columns.
 `text_layer_test.mbt` exercises the public decoded-page/text-layer/range/SVG
 surface; three checked API examples compile and run as documentation tests.
 
-The Chromium DevTools suite passed **19 interaction checks** using
-`90ms_rksj_h_sample.pdf`, `vertical.pdf` (3 pages), and `tracemonkey.pdf`
-(14 pages). It verifies:
+The Chromium DevTools suite passed **33 interaction checks** using
+`90ms_rksj_h_sample.pdf`, `vertical.pdf` (3 pages), `tracemonkey.pdf`
+(14 pages), `nested_outline.pdf` (9 pages), `labelled_pages.pdf` (11 pages),
+and `attachment.pdf`. It verifies:
 
 - actual mouse drag on ordinary, rotated/scaled and vertical CJK text;
 - Shift plus arrow and keyboard initiation of cursor selection;
@@ -288,13 +609,19 @@ The Chromium DevTools suite passed **19 interaction checks** using
 - selection restoration and highlighter reprojection after zoom/rotation;
 - actual browser file input, invalid-file reporting, retention of the prior
   preview and reopening after an error;
+- document search toolbar options, source-match result counts, item-level
+  highlights, active-result scrolling and previous/next result controls;
+- document-info bridge output for outline destinations, Info fields, page
+  labels, attachment metadata and XMP availability;
+- outline click-to-scroll, thumbnail SVG previews, Info/attachment panel
+  rendering, on-demand attachment/XMP downloads and the print entry point;
+- continuous/single-page mode switching and `#page=N` browser history state;
 - absence of uncaught browser runtime exceptions during these checks.
 
 Screenshots and the per-check report are saved in a fresh
-`_build/browser-test-*/` directory. The initial complete 19-check run is in
-`_build/browser-test-1791563539676/`; the latest rerun, including all 19 check
-names and the passed count in `report.json`, is in
-`_build/browser-test-1791566968073/`. The mouse-selection screenshot was
+`_build/browser-test-*/` directory. The latest 33-check run is in
+`_build/browser-test-1791598489760/`; its `report.json` records every check
+name and the passed count. The mouse-selection screenshot was
 inspected: the Japanese line stays legible and the native highlight follows
 its glyphs. The rotated screenshot places the selection on the rotated text;
 the browser scrolls it into view instead of leaving it outside the viewport.
@@ -314,7 +641,76 @@ virtualization, cancellation, memory limits and performance budgets remain
 pending. The body layer uses source paint order plus a writing-direction
 separator heuristic; general reading order/bidi and raw PDF byte spans are
 not completed. Annotation appearances and readonly widgets still need their
-own DOM interaction layer. Search, thumbnails and printing remain TODO.
+own DOM interaction layer. Search currently highlights complete source items;
+exact character-range painting and full Unicode normalization remain TODO.
+Scale and rotation still rebuild all mounted pages even though the page models
+are cached.
+
+## Host font fallback policy
+
+`PdfFontFallback` maps a PDF resource or `/BaseFont` name to a host CSS font
+family. `PdfViewerDocument::with_font_fallbacks` applies the mapping when page
+font resources are built; an embedded TrueType/OpenType program remains the
+preferred source, so a host fallback cannot silently replace an embedded font.
+The native API exposes the same value as the browser API. The browser bridge
+accepts the JSON form through `set_font_fallbacks`, clears its page-model cache,
+and returns the number of accepted mappings. This keeps font ownership with the
+host and avoids bundling or redistributing font files.
+
+The latest Chromium run includes the bridge acceptance check in
+`_build/browser-test-1791598489760/report.json`. The white-box font test also
+checks that a fallback changes an unembedded family and leaves an embedded
+TrueType family on its document-local `@font-face` name.
+
+## Standard 14 fonts and host fallback
+
+Standard 14 resources now carry the AFM data needed by the viewer: the 1000-unit
+em size, ascent, descent, cap height and character widths. BaseFont names with a
+subset prefix are canonicalized before this lookup, so an unembedded
+`/ABCDEF+Helvetica-Bold` still receives the Helvetica metrics. The page model
+keeps the canonical face and metrics in `PdfFontResource` for native consumers
+and browser diagnostics.
+
+The SVG path uses host CSS families for unembedded Standard 14 faces. Times,
+Helvetica and Courier prefer Nimbus/Liberation families with a generic fallback;
+Symbol and ZapfDingbats prefer `Standard Symbols PS` and `D050000L`. An embedded
+TrueType/OpenType program still wins and is emitted as a document-local
+`@font-face`. The viewer does not bundle the PDF.js Foxit font programs or any
+other font files, so the host remains responsible for licensing and installation.
+`PdfFontFallback` lets an application provide a different local CSS family by
+resource name or BaseFont name, and the browser bridge clears its page cache
+when that mapping changes.
+
+The white-box regressions verify AFM metrics, subset-name recognition, host family
+selection and filtering of Standard 14 C0/undefined C1/`.notdef` display codes.
+The `standard_fonts.pdf` fixture renders all 14 pages with no explicit control
+characters in the SVG (`NUL_COUNT=0`). In the Standard 14 visual run,
+`_build/visual-test-1791590079766/`, the Standard 14 pages differ from PDF.js by
+129,822–169,878 pixels above channel tolerance 8. The remaining differences are
+the expected host glyph outlines, rasterization and Symbol/ZapfDingbats coverage,
+not a missing AFM advance path. A machine with different installed fonts will
+produce different pixels; exact PDF.js parity would require a licensed,
+deterministic font program or an outline renderer, so F-07 remains open.
+
+## Text search
+
+`PdfViewerDocument::search` searches the text already produced by each page
+model, so optional-content visibility is respected without a second PDF parse.
+Each result carries the one-based page number, the original matched text, a
+UTF-16 source `index`/`length`, the union of matching glyph bounds and stable
+source item indices. `PdfSearchOptions` supports case-sensitive, whole-word and
+common Latin diacritic-insensitive matching. The implementation keeps a
+normalized-code-unit to source-interval map; the regression for `Straße` and
+`strasse` confirms that an expansion such as `ß` to `ss` still returns the
+source range rather than the normalized range.
+
+The browser bridge exposes the same operation as `search_pdf`. The standalone
+toolbar adds the three options, displays the result count, scrolls to the active
+page and highlights source text-layer items. The latest Chromium run is
+`_build/browser-test-1791598489760/report.json`, with all 33 checks passing.
+The API does not yet reconstruct PDF.js reading order/bidi, perform full Unicode
+normalization, highlight only the matching substring inside a multi-character
+item, or move the search work to a cancellable Worker.
 
 ## Automated PDF.js visual baseline
 
@@ -332,26 +728,35 @@ moon run tools/visual_summary.mbtx _build/visual-test-<run>/report.json
 moon run tools/visual_contract_test.mbtx /path/to/chromium
 ```
 
-The 2026-10-10 baseline in `_build/visual-test-1791566623303/` measured
-**14/14 page/rotation combinations from 9 PDFs**, with **0 measurement
+The latest 2026-10-10 baseline in `_build/visual-test-1791598324155/` measured
+**57/57 page/rotation combinations from 20 PDFs**, with **0 measurement
 failures and 0 uncaught runtime exceptions**. PDF.js version `6.5.0`, build
 `89b500f`, rendered in the same Chromium profile as MoonBit, at scale 2 and
-deviceScaleFactor 1, on white. All 14 viewport dimension/matrix comparisons
-matched within 1e-6; 11 text comparisons matched after removing whitespace.
-**11 combinations had pixel or text differences; 3 were within the recorded
+deviceScaleFactor 1, on white. All 57 viewport dimension/matrix comparisons
+matched within 1e-6; 20 text comparisons matched after removing whitespace.
+**55 combinations had pixel or text differences; 2 were within the recorded
 tolerance.** This is a selected corpus, not a visual compatibility percentage.
 
 | Sample | Selected pages/rotations | Pixels above per-channel tolerance 8 | Main finding |
 | --- | --- | ---: | --- |
-| `90ms_rksj_h_sample.pdf` | page 1, 0/90° | 0 / 0 | Visible ASCII/Japanese control matches in this environment |
+| `90ms_rksj_h_sample.pdf` | page 1, 0/90° | 1,098 / 956 | ASCII/Japanese are visible; recorded pixel differences remain |
 | `vertical.pdf` | pages 1/2/3, 0° | 2,569 / 1,497 / 1,497 | Page edges differ; pages 2/3 have no body text, not entirely blank pixels |
 | `issue18117.pdf` | page 1, 0° | 11,268 | Text agrees; glyph/raster differences remain |
+| `cidfont_cmap_overflow.pdf` | page 1, 0° | 4,620 | Text and viewport agree; all changed pixels are outside the 1px neighborhood |
 | `issue14462_reduced.pdf` | page 1, 0° | 1,578 | Type 1 glyph/raster differences remain |
 | `issue18548_reduced.pdf` | page 1, 0° | 0 | CID Type 1 result is within tolerance; minor exact pixel differences remain |
 | `text_clip_cff_cid.pdf` | page 1, 0° | 346 | Zoom clipping is corrected; residual pixel differences remain |
 | `annotation-highlight.pdf` | page 1, 0° | 2,308 | Appearance differences remain |
-| `annotation-freetext.pdf` | page 1, 0° | 585 | Appearance differences remain |
+| `annotation-freetext.pdf` | page 1, 0° | 1,032 | Appearance differences remain |
+| `issue19176.pdf` | page 1, 0° | 0 | `/UserUnit 72`; exact viewport and pixels in this environment |
+| `standard_fonts.pdf` | pages 1–14, 0° | 129,822–169,878 per page | Standard 14 fonts: AFM placement is wired; host glyph outlines, `.notdef`, Symbol and ZapfDingbats fallback remain visibly different |
+| `tiling_patterns_variations.pdf` | page 1, 0° | 27,076 | Output scale is no longer doubled for tiling cells; P5 region has 4,176 changed pixels including its border; other matrix/clip/edge differences remain |
 | `tracemonkey.pdf` | pages 1/7/14, 0° | 246,338 / 276,148 / 136,162 | Nimbus/Computer Modern fallback family improved; glyphs and normalized extracted text still differ |
+
+The other 26 combinations are the seven colour/image fixtures listed in
+[Calibrated colours and original image samples](#calibrated-colours-and-original-image-samples).
+All of those pages still count as full-page differences, including the 21
+pages whose sampled calibrated-colour interiors match exactly.
 
 The initial run `_build/visual-test-1791564786890/` exposed a concrete scale
 bug: clip definitions used unscaled coordinates while text, paths, images
@@ -371,10 +776,10 @@ pixels fell by 35,429 / 33,621 / 15,552 on pages 1/7/14 respectively. The
 remaining Type 1 failures are per-glyph parser coverage and font metrics work,
 not an excuse to mark F-06 or F-07 complete.
 
-The Type 1 recovery change in this update was checked with the full corpus
-smoke run and all four MoonBit backends. This environment has no
-Chromium executable available, so the pixel counts above remain the prior
-selected baseline until that visual run is repeated.
+The Type 1 recovery change was checked with the full corpus smoke run and all
+four MoonBit backends. The latest selected visual run above also completed in
+Chromium with no measurement failures; its remaining pixel differences are
+retained in the report rather than treated as matches.
 
 Each run retains PDF.js/MoonBit PNGs, raw RGBA, a heatmap, the original
 run/glyph text geometry, viewport diagnostics, fixture SHA-256, browser build,
@@ -391,13 +796,16 @@ runner contract checks in `_build/visual-contract-1791565301945/` verify a
 visible, nonblank control is accepted in strict mode, a deliberate 3px shift
 is rejected after saving its report, and a missing fixture counts as one
 failed selected page. The diagnostic shift is recorded explicitly and is
-absent from the default manifest. These checks are separate from the 19
+absent from the default manifest. These checks are separate from the 33
 standalone viewer interaction checks.
 
-After the zoom-clip correction and CMap recovery, all **155/155** tests passed on wasm,
-wasm-gc, JavaScript and native, and the standalone Chromium suite again
-passed all **19** interactions. The latter report and screenshots are in
-`_build/browser-test-1791566968073/`.
+After the zoom-clip correction, CMap recovery, password paths, page-boundary,
+destination, optional-content, search, ToUnicode fallback, Standard 14 font
+metrics, pattern scale, inline-image decode, calibrated-colour conversion and
+stream-comment recovery updates, all **209/209** tests passed
+on wasm, wasm-gc, JavaScript and native, and the standalone Chromium suite
+passed all **33** interactions. The latest report and screenshots are in
+`_build/browser-test-1791598489760/`.
 
 Normal mode exits successfully when measurement completes, including reported
 differences. Appending `--strict` rejects pixel differences above tolerance,

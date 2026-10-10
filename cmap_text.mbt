@@ -6,6 +6,29 @@ priv struct PdfDecodedCMapCode {
 }
 
 ///|
+fn pdf_viewer_tounicode_text(bytes : BytesView) -> String? {
+  let aligned : Bytes = if bytes.length() % 2 == 0 {
+    bytes.to_owned()
+  } else {
+    Bytes::makei(bytes.length() + 1, index => {
+      if index == 0 {
+        0
+      } else {
+        bytes[index - 1]
+      }
+    })
+  }
+  try {
+    let codepoints = @pdflite.pdf_codepoints_of_utf16be(aligned[:])
+    @utf8.decode(@pdflite.pdf_utf8_of_codepoints(codepoints))
+  } catch {
+    _ => None
+  } noraise {
+    value => Some(value)
+  }
+}
+
+///|
 /// PDF.js checks codespaces from one to four bytes, accepting the first match.
 /// Unsigned comparisons preserve codes with the high bit set in four bytes.
 fn pdf_decode_cmap_codes(
@@ -64,41 +87,72 @@ fn pdf_cmap_unicode_of_code(
   font : @pdflite.PdfCIDKeyedFont,
   code : PdfDecodedCMapCode,
   recovery : PdfViewerCMapRecovery?,
+  unicode_recovery : PdfViewerCMapRecovery?,
 ) -> String {
   if !code.valid {
     return "\uFFFD"
   }
-  if font.composite.cid_fontdescriptor.tounicode is None &&
-    pdf_cid_collection_unicode_with_recovery(font, code.charcode, recovery)
-    is Some(text) {
-    return text
-  }
-  let codepoints = match font.composite.cid_fontdescriptor.tounicode {
-    Some(entries) => {
-      let mapping = for (charcode, bytes) in entries {
+  let reader_unicode = match font.composite.cid_fontdescriptor.tounicode {
+    Some(entries) =>
+      for (charcode, bytes) in entries {
         if charcode == code.charcode {
-          break Some(bytes)
+          break pdf_viewer_tounicode_text(bytes[:])
         }
       } nobreak {
         None
       }
-      match mapping {
-        Some(bytes) =>
-          @pdflite.pdf_codepoints_of_utf16be(bytes) catch {
-            _ => [code.charcode]
-          }
-        None => [code.charcode]
-      }
-    }
-    None =>
-      @pdflite.PdfFontCIDKeyed(font)
-      .text_extractor()
-      .codepoints_of_text(code.bytes) catch {
-        _ => [0xFFFD]
-      }
+    None => None
   }
+  let recovered_unicode = match unicode_recovery {
+    Some(cmap) => pdf_viewer_unicode_text_with_recovery(cmap, code.charcode)
+    None => None
+  }
+  match reader_unicode {
+    Some(text) => return text
+    None => ()
+  }
+  match recovered_unicode {
+    Some(text) => return text
+    None => ()
+  }
+  match
+    pdf_cid_collection_unicode_with_recovery(font, code.charcode, recovery) {
+    Some(text) => return text
+    None => ()
+  }
+  let codepoints = @pdflite.PdfFontCIDKeyed(font)
+    .text_extractor()
+    .codepoints_of_text(code.bytes) catch {
+      _ => [0xFFFD]
+    }
   @utf8.decode(@pdflite.pdf_utf8_of_codepoints(codepoints)) catch {
     _ => "\uFFFD"
+  }
+}
+
+///|
+fn pdf_viewer_unicode_text_with_recovery(
+  cmap : PdfViewerCMapRecovery,
+  charcode : Int,
+) -> String? {
+  if !cmap.source_available {
+    return None
+  }
+  match pdf_viewer_unicode_lookup(cmap.unicode_entries[:], charcode) {
+    Some(bytes) =>
+      match pdf_viewer_tounicode_text(bytes[:]) {
+        Some(text) => return Some(text)
+        None => ()
+      }
+    None => ()
+  }
+  match cmap.usecmap {
+    Some(name) =>
+      match pdf_builtin_cmap_unicode(pdf_cmap_name_text(name), charcode) {
+        Some(bytes) => pdf_viewer_tounicode_text(bytes[:])
+        None => None
+      }
+    None => None
   }
 }
 
@@ -109,12 +163,13 @@ fn pdf_cmap_glyph_entry(
   code : PdfDecodedCMapCode,
   glyph : @pdflite.PdfContentTextGlyphPlacement,
   recovery : PdfViewerCMapRecovery?,
+  unicode_recovery : PdfViewerCMapRecovery?,
 ) -> @pdflite.PdfContentJsonEntry {
   {
     object: @pdflite.PdfContentGlyphObject(
       code.charcode,
       @utf8.decode_lossy(code.bytes),
-      pdf_cmap_unicode_of_code(font, code, recovery),
+      pdf_cmap_unicode_of_code(font, code, recovery, unicode_recovery),
     ),
     state: @pdflite.PdfContentStateGlyph(
       state.text_state.content_glyph_state(state.clipping_path),
@@ -172,10 +227,28 @@ fn pdf_decode_cid_codes(
 }
 
 ///|
+fn pdf_viewer_tounicode_recovery_for_font(
+  document : @pdflite.PdfDocument,
+  resources : @syntax.PdfObject,
+  font_name : String,
+) -> PdfViewerCMapRecovery? {
+  guard pdf_viewer_ttf_font_object(document, resources, font_name)
+    is Some(font_object) else {
+    return None
+  }
+  guard document.lookup_direct(pdf_name_key("/ToUnicode"), font_object)
+    is Some(stream) else {
+    return None
+  }
+  pdf_viewer_cmap_recovery_of_object(document, stream, Map([]))
+}
+
+///|
 fn pdf_apply_cid_text_op(
   document : @pdflite.PdfDocument,
   state : @pdflite.PdfContentOperatorState,
   font : @pdflite.PdfCIDKeyedFont,
+  resources : @syntax.PdfObject,
   op : @content.PdfContentOp,
 ) -> (
   @pdflite.PdfContentOperatorResourceResult,
@@ -195,6 +268,11 @@ fn pdf_apply_cid_text_op(
   let mut text_matrix = layout.text_matrix
   let original_font = @pdflite.PdfFontCIDKeyed(font)
   let recovery = pdf_viewer_cmap_recovery_for_font(document, font)
+  let unicode_recovery = pdf_viewer_tounicode_recovery_for_font(
+    document,
+    resources,
+    state.text_state.font,
+  )
   let vertical = pdf_viewer_font_is_vertical_with_recovery(
     original_font, recovery,
   )
@@ -246,7 +324,14 @@ fn pdf_apply_cid_text_op(
   let next_state = { ..state, text_state: { ..text_state, text_matrix, }, }
   let entries = [
     for index, glyph in glyphs => {
-      pdf_cmap_glyph_entry(next_state, font, codes[index], glyph, recovery)
+      pdf_cmap_glyph_entry(
+        next_state,
+        font,
+        codes[index],
+        glyph,
+        recovery,
+        unicode_recovery,
+      )
     }
   ]
   ({ state: next_state, entries, }, glyphs)

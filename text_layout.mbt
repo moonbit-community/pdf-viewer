@@ -10,14 +10,22 @@ fn pdf_apply_op_for_viewer(
   @pdflite.PdfContentOperatorResourceResult,
   Array[@pdflite.PdfContentTextGlyphPlacement],
 ) raise @core.PdfError {
+  match pdf_apply_colour_op_for_viewer(document, state, resources, op) {
+    Some(state) => return ({ state, entries: [], }, [])
+    None => ()
+  }
   match op {
     @content.Op_Tf(_, _) => {
       let result = document.content_apply_resource_op(state, resources, op) catch {
-        @core.CIDFontDescriptorExpected => {
+        @core.CIDFontDescriptorExpected
+        | @core.FontWidthsExpected
+        | @core.FontWidthExpected
+        | @core.FontFirstCharExpected
+        | @core.FontLastCharExpected as error => {
           let text_state = state.text_state.content_apply_text_state_op(op)
           guard pdf_viewer_ttf_font_object(document, resources, text_state.font)
             is Some(object) else {
-            raise @core.CIDFontDescriptorExpected
+            raise error
           }
           let current_font = pdf_read_font_for_viewer(document, object)
           {
@@ -35,7 +43,7 @@ fn pdf_apply_op_for_viewer(
     | @content.Op_double_quote(_, _, _) => {
       let original_font = state.text_state.current_font
       if original_font is @pdflite.PdfFontCIDKeyed(font) {
-        return pdf_apply_cid_text_op(document, state, font, op)
+        return pdf_apply_cid_text_op(document, state, font, resources, op)
       }
       let layout = state.text_state.content_apply_text_op(
         original_font,

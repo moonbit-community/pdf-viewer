@@ -53,13 +53,87 @@ test "embedded CFF and Type 1 programs are preserved without invalid browser fon
 }
 
 ///|
+test "host font fallback replaces only the requested unembedded font" {
+  let fallback : PdfFontFallback = {
+    pdf_name: "Helvetica",
+    family: "Arial",
+    weight: Some("600"),
+    style: Some("normal"),
+  }
+  let resource = pdf_font_resource_from_bytes(
+    "F1",
+    "Helvetica",
+    None,
+    "F1",
+    fallback=Some(fallback),
+  )
+  assert_eq(resource.family, "Arial")
+  assert_eq(resource.weight, "600")
+  assert_eq(resource.style, "normal")
+  let embedded = pdf_font_resource_from_bytes(
+    "F2",
+    "Helvetica",
+    Some(Bytes::from_array([0, 1, 0, 0, 0])),
+    "F2",
+    fallback=Some(fallback),
+  )
+  assert_true(embedded.family.has_prefix("pdf-font-"))
+}
+
+///|
+test "standard 14 resources expose AFM metrics and host font stacks" {
+  let times = pdf_font_resource_from_bytes(
+    "F1",
+    "/Times-BoldItalic",
+    None,
+    "F1",
+  )
+  assert_eq(times.standard_font, Some("Times-BoldItalic"))
+  assert_true(times.family.contains("Nimbus Roman"))
+  guard times.metrics is Some(metrics) else { fail("missing AFM metrics") }
+  assert_eq(metrics.units_per_em, 1000)
+  assert_true(metrics.ascent > 0)
+  assert_true(metrics.descent < 0)
+  assert_true(metrics.widths.length() > 100)
+
+  let symbol = pdf_font_resource_from_bytes("F2", "/Symbol", None, "F2")
+  assert_eq(symbol.standard_font, Some("Symbol"))
+  assert_true(symbol.family.contains("Standard Symbols PS"))
+}
+
+///|
+test "undefined standard font codes do not become SVG control characters" {
+  assert_eq(
+    pdf_standard14_display_text(Some(@pdflite.PdfHelvetica), 0x00, "\u0000"),
+    "",
+  )
+  assert_eq(
+    pdf_standard14_display_text(Some(@pdflite.PdfHelvetica), 0x81, "\u0081"),
+    "•",
+  )
+  assert_eq(
+    pdf_standard14_display_text(Some(@pdflite.PdfSymbol), 0x80, "\u0080"),
+    "",
+  )
+  assert_eq(pdf_standard14_display_text(None, 0x00, "\u0000"), "\u0000")
+}
+
+///|
 test "viewer corrects pdflite's placeholder default paint colour" {
   assert_eq(
-    pdf_colour_hex_for_paint(@pdflite.PdfContentColourFloats([1.0]), false),
+    pdf_colour_hex_for_paint_in_space(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([1.0]),
+      false,
+    ),
     "#000000",
   )
   assert_eq(
-    pdf_colour_hex_for_paint(@pdflite.PdfContentColourFloats([1.0]), true),
+    pdf_colour_hex_for_paint_in_space(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([1.0]),
+      true,
+    ),
     "#FFFFFF",
   )
 }
@@ -127,6 +201,7 @@ test "soft mask SVG keeps transfer-function backdrop pixels" {
     origin_y: 0.0,
     width: 100.0,
     height: 100.0,
+    user_unit: 1.0,
     rotation: 0,
     fonts: [],
     items: [],
@@ -210,6 +285,7 @@ test "adjacent soft-masked paint items share one compositor group" {
     origin_y: 0.0,
     width: 100.0,
     height: 100.0,
+    user_unit: 1.0,
     rotation: 0,
     fonts: [],
     items: [PdfPageItem::Text(text_a), PdfPageItem::Text(text_b)],
@@ -262,6 +338,7 @@ test "svg preserves transparency group metadata and isolation" {
     origin_y: 0.0,
     width: 100.0,
     height: 100.0,
+    user_unit: 1.0,
     rotation: 0,
     fonts: [],
     items: [PdfPageItem::Text(item)],
@@ -311,6 +388,7 @@ test "rotated text uses its source quadrilateral" {
     origin_y: 0.0,
     width: 100.0,
     height: 100.0,
+    user_unit: 1.0,
     rotation: 0,
     fonts: [],
     items: [],
@@ -330,6 +408,7 @@ test "visual quads become affine SVG image transforms" {
     origin_y: 20.0,
     width: 100.0,
     height: 80.0,
+    user_unit: 1.0,
     rotation: 0,
     fonts: [],
     items: [],
@@ -354,6 +433,9 @@ test "visual quads become affine SVG image transforms" {
       alpha_mask_data_uri: None,
       width: Some(1),
       height: Some(1),
+      interpolate: false,
+      alpha_mask_width: None,
+      alpha_mask_height: None,
     }),
     shading: None,
     fill_color: "#000000",
@@ -380,6 +462,7 @@ test "viewport matrix follows pdfjs for a nonzero media box" {
     origin_y: 20.0,
     width: 200.0,
     height: 100.0,
+    user_unit: 1.0,
     rotation: 0,
     fonts: [],
     items: [],
@@ -405,6 +488,7 @@ test "svg rotation uses the unrotated page dimensions" {
     origin_y: 0.0,
     width: 200.0,
     height: 100.0,
+    user_unit: 1.0,
     rotation: 0,
     fonts: [],
     items: [],
@@ -464,6 +548,7 @@ test "svg preserves paint opacity and blend mode" {
     origin_y: 0.0,
     width: 100.0,
     height: 100.0,
+    user_unit: 1.0,
     rotation: 0,
     fonts: [],
     items: [],
@@ -513,6 +598,7 @@ test "svg maps stroked PDF text rendering mode" {
     origin_y: 0.0,
     width: 100.0,
     height: 100.0,
+    user_unit: 1.0,
     rotation: 0,
     fonts: [],
     items: [],
@@ -563,9 +649,11 @@ test "svg paints a path pattern through a reusable definition" {
       y_step: 2.0,
       matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
       tile_svg: "<path d=\"M 0 0 L 1 1\" fill=\"none\"/>",
+      tile_parts: [],
       shading: None,
     }),
     shading_pattern: None,
+    stroke_pattern: None,
     blend_mode: "normal",
     clip_path: None,
     soft_mask: None,
@@ -578,6 +666,7 @@ test "svg paints a path pattern through a reusable definition" {
     origin_y: 0.0,
     width: 100.0,
     height: 100.0,
+    user_unit: 1.0,
     rotation: 0,
     fonts: [],
     items: [],
@@ -611,6 +700,7 @@ test "shading pattern keeps its own matrix outside the path CTM" {
     y_step: 1.0,
     matrix: [2.0, 0.0, 0.0, 2.0, 150.0, 300.0],
     tile_svg: "",
+    tile_parts: [],
     shading: Some(shading),
   }
   let transformed = pdf_pattern_resource_with_ctm(pattern, {
@@ -675,6 +765,7 @@ test "svg lowers a mesh shading triangle" {
     origin_y: 0.0,
     width: 20.0,
     height: 20.0,
+    user_unit: 1.0,
     rotation: 0,
     fonts: [],
     items: [],
@@ -733,6 +824,7 @@ test "svg places clipping definitions before painted elements" {
     origin_y: 0.0,
     width: 100.0,
     height: 100.0,
+    user_unit: 1.0,
     rotation: 0,
     fonts: [],
     items: [],
@@ -849,6 +941,7 @@ test "inline ImageMask keeps a browser mask resource" {
     origin_y: 0.0,
     width: 20.0,
     height: 20.0,
+    user_unit: 1.0,
     rotation: 0,
     fonts: [],
     items: [],
@@ -858,4 +951,323 @@ test "inline ImageMask keeps a browser mask resource" {
   let output = StringBuilder()
   pdf_svg_image(output, page, item, 1.0)
   assert_true(output.to_string().contains("data:image/svg+xml;base64,"))
+}
+
+///|
+fn inline_image_viewer_fixture(
+  dictionary : @syntax.PdfObject,
+  decode_parms : @syntax.PdfObject?,
+  encoded : Bytes,
+) -> PdfViewerDocument raise {
+  let font = @pdflite.PdfFontStandard({
+    font: @pdflite.PdfHelvetica,
+    encoding: @pdflite.PdfWinAnsiEncoding,
+  })
+  let pack = @pdflite.pdf_fontpack_of_standard_font(font)
+  let paper = @geometry.paper_size_make(@geometry.PdfPoint, 40.0, 40.0)
+  let document = @pdflite.pdf_texttopdf_typeset(
+    pack,
+    8.0,
+    paper,
+    @utf8.encode("inline image"),
+  )
+  let page = document.pages_of_pagetree()[0]
+  let ops : Array[@content.PdfContentOp] = [
+    @content.Op_InlineImage(dictionary, decode_parms, encoded),
+  ]
+  let changed_page = {
+    ..page,
+    resources: @syntax.PdfDictionary([]),
+    content: [@pdflite.pdf_content_stream_of_ops(ops)],
+  }
+  let document = document.change_pages([changed_page])
+  open_document(@pdflite.pdf_write_document(document))
+}
+
+///|
+fn inline_fixture_name(text : String) -> @core.PdfName {
+  @core.pdf_name_of_bytes(@utf8.encode(text))
+}
+
+///|
+fn inline_ccitt_viewer_fixture() -> PdfViewerDocument raise {
+  let dictionary : @syntax.PdfObject = @syntax.PdfDictionary([
+    (inline_fixture_name("/W"), @syntax.PdfInteger(8)),
+    (inline_fixture_name("/H"), @syntax.PdfInteger(2)),
+    (
+      inline_fixture_name("/CS"),
+      @syntax.PdfNameObject(inline_fixture_name("/G")),
+    ),
+    (inline_fixture_name("/BPC"), @syntax.PdfInteger(1)),
+    (
+      inline_fixture_name("/F"),
+      @syntax.PdfNameObject(inline_fixture_name("/CCITTFaxDecode")),
+    ),
+  ])
+  let decode_parms : @syntax.PdfObject = @syntax.PdfDictionary([
+    (inline_fixture_name("/K"), @syntax.PdfInteger(-1)),
+    (inline_fixture_name("/Columns"), @syntax.PdfInteger(8)),
+    (inline_fixture_name("/Rows"), @syntax.PdfInteger(2)),
+  ])
+  let raw = try! @core.pdf_bytes_of_int_array([0xF0, 0x00])
+  let encoded = try! @pdflite.pdf_ccitt_g4_encode(8, 2, raw)
+  inline_image_viewer_fixture(dictionary, Some(decode_parms), encoded)
+}
+
+///|
+fn inline_ccitt_g3_viewer_fixture() -> PdfViewerDocument raise {
+  let dictionary : @syntax.PdfObject = @syntax.PdfDictionary([
+    (inline_fixture_name("/W"), @syntax.PdfInteger(8)),
+    (inline_fixture_name("/H"), @syntax.PdfInteger(2)),
+    (
+      inline_fixture_name("/CS"),
+      @syntax.PdfNameObject(inline_fixture_name("/G")),
+    ),
+    (inline_fixture_name("/BPC"), @syntax.PdfInteger(1)),
+    (
+      inline_fixture_name("/F"),
+      @syntax.PdfNameObject(inline_fixture_name("/CCITTFaxDecode")),
+    ),
+  ])
+  let decode_parms : @syntax.PdfObject = @syntax.PdfDictionary([
+    (inline_fixture_name("/K"), @syntax.PdfInteger(0)),
+    (inline_fixture_name("/Columns"), @syntax.PdfInteger(8)),
+    (inline_fixture_name("/Rows"), @syntax.PdfInteger(2)),
+  ])
+  let raw = try! @core.pdf_bytes_of_int_array([0xF0, 0x00])
+  let encoded = try! @pdflite.pdf_ccitt_encode(8, 2, raw)
+  inline_image_viewer_fixture(dictionary, Some(decode_parms), encoded)
+}
+
+///|
+fn inline_decode_viewer_fixture() -> PdfViewerDocument raise {
+  let dictionary : @syntax.PdfObject = @syntax.PdfDictionary([
+    (inline_fixture_name("/W"), @syntax.PdfInteger(4)),
+    (inline_fixture_name("/H"), @syntax.PdfInteger(1)),
+    (
+      inline_fixture_name("/CS"),
+      @syntax.PdfNameObject(inline_fixture_name("/G")),
+    ),
+    (inline_fixture_name("/BPC"), @syntax.PdfInteger(1)),
+    (
+      inline_fixture_name("/Decode"),
+      @syntax.PdfArray([@syntax.PdfInteger(1), @syntax.PdfInteger(0)]),
+    ),
+  ])
+  let raw = try! @core.pdf_bytes_of_int_array([0xA0])
+  inline_image_viewer_fixture(dictionary, None, raw)
+}
+
+///|
+fn inline_mask_viewer_fixture() -> PdfViewerDocument raise {
+  let dictionary : @syntax.PdfObject = @syntax.PdfDictionary([
+    (inline_fixture_name("/W"), @syntax.PdfInteger(4)),
+    (inline_fixture_name("/H"), @syntax.PdfInteger(1)),
+    (inline_fixture_name("/IM"), @syntax.PdfBoolean(true)),
+  ])
+  let raw = try! @core.pdf_bytes_of_int_array([0xA0])
+  inline_image_viewer_fixture(dictionary, None, raw)
+}
+
+///|
+fn inline_predictor_viewer_fixture() -> PdfViewerDocument raise {
+  let dictionary : @syntax.PdfObject = @syntax.PdfDictionary([
+    (inline_fixture_name("/W"), @syntax.PdfInteger(2)),
+    (inline_fixture_name("/H"), @syntax.PdfInteger(2)),
+    (
+      inline_fixture_name("/CS"),
+      @syntax.PdfNameObject(inline_fixture_name("/G")),
+    ),
+    (inline_fixture_name("/BPC"), @syntax.PdfInteger(8)),
+    (
+      inline_fixture_name("/F"),
+      @syntax.PdfNameObject(inline_fixture_name("/FlateDecode")),
+    ),
+  ])
+  let decode_parms : @syntax.PdfObject = @syntax.PdfDictionary([
+    (inline_fixture_name("/Predictor"), @syntax.PdfInteger(12)),
+    (inline_fixture_name("/Colors"), @syntax.PdfInteger(1)),
+    (inline_fixture_name("/BitsPerComponent"), @syntax.PdfInteger(8)),
+    (inline_fixture_name("/Columns"), @syntax.PdfInteger(2)),
+  ])
+  let raw = try! @core.pdf_bytes_of_int_array([10, 20, 30, 40])
+  let predicted = try! @pdflite.pdf_encode_predictor(12, 1, 8, 2, raw)
+  let encoded = @flate.pdf_flate_encode(predicted)
+  inline_image_viewer_fixture(dictionary, Some(decode_parms), encoded)
+}
+
+///|
+test "inline CCITT preserves DecodeParms through the viewer image path" {
+  let viewer = inline_ccitt_viewer_fixture()
+  let page = viewer.page(1).unwrap()
+  guard page.items is [PdfPageItem::Image(image), ..] else {
+    fail("inline CCITT should produce an image item")
+  }
+  guard image.resource is Some(resource) else {
+    fail("inline CCITT should decode into a browser resource")
+  }
+  guard resource.data_uri is Some(uri) else {
+    fail("inline CCITT should produce PNG data")
+  }
+  assert_true(uri.has_prefix("data:image/png;base64,"))
+  let rendered = try! page.render_svg(scale=1.0, rotation=0)
+  assert_true(rendered.contains("data:image/png;base64,"))
+}
+
+///|
+test "inline CCITT Group 3 decodes through the page model" {
+  let viewer = inline_ccitt_g3_viewer_fixture()
+  let page = viewer.page(1).unwrap()
+  guard page.items is [PdfPageItem::Image(image), ..] else {
+    fail("inline Group 3 should produce an image item")
+  }
+  guard image.resource is Some(resource) else {
+    fail("inline Group 3 should produce a resource")
+  }
+  guard resource.data_uri is Some(uri) else {
+    fail("inline Group 3 should produce PNG data")
+  }
+  let png = try! @base64.decode(uri[22:])
+  let parsed = try! @pdflite.pdf_read_png(png)
+  let scanlines = try! @flate.pdf_flate_decode(parsed.idat)
+  assert_eq(parsed.width, 8)
+  assert_eq(parsed.height, 2)
+  assert_eq(scanlines.length(), 2 * (1 + 8 * 3))
+  assert_eq(scanlines[0].to_int(), 0)
+  assert_eq(scanlines[1].to_int(), 255)
+  assert_eq(scanlines[4].to_int(), 255)
+  assert_eq(scanlines[1 + 8 * 3].to_int(), 0)
+  assert_eq(scanlines[1 + 8 * 3 + 1].to_int(), 0)
+}
+
+///|
+test "inline one-bit Decode array is reflected in browser pixels" {
+  let viewer = inline_decode_viewer_fixture()
+  let page = viewer.page(1).unwrap()
+  guard page.items is [PdfPageItem::Image(image), ..] else {
+    fail("inline Decode image should produce an image item")
+  }
+  guard image.resource is Some(resource) else {
+    fail("inline Decode image should produce a resource")
+  }
+  guard resource.data_uri is Some(uri) else {
+    fail("inline Decode image should produce PNG data")
+  }
+  let png = try! @base64.decode(uri[22:])
+  let parsed = try! @pdflite.pdf_read_png(png)
+  let scanlines = try! @flate.pdf_flate_decode(parsed.idat)
+  assert_eq(parsed.width, 4)
+  assert_eq(parsed.height, 1)
+  assert_eq(scanlines.length(), 1 + 4 * 3)
+  assert_eq(scanlines[1].to_int(), 0)
+  assert_eq(scanlines[4].to_int(), 255)
+  assert_eq(scanlines[7].to_int(), 0)
+  assert_eq(scanlines[10].to_int(), 255)
+}
+
+///|
+test "inline ImageMask survives the serialized viewer path" {
+  let viewer = inline_mask_viewer_fixture()
+  let page = viewer.page(1).unwrap()
+  guard page.items is [PdfPageItem::Image(image), ..] else {
+    fail("inline ImageMask should produce an image item")
+  }
+  guard image.resource is Some(resource) else {
+    fail("inline ImageMask should produce a resource")
+  }
+  assert_eq(resource.mime_type, "image/mask")
+  guard resource.mask_data_uri is Some(uri) else {
+    fail("inline ImageMask should produce a mask PNG")
+  }
+  let png = try! @base64.decode(uri[22:])
+  let parsed = try! @pdflite.pdf_read_png(png)
+  let scanlines = try! @flate.pdf_flate_decode(parsed.idat)
+  assert_eq(parsed.width, 4)
+  assert_eq(parsed.height, 1)
+  assert_eq(parsed.color_type, 2)
+  assert_eq(scanlines.length(), 1 + 4 * 3)
+  assert_eq(scanlines[1].to_int(), 0)
+  assert_eq(scanlines[4].to_int(), 255)
+  assert_eq(scanlines[7].to_int(), 0)
+  assert_eq(scanlines[10].to_int(), 255)
+}
+
+///|
+test "inline Flate PNG predictor is decoded before SVG PNG encoding" {
+  let viewer = inline_predictor_viewer_fixture()
+  let page = viewer.page(1).unwrap()
+  guard page.items is [PdfPageItem::Image(image), ..] else {
+    fail("inline predictor image should produce an image item")
+  }
+  guard image.resource is Some(resource) else {
+    fail("inline predictor image should produce a resource")
+  }
+  guard resource.data_uri is Some(uri) else {
+    fail("inline predictor image should produce PNG data")
+  }
+  let png = try! @base64.decode(uri[22:])
+  let parsed = try! @pdflite.pdf_read_png(png)
+  let scanlines = try! @flate.pdf_flate_decode(parsed.idat)
+  assert_eq(parsed.width, 2)
+  assert_eq(parsed.height, 2)
+  assert_eq(scanlines.length(), 2 * (1 + 2 * 3))
+  assert_eq(scanlines[1].to_int(), 10)
+  assert_eq(scanlines[4].to_int(), 20)
+  assert_eq(scanlines[8].to_int(), 30)
+  assert_eq(scanlines[11].to_int(), 40)
+}
+
+///|
+fn page_box_test_page(page_dictionary : String) -> PdfPageModel raise {
+  let viewer = annotation_test_document([
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+    page_dictionary,
+    annotation_test_stream("", ""),
+  ])
+  viewer.page(1).unwrap()
+}
+
+///|
+test "page view intersects crop box and applies user unit" {
+  let page = page_box_test_page(
+    "<< /Type /Page /Parent 2 0 R /MediaBox [10 20 210 320] " +
+    "/CropBox [-10 0 100 200] /UserUnit 2 /Contents 4 0 R /Resources << >> >>",
+  )
+  assert_eq(page.origin_x, 10.0)
+  assert_eq(page.origin_y, 20.0)
+  assert_eq(page.width, 90.0)
+  assert_eq(page.height, 180.0)
+  assert_eq(page.user_unit, 2.0)
+  let viewport = page.viewport(scale=1.0, rotation=0)
+  assert_eq(viewport.scale, 1.0)
+  assert_eq(viewport.user_unit, 2.0)
+  assert_eq(viewport.width, 180.0)
+  assert_eq(viewport.height, 360.0)
+  assert_eq(viewport.matrix, [2.0, 0.0, 0.0, -2.0, -20.0, 400.0])
+  assert_eq(viewport.convert_to_viewport_point({ x: 10.0, y: 20.0, }), {
+    x: 0.0,
+    y: 360.0,
+  })
+  let svg = try! page.render_svg(scale=1.0, rotation=0)
+  assert_true(svg.contains("viewBox=\"0 0 180 360\""))
+}
+
+///|
+test "invalid or disjoint crop boxes fall back to media box" {
+  let invalid = page_box_test_page(
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 120] " +
+    "/CropBox [0 0 0 120] /UserUnit -2 /Contents 4 0 R /Resources << >> >>",
+  )
+  assert_eq(invalid.origin_x, 0.0)
+  assert_eq(invalid.origin_y, 0.0)
+  assert_eq(invalid.width, 100.0)
+  assert_eq(invalid.height, 120.0)
+  assert_eq(invalid.user_unit, 1.0)
+  let disjoint = page_box_test_page(
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 120] " +
+    "/CropBox [200 200 300 300] /Contents 4 0 R /Resources << >> >>",
+  )
+  assert_eq(disjoint.width, 100.0)
+  assert_eq(disjoint.height, 120.0)
 }
