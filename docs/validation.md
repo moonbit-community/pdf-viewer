@@ -287,6 +287,31 @@ moon run tools/text_provenance_corpus.mbtx tools/font_post_cases.json
 moon run tools/visual_test.mbtx tools/font_post_cases.json '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 ```
 
+### Active font bindings in Forms and graphics state
+
+TrueType/Type 3 paint, TrueType text clipping and CID ToUnicode recovery now
+consume the active font object captured by the interpreter. An inherited Form
+font is retained until a new Tf, even when its resource name is shadowed;
+missing Tf resources, q/Q and ExtGState font arrays follow the same binding.
+ExtGState font reads use the viewer's existing metrics/checksum recovery.
+Page and annotation font resources register that binding instead of looking
+the name up again. Page names remain unchanged unless two different active
+font objects share a name, in which case the later binding gets a page-local
+alias. Public records and item indices are unchanged.
+
+Six new regressions cover painted GIDs and clip paths, Form shadowing and
+restoration, host-font resource collisions, Type 3 missing/ExtGState bindings,
+ExtGState metrics and ToUnicode checksum recovery, unchanged source objects,
+and disabled string-byte capture during ordinary rendering. All four backends
+passed **311/311**; interface generation/formatting and all-target checks passed
+with the same 24 existing warnings. No public `.mbti` change was required.
+
+The font manifest replay in `_build/visual-test-1791650411821/` measured **10/10**,
+with no failures or runtime exceptions. All ten viewer PNG hashes match the
+preceding `_build/visual-test-1791647890679/` baseline. These selected real files
+retain their existing differences from PDF.js; the new scope defects are
+demonstrated by the authored regressions, not presented as real-corpus fixes.
+
 ### Font candidate probe
 
 These commands extract original program bytes and call the candidate's public

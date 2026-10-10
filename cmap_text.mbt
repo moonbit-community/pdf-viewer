@@ -229,13 +229,9 @@ fn pdf_decode_cid_codes(
 ///|
 fn pdf_viewer_tounicode_recovery_for_font(
   document : @pdflite.PdfDocument,
-  resources : @syntax.PdfObject,
-  font_name : String,
+  font_object : @syntax.PdfObject?,
 ) -> PdfViewerCMapRecovery? {
-  guard pdf_viewer_ttf_font_object(document, resources, font_name)
-    is Some(font_object) else {
-    return None
-  }
+  guard font_object is Some(font_object) else { return None }
   guard document.lookup_direct(pdf_name_key("/ToUnicode"), font_object)
     is Some(stream) else {
     return None
@@ -248,7 +244,7 @@ fn pdf_apply_cid_text_op(
   document : @pdflite.PdfDocument,
   state : @pdflite.PdfContentOperatorState,
   font : @pdflite.PdfCIDKeyedFont,
-  resources : @syntax.PdfObject,
+  font_object : @syntax.PdfObject?,
   op : @content.PdfContentOp,
 ) -> (
   @pdflite.PdfContentOperatorResourceResult,
@@ -269,9 +265,7 @@ fn pdf_apply_cid_text_op(
   let original_font = @pdflite.PdfFontCIDKeyed(font)
   let recovery = pdf_viewer_cmap_recovery_for_font(document, font)
   let unicode_recovery = pdf_viewer_tounicode_recovery_for_font(
-    document,
-    resources,
-    state.text_state.font,
+    document, font_object,
   )
   let vertical = pdf_viewer_font_is_vertical_with_recovery(
     original_font, recovery,

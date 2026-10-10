@@ -172,7 +172,7 @@ test "recovered ToUnicode takes precedence over CID collection fallback" {
     document.document,
     state,
     font_without_reader_map,
-    page.resources,
+    Some(@syntax.PdfIndirect(5)),
     @content.Op_Tj(b"\xF0\x01\x02\x03"),
   )
   guard result.entries[0].object is @pdflite.PdfContentGlyphObject(_, _, text) else {
@@ -226,7 +226,7 @@ test "partial ToUnicode falls back to the Adobe CID collection map" {
     document.document,
     state,
     font_with_collection_fallback,
-    page.resources,
+    Some(@syntax.PdfIndirect(5)),
     @content.Op_Tj(b"\xF0\x01\x02\x03"),
   )
   guard result.entries[0].object is @pdflite.PdfContentGlyphObject(_, _, text) else {
@@ -261,8 +261,7 @@ test "named ToUnicode UseCMap recovers reader-dropped Adobe Unicode entries" {
   assert_true(to_unicode_source.contains("Adobe-Japan1-UCS2"))
   let unicode_recovery = pdf_viewer_tounicode_recovery_for_font(
     document.document,
-    page.resources,
-    "/F1",
+    Some(@syntax.PdfIndirect(5)),
   ).unwrap()
   assert_eq(unicode_recovery.usecmap, Some(pdf_name_key("/Adobe-Japan1-UCS2")))
   assert_eq(
@@ -299,7 +298,7 @@ test "named ToUnicode UseCMap recovers reader-dropped Adobe Unicode entries" {
     document.document,
     state,
     font_without_reader_map,
-    page.resources,
+    Some(@syntax.PdfIndirect(5)),
     @content.Op_Tj(b"\x03\x4B"),
   )
   guard result.entries[0].object is @pdflite.PdfContentGlyphObject(_, _, text) else {
@@ -368,7 +367,7 @@ test "reader-loss recovery composes indirect UseCMap streams locally first" {
     document.document,
     state,
     font_without_reader_tables,
-    page.resources,
+    Some(@syntax.PdfIndirect(5)),
     @content.Op_Tj(b"\xF0\x01\x02\x03"),
   )
   guard result.entries[0].object is @pdflite.PdfContentGlyphObject(_, _, text) else {

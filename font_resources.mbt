@@ -1,47 +1,4 @@
 ///|
-fn pdf_font_resources_of_items(
-  document : @pdflite.PdfDocument,
-  page_number : Int,
-  items : ArrayView[PdfPageItem],
-  fallbacks : ArrayView[PdfFontFallback],
-) -> Array[PdfFontResource] {
-  let fonts : Array[PdfFontResource] = []
-  let names : Array[String] = []
-  for item in items {
-    match item {
-      PdfPageItem::Text(text) if !names.contains(text.font) => {
-        names.push(text.font)
-        fonts.push(
-          pdf_font_resource_of(document, page_number, text.font, fallbacks),
-        )
-      }
-      _ => ()
-    }
-  }
-  fonts
-}
-
-///|
-fn pdf_font_base_name_of(
-  document : @pdflite.PdfDocument,
-  page_number : Int,
-  name : String,
-) -> String {
-  try document.list_fonts([page_number]) catch {
-    _ => []
-  } noraise {
-    entries => {
-      for entry in entries {
-        if entry.name == name && entry.basefont != "" {
-          return entry.basefont
-        }
-      }
-      name
-    }
-  }
-}
-
-///|
 /// Resolve a PDF base-font name to the canonical Standard 14 face. Subset
 /// prefixes are accepted because malformed producers sometimes add one even
 /// though the standard face is not embedded.
@@ -139,36 +96,6 @@ fn pdf_standard14_display_text(
       charcode == 0x9D => "•"
     _ => text
   }
-}
-
-///|
-fn pdf_font_resource_of(
-  document : @pdflite.PdfDocument,
-  page_number : Int,
-  name : String,
-  fallbacks : ArrayView[PdfFontFallback],
-) -> PdfFontResource {
-  let base_name = pdf_font_base_name_of(document, page_number, name)
-  let bytes = try document.extract_fontfile_bytes(page_number, name) catch {
-    @core.InvalidFlateData =>
-      try {
-        for entry in document.list_fonts([page_number]) {
-          if entry.name == name {
-            let font = pdf_read_font_for_viewer(document, entry.font)
-            break pdf_viewer_ttf_embedded_bytes(document, font)
-          }
-        } nobreak {
-          None
-        }
-      } catch {
-        _ => None
-      }
-    _ => None
-  } noraise {
-    bytes => bytes
-  }
-  let fallback = pdf_font_fallback_for(fallbacks, name, base_name)
-  pdf_font_resource_from_bytes(name, base_name, bytes, name, fallback~)
 }
 
 ///|

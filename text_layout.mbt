@@ -1,4 +1,31 @@
 ///|
+/// Apply the same font recovery used by Tf to an ExtGState font binding.
+fn pdf_apply_extgstate_font_for_viewer(
+  document : @pdflite.PdfDocument,
+  state : @pdflite.PdfContentOperatorState,
+  extgstate : @syntax.PdfObject,
+) -> @pdflite.PdfContentOperatorState raise @core.PdfError {
+  match document.lookup_direct(pdf_name_key("/Font"), extgstate) {
+    Some(@syntax.PdfArray([@syntax.PdfIndirect(number) as object, size])) => {
+      let font = pdf_read_font_for_viewer(document, object)
+      let font_size = document.get_number(size) catch {
+        _ => state.text_state.font_size
+      }
+      {
+        ..state,
+        text_state: {
+          ..state.text_state,
+          font: "__EXTGSTATE__" + number.to_string(),
+          font_size,
+          current_font: font,
+        },
+      }
+    }
+    _ => state
+  }
+}
+
+///|
 /// Collect entries and glyph placements from one layout pass so the paint,
 /// selection, text clips and following operators share the corrected advance.
 fn pdf_apply_op_for_viewer(
@@ -6,6 +33,7 @@ fn pdf_apply_op_for_viewer(
   state : @pdflite.PdfContentOperatorState,
   resources : @syntax.PdfObject,
   op : @content.PdfContentOp,
+  font_object : @syntax.PdfObject?,
 ) -> (
   @pdflite.PdfContentOperatorResourceResult,
   Array[@pdflite.PdfContentTextGlyphPlacement],
@@ -60,7 +88,7 @@ fn pdf_apply_op_for_viewer(
     | @content.Op_double_quote(_, _, _) => {
       let original_font = state.text_state.current_font
       if original_font is @pdflite.PdfFontCIDKeyed(font) {
-        return pdf_apply_cid_text_op(document, state, font, resources, op)
+        return pdf_apply_cid_text_op(document, state, font, font_object, op)
       }
       let layout = state.text_state.content_apply_text_op(
         original_font,

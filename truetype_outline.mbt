@@ -903,8 +903,8 @@ fn pdf_viewer_ttf_paint_path(
 /// Resolve the page-space geometry independently of painting and clipping.
 fn pdf_truetype_path_of_pdf_glyph(
   document : @pdflite.PdfDocument,
-  resources : @syntax.PdfObject,
-  font_name : String,
+  font : @pdflite.PdfFont,
+  font_object : @syntax.PdfObject?,
   charcode : Int,
   glyph_matrix : @geometry.TransformMatrix?,
   origin_x : Double,
@@ -915,12 +915,6 @@ fn pdf_truetype_path_of_pdf_glyph(
     Some(value) => value
     None => return None
   }
-  let font_object = match
-    pdf_viewer_ttf_font_object(document, resources, font_name) {
-    Some(value) => value
-    None => return None
-  }
-  let font = pdf_read_font_for_viewer(document, font_object)
   let bytes = match font {
     @pdflite.PdfFontSimple(
       { fonttype: @pdflite.PdfSimpleFontType::PdfTrueType, .. }
@@ -936,8 +930,10 @@ fn pdf_truetype_path_of_pdf_glyph(
     @pdflite.PdfFontSimple(
       { fonttype: @pdflite.PdfSimpleFontType::PdfTrueType, .. } as simple
     ) => pdf_viewer_ttf_simple_gid(simple, bytes, charcode)
-    @pdflite.PdfFontCIDKeyed(cid_font) =>
+    @pdflite.PdfFontCIDKeyed(cid_font) => {
+      guard font_object is Some(font_object) else { return None }
       pdf_viewer_ttf_cid_to_gid(document, font_object, cid_font, charcode)
+    }
     _ => return None
   }
   pdf_viewer_ttf_outline_path(
@@ -950,8 +946,8 @@ fn pdf_truetype_path_of_pdf_glyph(
 /// bounds and advance widths never determine the outline scale.
 fn pdf_truetype_outline_of_pdf_glyph(
   document : @pdflite.PdfDocument,
-  resources : @syntax.PdfObject,
-  font_name : String,
+  font : @pdflite.PdfFont,
+  font_object : @syntax.PdfObject?,
   charcode : Int,
   glyph_matrix : @geometry.TransformMatrix?,
   rendering_mode : Int,
@@ -965,8 +961,7 @@ fn pdf_truetype_outline_of_pdf_glyph(
 ) -> String? raise @core.PdfError {
   match
     pdf_truetype_path_of_pdf_glyph(
-      document, resources, font_name, charcode, glyph_matrix, origin_x, origin_y,
-      page_height,
+      document, font, font_object, charcode, glyph_matrix, origin_x, origin_y, page_height,
     ) {
     Some("") => Some("")
     Some(path) =>

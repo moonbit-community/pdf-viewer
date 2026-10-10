@@ -3,8 +3,7 @@
 /// A text object contributes one nonzero path when ET is reached.
 priv struct PdfCollectedTextClipGlyph {
   font : @pdflite.PdfFont
-  resources : @syntax.PdfObject
-  font_name : String
+  font_object : @syntax.PdfObject?
   charcode : Int
   matrix : @geometry.TransformMatrix
 }
@@ -20,7 +19,7 @@ priv struct PdfCollectedTextClipGroup {
 ///|
 fn pdf_collect_text_clip_glyphs(
   state : @pdflite.PdfContentOperatorState,
-  resources : @syntax.PdfObject,
+  font_object : @syntax.PdfObject?,
   glyphs : ArrayView[@pdflite.PdfContentTextGlyphPlacement],
 ) -> Array[PdfCollectedTextClipGlyph] {
   let text = state.text_state
@@ -38,8 +37,7 @@ fn pdf_collect_text_clip_glyphs(
     for glyph in glyphs => {
       {
         font: text.current_font,
-        resources,
-        font_name: text.font,
+        font_object,
         charcode: glyph.charcode,
         matrix: pdf_glyph_transform(state, glyph),
       }
@@ -96,8 +94,8 @@ fn pdf_text_clip_path_of_group(
       None =>
         pdf_truetype_path_of_pdf_glyph(
           document,
-          glyph.resources,
-          glyph.font_name,
+          glyph.font,
+          glyph.font_object,
           glyph.charcode,
           Some(glyph.matrix),
           origin_x,

@@ -988,6 +988,13 @@ fn pdf_page_model(
 ) -> PdfPageModel raise @core.PdfError {
   let rectangle = pdf_page_view_box(document, page)
   let user_unit = pdf_page_user_unit(document, page)
+  let page_fonts : PdfPageFontScope = {
+    fonts: [],
+    sources: [],
+    fallbacks: [
+      for fallback in font_fallbacks => fallback
+    ],
+  }
   let items = pdf_items_of_page(
     document,
     page,
@@ -995,14 +1002,13 @@ fn pdf_page_model(
     rectangle.min_y,
     rectangle.max_x - rectangle.min_x,
     rectangle.max_y - rectangle.min_y,
+    page_fonts~,
     optional_content_view=pdf_optional_content_view(
       document, optional_content_state,
     ),
   )
   let text = pdf_text_of_items(items)
-  let fonts = pdf_font_resources_of_items(
-    document, page_number, items, font_fallbacks,
-  )
+  let fonts = page_fonts.fonts
   let next_index = Ref(0)
   for item in items {
     next_index.val = next_index.val.max(pdf_page_item_index(item) + 1)
@@ -1119,6 +1125,7 @@ priv struct PdfCollectedEntry {
   state : @pdflite.PdfContentOperatorState
   text_glyph : @pdflite.PdfContentTextGlyphPlacement?
   text_source : PdfCollectedTextSource?
+  font_object : @syntax.PdfObject?
   resources : @syntax.PdfObject
   inline_image : (@syntax.PdfObject, @syntax.PdfObject?, @core.PdfBytes)?
   clip_paths : Array[@shape.PdfPath]
@@ -1165,11 +1172,7 @@ fn pdf_collected_entries_of_page(
     false,
     false,
     optional_content_view~,
-    text_source_scope=if collect_text_sources {
-      Some(pdf_text_scope_for_page(page))
-    } else {
-      None
-    },
+    text_source_scope=Some(pdf_text_scope_for_page(page, collect_text_sources)),
   )
 }
 
@@ -1295,6 +1298,15 @@ fn pdf_collected_entries_of_ops(
   initial_optional_content_visible? : Bool = true,
   text_source_scope? : PdfTextCollectScope? = None,
 ) -> Array[PdfCollectedEntry] raise @core.PdfError {
+  let text_source_scope = Some(
+    text_source_scope.unwrap_or({
+      content_streams: [],
+      form_path: [],
+      font_object: None,
+      font_stack: [],
+      collect_sources: false,
+    }),
+  )
   let mut state = initial
   let mut soft_mask = initial_soft_mask
   let group_path : Array[PdfTransparencyGroup] = [
@@ -1390,7 +1402,11 @@ fn pdf_collected_entries_of_ops(
           }
           None => {
             let (result, glyphs) = pdf_apply_op_for_viewer(
-              document, state, resources, op,
+              document,
+              state,
+              resources,
+              op,
+              text_source_scope.bind(scope => scope.font_object),
             )
             let mut glyph_index = 0
             for entry in result.entries {
@@ -1410,6 +1426,7 @@ fn pdf_collected_entries_of_ops(
                   state: result.state,
                   text_glyph: glyphs.get(glyph_index),
                   text_source: None,
+                  font_object: None,
                   resources,
                   inline_image: None,
                   clip_paths: [
@@ -1447,6 +1464,7 @@ fn pdf_collected_entries_of_ops(
               state: result.state,
               text_glyph: None,
               text_source: None,
+              font_object: None,
               resources,
               inline_image: Some((dictionary, decode_parms, data)),
               clip_paths: [
@@ -1542,7 +1560,11 @@ fn pdf_collected_entries_of_ops(
       }
       _ => {
         let (result, glyphs) = pdf_apply_op_for_viewer(
-          document, state, resources, op,
+          document,
+          state,
+          resources,
+          op,
+          text_source_scope.bind(scope => scope.font_object),
         )
         if op is @content.Op_BT {
           pending_text_clip.clear()
@@ -1564,7 +1586,11 @@ fn pdf_collected_entries_of_ops(
             initial_optional_content_visible,
           ) {
           pending_text_clip.append(
-            pdf_collect_text_clip_glyphs(result.state, resources, glyphs[:]),
+            pdf_collect_text_clip_glyphs(
+              result.state,
+              text_source_scope.bind(scope => scope.font_object),
+              glyphs[:],
+            ),
           )
         }
         let mut glyph_index = 0
@@ -1589,6 +1615,7 @@ fn pdf_collected_entries_of_ops(
                 glyphs[:],
                 glyph_index,
               ),
+              font_object: text_source_scope.bind(scope => scope.font_object),
               resources,
               inline_image: None,
               clip_paths: [
@@ -1631,6 +1658,7 @@ fn pdf_items_of_page(
   height : Double,
   index_offset? : Int = 0,
   appearance_fonts? : PdfAppearanceFontScope,
+  page_fonts? : PdfPageFontScope,
   optional_content_view? : PdfOptionalContentView? = None,
 ) -> Array[PdfPageItem] raise @core.PdfError {
   let collected_entries = pdf_collected_entries_of_page(
@@ -1692,8 +1720,8 @@ fn pdf_items_of_page(
         }
         let type3_outline = pdf_type3_outline_of_glyph(
           document,
-          collected.resources,
-          state.font,
+          collected.state.text_state.current_font,
+          collected.font_object,
           charcode,
           pdf_quad_of_box(entry.bounding_box),
           state.rendering_mode,
@@ -1754,8 +1782,8 @@ fn pdf_items_of_page(
           None =>
             pdf_truetype_outline_of_pdf_glyph(
               document,
-              collected.resources,
-              state.font,
+              collected.state.text_state.current_font,
+              collected.font_object,
               charcode,
               glyph_matrix,
               state.rendering_mode,
@@ -1791,8 +1819,23 @@ fn pdf_items_of_page(
                   collected.resources,
                   state.font,
                   scope,
+                  active_font=(
+                    collected.state.text_state.current_font,
+                    collected.font_object,
+                  ),
                 )
-              None => state.font
+              None =>
+                match page_fonts {
+                  Some(scope) =>
+                    pdf_page_font_name(
+                      document,
+                      collected.state.text_state.current_font,
+                      collected.font_object,
+                      state.font,
+                      scope,
+                    )
+                  None => state.font
+                }
             },
             font_size: state.font_size,
             rendering_mode: state.rendering_mode,
@@ -2067,7 +2110,9 @@ fn pdf_apply_extgstate_for_viewer(
             output, extgstate,
           )
           output = document.content_apply_extgstate_dash_op(output, extgstate)
-          output = document.content_apply_extgstate_font_op(output, extgstate)
+          output = pdf_apply_extgstate_font_for_viewer(
+            document, output, extgstate,
+          )
           output = document.content_apply_extgstate_overprint_op(
             output, extgstate,
           )

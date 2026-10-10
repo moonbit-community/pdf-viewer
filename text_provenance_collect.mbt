@@ -11,6 +11,7 @@ priv struct PdfTextCollectScope {
   form_path : Array[PdfTextFormInvocation]
   mut font_object : @syntax.PdfObject?
   font_stack : Array[@syntax.PdfObject?]
+  collect_sources : Bool
 }
 
 ///|
@@ -22,12 +23,16 @@ fn pdf_text_object_number(object : @syntax.PdfObject) -> Int? {
 }
 
 ///|
-fn pdf_text_scope_for_page(page : @page.PdfPage) -> PdfTextCollectScope {
+fn pdf_text_scope_for_page(
+  page : @page.PdfPage,
+  collect_sources : Bool,
+) -> PdfTextCollectScope {
   {
     content_streams: page.content.map(pdf_text_object_number),
     form_path: [],
     font_object: None,
     font_stack: [],
+    collect_sources,
   }
 }
 
@@ -59,6 +64,7 @@ fn pdf_text_scope_for_form(
     // The interpreter enters a Form with an implicit q and retains outer
     // frames. Mirror these too, so unmatched Q recovery keeps the same font.
     font_stack: [..parent.font_stack, parent.font_object],
+    collect_sources: parent.collect_sources,
   })
 }
 
@@ -116,6 +122,9 @@ fn pdf_collect_text_string_sources(
   operator_index : Int,
 ) -> Array[PdfCollectedTextSource] {
   guard scope is Some(scope) else { return [] }
+  if !scope.collect_sources {
+    return []
+  }
   let operands : Array[(Int, Bytes)] = []
   match op {
     @content.Op_Tj(bytes) | @content.Op_quote(bytes) =>

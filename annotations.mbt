@@ -40,10 +40,15 @@ fn pdf_annotation_font_name(
   resources : @syntax.PdfObject,
   name : String,
   scope : PdfAppearanceFontScope,
+  active_font? : (@pdflite.PdfFont, @syntax.PdfObject?),
 ) -> String {
-  let object = pdf_viewer_ttf_font_object(document, resources, name).unwrap_or(
-    @syntax.PdfNull,
-  )
+  let object = match active_font {
+    Some((_, object)) => object.unwrap_or(@syntax.PdfNull)
+    None =>
+      pdf_viewer_ttf_font_object(document, resources, name).unwrap_or(
+        @syntax.PdfNull,
+      )
+  }
   for i, source in scope.sources {
     if source.0 == name && source.1 == object {
       return scope.fonts[i].name
@@ -56,7 +61,10 @@ fn pdf_annotation_font_name(
   }
   let bytes = pdf_viewer_ttf_embedded_bytes(
     document,
-    document.read_font(object),
+    match active_font {
+      Some((font, _)) => font
+      None => pdf_read_font_for_viewer(document, object)
+    },
   ) catch {
     _ => None
   }
