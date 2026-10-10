@@ -642,6 +642,7 @@ test "svg paints a path pattern through a reusable definition" {
     line_join: 0,
     dash_array: [],
     dash_phase: 0.0,
+    stroke: None,
     pattern: Some({
       name: "/p",
       bbox: { min_x: 0.0, min_y: 0.0, max_x: 2.0, max_y: 2.0, },

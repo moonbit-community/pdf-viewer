@@ -159,6 +159,9 @@ pub(all) struct PdfPathItem {
   line_join : Int
   dash_array : Array[Double]
   dash_phase : Double
+  /// Affine stroke geometry and metrics. The fields above retain their legacy
+  /// page-space approximation for consumers that do not use affine strokes.
+  stroke : PdfPathStroke?
   /// Non-stroking tiling paint; independent of the stroking colour space.
   pattern : PdfPatternResource?
   /// Stroking tiling paint. Shading patterns are retained for future pixel
@@ -170,6 +173,19 @@ pub(all) struct PdfPathItem {
   soft_mask : PdfSoftMaskResource?
   group : PdfTransparencyGroup?
   group_path : Array[PdfTransparencyGroup]
+} derive(Eq, Debug, ToJson)
+
+///|
+/// A stroke in paint-time user space, with y reversed like an SVG path.
+/// `transform` maps it into the unscaled, top-left SVG page coordinate system.
+/// Width, dash lengths and phase are unscaled user-space values.
+pub(all) struct PdfPathStroke {
+  svg_path : String
+  transform : Array[Double]
+  line_width : Double
+  dash_array : Array[Double]
+  dash_phase : Double
+  miter_limit : Double
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -1876,6 +1892,19 @@ fn pdf_items_of_page(
             line_join,
             dash_array,
             dash_phase,
+            stroke: if drawn.stroked {
+              Some(
+                pdf_path_stroke(
+                  drawn.path,
+                  collected.state,
+                  origin_x,
+                  origin_y,
+                  height,
+                ),
+              )
+            } else {
+              None
+            },
             pattern,
             stroke_pattern,
             shading_pattern,

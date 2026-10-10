@@ -256,6 +256,7 @@ pub(all) struct PdfPathItem {
   line_join : Int
   dash_array : Array[Double]
   dash_phase : Double
+  stroke : PdfPathStroke?
   pattern : PdfPatternResource?
   stroke_pattern : PdfPatternResource?
   shading_pattern : PdfShadingResource?
@@ -273,6 +274,23 @@ pub fn PdfPathItem::not_equal(Self, Self) -> Bool
 pub fn PdfPathItem::to_json(Self) -> Json
 #deprecated
 pub fn PdfPathItem::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfPathStroke {
+  svg_path : String
+  transform : Array[Double]
+  line_width : Double
+  dash_array : Array[Double]
+  dash_phase : Double
+  miter_limit : Double
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfPathStroke::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfPathStroke::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfPathStroke::to_json(Self) -> Json
+#deprecated
+pub fn PdfPathStroke::to_repr(Self) -> @debug.Repr
 
 pub(all) struct PdfPatternResource {
   name : String

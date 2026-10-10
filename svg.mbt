@@ -333,9 +333,9 @@ fn pdf_svg_path(
     ""
   } else {
     " stroke-dasharray=\"" +
-    pdf_svg_dash_array(path.dash_array, scale) +
+    pdf_svg_dash_array(path.dash_array, 1.0) +
     "\" stroke-dashoffset=\"" +
-    (path.dash_phase * scale).to_string() +
+    path.dash_phase.to_string() +
     "\""
   }
   pdf_svg_clip_defs(output, path.index, path.clip_path, scale)
@@ -360,13 +360,13 @@ fn pdf_svg_path(
     "\" fill=\"" +
     fill +
     "\" stroke=\"" +
-    stroke +
+    (if path.stroke is Some(_) { "none" } else { stroke }) +
     "\" fill-opacity=\"" +
     path.fill_alpha.to_string() +
     "\" stroke-opacity=\"" +
     path.stroke_alpha.to_string() +
     "\" stroke-width=\"" +
-    (path.line_width * scale).to_string() +
+    path.line_width.to_string() +
     "\" stroke-linecap=\"" +
     pdf_svg_line_cap(path.line_cap) +
     "\" stroke-linejoin=\"" +
@@ -381,6 +381,11 @@ fn pdf_svg_path(
     Some(shading) =>
       pdf_svg_shading_pattern_path(output, page, path, shading, scale)
     None => ()
+  }
+  if path.stroked && path.stroke is Some(geometry) {
+    pdf_svg_clip_open(output, path.index, path.clip_path)
+    pdf_svg_affine_stroke(output, path, geometry, scale, stroke)
+    pdf_svg_clip_close(output, path.index, path.clip_path)
   }
   pdf_svg_soft_mask_close(output, path.index, path.soft_mask)
 }
@@ -545,7 +550,14 @@ fn pdf_svg_pattern_defs(
         "\" height=\"" +
         pattern.y_step.to_string() +
         "\" patternTransform=\"" +
-        pdf_svg_shading_transform(page, pattern.matrix, 1.0) +
+        (if prefix == "pdf-stroke-pattern-" {
+          pdf_svg_stroke_pattern_transform(
+            path.stroke,
+            pdf_svg_shading_transform(page, pattern.matrix, 1.0),
+          )
+        } else {
+          pdf_svg_shading_transform(page, pattern.matrix, 1.0)
+        }) +
         "\">" +
         tile_svg +
         "</pattern></defs>",
