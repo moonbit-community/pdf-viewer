@@ -71,9 +71,32 @@ TODO 范围：R-02、F-03、F-05、F-06、F-07、T-01、T-02、T-04。
   零宽控制符、显式换行与跨方向 run 空隙共享 separator 和 UTF-16 来源。
   8 项专用回归、四后端 345/345 和 10 份真实字体样本的来源检查通过。
 
-F-07、T-01 和 T-02 已达到各自主路径验收；其余项目继续保持未勾选。后续仍需字体库扩展、其它 cmap/post 格式和损坏字体覆盖、
-统一恢复策略和真实 UseCMap/reader 损坏样本。几何段落/短表格是无 tag PDF 的启发式；
-无法核对的 bidi 置换保留内容流顺序，不承诺恢复作者未编码的结构。
+- cmap format 2 的双字节 subheader/别名/相对 offset 和 post 2.5 的 signed index
+  转为现有库可读的格式；截断目录、错误 offset、空表、symbol/复合轮廓保留边界检查。
+  Type 1 非默认 FontMatrix 与损坏 charstring、CFF 名称缺失与坏子程序保持原复制文本、
+  PDF advance 和后续页面绘制；无法使用的程序进入有诊断的宿主回退。
+  Type 1 hint replacement 保留 OtherSubr 参数，flex 使用相对坐标；真实
+  `tracemonkey.pdf` 第一页的 1,549 个缺失嵌入轮廓已全部恢复。
+- 字体字典、Encoding/Differences、metrics 和 Unicode 缺失/损坏使用共同恢复入口。
+  正常编码优先，非法 ToUnicode 目标回到 Encoding，空串/字面 U+FFFD 不误报为损坏。
+  CID 宽度/CMap 的展开量在 reader 前检查，过大 CMap 留在现有惰性表示中。
+  `text_recovery_diagnostics(n)` 记录活动字体、原字节和资源对象，空复制字形也可定位。
+- 四份固定版本的真实 Adobe Japan1 文本 CMap 验证命名/间接父映射、缺 codespace、
+  本地覆盖、WMode 和 UTF32 来源；PDF 包装是自建 fixture，来源及许可见
+  `assets/cmaps/test-sources/`，不冒充自然出现的 PDF.js corpus 文件。
+- reader 继续复用 pdflite；循环/过深页树先限额检查，在独立对象表内保留有效分支，
+  原内容流/字体引用和文件来源不变。`reader_diagnostics()` 定位跳过节点。
+  优先使用其严格 xref 入口，再做有限页树检查，避免 JS 在依赖的提前探测中栈溢出。
+  989 份真实 PDF 载入扫描有 952 份成功、37 份失败；报告保留密码/认证、坏流/xref
+  和不可恢复页树的文件及错误。载入成功不代表渲染或像素一致。
+
+本主线的 8 个 TODO 主路径已全部验收：四后端各 374/374、Chromium 39/39，
+10 份字体及 5 份 reader 来源检查通过，10/16/5 个字体/标准字体/reader 页组合
+均完成 PDF.js 对照测量。证据和真实差异见 [A1 收尾验证](../validation.md#a1-completion-validation)。
+保留的限制包括罕见 cmap 8/10/13、厂商 post、字体库尚不支持的缺表子集/复合轮廓，
+多 FD 的 CID Type 1、不可恢复损坏流，以及无 tags 的歧义几何段落/短表格。
+这些分支保留回退和诊断；无法核对的 bidi 保留内容顺序，不承诺恢复作者未编码的结构。
+整页描边、图像/合成和栅格化差异仍由 A2 与视觉基线跟踪。
 
 ## 可修改的文件
 

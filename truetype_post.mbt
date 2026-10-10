@@ -51,7 +51,25 @@ fn pdf_viewer_ttf_read_post(
       }
       table.to_owned()
     }
-    // Version 3 has no names. Deprecated 2.5 and vendor formats stay absent.
+    Some(0x00025000) => {
+      guard pdf_viewer_ttf_u16(table, 32) == Some(glyph_count) &&
+        glyph_count <= 258 &&
+        glyph_count <= table.length() - 34 else {
+        return None
+      }
+      let normalized = Array::make(34 + glyph_count * 2, b'\x00')
+      @font.write_be32(normalized, 0, 0x00020000)
+      @font.write_be16(normalized, 32, glyph_count)
+      for index in 0..<glyph_count {
+        let byte = table[34 + index].to_int()
+        let delta = if byte >= 128 { byte - 256 } else { byte }
+        let name = index + delta
+        guard name >= 0 && name < 258 else { return None }
+        @font.write_be16(normalized, 34 + index * 2, name)
+      }
+      Bytes::from_array(normalized)
+    }
+    // Version 3 intentionally supplies no names; vendor formats stay absent.
     _ => return None
   }
   let decoded = @font.parse_post(@font.BinaryReader::new(input), 0, glyph_count)

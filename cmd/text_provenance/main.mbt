@@ -10,6 +10,7 @@ fn inspect(
   page : @pdf.PdfPageModel,
   provenance : Array[@pdf.PdfTextProvenance],
   lexical : Array[@pdf.PdfTextLexicalSource],
+  diagnostics : Array[@pdf.PdfTextRecoveryDiagnostic],
   source_length : Int,
 ) -> Json {
   let errors : Array[String] = []
@@ -174,6 +175,27 @@ fn inspect(
   if structure.text != text || structured_sources != page.text_sources() {
     errors.push("structured runs do not preserve logical source order")
   }
+  let origins : Map[Int, @pdf.PdfTextLexicalSource] = Map([])
+  for origin in lexical {
+    origins[origin.item_index] = origin
+  }
+  let kinds : Map[String, Int] = Map([])
+  for observation in diagnostics {
+    let key = ToJson::to_json(observation.kind).stringify()
+    kinds[key] = kinds.get(key).unwrap_or(0) + 1
+    match origins.get(observation.item_index) {
+      Some(origin) if origin.logical_source == observation.source &&
+        origin.string_source == observation.string_source => ()
+      _ => errors.push("recovery observation disagrees with its glyph origin")
+    }
+    match page.items.get(observation.item_index) {
+      Some(@pdf.Text(item)) if observation.page == page.number &&
+        observation.charcode == item.charcode &&
+        observation.font == item.font => ()
+      _ =>
+        errors.push("recovery observation does not identify its painted glyph")
+    }
+  }
   {
     "passed": errors.is_empty(),
     "logical_glyphs": provenance.length(),
@@ -188,6 +210,8 @@ fn inspect(
     "file_lexical_spans": file_spans,
     "text_runs": run_count,
     "paragraphs": structure.paragraphs.length(),
+    "recovery_observations": diagnostics.length(),
+    "diagnostic_kinds": kinds.to_json(),
     "font_objects": ToJson::to_json(fonts),
     "font_program_objects": ToJson::to_json(programs),
     "errors": ToJson::to_json(errors),
@@ -211,7 +235,8 @@ fn run() -> Int {
     }
     let provenance = viewer.text_provenance(number).unwrap()
     let lexical = viewer.text_lexical_sources(number).unwrap()
-    let checks = inspect(page, provenance, lexical, bytes.length())
+    let diagnostics = viewer.text_recovery_diagnostics(number).unwrap()
+    let checks = inspect(page, provenance, lexical, diagnostics, bytes.length())
     let report : Json = {
       "file": args[1],
       "page": number,
@@ -221,6 +246,8 @@ fn run() -> Int {
       "provenance": ToJson::to_json(provenance),
       "lexical_sources": ToJson::to_json(lexical),
       "text_structure": ToJson::to_json(page.text_structure()),
+      "text_recovery_diagnostics": diagnostics.to_json(),
+      "reader_diagnostics": viewer.reader_diagnostics().to_json(),
     }
     @fs.write_string_to_file(args[2], report.stringify(indent=2))
     println(checks.stringify())

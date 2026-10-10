@@ -232,7 +232,9 @@ fn pdf_viewer_tounicode_recovery_for_font(
   font_object : @syntax.PdfObject?,
 ) -> PdfViewerCMapRecovery? {
   guard font_object is Some(font_object) else { return None }
-  guard document.lookup_direct(pdf_name_key("/ToUnicode"), font_object)
+  guard pdf_direct_for_viewer(document, font_object).bind(object => {
+      object.lookup_immediate(pdf_name_key("/ToUnicode"))
+    })
     is Some(stream) else {
     return None
   }

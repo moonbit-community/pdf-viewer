@@ -371,7 +371,8 @@ test "Type 1 seac applies accent sidebearing displacement" {
 
 ///|
 test "Type 1 flex othersubr produces two cubic curves" {
-  let values = [0, 0, 10, 0, 20, 10, 30, 10, 40, 10, 50, 0, 60, 0, 50, 60, 0]
+  // Flex operands are relative deltas, followed by depth and final position.
+  let values = [0, 0, 10, 0, 10, 10, 10, 0, 10, 0, 10, -10, 10, 0, 50, 60, 0]
   let code : Array[Int] = [139, 248, 136, 13, 139, 139, 21, 139, 140, 12, 16]
   for value in values {
     code.push(value + 139)

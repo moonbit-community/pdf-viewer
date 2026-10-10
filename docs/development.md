@@ -111,6 +111,22 @@ moon run tools/visual_summary.mbtx _build/visual-test-<run>/report.json
 moon run tools/visual_contract_test.mbtx /path/to/chromium
 ```
 
+A1 字体、来源和 reader 恢复的复跑入口：
+
+```bash
+moon run tools/visual_test.mbtx tools/font_post_cases.json /path/to/chromium
+moon run tools/visual_test.mbtx tools/standard14_cases.json /path/to/chromium
+moon run tools/visual_test.mbtx tools/reader_cases.json /path/to/chromium
+moon run tools/text_provenance_corpus.mbtx tools/font_post_cases.json
+moon run tools/text_provenance_corpus.mbtx tools/reader_cases.json
+moon run tools/reader_corpus.mbtx
+moon run tools/cmap_corpus.mbtx
+```
+
+corpus 工具使用根模块固定的 pdflite，每份输入独立进程并有超时；失败文件和错误
+留在报告中，不将载入扫描换算成视觉兼容率。验收记录见
+[validation.md](validation.md#a1-completion-validation)。
+
 每次生成新的 `_build/visual-test-*/index.html`，并排展示 PDF.js、MoonBit 与差异图，
 JSON 包含原始像素差异、viewport/文本比较和样本 hash。普通模式成功表示完成测量；
 末尾加 `--strict` 时，像素、viewport 或非空白文本差异都会让命令失败。
@@ -191,7 +207,10 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs vertical 1,2,3
 | cursor selection → source glyphs | `PdfPageModel::select_text(start_item, start_offset, end_item, end_offset)` |
 | logical UTF-16 offsets → source glyphs | `PdfPageModel::text_sources()`；保留 item index、charcode 和字体，推断分隔符不伪造来源 |
 | source glyphs → PDF strings and font IDs | `PdfViewerDocument::text_provenance(n)`；返回串内 bytes/range、Form 调用路径和可解析的 CID/GID/字形名 |
-| text/font recovery diagnostics | `PdfPageModel::text_diagnostics()`；`PdfViewerDocument::text_diagnostics(n)` 另含 CMap stream 诊断 |
+| PDF spelling → verified byte spans | `PdfViewerDocument::text_lexical_sources(n)`；空复制字形也保留来源，文件偏移只在可核对时返回 |
+| text runs and paragraphs | `PdfPageModel::text_structure()`；共同 UTF-16 范围、几何和来源，段落由几何推断 |
+| text/font recovery diagnostics | `PdfViewerDocument::text_recovery_diagnostics(n)`；包括空复制字形、原字符串 bytes 和实际字体/CMap 对象号；既有 `text_diagnostics` API 保留 |
+| skipped damaged page-tree branches | `PdfViewerDocument::reader_diagnostics()`；资源路径、对象号和原因 |
 | `PDFPageProxy.getOperatorList()` | `PdfViewerDocument::operator_list(n)` |
 | `PDFPageProxy.render(...)` | `PdfViewerDocument::render_svg(n, scale~)` / `render_svg_with_rotation(...)` / cached `PdfPageModel::render_svg(...)` |
 | `PDFFindController`-style text search | `PdfViewerDocument::search(query, options~)`; browser bridge `search_pdf` |
@@ -225,6 +244,14 @@ JSON 导出沿用 MoonBit 的 Bytes 格式：可打印 ASCII 保留，其余 byt
 `@json.from_json` 可以无损恢复，不能把这个字符串直接当作 UTF-8 原码。
 页面诊断记录替换字符、宿主字体回退、缺轮廓/clip 等可观察情况；文档诊断还记录
 CMap 坏 token、未闭合段、继承环和不可取得的 stream，并保留资源路径与直接对象号。
+`text_recovery_diagnostics(n)` 还记录编码、metrics、字体字典、未知 Unicode 和非法 CMap
+字符码的回退，以及不可解码字体流；绑定对象与绘制使用同一套 Tf/Form/ExtGState 状态。
+它保留空复制字形的 item/charcode/string_source，此时逻辑 `source` 为 `None`，不编造 UTF-16
+范围。既有文档 `text_diagnostics(n)` 只投影有逻辑来源的记录，现有 record 不变。
+词法 sidecar 将字符串 bytes 对应到 literal/hex 的解码流拼写；压缩/加密流给解码位置及可取得的
+完整原流范围，只有原始 backing bytes 可核对且没有变换时才提供字符的文件位置。
+页树循环/深度超过上限时，读取器保留可取得的有效页面，`reader_diagnostics()` 报告跳过分支；
+这与 PDF.js 延迟读取坏页的模式不同，恢复后的 `page_count()` 是保留的可读页数。
 宿主回退或字面 U+FFFD 本身不证明文件损坏；浏览器字体实际加载成功与否不在诊断范围内。
 文档诊断是显式调用，会重新构建页面与资源作用域，当前未接到浏览器 bridge/UI。
 
@@ -245,8 +272,8 @@ link layer 和远程 destination 的宿主策略仍待后续工作。
 ARC4、128-bit ARC4 和 AESV2，浏览器 viewer 在本地弹出密码提示并在错误后重试；密码只在
 浏览器内存中传递。
 
-这不是声称已经达到 pdf.js 的覆盖率。复杂外部 CMap 继承及
-reader 未保留的 codespace、完整字体 metrics 和标准 14 字体替代、
+这不是声称已经达到 pdf.js 的覆盖率。字体、CMap 继承、来源和确定性 Standard 14 主路径已经接通；
+罕见字体格式、无法恢复的损坏流、歧义几何布局与像素差异保留在验证报告中。
 ICC 色彩管理、soft mask 的完整组合成语义、透明组的完整 backdrop/knockout 合成、
 tiling pattern 的精确矩阵/裁剪和复杂单元、mesh 的最终像素级 Gouraud 合成、完整
 annotation appearance/form 行为仍是后续工作；
@@ -255,8 +282,8 @@ display list 中，避免宿主丢失结构化信息。现阶段 SVG 输出适�
 当作 pdf.js 的像素级替代品。
 
 四字节字符码的高位保留在 `PdfTextItem.charcode` 的 `Int` 位模式中，可能显示为负数；
-MoonBit 宿主可用 `reinterpret_as_uint()` 取得无符号值。原始 byte span 尚未暴露为公开
-选择元数据。`select_text()` 的 offsets 是 DOM 使用的 UTF-16 code-unit offsets；
+MoonBit 宿主可用 `reinterpret_as_uint()` 取得无符号值。原始 byte span 通过来源 sidecar 暴露，
+选择结果沿用稳定的 glyph index。`select_text()` 的 offsets 是 DOM 使用的 UTF-16 code-unit offsets；
 部分 ligature 的选择保留完整源 glyph 的 quad，不能解释成原始 PDF byte offset。
 自动 PDF.js 像素对照、viewport 与文本诊断已经实现；首批样本仍存在明确差异，
 结果见 [`validation.md`](validation.md#automated-pdfjs-visual-baseline)。
@@ -265,8 +292,8 @@ MoonBit 宿主可用 `reinterpret_as_uint()` 取得无符号值。原始 byte sp
 `file: { name, path }`、归并的 `text` 和每页的 `ranges`；选区清空时为 `null`。
 本地文件的 `path` 为浏览器能获得的文件名，URL 载入保留传入的 URL。
 这只是独立 viewer 的来源信息，未接入 OpenSeek。搜索结果通过 `pdf-search-change` 事件提供
-查询词和几何丰富的结果；当前浏览器按 source item 高亮并滚动到活动结果。阅读顺序/bidi、
-完整 Unicode normalization、批注与表单的 DOM 层、Worker/取消和大文件内存上限继续由
+查询词和几何丰富的结果；当前浏览器按 source item 高亮并滚动到活动结果。
+歧义布局/tagged PDF、完整 locale/case-fold 策略、批注与表单的 DOM 层、Worker/取消和大文件内存上限继续由
 TODO 跟踪；缩略图和基础打印入口已经提供。
 
 旋转参数按 pdf.js 规则只接受 `0/90/180/270`（允许等价的负数和大于 360 的整数）；

@@ -4,7 +4,7 @@ import {
   "moonbitlang/async/fs",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
-  "moonbitlang/pdflite",
+  "moonbitlang/pdflite@0.2.2",
 }
 
 ///|

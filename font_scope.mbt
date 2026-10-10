@@ -27,7 +27,10 @@ fn pdf_page_font_name(
   }
   let base_name = match object {
     Some(object) =>
-      match document.lookup_direct(pdf_name_key("/BaseFont"), object) {
+      match
+        pdf_direct_for_viewer(document, object)
+        .bind(object => object.lookup_immediate(pdf_name_key("/BaseFont")))
+        .bind(value => pdf_direct_for_viewer(document, value)) {
         Some(@syntax.PdfNameObject(base)) => pdf_annotation_name_text(base)
         _ => name
       }

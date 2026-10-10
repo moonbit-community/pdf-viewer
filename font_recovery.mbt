@@ -6,8 +6,7 @@ fn pdf_read_font_for_viewer(
   document : @pdflite.PdfDocument,
   object : @syntax.PdfObject,
 ) -> @pdflite.PdfFont raise @core.PdfError {
-  let font = pdf_read_font_with_viewer_metrics(document, object)
-  pdf_font_with_recovered_tounicode(document, object, font)
+  pdf_font_unicode_for_viewer(pdf_read_font_recovery_result(document, object).0)
 }
 
 ///|

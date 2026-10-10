@@ -12,7 +12,8 @@ priv struct PdfTextCollectScope {
   content_objects : Array[@syntax.PdfObject]
   form_path : Array[PdfTextFormInvocation]
   mut font_object : @syntax.PdfObject?
-  font_stack : Array[@syntax.PdfObject?]
+  mut font_resource_missing : Bool
+  font_stack : Array[(@syntax.PdfObject?, Bool)]
   collect_sources : Bool
   font_fallbacks : Array[PdfFontFallback]
 }
@@ -36,6 +37,7 @@ fn pdf_text_scope_for_page(
     content_objects: page.content,
     form_path: [],
     font_object: None,
+    font_resource_missing: false,
     font_stack: [],
     collect_sources,
     font_fallbacks: [
@@ -71,9 +73,13 @@ fn pdf_text_scope_for_form(
       },
     ],
     font_object: parent.font_object,
+    font_resource_missing: parent.font_resource_missing,
     // The interpreter enters a Form with an implicit q and retains outer
     // frames. Mirror these too, so unmatched Q recovery keeps the same font.
-    font_stack: [..parent.font_stack, parent.font_object],
+    font_stack: [
+      ..parent.font_stack,
+      (parent.font_object, parent.font_resource_missing),
+    ],
     collect_sources: parent.collect_sources,
     font_fallbacks: parent.font_fallbacks,
   })
@@ -91,33 +97,41 @@ fn pdf_text_scope_after_op(
 ) -> Unit {
   guard scope is Some(scope) else { return }
   match op {
-    @content.Op_Tf(name, _) =>
-      match document.lookup_direct(pdf_name_key("/Font"), resources) {
-        Some(fonts) =>
-          match fonts.lookup_immediate(name) {
-            Some(object) => scope.font_object = Some(object)
-            None => ()
-          }
-        None => ()
+    @content.Op_Tf(name, _) => {
+      let object = pdf_viewer_ttf_font_object(
+        document,
+        resources,
+        pdf_annotation_name_text(name),
+      )
+      scope.font_resource_missing = object is None
+      if object is Some(object) {
+        scope.font_object = Some(object)
       }
+    }
     @content.Op_gs(name) =>
       match document.lookup_direct(pdf_name_key("/ExtGState"), resources) {
         Some(states) =>
           match document.lookup_direct(name, states) {
             Some(state) =>
               match document.lookup_direct(pdf_name_key("/Font"), state) {
-                Some(@syntax.PdfArray([@syntax.PdfIndirect(_) as font, _])) =>
+                Some(@syntax.PdfArray([@syntax.PdfIndirect(_) as font, _])) => {
                   scope.font_object = Some(font)
+                  scope.font_resource_missing = false
+                }
                 _ => ()
               }
             None => ()
           }
         None => ()
       }
-    @content.Op_q => scope.font_stack.push(scope.font_object)
+    @content.Op_q =>
+      scope.font_stack.push((scope.font_object, scope.font_resource_missing))
     @content.Op_Q =>
       match scope.font_stack.pop() {
-        Some(font) => scope.font_object = font
+        Some((font, missing)) => {
+          scope.font_object = font
+          scope.font_resource_missing = missing
+        }
         None => ()
       }
     _ => ()

@@ -6,8 +6,9 @@ CLI. That conversion baseline does not measure parity with pdf.js rendering.
 The automated selected-page visual baseline below now measures actual output
 against the same pinned PDF.js build.
 
-The suite currently contains 305 tests on each of wasm, wasm-gc, JavaScript, and
-native. It includes 13 annotation tests, 17 CFF tests, 25 Type 1 tests, 5 CID
+The suite currently contains **374 tests on each of wasm, wasm-gc, JavaScript,
+and native**; the final A1 results are recorded below. Earlier stages included
+13 annotation tests, 17 CFF tests, 25 Type 1 tests, 5 CID
 layout tests, 9 variable-length CMap tests, 4 text-geometry tests, and 8
 text-clipping tests, one mixed-paint scaling regression, and one tiling-pattern
 transform-scaling regression. Earlier stages added 8 predefined-CMap tests,
@@ -32,6 +33,164 @@ The expanded selected-page baseline in `_build/visual-test-1791598324155/`
 measured **57/57 combinations from 20 PDFs**, **0 failures**, and **55 with
 pixel or text differences**. Its calibrated-colour interior samples below
 are an additional diagnostic, not an exemption from full-page differences.
+
+## A1 completion validation
+
+Validated on 2026-10-11 against the pinned pdflite **0.2.2**, `mizchi/font`
+**0.7.4**, Unicode packages **0.5.2**, and PDF.js revision
+`89b500f5e1d98ed89bb90211e45b28730b2d99ac` (build 6.5.1), using Chromium
+154.0.0.0. The eight A1 main-path items **R-02, F-03, F-05, F-06, F-07,
+T-01, T-02 and T-04 are complete** under the TODO acceptance rules. This is
+font/text main-path acceptance, not complete PDF.js compatibility.
+
+### Implementation and regression coverage
+
+The final batch adds **29 regressions**, bringing the suite from 345 to 374:
+
+| Area | New checks | Evidence |
+| --- | ---: | --- |
+| TrueType legacy tables | 4 | cmap 2 subheader aliases/relative offsets, post 2.5 signed names, truncated directories, valid later tables and damaged sfnt fallback; normalized input still uses the pinned cmap/post library |
+| CFF/Type 1 programs | 6 | explicit missing CFF name selects `.notdef`; damaged strings/subroutines/programs retain copy and PDF advance; non-default FontMatrix; hint OtherSubrs and flex relative coordinates |
+| Real text CMaps | 4 | named/indirect inheritance, absent local codespaces, WMode/local precedence, UTF32/surrogate source bytes, bounded large ranges and inheritance |
+| Reader page trees | 5 | aliases/cycles/depth, inherited box/rotation/resources, retained good branches, unchanged original object store and lexical spans; serialized cyclic input also exercises password-aware opening |
+| Text recovery | 10 | dictionary/Encoding/metrics/Unicode recovery, empty copied glyphs, missing Tf, cyclic descriptor/font-stream references, huge CID widths, literal U+FFFD and valid indirect Encoding/PostScript metadata |
+
+`moon info && moon fmt`, `moon test --target native`, and sequential tests on
+`wasm`, `wasm-gc` and `js` pass **374/374 on every backend**. `moon check
+--target all` passes with the existing **24 warnings**, and `git diff --check`
+passes. No new snapshot approval was needed.
+
+The generated interface adds `PdfReaderDiagnostic`,
+`PdfTextRecoveryDiagnostic`, `reader_diagnostics()` and
+`text_recovery_diagnostics(n)`. Existing public record layouts stay unchanged.
+Seven diagnostic enum cases add font stream/dictionary/encoding/metrics,
+invalid-code, Unicode fallback and reader-CMap observations; consumers with
+exhaustive matches must handle these additions. Old document text diagnostics
+project records with a logical source range. Empty copied glyphs keep their
+original operand bytes with no fabricated UTF-16 interval.
+
+### Embedded programs and browser loading
+
+The real `tracemonkey.pdf` exposed retained-argument failures in Type 1 hint
+replacement. Following the pinned PDF.js OtherSubr handling and relative flex
+operands reduces page 1's **1,549 missing embedded outlines and 1,549 host
+fallbacks to zero**. The same 4,282 source glyphs and original font/program IDs
+remain; the page has one `UnicodeMappingFallback` observation. Both page images
+were inspected: title, superscripts, body contours and column placement are
+present. Pixel differences still count in the report.
+
+Chromium interaction checks pass **39/39**, including fresh mouse drags after
+rotation/zoom, Shift-arrow extension, vertical/CJK copying, multi-page source
+selection, five font-loading inputs and the cyclic-page-tree fixture. Report:
+`_build/browser-test-1791658143102/report.json`.
+
+| Input | FontFace result | Selectable glyphs / painted paths |
+| --- | --- | ---: |
+| `standard_fonts.pdf`, all 14 pages | 30 faces loaded | 5,788 / 12,664 |
+| `complex_ttf_font.pdf` | 2 subset faces rejected | 616 / 1,143 |
+| `TrueType_without_cmap.pdf` | 1 face rejected | 4 / 4 |
+| `issue4800.pdf` | 1 face loaded | 12 / 12 |
+| `issue14462_reduced.pdf` | Type 1 paths; no browser FontFace | 11 / 10 |
+
+The rejected subset fonts are an observed browser decoder limitation. The
+viewer still uses original-program outlines and selectable text; the check
+does not claim that these font files became valid browser fonts. Normal host
+fallback or missing ToUnicode observations do not prove PDF corruption.
+
+### Original bytes, layout and located diagnostics
+
+The final ten-font replay passes **10/10** with **5,409 logical/located glyphs,
+6,252 captured bytes, 355 runs and 44 geometric paragraphs**. There are no
+source/lexical/run/paragraph/diagnostic join failures. Rich diagnostic records
+are checked against the same item/font/charcode and operand bytes. Its 783
+observations include missing Unicode mappings, 74 host fallbacks in
+`mixedfonts.pdf`, and 18 checksum-recovery observations across the nine glyphs
+of `issue13316_reduced.pdf`; they are not 783 corrupt glyphs. Report:
+`_build/text-provenance-1791658201943/report.json`.
+
+The five-reader replay also passes **5/5**, with **2,525 logical glyphs and
+2,525 captured bytes** across the four text-bearing pages. `bug1770750.pdf`
+has no body text; its empty source list is checked without inventing glyphs.
+The retained cyclic-tree page preserves 22 file-level lexical spans. Report:
+`_build/text-provenance-1791658093293/report.json`.
+
+Valid indirect simple-font Encoding dictionaries and real PostScript CMap
+dictionary/literal headers no longer produce spurious CMap diagnostics.
+Compressed/encrypted content still returns decoded lexical positions and
+available whole encoded-stream spans, not invented character file offsets.
+Rotated/sheared blocks, columns, compact tables and bidi controls use the
+previously checked shared copy/search/selection order; untagged paragraphs
+remain geometric inference.
+
+### Reader and CMap corpus evidence
+
+The isolated native reader scan processes all **989 locally present PDF.js
+PDFs: 952 open, 37 fail**. Open/fail status is unchanged after using the strict
+reader entry before bounded page-tree recovery. Among readable documents,
+266 contain typed ObjStm streams, 6 XRef streams, 306 Metadata streams, 407
+XObject streams and 18 typed CMap streams. These are document/stream-type
+counts, not font CMap counts. Failure classes include 5 InvalidFlateData,
+3 unsupported encryption authentications, 23 SoftError, 2 indirect-object
+parse errors, 2 RootExpected, 1 XRefEntryExpected and 1 InvalidASCII85Data.
+Each file retains its error and available startxref pointer; that pointer is
+context, not a claim of the exact error byte offset. Report:
+`_build/reader-corpus-1791658180369/report.json`.
+
+`Pages-tree-refs.pdf` now retains its first readable page and reports the
+original cycle path `/Root/Pages/Kids[1]/Kids[0]/Kids[0]/Kids[0]`, object 3.
+The viewer reports **1 surviving page**. PDF.js reports **2 pages**, renders
+page 1 and rejects page 2 lazily; the count difference is retained explicitly
+in the visual report and browser check.
+
+The matching pinned-reader CMap inventory sees **14 parsed external font
+CMap resources**, **0 reader-dropped**, **0 body UseCMap** and **0 dictionary
+UseCMap** across those inputs. Raw font inspection of the recovered cyclic
+tree is skipped and recorded. Report:
+`_build/cmap-corpus-1791658244622/report.json`. Earlier 990/976/17 inventory
+numbers elsewhere are historical runs with a different standalone reader and
+available-file set, not this pinned-root result.
+
+Because the natural corpus has no external UseCMap sample, four **unmodified
+Adobe Japan1 text CMaps** (`90ms-RKSJ-H/V`, `UniJIS-UTF32-H/V`) are pinned at
+`f5cf3bca7fdfeaceb77aa82847e974f2306c20b4`, with hashes and Adobe BSD license
+in `assets/cmaps/test-sources/`. Authored PDF wrappers test their real named
+parents, indirect PDF parents, WMode and original multibyte origins. Additional
+authored ranges/depth failures test limits and fallback. These wrappers are
+not claimed as naturally occurring PDF.js PDFs. Runtime mappings remain the
+existing Adobe assets and lazy viewer representation; no second reader or
+stream decoder was introduced.
+
+### Measured visual differences and retained branches
+
+All selected comparisons use the same Chromium, scale 2, white background and
+unmodified pinned PDF.js source. Ordinary completion means measured output;
+`--strict` would reject the differences below.
+
+| Manifest | Measured | Failures | With pixel/text differences | Report |
+| --- | ---: | ---: | ---: | --- |
+| `font_post_cases.json` | 10/10 | 0 | 10 | `_build/visual-test-1791657614581/report.json` |
+| `standard14_cases.json`, `use_system_fonts=false` | 16/16 | 0 | 16 | `_build/visual-test-1791658043891/report.json` |
+| `reader_cases.json`, `use_system_fonts=false` | 5/5 | 0 | 5 | `_build/visual-test-1791658014379/report.json` |
+
+Standard-font pages retain **116,689–128,412** raw pixels over channel tolerance;
+the whole-page grid includes known stroke/raster differences. Text comparison
+also remains raw: pages 1–12 match after whitespace removal and NFKC (micro sign
+versus Greek mu), Symbol retains Delta-codepoint differences, and Zapf copy
+uses the dependency's dingbat Unicode mappings while PDF.js extraction retains
+Latin codes. This is not concealed as a pixel-only difference. Neither report
+normalizes away these mismatches. `tracemonkey.pdf` retains **182,901** raw
+changed pixels (**163,751** outside the diagnostic 1px neighborhood) and text
+order/normalization differences. `issue17147.pdf` retains **1,001** raw changed
+pixels. The recovered cyclic page has **2,749**, CalGray **13,166**, CalRGB
+**65,221**, checksum-recovered text **2,033**, and `bug1770750.pdf` **111**.
+
+Rare cmap 8/10/13 and vendor post formats, font-library limitations on missing
+tables/compound outlines, multiple-FD CID Type 1 and unrecoverable streams
+retain documented recovery/error branches. Untagged ambiguous structures do
+not recover author semantics automatically; unverifiable bidi retains content
+order. Complete stroking/rasterization, image/colour/compositing and annotation
+parity remain in A2 and later TODO items. The global checklist is now **25/50**;
+editing, form saving and signatures are still outside that readonly baseline.
 
 ## A1 fonts, Unicode and reading order
 

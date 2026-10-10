@@ -53,7 +53,8 @@ applied afterwards.
 
 Simple TrueType fonts resolve Encoding/Differences separately from ToUnicode.
 The viewer selects a Windows Unicode/Symbol or MacRoman cmap before calling
-`mizchi/font` 0.7.4's standalone `parse_cmap` for formats 0/4/6/12. MacRoman
+`mizchi/font` 0.7.4's standalone `parse_cmap` for formats 0/4/6/12. Legacy format
+2 is bounded and normalized into that decoder's format 12 input. MacRoman
 glyph names use pdflite's reverse encoding lookup; supplementary scalars use
 full-repertoire Unicode tables. Declared table bounds, segment/range ordering,
 glyph IDs and expansion counts are checked before the library reads bytes.
@@ -65,7 +66,8 @@ It retains no complete font or PDF document. General font parsing and outlines
 still use the existing recovery paths because PDF subsets can omit tables.
 
 `truetype_post.mbt` reuses the same library's standalone `parse_post` for version
-2 names and supplies equivalent indices for version 1's standard names. Version
+2 names and supplies equivalent indices for versions 1 and 2.5. Signed version
+2.5 offsets are checked against the library's Macintosh name catalog. Version
 3 supplies no names. Counts and Pascal strings are checked within the declared
 table before library reads. A separate cache retains at most eight post tables,
 1 MiB of source and 131,072 names, keyed by table bytes and maxp glyph count.
@@ -107,7 +109,10 @@ and the Type 2 charstring operators used by the tested fonts. Parsed outlines
 are cached per embedded font and glyph. Single-byte Type 1 programs are also
 decoded in the viewer: eexec and PFB framing, ASCII-hex eexec, charstring
 encryption, direct-index subroutines, `seac`, and common flex othersubrs are
-supported. Single-FD CID-keyed Type 1 programs are also decoded from Binary/Hex
+supported. Hint-replacement OtherSubrs retain arguments for `pop`/`callsubr`;
+flex points use relative displacements from the current baseline, following
+the pinned PDF.js parser. This restores all 1,549 previously missing embedded
+outlines on `tracemonkey.pdf` page 1. Single-FD CID-keyed Type 1 programs are also decoded from Binary/Hex
 `StartData`, including CIDMap, SubrMap, `lenIV`, and empty-CID fallback.
 Counted `1 array` FDArray declarations and headers without an FDArray
 declaration are supported; other FDArray declaration forms use text fallback.
@@ -119,8 +124,10 @@ lower, SVG text fallback uses the font's family metadata. Nimbus Roman and
 Computer Modern Roman/symbol names map to serif, CMTT/Nimbus Mono to
 monospace, and medium/italic/slanted suffixes are retained. This improves the
 fallback shape without claiming that host metrics equal the PDF font; the
-selected visual baseline still tracks the unresolved glyphs and metrics as
-F-06/F-07 work.
+selected visual baseline still tracks unresolved glyphs and raster differences.
+Explicit PDF Encoding names select the CFF charset or `.notdef`, avoiding an
+unrelated built-in encoding glyph. Damaged charstrings/programs retain copy
+text, PDF advances and the remaining page, with located fallback observations.
 
 `cid_mapping.mbt` resolves Identity, Adobe predefined and explicit external
 CMap entries without using ToUnicode values as glyph CIDs. Explicit entries
@@ -151,11 +158,15 @@ individual maps on demand, follows named inheritance for CID lookup,
 codespaces and WMode, and supplies Adobe CID-to-Unicode data when ToUnicode is
 absent. Local mappings and WMode take priority over the named base.
 
-`font_recovery.mbt` retains the normal reader path and catches only a missing
-CID FontDescriptor error. A local shadow dictionary provides fallback metrics
-for that font; source document objects are not mutated. This lets malformed,
-non-embedded CID fonts retain text and widths without claiming to recover the
-original font's ascent, descent or appearance. Other reader errors propagate.
+`font_recovery.mbt` uses the pinned reader through bounded font dictionaries.
+Local shadows retain valid Differences, widths and descriptors; invalid fields
+use documented fallback metrics or a replacement font without changing source
+objects. Missing Tf resources retain the active binding. Malformed or absent
+ToUnicode entries try the PDF Encoding extractor; empty mappings and literal
+U+FFFD remain valid. CID W/W2 clauses are bounded before the dependency expands
+them. Large CMap ranges stay in the existing lazy representation, with local
+mapping and original code bytes preserved; parent traversal stops at 64 links.
+Prepared stream dictionaries prevent reference-alias cycles entering decoding.
 
 Text rendering modes 4–7 collect glyph outlines while a text object is read;
 the combined path becomes active at `ET`. Later text-object clips are
@@ -226,6 +237,17 @@ using declared stream lengths and the active xref chain rather than scanning
 old revisions for deleted content. The raw-byte recovery is skipped for
 authenticated encrypted documents with unresolved page contents.
 
+`reader_page_tree.mbt` first uses pdflite's strict xref reader when its catalog
+is available, avoiding the high-level reader's deep recursive page-tree probe on
+cyclic input in JavaScript. pdflite still owns reconstruction and password
+decryption. The viewer validates reference aliases and page-tree traversal
+before pdflite materializes inherited page attributes. Traversal has a 256-level and
+131,072-node limit. `reader_page_recovery.mbt` copies the document's object store,
+removes invalid branches, and preserves retained page/font/content object IDs
+and stream backing. `reader_diagnostics()` records original paths and node IDs;
+if no page survives, the located original error propagates. This eager recovery
+reports the surviving page count, unlike PDF.js's lazy failure for a bad page.
+
 The standalone browser shell lives in `web/`, with a MoonBit JS bridge in
 `cmd/browser/`. PDF bytes are decoded entirely by the MoonBit/pdflite module;
 the JavaScript shell handles file input, DOM mounting and native browser
@@ -259,9 +281,11 @@ search remain future work.
 blocks before line grouping. `text_bidi.mbt` maps `bidi` code-point permutations
 to complete glyph items, preferring source order when its forward UAX #9
 projection matches geometry. A recovered visual-order candidate must pass the
-same check. Ambiguous/split-glyph permutations preserve source order; rotated
-and vertical layouts retain the earlier line handling. Tables, explicit bidi
-controls and inferred spaces across directional boundaries remain limited.
+same check. Ambiguous/split-glyph permutations preserve source order. Baseline
+projection handles rotated/sheared blocks without changing original quads;
+aligned compact tables read by row, long prose by column. Explicit bidi controls
+and cross-direction gaps share the same separator/source calculations. Untagged
+paragraphs and short tables remain geometric heuristics.
 
 `text_sources.mbt` shares source UTF-16 ranges with search and the additive
 `PdfPageModel::text_sources()` sidecar. Inferred separators have no source item.
@@ -292,10 +316,13 @@ geometrically inferred paragraphs. Their UTF-16 ranges and source items join to
 selection/search; separators have no fabricated glyph owner. This view does not
 claim tagged-PDF semantics or change the original display list.
 `text_diagnostics.mbt` exposes observed render fallbacks and replacement text;
-the document-level method additionally reads CMap recovery diagnostics in each
-collected resource scope, retaining the resource path and immediate stream
-object number. It is opt-in, can rebuild a page, and does not modify source
-objects or claim per-glyph corruption from a resource-level observation.
+`text_recovery_diagnostics(n)` additionally reads encoding/metrics/dictionary,
+Unicode, invalid-code and font/CMap stream observations through the same active
+bindings as painting. Empty copied glyphs retain operand bytes with no fabricated
+logical interval. The old document method projects records with logical sources.
+Both methods are opt-in and may rebuild a page; resource-level observations do
+not establish per-glyph corruption. Stream paths and immediate object IDs locate
+checksum recovery or unavailable bytes, including inherited CMaps.
 
 `text_layer.mbt` maps the actual glyph quads through the public viewport and
 retains source item indices. A layer item carries a unit-square affine matrix;
@@ -333,10 +360,12 @@ Strict mode rejects differences, while measurement errors always fail the run.
 The contract test deliberately shifts a visible control and removes an input
 to verify that the harness cannot pass an empty or failed operation.
 
+The A1 font/text main paths are complete; measured differences and retained
+fallback branches are recorded in [validation.md](validation.md#a1-completion-validation).
 The remaining implementation stages are ordered by the visible compatibility gap:
 
-1. Fixes for the measured clipping/font gaps and Worker/page scheduling, followed
-   by complex CMap inheritance, font metrics and system-font fallback policy;
+1. Worker/page scheduling and larger visual baselines, retaining measured
+   font rasterization differences and fallback observations;
 2. CTM-preserving path/image geometry, complete group-level mask compositing, and pixel-level
    Gouraud interpolation for mesh triangles;
 3. complete annotation appearance and form/widget layers;

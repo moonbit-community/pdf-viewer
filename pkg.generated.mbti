@@ -342,6 +342,20 @@ pub fn PdfQuad::to_json(Self) -> Json
 #deprecated
 pub fn PdfQuad::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfReaderDiagnostic {
+  resource : String
+  object_number : Int?
+  message : String
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfReaderDiagnostic::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfReaderDiagnostic::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfReaderDiagnostic::to_json(Self) -> Json
+#deprecated
+pub fn PdfReaderDiagnostic::to_repr(Self) -> @debug.Repr
+
 pub(all) struct PdfSearchOptions {
   case_sensitive : Bool
   whole_word : Bool
@@ -458,10 +472,17 @@ pub(all) enum PdfTextDiagnosticKind {
   MissingEmbeddedOutline
   MissingClipOutline
   FontStreamChecksumRecovered
+  FontStreamUnavailable
+  FontMetricsRecovered
+  FontEncodingRecovered
+  FontDictionaryRecovered
+  InvalidCharacterCode
+  UnicodeMappingFallback
   CMapMalformedTokens(Int)
   CMapIncompleteSection(String)
   CMapCycle
   CMapSourceUnavailable
+  CMapReaderFallback
 } derive(Eq, ToJson, @debug.Debug)
 #deprecated
 pub fn PdfTextDiagnosticKind::equal(Self, Self) -> Bool
@@ -619,6 +640,26 @@ pub fn PdfTextRangeSelection::to_json(Self) -> Json
 #deprecated
 pub fn PdfTextRangeSelection::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfTextRecoveryDiagnostic {
+  page : Int
+  item_index : Int
+  charcode : Int
+  font : String
+  source : PdfTextSourceRange?
+  string_source : PdfTextStringSource?
+  kind : PdfTextDiagnosticKind
+  resource : String
+  object_number : Int?
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfTextRecoveryDiagnostic::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextRecoveryDiagnostic::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextRecoveryDiagnostic::to_json(Self) -> Json
+#deprecated
+pub fn PdfTextRecoveryDiagnostic::to_repr(Self) -> @debug.Repr
+
 pub(all) struct PdfTextRun {
   start : Int
   end : Int
@@ -727,6 +768,7 @@ pub fn PdfViewerDocument::page_json(Self, Int) -> Json? raise @core.PdfError
 pub fn PdfViewerDocument::page_labels(Self) -> Array[String] raise @core.PdfError
 pub fn PdfViewerDocument::page_labels_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::pages(Self) -> Array[PdfPageModel] raise @core.PdfError
+pub fn PdfViewerDocument::reader_diagnostics(Self) -> Array[PdfReaderDiagnostic]
 pub fn PdfViewerDocument::render_svg(Self, Int, scale? : Double) -> String? raise @core.PdfError
 pub fn PdfViewerDocument::render_svg_with_rotation(Self, Int, Int, scale? : Double) -> String? raise @core.PdfError
 pub fn PdfViewerDocument::search(Self, String, options? : PdfSearchOptions) -> Array[PdfSearchResult] raise @core.PdfError
@@ -738,6 +780,7 @@ pub fn PdfViewerDocument::text_content(Self, Int) -> PdfTextContent? raise @core
 pub fn PdfViewerDocument::text_diagnostics(Self, Int) -> Array[PdfTextDiagnostic]? raise @core.PdfError
 pub fn PdfViewerDocument::text_lexical_sources(Self, Int) -> Array[PdfTextLexicalSource]? raise @core.PdfError
 pub fn PdfViewerDocument::text_provenance(Self, Int) -> Array[PdfTextProvenance]? raise @core.PdfError
+pub fn PdfViewerDocument::text_recovery_diagnostics(Self, Int) -> Array[PdfTextRecoveryDiagnostic]? raise @core.PdfError
 pub fn PdfViewerDocument::with_font_fallbacks(Self, Array[PdfFontFallback]) -> Self
 pub fn PdfViewerDocument::with_optional_content_state(Self, PdfOptionalContentState) -> Self
 

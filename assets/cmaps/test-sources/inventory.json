@@ -1,0 +1,27 @@
+{
+  "source": "https://github.com/adobe-type-tools/cmap-resources",
+  "revision": "f5cf3bca7fdfeaceb77aa82847e974f2306c20b4",
+  "directory": "Adobe-Japan1-7/CMap",
+  "files": [
+    {
+      "file": "90ms-RKSJ-H",
+      "sha256": "e0b104bcc8dfb3c2d3e025e12c59182d7e0ee1b5df6f55bc8550d4b3fc83ecd3",
+      "bytes": 6070
+    },
+    {
+      "file": "90ms-RKSJ-V",
+      "sha256": "a588f7d20d0c8dbf09693480e62bf3ab80b7453858e4425d4b47650d48e7757b",
+      "bytes": 4229
+    },
+    {
+      "file": "UniJIS-UTF32-H",
+      "sha256": "1c6a4b07e994dfb29e32522a928e86cfa3d18dfd3ae287044de97a923fa578fd",
+      "bytes": 245445
+    },
+    {
+      "file": "UniJIS-UTF32-V",
+      "sha256": "e15ff77629f5bd1989ed602a01d48d80f91856055ed357c4fcd5214d46422a76",
+      "bytes": 6838
+    }
+  ]
+}

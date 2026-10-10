@@ -904,6 +904,11 @@ viewer.addEventListener("keydown", (event) => {
     selection.removeAllRanges();
     selection.addRange(range);
   }
+  // Normalize native drag affinity before extending across positioned glyphs.
+  selection.setBaseAndExtent(
+    selection.anchorNode, selection.anchorOffset,
+    selection.focusNode, selection.focusOffset,
+  );
   selection.modify(
     "extend",
     direction,

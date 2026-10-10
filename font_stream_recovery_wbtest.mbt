@@ -361,7 +361,10 @@ test "truncated font streams keep extracted text and metrics with visible fallba
   assert_eq([ for diagnostic in diagnostics => diagnostic.kind ], [
     MissingClipOutline,
     HostFontFallback,
+    FontStreamUnavailable,
   ])
+  assert_eq(diagnostics[2].object_number, Some(7))
+  assert_eq(diagnostics[2].resource, "/F1/FontDescriptor/FontFile2")
 }
 
 ///|

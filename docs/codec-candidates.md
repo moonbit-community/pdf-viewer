@@ -102,10 +102,13 @@ JP2 colour/alpha、PDF `/SMaskInData`、支持的编码 profile、目标和内�
 glyph ID 再与 maxp 核对。无可用表沿用恢复路径；有效表中的缺字先尝试 post，
 无法恢复时保留 GID 0。
 缓存只保留 cmap，最多 8 项、1 MiB 源数据、262144 映射；单个 format 12
-最多展开 131072 个码位，超出时该表不可用。其它格式与更复杂字体恢复仍待推进。
+最多展开 131072 个码位，超出时该表不可用。format 2 的 subHeaderKeys、相对 glyph
+offset、delta 和别名先验证，再转成 format 12 交给同一库解码；原平台语义保留。
+罕见的 8/10/13 等表不在当前适配范围，仍走已记录的 post/缺表恢复路径。
 
 独立 `parse_post` 用于 version 2 字形名；version 1 转为等价标准索引，复用库的
-Macintosh 字形名表。version 3 无字形名，弃用的 2.5 及厂商格式仍未接入。
+Macintosh 字形名表。version 2.5 的 signed offset 转为同一套索引并验证边界；
+version 3 合法地不提供字形名，厂商格式不在当前适配范围。
 先验证 maxp 数量、索引与 Pascal 字符串范围；缓存最多 8 项、1 MiB 源数据和
 131072 个名称。Windows/Symbol cmap 的有效映射优先，Unicode 平台 cmap
 优先显式 Encoding/Differences 名称；未知名称且无可用 post 时允许显式
@@ -114,13 +117,16 @@ ToUnicode 恢复。字形名到 Unicode 仍用 pdflite；不另抄 Adobe/Mac 名
 字体流恢复也复用现有 Flate 引擎：先保留 pdflite 严格解码，失败后用库区分
 `ChecksumMismatch` 与其它错误，再用同库的有上限 raw 解码取得完整正文。
 `issue13316_reduced.pdf` 的字体与 ToUnicode 都属于校验和不匹配，已恢复中文
-绘制、提取及嵌入资源；filter chain、predictor、缺失 trailer 等恢复仍未扩大。
+绘制、提取及嵌入资源；filter chain、变换 predictor、缺失 trailer 等保持严格失败，
+回归明确核对这些分支不会误用只忽略校验和的恢复。流和已知字体字段的 alias
+循环在进入依赖之前停止，字体字典/编码/metrics 的修复只使用本地 shadow。
 `tools/font_stream_probe.mbtx` 分别记录严格 PDF 解码和 zlib 的错误种类，避免
 单个损坏字体掩盖其它 stream。验证与剩余像素差异见 [A1 验证](validation.md#font-stream-checksum-recovery)。
 
 `bidi.reorder_string` 输出视觉顺序且会做镜像；不能直接拿它作为逻辑复制文本，
 也不能重复重排已由 PDF 定位的字形。A1 使用置换与 Unicode 分类，
-结合来源和几何验证混合方向、surrogate 与 ligature；复杂控制字符仍待覆盖。
+结合来源和几何验证混合方向、surrogate 与 ligature，覆盖 embedding/isolate 和零宽
+控制符；旋转、剪切与短表格使用同一来源顺序。歧义未标记结构仍需保留内容顺序。
 
 `tools/font_inventory.mbtx` 提取原始嵌入程序，`tools/font_library_probe.mbtx`
 使用按 GID 的公开接口，不改字体 bytes。实测 `issue14462_reduced.pdf` 的 PFB Type 1

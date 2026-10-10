@@ -13,6 +13,7 @@ page APIs, and SVG output for native applications.
 - Open password-protected documents and inspect document information and attachments.
 - Export pages as SVG through the native command-line interface.
 - Access page geometry, text, display lists, and selection data through MoonBit APIs.
+- Inspect text sources, original character bytes, lexical spans, runs/paragraphs, and recovery diagnostics.
 
 Rendering support and compatibility limitations are documented in
 [Implementation and Development Notes](docs/development.md).

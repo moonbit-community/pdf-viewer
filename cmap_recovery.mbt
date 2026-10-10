@@ -121,6 +121,25 @@ fn pdf_viewer_cmap_tokens(data : BytesView) -> Array[PdfViewerCMapToken] {
       }
       continue
     }
+    if index + 1 < data.length() &&
+      (
+        (data[index] == b'<' && data[index + 1] == b'<') ||
+        (data[index] == b'>' && data[index + 1] == b'>')
+      ) {
+      index += 2
+      continue
+    }
+    if data[index] is b'(' {
+      let cursor = @core.byte_cursor_of_view(data[index:])
+      ignore(@syntax.pdf_cursor_lex_literal_string(cursor)) catch {
+        _ => {
+          output.push(PdfViewerCMapInvalid)
+          break
+        }
+      }
+      index += cursor.position()
+      continue
+    }
     if data[index] is b'<' &&
       (index + 1 >= data.length() || data[index + 1] != b'<') {
       let start = index + 1
@@ -720,9 +739,12 @@ fn pdf_viewer_cmap_recovery_of_object(
     }
     seen[number] = true
   }
-  let bytes = try
+  let bytes = try {
+    guard seen.length() <= 64 else {
+      raise @core.SoftError("CMap inheritance limit")
+    }
     pdf_decode_font_stream_with_recovery(document, object).stream_bytes()
-  catch {
+  } catch {
     _ => None
   } noraise {
     value => Some(value)
@@ -746,8 +768,8 @@ fn pdf_viewer_cmap_recovery_of_object(
       })
     Some(bytes) => {
       let current = pdf_viewer_cmap_recovery_cached(bytes)
-      let base = match document.direct(object) {
-        @syntax.PdfStreamObject(stream) =>
+      let base = match pdf_direct_for_viewer(document, object) {
+        Some(@syntax.PdfStreamObject(stream)) =>
           stream.dictionary.lookup_immediate(pdf_name_key("/UseCMap"))
         _ => None
       }

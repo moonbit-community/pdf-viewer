@@ -2,235 +2,57 @@
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
-  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/async/shell",
   "moonbitlang/core/env",
-  "moonbitlang/core/string",
-  "moonbitlang/pdflite",
-  "moonbitlang/pdflite/core",
-  "moonbitlang/pdflite/syntax",
+  "moonbitlang/core/json",
 }
 
 ///|
-struct CMapSample {
-  file : String
-  page : Int
-  resource : String
-  object_number : Int
-  encoding : String
-  parsed_usecmap : String?
-  body_usecmap : Bool
-  dictionary_usecmap : String?
-  dictionary_object : Int?
-  status : String
-} derive(ToJson)
-
-///|
-struct CMapScanReport {
-  corpus : String
-  prefix : String
-  mut files_seen : Int
-  mut documents_read : Int
-  mut documents_failed : Int
-  failed_files : Array[String]
-  mut external_cmaps : Int
-  mut reader_dropped_cmaps : Int
-  mut body_usecmap : Int
-  mut dictionary_usecmap : Int
-  samples : Array[CMapSample]
-} derive(ToJson)
-
-///|
-fn cmap_name_text(name : @core.PdfName) -> String {
-  @utf8.decode_lossy(name.bytes())
-}
-
-///|
-fn cmap_object_number(object : @syntax.PdfObject) -> Int? {
-  match object {
-    @syntax.PdfIndirect(number) => Some(number)
-    _ => None
-  }
-}
-
-///|
-fn cmap_dictionary_usecmap(
-  document : @pdflite.PdfDocument,
-  object_number : Int,
-) -> (String?, Int?) {
-  let object = document.direct(@syntax.PdfIndirect(object_number))
-  match object {
-    @syntax.PdfStreamObject(stream) => {
-      let key = @core.pdf_name_of_bytes(b"/UseCMap")
-      match stream.dictionary.lookup_immediate(key) {
-        Some(@syntax.PdfNameObject(name)) => (Some(cmap_name_text(name)), None)
-        Some(value) => (None, cmap_object_number(value))
-        None => (None, None)
-      }
-    }
-    _ => (None, None)
-  }
-}
-
-///|
-fn cmap_sample_of_font(
-  document : @pdflite.PdfDocument,
-  file : String,
-  page : Int,
-  resource : String,
-  font_object : @syntax.PdfObject,
-) -> CMapSample? {
-  let font = try document.read_font(font_object) catch {
-    _ => return None
-  }
-  match font {
-    @pdflite.PdfFontCIDKeyed(cid_font) =>
-      match cid_font.encoding {
-        @pdflite.PdfExternalCMap(object_number, parsed) => {
-          let source : Bytes? = try {
-            Some(document.pdf_decode_stream(@syntax.PdfIndirect(object_number)).stream_bytes())
-          } catch {
-            _ => None
-          } noraise {
-            value => value
-          }
-          let body_usecmap = match source {
-            Some(bytes) => @utf8.decode_lossy(bytes[:]).contains(
-              "usecmap",
-            )
-            None => false
-          }
-          let (dictionary_use, dictionary_object) = cmap_dictionary_usecmap(
-            document,
-            object_number,
-          )
-          let status = if source is None {
-            "source-unavailable"
-          } else if body_usecmap || dictionary_use is Some(_) ||
-            dictionary_object is Some(_) {
-            "external-usecmap"
-          } else {
-            "external"
-          }
-          Some({
-            file,
-            page,
-            resource,
-            object_number,
-            encoding: "external",
-            parsed_usecmap: match parsed.usecmap {
-              Some(name) => Some(cmap_name_text(name))
-              None => None
-            },
-            body_usecmap,
-            dictionary_usecmap: dictionary_use,
-            dictionary_object,
-            status,
-          })
-        }
-        @pdflite.PdfCMap(object_number) =>
-          Some({
-            file,
-            page,
-            resource,
-            object_number,
-            encoding: "reader-dropped",
-            parsed_usecmap: None,
-            body_usecmap: false,
-            dictionary_usecmap: None,
-            dictionary_object: None,
-            status: "reader-dropped",
-          })
-        @pdflite.PdfPredefinedCMap(_) => None
-      }
-    _ => None
-  }
-}
-
-///|
-fn selected_file(name : String, prefix : String) -> Bool {
-  name.has_suffix(".pdf") && (prefix == "" || name.has_prefix(prefix))
-}
-
-///|
+/// Probe the root's pinned reader in isolated processes. Page-tree cycles,
+/// unbounded font expansion and timeouts retain a per-file result instead of
+/// erasing the inventory with a VM stack overflow.
 async fn main {
   let args = @env.args()
-  let corpus = if args.length() > 1 {
-    args[1]
-  } else {
-    "reference/pdf.js/test/pdfs"
-  }
+  let corpus = if args.length() > 1 { args[1] } else { "reference/pdf.js/test/pdfs" }
   let prefix = if args.length() > 2 { args[2] } else { "" }
-  let report = CMapScanReport::{
-    corpus,
-    prefix,
-    files_seen: 0,
-    documents_read: 0,
-    documents_failed: 0,
-    failed_files: [],
-    external_cmaps: 0,
-    reader_dropped_cmaps: 0,
-    body_usecmap: 0,
-    dictionary_usecmap: 0,
-    samples: [],
-  }
+  @shell.Cmd("moon", ["build", "--target", "native", "--release", "cmd/reader_probe"]).run()
+  let output = "_build/cmap-corpus-\{@env.now()}"
+  @fs.mkdir(output, recursive=true)
+  let failed : Array[String] = []
+  let skipped : Array[String] = []
+  let samples : Array[Json] = []
+  let mut seen = 0
+  let mut readable = 0
+  let mut external = 0
+  let mut dropped = 0
+  let mut body = 0
+  let mut dictionary = 0
   for name in @fs.readdir(corpus, sort=true) {
-    if !selected_file(name, prefix) {
-      continue
-    }
-    report.files_seen += 1
-    let bytes = @fs.read_file(corpus + "/" + name).binary()
-    let document : @pdflite.PdfDocument? = try {
-      Some(@pdflite.pdf_read_document_from_bytes(bytes))
-    } catch {
-      _ => None
-    } noraise {
-      value => value
-    }
-    guard document is Some(document) else {
-      report.documents_failed += 1
-      report.failed_files.push(name)
-      continue
-    }
-    report.documents_read += 1
-    let pages = try document.pages_of_pagetree() catch {
-      _ => []
-    }
-    if pages.is_empty() {
-      continue
-    }
-    let page_numbers : Array[Int] = []
-    for page in 1..=pages.length() {
-      page_numbers.push(page)
-    }
-    let fonts = try document.list_fonts(page_numbers[:]) catch {
-      _ => []
-    }
-    for entry in fonts {
-      match cmap_sample_of_font(
-        document,
-        name,
-        entry.page,
-        entry.name,
-        entry.font,
-      ) {
-        Some(sample) => {
-          if sample.encoding == "external" {
-            report.external_cmaps += 1
-            if sample.body_usecmap {
-              report.body_usecmap += 1
-            }
-            if sample.dictionary_usecmap is Some(_) ||
-              sample.dictionary_object is Some(_) {
-              report.dictionary_usecmap += 1
-            }
-          } else {
-            report.reader_dropped_cmaps += 1
-          }
-          report.samples.push(sample)
-        }
-        None => ()
+    if !name.has_suffix(".pdf") || !name.has_prefix(prefix) { continue }
+    seen += 1
+    let path = output + "/" + name + ".json"
+    ignore(@shell.Cmd("_build/native/release/build/cmd/reader_probe/reader_probe.exe",
+      [corpus + "/" + name, path, "--cmaps"]).output(timeout_ms=10000) catch { _ => None } noraise { value => Some(value) })
+    guard @fs.exists(path) else { failed.push(name); continue }
+    let result = @json.parse(@fs.read_file(path).text())
+    guard result is {"passed": True, ..} else { failed.push(name); continue }
+    readable += 1
+    if result is {"cmap_page_tree_skipped": True, ..} { skipped.push(name) }
+    if result is {"cmaps": Array(maps), ..} {
+      for sample in maps {
+        if sample is {"encoding": String("external"), ..} { external += 1 } else { dropped += 1 }
+        if sample is {"body_usecmap": True, ..} { body += 1 }
+        if sample is {"dictionary_usecmap": String(_), ..} || sample is {"dictionary_object": Number(_, ..), ..} { dictionary += 1 }
+        samples.push(sample)
       }
     }
+    if seen % 100 == 0 { println("CMap files checked: \{seen}") }
   }
-  println(ToJson::to_json(report).stringify(indent=2))
+  let report : Json = {"corpus": corpus, "prefix": prefix, "files_seen": seen,
+    "documents_read": readable, "documents_failed": failed.length(), "failed_files": failed,
+    "page_tree_skipped": skipped, "external_cmaps": external, "reader_dropped_cmaps": dropped,
+    "body_usecmap": body, "dictionary_usecmap": dictionary, "samples": samples}
+  @fs.write_file(output + "/report.json", report.stringify(indent=2))
+  println(report.stringify(indent=2))
+  println("CMap corpus: " + output + "/report.json")
 }

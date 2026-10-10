@@ -687,10 +687,16 @@ fn pdf_viewer_ttf_font_object(
   resources : @syntax.PdfObject,
   font_name : String,
 ) -> @syntax.PdfObject? {
-  match document.lookup_direct(pdf_name_key("/Font"), resources) {
-    Some(fonts) => document.lookup_direct(pdf_name_key(font_name), fonts)
-    None => None
+  guard pdf_direct_for_viewer(document, resources) is Some(resources) else {
+    return None
   }
+  guard resources.lookup_immediate(pdf_name_key("/Font")) is Some(fonts) else {
+    return None
+  }
+  guard pdf_direct_for_viewer(document, fonts) is Some(fonts) else {
+    return None
+  }
+  fonts.lookup_immediate(pdf_name_key(font_name))
 }
 
 ///|

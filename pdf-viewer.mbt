@@ -434,6 +434,7 @@ pub struct PdfViewerDocument {
   pages : Array[@page.PdfPage]
   optional_content_state : PdfOptionalContentState?
   font_fallbacks : Array[PdfFontFallback]
+  priv reader_observations : Array[PdfReaderDiagnostic]
 }
 
 ///|
@@ -443,7 +444,10 @@ pub struct PdfViewerDocument {
 /// `open_document_with_passwords(bytes)` with no passwords. Encrypted files
 /// raise `SoftError` when no supplied password authenticates.
 pub fn open_document(bytes : Bytes) -> PdfViewerDocument raise @core.PdfError {
-  let document = @pdflite.pdf_read_document_from_bytes(bytes)
+  let document = match pdf_reader_strict_document_for_viewer(bytes) {
+    Some(document) => document
+    None => @pdflite.pdf_read_document_from_bytes(bytes)
+  }
   if document.is_encrypted() {
     raise @core.SoftError("PDF password authentication failed")
   }
@@ -466,11 +470,19 @@ pub fn open_document_with_passwords(
   if user_password is None && owner_password is None {
     return open_document(bytes)
   }
-  let result = @pdflite.pdf_read_document_from_bytes_with_passwords(
-    bytes,
-    user_password=user_password.map(password => password[:]),
-    owner_password=owner_password.map(password => password[:]),
-  )
+  let result = match pdf_reader_strict_document_for_viewer(bytes) {
+    Some(document) =>
+      document.decrypt_with_passwords(
+        user_password=user_password.map(password => password[:]),
+        owner_password=owner_password.map(password => password[:]),
+      )
+    None =>
+      @pdflite.pdf_read_document_from_bytes_with_passwords(
+        bytes,
+        user_password=user_password.map(password => password[:]),
+        owner_password=owner_password.map(password => password[:]),
+      )
+  }
   let document = match result {
     Some(result) => result.document
     None => raise @core.SoftError("PDF password authentication failed")
@@ -491,14 +503,17 @@ fn pdf_viewer_document_of_parsed_document(
   } else {
     document
   }
-  let (document, pages) = (document, document.pages_of_pagetree()) catch {
-    @core.PageTreeExpected => {
+  let (document, pages, reader_observations) = pdf_page_tree_for_viewer(
+    document,
+  ) catch {
+    original_error => {
       let recovered = pdf_recover_compressed_document(bytes, document) catch {
-        _ => raise @core.PageTreeExpected
+        _ => raise original_error
       }
-      (recovered, recovered.pages_of_pagetree())
+      pdf_page_tree_for_viewer(recovered) catch {
+        _ => raise original_error
+      }
     }
-    error => raise error
   }
   {
     source_length: bytes.length(),
@@ -507,6 +522,7 @@ fn pdf_viewer_document_of_parsed_document(
     pages,
     optional_content_state: None,
     font_fallbacks: [],
+    reader_observations,
   }
 }
 
@@ -548,7 +564,7 @@ pub fn PdfViewerDocument::optional_content_state(
 }
 
 ///|
-/// Number of pages in the source document.
+/// Number of readable pages retained after page-tree recovery.
 pub fn PdfViewerDocument::page_count(self : PdfViewerDocument) -> Int {
   self.pages.length()
 }
@@ -1128,6 +1144,7 @@ priv struct PdfCollectedEntry {
   text_glyph : @pdflite.PdfContentTextGlyphPlacement?
   text_source : PdfCollectedTextSource?
   font_object : @syntax.PdfObject?
+  font_resource_missing : Bool
   resources : @syntax.PdfObject
   inline_image : (@syntax.PdfObject, @syntax.PdfObject?, @core.PdfBytes)?
   clip_paths : Array[@shape.PdfPath]
@@ -1309,6 +1326,7 @@ fn pdf_collected_entries_of_ops(
       content_objects: [],
       form_path: [],
       font_object: None,
+      font_resource_missing: false,
       font_stack: [],
       collect_sources: false,
       font_fallbacks: [],
@@ -1434,6 +1452,7 @@ fn pdf_collected_entries_of_ops(
                   text_glyph: glyphs.get(glyph_index),
                   text_source: None,
                   font_object: None,
+                  font_resource_missing: false,
                   resources,
                   inline_image: None,
                   clip_paths: [
@@ -1472,6 +1491,7 @@ fn pdf_collected_entries_of_ops(
               text_glyph: None,
               text_source: None,
               font_object: None,
+              font_resource_missing: false,
               resources,
               inline_image: Some((dictionary, decode_parms, data)),
               clip_paths: [
@@ -1630,6 +1650,9 @@ fn pdf_collected_entries_of_ops(
                 glyph_index,
               ),
               font_object: text_source_scope.bind(scope => scope.font_object),
+              font_resource_missing: text_source_scope
+              .map(scope => scope.font_resource_missing)
+              .unwrap_or(false),
               resources,
               inline_image: None,
               clip_paths: [

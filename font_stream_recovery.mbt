@@ -51,7 +51,8 @@ fn pdf_font_stream_recovery_input(
   document : @pdflite.PdfDocument,
   object : @syntax.PdfObject,
 ) -> Bytes? {
-  guard document.direct(object) is @syntax.PdfStreamObject(stream) else {
+  guard pdf_direct_for_viewer(document, object)
+    is Some(@syntax.PdfStreamObject(stream)) else {
     return None
   }
   guard document.lookup_direct(pdf_name_key("/Length"), object)
@@ -136,7 +137,8 @@ fn pdf_font_recovered_stream(
   object : @syntax.PdfObject,
   bytes : Bytes,
 ) -> @syntax.PdfObject raise @core.PdfError {
-  guard document.direct(object) is @syntax.PdfStreamObject(stream) else {
+  guard pdf_direct_for_viewer(document, object)
+    is Some(@syntax.PdfStreamObject(stream)) else {
     raise @core.ParseStreamExpected
   }
   let mut dictionary = stream.dictionary
@@ -155,7 +157,15 @@ fn pdf_decode_font_stream_result(
   document : @pdflite.PdfDocument,
   object : @syntax.PdfObject,
 ) -> (@syntax.PdfObject, Bool) raise @core.PdfError {
-  let input = pdf_font_stream_recovery_input(document, object)
+  guard pdf_direct_for_viewer(document, object)
+    is Some(@syntax.PdfStreamObject(stream)) else {
+    raise @core.SoftError("Font stream reference cycle or limit")
+  }
+  let prepared = @syntax.pdf_stream(
+    pdf_font_safe_dictionary(document, stream.dictionary, 0),
+    stream.data,
+  )
+  let input = pdf_font_stream_recovery_input(document, prepared)
   match input {
     Some(bytes) =>
       for entry in pdf_font_stream_recovery_cache {
@@ -167,7 +177,7 @@ fn pdf_decode_font_stream_result(
       }
     None => ()
   }
-  try document.pdf_decode_stream(object) catch {
+  try document.pdf_decode_stream(prepared) catch {
     @core.InvalidFlateData => {
       guard input is Some(bytes) &&
         pdf_font_stream_recovery_cached(bytes) is Some(decoded) else {

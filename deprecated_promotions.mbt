@@ -435,3 +435,27 @@ pub extend PdfTextStructure with @debug.Debug::{to_repr}
 ///|
 #deprecated
 pub extend PdfTextStructure with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextRecoveryDiagnostic with Eq::{equal, not_equal}
+
+///|
+#deprecated
+pub extend PdfTextRecoveryDiagnostic with Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextRecoveryDiagnostic with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfReaderDiagnostic with Eq::{equal, not_equal}
+
+///|
+#deprecated
+pub extend PdfReaderDiagnostic with Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfReaderDiagnostic with ToJson::{to_json}

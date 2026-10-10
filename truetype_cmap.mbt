@@ -178,11 +178,23 @@ fn pdf_viewer_ttf_read_cmap(
     }
     guard length >= 2 && length <= table.length() - offset else { continue }
     let subtable = table[offset:offset + length]
-    guard pdf_viewer_ttf_cmap_subtable_valid(subtable) else { continue }
+    if format == 2 {
+      guard pdf_viewer_ttf_cmap2_normalize(subtable) is Some(_) else {
+        continue
+      }
+    } else {
+      guard pdf_viewer_ttf_cmap_subtable_valid(subtable) else { continue }
+    }
     chosen = Some((platform, encoding, subtable))
     best_rank = rank
   }
   guard chosen is Some((platform, encoding, subtable)) else { return None }
+  let normalized = if pdf_viewer_ttf_u16(subtable, 0) == Some(2) {
+    pdf_viewer_ttf_cmap2_normalize(subtable).unwrap()
+  } else {
+    subtable.to_owned()
+  }
+  let subtable = normalized[:]
   // Present exactly one validated subtable using the library's accepted IDs.
   // The original IDs remain on the result for PDF/MacRoman semantics.
   let prefix = if pdf_viewer_ttf_u16(subtable, 0) == Some(12) {

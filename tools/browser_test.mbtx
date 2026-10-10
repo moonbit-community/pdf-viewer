@@ -76,9 +76,15 @@ async fn Browser::check(
 
 ///|
 async fn Browser::ready(self : Browser, expected_pages : Int) -> Unit {
+  let page_condition = if expected_pages < 0 {
+    "document.querySelectorAll('.page').length > 0"
+  } else {
+    "document.querySelectorAll('.page').length === \{expected_pages}"
+  }
   for _ in 0..<400 {
     if self.evaluate(
-        "document.querySelectorAll('.page').length === \{expected_pages} && document.getElementById('viewer').getAttribute('aria-busy') === 'false'",
+        page_condition +
+        " && document.getElementById('viewer').getAttribute('aria-busy') === 'false'",
       ) ==
       Json::boolean(true) {
       return
@@ -143,6 +149,8 @@ async fn Browser::upload(self : Browser, filename : String) -> Unit {
 async fn Browser::drag(self : Browser, first : String, last : String) -> Unit {
   let expression =
     #| ((firstText, lastText) => {
+    #|   // Start a new selection; dragging existing selected text starts native DnD.
+    #|   getSelection().removeAllRanges();
     #|   const glyphs = [...document.querySelectorAll('.glyph')];
     #|   const first = glyphs.find(g => g.textContent === firstText);
     #|   const last = glyphs.find(g => g.textContent === lastText);
@@ -179,6 +187,7 @@ async fn Browser::drag(self : Browser, first : String, last : String) -> Unit {
       "y": y0,
     }),
   )
+  @async.sleep(30)
   ignore(
     self.command("Input.dispatchMouseEvent", params={
       "type": "mousePressed",
@@ -200,6 +209,7 @@ async fn Browser::drag(self : Browser, first : String, last : String) -> Unit {
         "buttons": 1,
       }),
     )
+    @async.sleep(16)
   }
   ignore(
     self.command("Input.dispatchMouseEvent", params={
@@ -303,8 +313,7 @@ async fn main {
       ),
     )
     browser.check(
-      "search toolbar is enabled with document options",
-      "!document.getElementById('search-query').disabled && document.getElementById('search-case') !== null && document.getElementById('search-whole') !== null && document.getElementById('search-diacritic') !== null",
+      "search toolbar is enabled with document options", "!document.getElementById('search-query').disabled && document.getElementById('search-case') !== null && document.getElementById('search-whole') !== null && document.getElementById('search-diacritic') !== null",
     )
     browser.check(
       "search returns and highlights a source match",
@@ -318,8 +327,7 @@ async fn main {
       ),
     )
     browser.check(
-      "search result navigation keeps the active match",
-      "document.getElementById('search-next').disabled === false && document.getElementById('search-previous').disabled === false && document.getElementById('search-status').textContent === '1 / 1'",
+      "search result navigation keeps the active match", "document.getElementById('search-next').disabled === false && document.getElementById('search-previous').disabled === false && document.getElementById('search-status').textContent === '1 / 1'",
     )
     browser.navigate(base + "/?file=/fixtures/nested_outline.pdf", 9)
     browser.check(
@@ -332,10 +340,13 @@ async fn main {
         #| })()
       ),
     )
-    ignore(browser.evaluate("document.getElementById('outline-toggle').click(); true"))
+    ignore(
+      browser.evaluate(
+        "document.getElementById('outline-toggle').click(); true",
+      ),
+    )
     browser.check(
-      "outline panel renders local navigation entries",
-      "!document.getElementById('sidebar').hidden && document.getElementById('sidebar-title').textContent === '目录' && document.querySelectorAll('#sidebar-content .sidebar-item').length > 0",
+      "outline panel renders local navigation entries", "!document.getElementById('sidebar').hidden && document.getElementById('sidebar-title').textContent === '目录' && document.querySelectorAll('#sidebar-content .sidebar-item').length > 0",
     )
     browser.check(
       "outline entry navigates to its destination",
@@ -348,15 +359,19 @@ async fn main {
         #| })()
       ),
     )
-    ignore(browser.evaluate("document.getElementById('thumbnail-toggle').click(); true"))
-    browser.check(
-      "thumbnail panel renders page previews",
-      "document.getElementById('sidebar-title').textContent === '缩略图' && document.querySelectorAll('.thumbnail-preview svg').length === 9",
+    ignore(
+      browser.evaluate(
+        "document.getElementById('thumbnail-toggle').click(); true",
+      ),
     )
-    ignore(browser.evaluate("document.getElementById('info-toggle').click(); true"))
     browser.check(
-      "info panel exposes document fields and print control",
-      "document.getElementById('sidebar-title').textContent === '文档信息' && document.querySelector('.info-list') !== null && document.getElementById('print').disabled === false",
+      "thumbnail panel renders page previews", "document.getElementById('sidebar-title').textContent === '缩略图' && document.querySelectorAll('.thumbnail-preview svg').length === 9",
+    )
+    ignore(
+      browser.evaluate("document.getElementById('info-toggle').click(); true"),
+    )
+    browser.check(
+      "info panel exposes document fields and print control", "document.getElementById('sidebar-title').textContent === '文档信息' && document.querySelector('.info-list') !== null && document.getElementById('print').disabled === false",
     )
     browser.navigate(base + "/?file=/fixtures/labelled_pages.pdf", 11)
     browser.check(
@@ -380,15 +395,19 @@ async fn main {
         #| })()
       ),
     )
-    ignore(browser.evaluate("document.getElementById('view-mode').value = 'page'; document.getElementById('view-mode').dispatchEvent(new Event('change')); true"))
-    browser.check(
-      "page mode keeps one page visible",
-      "document.getElementById('viewer').classList.contains('page-mode') && [...document.querySelectorAll('.page')].filter(page => getComputedStyle(page).display !== 'none').length === 1",
+    ignore(
+      browser.evaluate(
+        "document.getElementById('view-mode').value = 'page'; document.getElementById('view-mode').dispatchEvent(new Event('change')); true",
+      ),
     )
-    ignore(browser.evaluate("document.getElementById('next-page').click(); true"))
     browser.check(
-      "page navigation writes browser history",
-      "location.hash === '#page=2' && document.getElementById('page-number').value === '2'",
+      "page mode keeps one page visible", "document.getElementById('viewer').classList.contains('page-mode') && [...document.querySelectorAll('.page')].filter(page => getComputedStyle(page).display !== 'none').length === 1",
+    )
+    ignore(
+      browser.evaluate("document.getElementById('next-page').click(); true"),
+    )
+    browser.check(
+      "page navigation writes browser history", "location.hash === '#page=2' && document.getElementById('page-number').value === '2'",
     )
     browser.navigate(base + "/?file=/fixtures/attachment.pdf", 1)
     browser.check(
@@ -403,7 +422,11 @@ async fn main {
       ),
     )
     browser.navigate(base + "/?file=/fixtures/90ms_rksj_h_sample.pdf", 1)
-    ignore(browser.evaluate("document.getElementById('search-query').value = ''; document.getElementById('search-query').dispatchEvent(new Event('input')); true"))
+    ignore(
+      browser.evaluate(
+        "document.getElementById('search-query').value = ''; document.getElementById('search-query').dispatchEvent(new Event('input')); true",
+      ),
+    )
     browser.screenshot(output + "/japanese-viewer.png")
     browser.check(
       "cursor text layer has PDF item indices and affine glyph boxes", "[...document.querySelectorAll('.glyph')].every(g => g.dataset.item !== undefined && getComputedStyle(g).cursor === 'text' && g.getBoundingClientRect().height > 0)",
@@ -631,6 +654,27 @@ async fn main {
         #| })()
       ),
     )
+    let font_loading : Array[Json] = []
+    for
+      file in [
+        "standard_fonts.pdf", "complex_ttf_font.pdf", "TrueType_without_cmap.pdf",
+        "issue4800.pdf", "issue14462_reduced.pdf",
+      ] {
+      browser.navigate(base + "/?file=/fixtures/" + file, -1)
+      browser.check(
+        "font loading retains painted and selectable glyphs: " + file,
+        "document.getElementById('error').hidden && document.querySelectorAll('.glyph-text').length > 0 && document.querySelectorAll('.paint-layer path').length > 0 && [...document.querySelectorAll('.glyph')].every(g => Number.isFinite(parseFloat(g.style.width)) && parseFloat(g.style.width) > 0)",
+      )
+      let faces = browser.evaluate(
+        "(async () => { await Promise.allSettled([...document.fonts].map(f => f.load())); return {faces: [...document.fonts].map(f => ({family: f.family, status: f.status})), glyphs: document.querySelectorAll('.glyph-text').length, outlined: document.querySelectorAll('.paint-layer path').length}; })()",
+      )
+      println("FONT LOADING " + file + " " + faces.stringify())
+      font_loading.push({ "file": file, "observations": faces })
+    }
+    browser.navigate(base + "/?file=/fixtures/Pages-tree-refs.pdf", 1)
+    browser.check(
+      "cyclic page tree retains its readable page in the browser", "document.getElementById('error').hidden && document.querySelectorAll('.page').length === 1 && [...document.querySelectorAll('.glyph-text')].map(g => g.textContent).join('').includes('Testcase: ’Pages loop’')",
+    )
     guard browser.errors.is_empty() else {
       fail("Browser errors: " + browser.errors.to_json().stringify())
     }
@@ -639,7 +683,10 @@ async fn main {
       "checks": browser.checks,
       "passed": browser.checks.length(),
       "scope": "Browser DOM text, source ranges, zoom/rotation, copy and multi-page smoke tests; not pixel parity",
-      "fixtures": ["90ms_rksj_h_sample.pdf", "vertical.pdf", "tracemonkey.pdf"],
+      "fixtures": [
+        "90ms_rksj_h_sample.pdf", "vertical.pdf", "tracemonkey.pdf", "Pages-tree-refs.pdf",
+      ],
+      "font_loading": font_loading,
       "artifacts": output,
     }
     @fs.write_file(output + "/report.json", report.stringify(indent=2))

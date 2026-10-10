@@ -1101,7 +1101,10 @@ fn pdf_type1_run_charstring(
         }
         let othersubr = stack[stack.length() - 1].to_int()
         let count = stack[stack.length() - 2].to_int()
-        if count < 0 || count > stack.length() - 2 {
+        if count < 0 ||
+          count > stack.length() - 2 ||
+          stack[stack.length() - 1] != othersubr.to_double() ||
+          stack[stack.length() - 2] != count.to_double() {
           return false
         }
         if othersubr == 1 && count == 0 {
@@ -1128,35 +1131,33 @@ fn pdf_type1_run_charstring(
           let bcp4y = args[a + 11]
           let p3x = args[a + 12]
           let p3y = args[a + 13]
-          let final_x = args[a + 15]
-          let final_y = args[a + 16]
           state.val = pdf_cff_curve(
             state.val,
             rpx + bcp1x,
             rpy + bcp1y,
-            bcp2x - bcp1x - rpx,
-            bcp2y - bcp1y - rpy,
-            p2x - bcp2x,
-            p2y - bcp2y,
+            bcp2x,
+            bcp2y,
+            p2x,
+            p2y,
           )
           state.val = pdf_cff_curve(
             state.val,
-            bcp3x - p2x,
-            bcp3y - p2y,
-            bcp4x - bcp3x,
-            bcp4y - bcp3y,
-            p3x - bcp4x,
-            p3y - bcp4y,
+            bcp3x,
+            bcp3y,
+            bcp4x,
+            bcp4y,
+            p3x,
+            p3y,
           )
-          state.val = {
-            ..state.val,
-            x: state.val.x + final_x - p3x,
-            y: state.val.y + final_y - p3y,
-          }
           flexing.val = false
           stack.clear()
         } else {
-          stack.clear()
+          // PDF.js leaves OtherSubr arguments on the charstring stack while
+          // discarding the selector/count. Hint replacement (OtherSubr 3)
+          // uses pop/callsubr to consume that retained subroutine index;
+          // OtherSubr 2 retains the accumulated relative flex displacements.
+          ignore(stack.remove(stack.length() - 1))
+          ignore(stack.remove(stack.length() - 1))
         }
       }
       0x0C11 => ()
