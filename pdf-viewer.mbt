@@ -1118,6 +1118,7 @@ priv struct PdfCollectedEntry {
   entry : @pdflite.PdfContentJsonEntry
   state : @pdflite.PdfContentOperatorState
   text_glyph : @pdflite.PdfContentTextGlyphPlacement?
+  text_source : PdfCollectedTextSource?
   resources : @syntax.PdfObject
   inline_image : (@syntax.PdfObject, @syntax.PdfObject?, @core.PdfBytes)?
   clip_paths : Array[@shape.PdfPath]
@@ -1140,6 +1141,7 @@ fn pdf_collected_entries_of_page(
   document : @pdflite.PdfDocument,
   page : @page.PdfPage,
   optional_content_view? : PdfOptionalContentView? = None,
+  collect_text_sources? : Bool = false,
 ) -> Array[PdfCollectedEntry] raise @core.PdfError {
   let rectangle = document.parse_rectangle(page.mediabox)
   let initial = @pdflite.pdf_content_initial_operator_state(
@@ -1163,6 +1165,11 @@ fn pdf_collected_entries_of_page(
     false,
     false,
     optional_content_view~,
+    text_source_scope=if collect_text_sources {
+      Some(pdf_text_scope_for_page(page))
+    } else {
+      None
+    },
   )
 }
 
@@ -1286,6 +1293,7 @@ fn pdf_collected_entries_of_ops(
   initial_text_clip_groups? : ArrayView[PdfCollectedTextClipGroup] = [],
   optional_content_view? : PdfOptionalContentView? = None,
   initial_optional_content_visible? : Bool = true,
+  text_source_scope? : PdfTextCollectScope? = None,
 ) -> Array[PdfCollectedEntry] raise @core.PdfError {
   let mut state = initial
   let mut soft_mask = initial_soft_mask
@@ -1306,7 +1314,14 @@ fn pdf_collected_entries_of_ops(
   let mut fill_color_stack : Array[Bool] = []
   let mut stroke_color_stack : Array[Bool] = []
   let output : Array[PdfCollectedEntry] = []
-  for op in ops {
+  for operator_index, op in ops {
+    let text_sources = pdf_collect_text_string_sources(
+      document,
+      text_source_scope,
+      state.text_state.current_font,
+      op,
+      operator_index,
+    )
     match op {
       @content.Op_Do(name) =>
         match document.content_form_xobject_ops(resources, name) {
@@ -1364,6 +1379,9 @@ fn pdf_collected_entries_of_ops(
                     initial_text_clip_groups=text_clip_groups[:],
                     optional_content_view~,
                     initial_optional_content_visible=form_visible,
+                    text_source_scope=pdf_text_scope_for_form(
+                      document, resources, text_source_scope, name, operator_index,
+                    ),
                   ),
                 )
               }
@@ -1391,6 +1409,7 @@ fn pdf_collected_entries_of_ops(
                   entry: emitted_entry,
                   state: result.state,
                   text_glyph: glyphs.get(glyph_index),
+                  text_source: None,
                   resources,
                   inline_image: None,
                   clip_paths: [
@@ -1427,6 +1446,7 @@ fn pdf_collected_entries_of_ops(
               entry,
               state: result.state,
               text_glyph: None,
+              text_source: None,
               resources,
               inline_image: Some((dictionary, decode_parms, data)),
               clip_paths: [
@@ -1564,6 +1584,11 @@ fn pdf_collected_entries_of_ops(
               entry: emitted_entry,
               state: result.state,
               text_glyph: glyphs.get(glyph_index),
+              text_source: pdf_collected_text_source_for_glyph(
+                text_sources[:],
+                glyphs[:],
+                glyph_index,
+              ),
               resources,
               inline_image: None,
               clip_paths: [
@@ -1586,6 +1611,7 @@ fn pdf_collected_entries_of_ops(
         state = result.state
       }
     }
+    pdf_text_scope_after_op(document, resources, text_source_scope, op)
     let (next_fill, next_stroke) = pdf_color_explicit_after_op(
       op, fill_color_explicit, stroke_color_explicit,
     )

@@ -6,7 +6,7 @@ CLI. That conversion baseline does not measure parity with pdf.js rendering.
 The automated selected-page visual baseline below now measures actual output
 against the same pinned PDF.js build.
 
-The suite currently contains 285 tests on each of wasm, wasm-gc, JavaScript, and
+The suite currently contains 305 tests on each of wasm, wasm-gc, JavaScript, and
 native. It includes 13 annotation tests, 17 CFF tests, 25 Type 1 tests, 5 CID
 layout tests, 9 variable-length CMap tests, 4 text-geometry tests, and 8
 text-clipping tests, one mixed-paint scaling regression, and one tiling-pattern
@@ -226,6 +226,64 @@ broader damaged-font/document recovery keep R-02/F-05/F-06/T-04 open.
 ```bash
 moon run tools/font_stream_probe.mbtx reference/pdf.js/test/pdfs/issue13316_reduced.pdf _build/a1-stream-issue13316
 moon test --target all --diagnostic-limit 1
+moon run tools/visual_test.mbtx tools/font_post_cases.json '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+```
+
+### Text byte and font provenance
+
+`PdfViewerDocument::text_provenance(n)` adds an opt-in sidecar joining existing
+logical UTF-16/item ranges to character-code bytes, half-open decoded-string
+operand ranges, stream-reference scopes and repeated/nested Form invocations.
+Operator indices address the existing parser's operations; TJ operand indices
+retain numeric adjustments. Escaping, decompression and decryption precede
+these byte offsets. A string may cross concatenated streams, so this API
+retains the scope's entire stream-reference sequence and does not invent a
+single stream or file lexical offset. Empty copied glyphs and inferred
+separators have no logical source entry; omitted bytes do not renumber later
+operand offsets.
+
+CID/GID mapping reuses the existing CMap/TrueType/CFF/Type1 selectors and pinned
+font library paths. The collector tracks the active PDF font object across Tf,
+ExtGState, q/Q, inherited/shadowed Form resources and implicit Form frames.
+Embedded programs are cached only within one inspection. GID 0 remains a valid
+notdef selection; Type1/Type3 use available glyph names. Unknown mappings,
+non-UTF8 Type3 names and host-font glyph IDs remain absent. Invalid or truncated
+CMap codes preserve bytes without a CID/GID. This identifies PDF program
+selection, not browser font-loading success or proof of matching rendered ink.
+
+Twenty new regressions (17 whitebox and 3 public API) cover all text-showing
+operators, PDF escapes and non-UTF8 operand bytes, 1–4-byte/unsigned and
+predefined UTF8/UTF16/UTF32 CMaps, truncation, CIDToGIDMap/checksum recovery,
+independent ToUnicode/GID selection, CFF/Type1/Type3 identities, Form invocation
+and font-state scopes, concatenated/direct streams, empty/multi-scalar mappings,
+bidi/ligature/surrogate search/selection, RC4/AESV2 decryption, optional-content
+visibility and unchanged source objects/rendering. The final suite passed
+**305/305 on each of wasm, wasm-gc, JavaScript and native**. `moon info && moon
+fmt`, script formatting and `moon check --target all` passed; the same 24
+pre-existing deprecation warnings remain. The public `.mbti` changes add three
+sidecar types and one document method; existing public records are unchanged.
+
+`cmd/text_provenance` exports JSON and checks public source relationships;
+`tools/text_provenance_corpus.mbtx` reuses `tools/font_post_cases.json` at the
+pinned reference revision. Report `_build/text-provenance-1791648236807/` passed
+**10/10**, covering **5,409/5,409 logical glyphs**, **6,252 source bytes**,
+**843 CID mappings**, **814 numeric GIDs** and **4,305 program glyph names**.
+No invalid code or source-range/charcode mismatch occurred in these pages.
+Counts can overlap; absent IDs include legitimate unembedded/host fonts.
+These are provenance checks, not a comparison of PDF.js's rewritten font GIDs.
+
+The selected-page visual replay in `_build/visual-test-1791647890679/` measured
+**10/10 with 0 failures, runtime exceptions or placeholders**. All ten viewer
+PNG SHA-256 values equal the `81b42d3` report in
+`_build/visual-test-1791645717953/`; the existing ten pixel/text differences
+from PDF.js remain. Generated browser JS grows from **12,316,533 to 12,334,904
+bytes**, and `gzip -c` from **2,795,296 to 2,797,759 bytes** (**2,463 bytes**).
+This is artifact size, not page-load performance. File lexical spans, text
+run/paragraph structure and broader font/recovery parity keep T-02/A1 open.
+
+```bash
+moon run --target native cmd/text_provenance -- input.pdf /tmp/page-1-text.json 1
+moon run tools/text_provenance_corpus.mbtx tools/font_post_cases.json
 moon run tools/visual_test.mbtx tools/font_post_cases.json '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 ```
 

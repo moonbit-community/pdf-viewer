@@ -265,6 +265,15 @@ controls and inferred spaces across directional boundaries remain limited.
 
 `text_sources.mbt` shares source UTF-16 ranges with search and the additive
 `PdfPageModel::text_sources()` sidecar. Inferred separators have no source item.
+`text_provenance.mbt` joins these logical ranges to decoded string-operand byte
+ranges and available embedded-font CID/GID or Type1/Type3 names. Its collector
+hook is opt-in: `text_provenance_collect.mbt` uses the existing CMap decoder and
+tracks stream-reference scopes, Form invocation paths and the active font
+object through Tf, gs, q/Q and implicit Form frames. `text_provenance_fonts.mbt`
+reuses the existing TrueType/CFF/Type1 selectors, with a local program cache per
+inspection. No file lexical offsets or host-font GIDs are inferred. Empty
+copied glyphs stay outside logical sources; their bytes still contribute to
+following operand offsets. Public page and text records remain unchanged.
 `text_diagnostics.mbt` exposes observed render fallbacks and replacement text;
 the document-level method additionally reads CMap recovery diagnostics in each
 collected resource scope, retaining the resource path and immediate stream

@@ -156,7 +156,7 @@ JPEG + SMask + Matte、color-key 边缘和复杂合成仍待完成，不能据�
 ## 文字与选择模型
 
 - [ ] T-01 / P0：提取、复制/框选、搜索和 DOM text layer 共用页面逻辑顺序，paint-order display list 与 item index 保持不变。已接入 `moonbit-community/bidi` 0.5.2，按 Unicode UAX #9 置换核对内容流顺序和几何，混合 RTL/LTR 保留数字串，多 scalar glyph 不拆分；水平页先按持续栏间空隙分块，覆盖通栏标题和 RTL 双栏。6 项新增顺序回归通过，真实 `tracemonkey.pdf` 第一页从左右栏交错变为逐栏提取。复杂 bidi 控制、表格/旋转布局、细粒度字形边界和跨方向空格推断仍待补齐，见 [A1 验证](validation.md#a1-fonts-unicode-and-reading-order)。
-- [ ] T-02 / P1：补字符码/CID/GID、原始 byte span、文本 run/段落与 selection source 的稳定映射；长文本可定位回源。 已提供 `PdfPageModel::text_sources()` sidecar，返回逻辑 UTF-16 范围、稳定 item index、charcode 和字体；推断分隔符保留无源空隙，连字/surrogate pair 属于完整源 glyph。未提供 byte span 或完整 CID/GID，因此保持未勾选。
+- [ ] T-02 / P1：补字符码/CID/GID、原始 byte span、文本 run/段落与 selection source 的稳定映射；长文本可定位回源。已提供 `PdfPageModel::text_sources()` 和文档 `text_provenance(n)` sidecar，连接逻辑 UTF-16 范围、稳定 item index、charcode、串内原码 bytes/range、内容流引用和 Form 调用，以及可解析的 CID/GID/字形名与字体/程序对象号。复用现有解码与选字路径，支持 TJ 字距、变长 CMap、Form 字体继承、ExtGState、`q/Q`、解密、bidi、连字和 surrogate pair；未知映射/宿主 GID 不编造。字节范围是在 PDF 转义、解压和解密后的字符串操作数中，不是文件词法偏移；空复制字形和推断分隔符无逻辑来源项。文件词法 span、run/段落结构仍待补齐，保持未勾选。
 - [x] T-03 / P0：全面对齐 Tw 的编码语义：只有原始单字节 0x20 应用 word spacing。所有 CID 字体共用按 byte length 判定的主路径；4 个独立字距测试及外部 CMap/纵排测试覆盖 standard、simple、Type 3、Identity 与预定义 UTF8/UTF16/UTF32。ToUnicode 把别的字符映射为空格也不会触发 Tw，见 [validation.md](validation.md#adobe-predefined-cmaps-vertical-layout-and-word-spacing)。
 - [ ] T-04 / P1：统一损坏字符串、未知字符、缺失 ToUnicode/metrics 的回退和诊断；绘制与提取失败不能静默丢失全部文字。 页面/文档 `text_diagnostics()` 已暴露替换字符、宿主字体回退、缺轮廓/clip 和 CMap 恢复观察，可定位页、item、charcode、字体/资源与直接对象号。新增字体/CMap 校验和恢复诊断，包含父 CMap 的实际对象号；不修改源对象。这是显式诊断 API，未统一所有 ToUnicode/metrics 回退，也不把字面 U+FFFD 或正常宿主回退判为文件损坏。
 

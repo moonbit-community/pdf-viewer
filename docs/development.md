@@ -149,6 +149,16 @@ CLI 成功写入 SVG 返回 `0`；读取、渲染、页码越界或写文件失�
 moon run tools/corpus.mbtx
 ```
 
+检查文字的字符码、串内字节范围和字体来源，可以输出独立 JSON：
+
+```bash
+moon run --target native cmd/text_provenance -- ./sample.pdf /tmp/page-1-text.json 1
+moon run tools/text_provenance_corpus.mbtx tools/font_post_cases.json
+```
+
+检查器核对逻辑来源、byte range、字符码和调用位置；返回 `0` 表示这些关系通过，
+不代表字形外观已与 PDF.js 一致。批量结果保存在 `_build/text-provenance-*/`。
+
 默认扫描 pdf.js corpus 中以 `annotation` 开头的 `.pdf`，每个文件只检查第一页，单文件
 超时 15 秒。也可以指定 corpus 目录和文件名前缀：
 
@@ -180,6 +190,7 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs vertical 1,2,3
 | DOM text layer | `PdfPageModel::text_layer(scale~, rotation~)` |
 | cursor selection → source glyphs | `PdfPageModel::select_text(start_item, start_offset, end_item, end_offset)` |
 | logical UTF-16 offsets → source glyphs | `PdfPageModel::text_sources()`；保留 item index、charcode 和字体，推断分隔符不伪造来源 |
+| source glyphs → PDF strings and font IDs | `PdfViewerDocument::text_provenance(n)`；返回串内 bytes/range、Form 调用路径和可解析的 CID/GID/字形名 |
 | text/font recovery diagnostics | `PdfPageModel::text_diagnostics()`；`PdfViewerDocument::text_diagnostics(n)` 另含 CMap stream 诊断 |
 | `PDFPageProxy.getOperatorList()` | `PdfViewerDocument::operator_list(n)` |
 | `PDFPageProxy.render(...)` | `PdfViewerDocument::render_svg(n, scale~)` / `render_svg_with_rotation(...)` / cached `PdfPageModel::render_svg(...)` |
@@ -201,7 +212,17 @@ usage/RBGroups 等交互语义仍是后续图层工作。
 文字 API 共用逻辑阅读顺序，绘制列表的原始 index 不变。搜索复用 Unicode NFKD
 和字符分类，兼容展开与组合符号重排后的结果返回原文 UTF-16 范围。
 `text_sources()` 的 `[start, end)` 与 `text_content().text` 对应；一个连字或
-surrogate pair 仍属于同一源 item，没有原始 PDF byte offset 或完整 CID/GID 信息。
+surrogate pair 仍属于同一源 item。`text_provenance(n)` 按同一顺序返回每个非空复制
+字形的来源：内容流引用序列、嵌套 Form 的对象号及调用位置、操作/字符串操作数索引、
+解码后字符串内的 `[byte_start, byte_end)` 和原字符码 bytes。TJ 操作数索引包含数值
+字距；引号操作分别使用 0/2。位置以串的 bytes 为单位，经过 PDF 转义、解压和解密，
+不是文件中的词法偏移；串可能横跨多个拼接的内容流，因此保留整个流引用序列。
+来源还保留实际活动字体和嵌入程序对象号，遵守 Form 字体继承、`q/Q` 和 ExtGState。
+CID/GID 与 ToUnicode 独立；Type 1/Type 3 使用字形名，宿主字体 GID 和无法解析的映射
+返回空值，非法/截断 CMap code 仍保留 bytes。空复制字形与推断分隔符不增加逻辑来源项。
+该检查 API 显式调用时才采集 bytes 和解析字形来源，现有公开页面/文字 record 不变。
+JSON 导出沿用 MoonBit 的 Bytes 格式：可打印 ASCII 保留，其余 byte 使用 `\xHH`；
+`@json.from_json` 可以无损恢复，不能把这个字符串直接当作 UTF-8 原码。
 页面诊断记录替换字符、宿主字体回退、缺轮廓/clip 等可观察情况；文档诊断还记录
 CMap 坏 token、未闭合段、继承环和不可取得的 stream，并保留资源路径与直接对象号。
 宿主回退或字面 U+FFFD 本身不证明文件损坏；浏览器字体实际加载成功与否不在诊断范围内。

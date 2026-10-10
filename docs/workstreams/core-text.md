@@ -42,12 +42,18 @@ TODO 范围：R-02、F-03、F-05、F-06、F-07、T-01、T-02、T-04。
   避免将合法长目标串误报为坏 token。
   文档诊断新增 `FontStreamChecksumRecovered`，能定位字体程序/CMap 及父流的
   实际资源路径和对象号；观察不表示已证明恢复 bytes 与原始 bytes 一致。
+- 新增文档 `text_provenance(n)` sidecar，串联逻辑 UTF-16 范围、字符串操作数中的
+  原字符码 bytes/range、内容流引用序列、嵌套/重复 Form 调用和活动字体对象号。
+  复用现有 1–4 字节 CMap 解码和 TrueType/CFF/Type 1 选字逻辑，返回可解析的
+  CID/GID/字形名；字体继承、`q/Q`、ExtGState、加密字符串、TJ、bidi 和连字均有回归。
+  来源采集显式开启，既有公开 record 不变；串内范围不冒充文件词法偏移，宿主 GID
+  和未知映射不编造。`tools/text_provenance_corpus.mbtx` 可复跑真实字体清单。
 - 用独立 `.mbtx` probe 验证 `mizchi/font`：缺 cmap 的 PDF 子集和裸 Type 1
   程序仍不可用，复合字形剪切/点对齐/缩放偏移与 fixture 预期不符，因此未替换
   当前字体恢复路径。真实对照和回归记录见 [validation.md](../validation.md#a1-fonts-unicode-and-reading-order)。
 
 这些进展没有勾选整个 TODO。后续仍需字体库扩展、其它 cmap/post 格式和损坏字体覆盖、
-复杂 bidi/表格/旋转布局、PDF byte span 与 CID/GID 来源，以及统一恢复策略和真实
+复杂 bidi/表格/旋转布局、PDF 文件词法 byte span 与 run/段落来源，以及统一恢复策略和真实
 UseCMap/reader 损坏样本。跨方向边界目前保留显式空白，不推断额外空格；
 无法核对的 bidi 置换保留内容流顺序。
 

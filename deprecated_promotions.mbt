@@ -327,3 +327,39 @@ pub extend PdfTextDiagnostic with Eq::{not_equal, equal}
 ///|
 #deprecated
 pub extend PdfTextDiagnostic with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextFormInvocation with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextFormInvocation with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextFormInvocation with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextStringSource with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextStringSource with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextStringSource with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextProvenance with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextProvenance with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextProvenance with ToJson::{to_json}

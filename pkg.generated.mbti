@@ -442,6 +442,20 @@ pub fn PdfTextDiagnosticKind::to_json(Self) -> Json
 #deprecated
 pub fn PdfTextDiagnosticKind::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfTextFormInvocation {
+  name : String
+  object_number : Int?
+  operator_index : Int
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfTextFormInvocation::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextFormInvocation::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextFormInvocation::to_json(Self) -> Json
+#deprecated
+pub fn PdfTextFormInvocation::to_repr(Self) -> @debug.Repr
+
 pub(all) struct PdfTextItem {
   index : Int
   text : String
@@ -507,6 +521,24 @@ pub fn PdfTextLayerItem::to_json(Self) -> Json
 #deprecated
 pub fn PdfTextLayerItem::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfTextProvenance {
+  source : PdfTextSourceRange
+  string_source : PdfTextStringSource?
+  font_object_number : Int?
+  font_program_object_number : Int?
+  cid : Int?
+  gid : Int?
+  glyph_name : String?
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfTextProvenance::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextProvenance::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextProvenance::to_json(Self) -> Json
+#deprecated
+pub fn PdfTextProvenance::to_repr(Self) -> @debug.Repr
+
 pub(all) struct PdfTextRangeSelection {
   page : Int
   text : String
@@ -541,6 +573,25 @@ pub fn PdfTextSourceRange::not_equal(Self, Self) -> Bool
 pub fn PdfTextSourceRange::to_json(Self) -> Json
 #deprecated
 pub fn PdfTextSourceRange::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfTextStringSource {
+  content_streams : Array[Int?]
+  form_path : Array[PdfTextFormInvocation]
+  operator_index : Int
+  operand_index : Int
+  byte_start : Int
+  byte_end : Int
+  bytes : Bytes
+  charcode_valid : Bool
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfTextStringSource::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextStringSource::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextStringSource::to_json(Self) -> Json
+#deprecated
+pub fn PdfTextStringSource::to_repr(Self) -> @debug.Repr
 
 pub(all) struct PdfTransparencyGroup {
   id : String
@@ -593,6 +644,7 @@ pub fn PdfViewerDocument::struct_tree_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::summary_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::text_content(Self, Int) -> PdfTextContent? raise @core.PdfError
 pub fn PdfViewerDocument::text_diagnostics(Self, Int) -> Array[PdfTextDiagnostic]? raise @core.PdfError
+pub fn PdfViewerDocument::text_provenance(Self, Int) -> Array[PdfTextProvenance]? raise @core.PdfError
 pub fn PdfViewerDocument::with_font_fallbacks(Self, Array[PdfFontFallback]) -> Self
 pub fn PdfViewerDocument::with_optional_content_state(Self, PdfOptionalContentState) -> Self
 

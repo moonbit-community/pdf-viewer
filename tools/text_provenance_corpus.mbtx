@@ -1,0 +1,82 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+///|
+/// Reuse the font visual manifest and the public API inspector. This checks
+/// provenance invariants; it does not claim pixel or PDF.js font-ID parity.
+async fn main {
+  let args = @env.args()
+  guard args.length() == 2 else {
+    fail("usage: text_provenance_corpus.mbtx <font-cases.json>")
+  }
+  let manifest = @json.parse(@fs.read_file(args[1]).text())
+  guard manifest
+    is { "reference_revision": String(revision), "cases": Array(cases), .. } else {
+    fail("invalid corpus manifest")
+  }
+  let reference = @shell.Cmd("git", [
+    "-C", "reference/pdf.js", "rev-parse", "HEAD",
+  ]).output()
+  guard reference.exit_code() == 0 && reference.stdout().trim() == revision else {
+    fail("PDF.js checkout does not match the manifest revision")
+  }
+  @shell.Cmd("moon", [
+    "build", "--target", "native", "--release", "cmd/text_provenance",
+  ]).run()
+  let output = "_build/text-provenance-\{@env.now()}"
+  @fs.mkdir(output, recursive=true)
+  @fs.write_file(output + "/manifest.json", manifest.stringify(indent=2))
+  let viewer_revision = @shell.Cmd("git", ["rev-parse", "HEAD"]).output()
+  let viewer_dirty = @shell.Cmd("git", ["status", "--porcelain"]).output()
+  let results : Array[Json] = []
+  let mut failures = 0
+  for entry in cases {
+    guard entry is { "file": String(file), "pages": Array(pages), .. } else {
+      fail("invalid corpus case")
+    }
+    for page in pages {
+      guard page is Number(number, ..) &&
+        number >= 1 &&
+        number == number.to_int().to_double() else {
+        fail("invalid page number")
+      }
+      let page = number.to_int()
+      let path = output + "/" + file + ".page-\{page}.json"
+      let command = @shell.Cmd(
+        "_build/native/release/build/cmd/text_provenance/text_provenance.exe",
+        ["reference/pdf.js/test/pdfs/" + file, path, page.to_string()],
+      ).output()
+      let checks = if @fs.exists(path) {
+        let report = @json.parse(@fs.read_file(path).text())
+        match report {
+          { "checks": checks, .. } => checks
+          _ => { "passed": false, "error": "inspector report has no checks" }
+        }
+      } else {
+        { "passed": false, "error": command.stdout() + command.stderr() }
+      }
+      if command.exit_code() != 0 || !(checks is { "passed": True, .. }) {
+        failures += 1
+      }
+      results.push({ "file": file, "page": page, "checks": checks })
+      println("\{file} page \{page}: " + checks.stringify())
+    }
+  }
+  let report : Json = {
+    "reference_revision": revision,
+    "viewer_revision": viewer_revision.stdout().trim().to_owned(),
+    "viewer_dirty": viewer_dirty.stdout(),
+    "cases": results.length(),
+    "failures": failures,
+    "results": results,
+  }
+  @fs.write_file(output + "/report.json", report.stringify(indent=2))
+  println("Provenance report: " + output + "/report.json")
+  guard failures == 0 else { fail("provenance corpus has failing cases") }
+}
