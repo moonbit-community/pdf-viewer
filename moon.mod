@@ -29,4 +29,7 @@ import {
   "moonbitlang/pdflite@0.2.2",
   "moonbitlang/async@0.22.4",
   "moonbitlang/x@0.5.5",
+  "moonbit-community/bidi@0.5.2",
+  "moonbit-community/normalization@0.5.2",
+  "moonbit-community/ucd@0.5.2",
 }

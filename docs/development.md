@@ -179,6 +179,8 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs vertical 1,2,3
 | `PDFPageProxy.getTextContent()` | `PdfViewerDocument::text_content(n)` / `PdfPageModel::text_content()` |
 | DOM text layer | `PdfPageModel::text_layer(scale~, rotation~)` |
 | cursor selection → source glyphs | `PdfPageModel::select_text(start_item, start_offset, end_item, end_offset)` |
+| logical UTF-16 offsets → source glyphs | `PdfPageModel::text_sources()`；保留 item index、charcode 和字体，推断分隔符不伪造来源 |
+| text/font recovery diagnostics | `PdfPageModel::text_diagnostics()`；`PdfViewerDocument::text_diagnostics(n)` 另含 CMap stream 诊断 |
 | `PDFPageProxy.getOperatorList()` | `PdfViewerDocument::operator_list(n)` |
 | `PDFPageProxy.render(...)` | `PdfViewerDocument::render_svg(n, scale~)` / `render_svg_with_rotation(...)` / cached `PdfPageModel::render_svg(...)` |
 | `PDFFindController`-style text search | `PdfViewerDocument::search(query, options~)`; browser bridge `search_pdf` |
@@ -195,6 +197,15 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs vertical 1,2,3
 display-list 过滤；使用 `with_optional_content_state(pdf_optional_content_state(on=[...], off=[...]))`
 可以按 pdflite 的 OCG 对象号切换显示，隐藏内容不会进入文本、选择或 SVG。浏览器图层面板和
 usage/RBGroups 等交互语义仍是后续图层工作。
+
+文字 API 共用逻辑阅读顺序，绘制列表的原始 index 不变。搜索复用 Unicode NFKD
+和字符分类，兼容展开与组合符号重排后的结果返回原文 UTF-16 范围。
+`text_sources()` 的 `[start, end)` 与 `text_content().text` 对应；一个连字或
+surrogate pair 仍属于同一源 item，没有原始 PDF byte offset 或完整 CID/GID 信息。
+页面诊断记录替换字符、宿主字体回退、缺轮廓/clip 等可观察情况；文档诊断还记录
+CMap 坏 token、未闭合段、继承环和不可取得的 stream，并保留资源路径与直接对象号。
+宿主回退或字面 U+FFFD 本身不证明文件损坏；浏览器字体实际加载成功与否不在诊断范围内。
+文档诊断是显式调用，会重新构建页面与资源作用域，当前未接到浏览器 bridge/UI。
 
 宿主可以用 `PdfFontFallback` 和 `with_font_fallbacks([...])` 为未嵌入字体指定本机 CSS
 字体族；嵌入的 TrueType/OpenType 程序仍优先使用文档内字节。浏览器 bridge 还导出

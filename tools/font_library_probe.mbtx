@@ -1,0 +1,190 @@
+///|
+import {
+  "mizchi/font@0.7.4",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/core/encoding/base64",
+  "moonbitlang/x@0.5.5/fs",
+}
+
+///|
+/// Deliberately small, authored fixtures for GID/compound behavior. The font
+/// library builds the sfnt container; the PDF tests also decode these bytes.
+fn font_probe_rectangle(width : Int, height : Int) -> Bytes {
+  let data = Array::make(34, b'\x00')
+  @font.write_be16(data, 0, 1)
+  @font.write_be16(data, 6, width)
+  @font.write_be16(data, 8, height)
+  @font.write_be16(data, 10, 3)
+  for index in 14..<18 {
+    data[index] = b'\x01'
+  }
+  for index, value in [0, width, 0, -width] {
+    @font.write_be16(data, 18 + index * 2, value)
+  }
+  for index, value in [0, 0, height, 0] {
+    @font.write_be16(data, 26 + index * 2, value)
+  }
+  Bytes::from_array(data)
+}
+
+///|
+fn font_probe_fixture() -> Bytes {
+  let shear = Array::make(26, b'\x00')
+  @font.write_be16(shear, 0, -1)
+  @font.write_be16(shear, 6, 200)
+  @font.write_be16(shear, 8, 200)
+  @font.write_be16(shear, 10, 0x83)
+  @font.write_be16(shear, 12, 1)
+  for index, value in [16384, 0, 8192, 16384] {
+    @font.write_be16(shear, 18 + index * 2, value)
+  }
+  let attached = Array::make(26, b'\x00')
+  @font.write_be16(attached, 0, -1)
+  @font.write_be16(attached, 6, 300)
+  @font.write_be16(attached, 8, 400)
+  @font.write_be16(attached, 10, 0x23)
+  @font.write_be16(attached, 12, 1)
+  @font.write_be16(attached, 18, 1)
+  @font.write_be16(attached, 20, 2)
+  @font.write_be16(attached, 22, 2)
+  @font.write_be16(attached, 24, 0)
+  let scaled = Array::make(20, b'\x00')
+  @font.write_be16(scaled, 0, -1)
+  @font.write_be16(scaled, 10, 0x80B)
+  @font.write_be16(scaled, 12, 1)
+  @font.write_be16(scaled, 14, 100)
+  @font.write_be16(scaled, 16, 200)
+  @font.write_be16(scaled, 18, 8192)
+  let glyphs = [
+    b"",
+    font_probe_rectangle(100, 200),
+    font_probe_rectangle(200, 200),
+    Bytes::from_array(shear),
+    Bytes::from_array(attached),
+    Bytes::from_array(scaled),
+  ]
+  let head = Array::make(54, b'\x00')
+  @font.write_be32(head, 0, 0x00010000)
+  @font.write_be32(head, 12, 0x5F0F3CF5)
+  @font.write_be16(head, 18, 1000)
+  @font.write_be16(head, 40, 300)
+  @font.write_be16(head, 42, 400)
+  @font.write_be16(head, 50, 1)
+  let maxp = Array::make(32, b'\x00')
+  @font.write_be32(maxp, 0, 0x00010000)
+  @font.write_be16(maxp, 4, glyphs.length())
+  let hhea = Array::make(36, b'\x00')
+  @font.write_be32(hhea, 0, 0x00010000)
+  @font.write_be16(hhea, 4, 800)
+  @font.write_be16(hhea, 6, -200)
+  @font.write_be16(hhea, 34, glyphs.length())
+  let hmtx = Array::make(glyphs.length() * 4, b'\x00')
+  for index in 0..<glyphs.length() {
+    @font.write_be16(hmtx, index * 4, 600)
+  }
+  let loca = Array::make((glyphs.length() + 1) * 4, b'\x00')
+  let glyf : Array[Byte] = []
+  for index, glyph in glyphs {
+    @font.write_be32(loca, index * 4, glyf.length())
+    for byte in glyph {
+      glyf.push(byte)
+    }
+  }
+  @font.write_be32(loca, glyphs.length() * 4, glyf.length())
+  let cmap = Array::make(52, b'\x00')
+  @font.write_be16(cmap, 2, 1)
+  @font.write_be16(cmap, 4, 3)
+  @font.write_be16(cmap, 6, 1)
+  @font.write_be32(cmap, 8, 12)
+  @font.write_be16(cmap, 12, 4)
+  @font.write_be16(cmap, 14, 40)
+  @font.write_be16(cmap, 18, 6)
+  @font.write_be16(cmap, 20, 4)
+  @font.write_be16(cmap, 22, 1)
+  @font.write_be16(cmap, 24, 2)
+  for index, (code, delta) in [(65, -64), (90, -88), (65535, 1)] {
+    @font.write_be16(cmap, 26 + index * 2, code)
+    @font.write_be16(cmap, 34 + index * 2, code)
+    @font.write_be16(cmap, 40 + index * 2, delta)
+  }
+  @font.rebuild_sfnt(0x00010000, [
+    ("head", Bytes::from_array(head)),
+    ("maxp", Bytes::from_array(maxp)),
+    ("hhea", Bytes::from_array(hhea)),
+    ("hmtx", Bytes::from_array(hmtx)),
+    ("cmap", Bytes::from_array(cmap)),
+    ("loca", Bytes::from_array(loca)),
+    ("glyf", Bytes::from_array(glyf)),
+  ])
+}
+
+///|
+fn main raise {
+  let args = @env.args()
+  guard args.length() == 2 || (args.length() == 3 && args[1] == "--synthetic") else {
+    fail("usage: font_library_probe.mbtx font.ttf | --synthetic output.ttf")
+  }
+  let path = if args[1] == "--synthetic" { args[2] } else { args[1] }
+  let bytes = if args[1] == "--synthetic" {
+    let bytes = font_probe_fixture()
+    @fs.write_bytes_to_file(path, bytes)
+    bytes
+  } else {
+    @fs.read_file_to_bytes(path)
+  }
+  let tables = if bytes.length() >= 12 &&
+    bytes.length() >= 12 + (bytes[4].to_int() * 256 + bytes[5].to_int()) * 16 {
+    @font.analyze_tables(bytes).unwrap_or([])
+  } else {
+    []
+  }
+  let missing = [
+    for tag in ["head", "maxp", "hhea", "hmtx", "cmap"] if !tables
+    .iter()
+    .any(table => table.tag == tag) => tag
+  ]
+  match @font.parse_font(bytes) {
+    Some(font) => {
+      let glyphs : Array[Json] = []
+      for gid in 0..<font.num_glyphs {
+        let metrics = font.glyph_metrics(gid)
+        let commands = font.glyph_outline(gid)
+        let (x0, y0, x1, y1) = @font.outline_bbox(commands)
+        glyphs.push({
+          "gid": gid,
+          "advance": metrics.advance_width,
+          "commands": commands.length(),
+          "bounds": [x0, y0, x1, y1],
+        })
+      }
+      let report : Json = {
+        "file": path,
+        "units_per_em": font.units_per_em,
+        "num_glyphs": font.num_glyphs,
+        "table_tags": [
+          for table in tables => table.tag
+        ],
+        "glyphs": glyphs,
+        "synthetic_base64": if args[1] == "--synthetic" {
+          Json::string(@base64.encode(bytes))
+        } else {
+          Json::null()
+        },
+      }
+      println(report.stringify())
+    }
+    None =>
+      println(
+        (
+          {
+            "file": path,
+            "parsed": false,
+            "table_tags": [
+              for table in tables => table.tag
+            ],
+            "missing_required_tables": missing,
+          } : Json).stringify(),
+      )
+  }
+}

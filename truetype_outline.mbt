@@ -259,6 +259,48 @@ fn pdf_viewer_ttf_simple_contours(
 }
 
 ///|
+fn pdf_viewer_ttf_component_argument(
+  data : BytesView,
+  offset : Int,
+  words : Bool,
+  signed : Bool,
+) -> Int? {
+  if words {
+    if signed {
+      pdf_viewer_ttf_i16(data, offset)
+    } else {
+      pdf_viewer_ttf_u16(data, offset)
+    }
+  } else {
+    data
+    .get(offset)
+    .map(byte => {
+      let value = byte.to_int()
+      if signed && value >= 128 {
+        value - 256
+      } else {
+        value
+      }
+    })
+  }
+}
+
+///|
+fn pdf_viewer_ttf_contour_point(
+  contours : ArrayView[Array[PdfViewerTrueTypePoint]],
+  index : Int,
+) -> PdfViewerTrueTypePoint? {
+  let mut remaining = index
+  for contour in contours {
+    if remaining < contour.length() {
+      return contour.get(remaining)
+    }
+    remaining -= contour.length()
+  }
+  None
+}
+
+///|
 fn pdf_viewer_ttf_composite_contours(
   data : BytesView,
   start : Int,
@@ -270,101 +312,61 @@ fn pdf_viewer_ttf_composite_contours(
     return None
   }
   let contours : Array[Array[PdfViewerTrueTypePoint]] = []
+  let mut point_count = 0
   let mut offset = start + 10
-  let mut more = true
-  while more {
-    let flags = match pdf_viewer_ttf_u16(data, offset) {
-      Some(value) => value
-      None => return None
+  let mut flags = 0x20
+  while (flags & 0x20) != 0 {
+    if offset > end - 4 {
+      return None
     }
-    let component_index = match pdf_viewer_ttf_u16(data, offset + 2) {
-      Some(value) => value
-      None => return None
-    }
+    flags = pdf_viewer_ttf_u16(data, offset).unwrap()
+    let component_index = pdf_viewer_ttf_u16(data, offset + 2).unwrap()
     offset += 4
-    let words = (flags & 0x0001) != 0
-    let xy_values = (flags & 0x0002) != 0
-    let arg_1 = if words {
-      match pdf_viewer_ttf_i16(data, offset) {
-        Some(value) => value
-        None => return None
-      }
+    let words = (flags & 1) != 0
+    let xy_values = (flags & 2) != 0
+    let argument_size = if words { 2 } else { 1 }
+    let matrix_size = if (flags & 0x80) != 0 {
+      8
+    } else if (flags & 0x40) != 0 {
+      4
+    } else if (flags & 8) != 0 {
+      2
     } else {
-      match data.get(offset) {
-        Some(value) => {
-          let raw = value.to_int()
-          if raw >= 128 {
-            raw - 256
-          } else {
-            raw
-          }
-        }
-        None => return None
-      }
+      0
     }
-    offset += if words { 2 } else { 1 }
-    let arg_2 = if words {
-      match pdf_viewer_ttf_i16(data, offset) {
-        Some(value) => value
-        None => return None
-      }
-    } else {
-      match data.get(offset) {
-        Some(value) => {
-          let raw = value.to_int()
-          if raw >= 128 {
-            raw - 256
-          } else {
-            raw
-          }
-        }
-        None => return None
-      }
+    if offset > end - argument_size * 2 - matrix_size {
+      return None
     }
-    offset += if words { 2 } else { 1 }
-    let (a, b, c, d) = if (flags & 0x0080) != 0 {
-      let a = match pdf_viewer_ttf_f2dot14(data, offset) {
-        Some(value) => value
-        None => return None
-      }
-      let b = match pdf_viewer_ttf_f2dot14(data, offset + 2) {
-        Some(value) => value
-        None => return None
-      }
-      let c = match pdf_viewer_ttf_f2dot14(data, offset + 4) {
-        Some(value) => value
-        None => return None
-      }
-      let d = match pdf_viewer_ttf_f2dot14(data, offset + 6) {
-        Some(value) => value
-        None => return None
-      }
+    let arg_1 = pdf_viewer_ttf_component_argument(
+      data, offset, words, xy_values,
+    ).unwrap()
+    let arg_2 = pdf_viewer_ttf_component_argument(
+      data,
+      offset + argument_size,
+      words,
+      xy_values,
+    ).unwrap()
+    offset += argument_size * 2
+    let (a, b, c, d) = if (flags & 0x80) != 0 {
+      let a = pdf_viewer_ttf_f2dot14(data, offset).unwrap()
+      let b = pdf_viewer_ttf_f2dot14(data, offset + 2).unwrap()
+      let c = pdf_viewer_ttf_f2dot14(data, offset + 4).unwrap()
+      let d = pdf_viewer_ttf_f2dot14(data, offset + 6).unwrap()
       offset += 8
       (a, b, c, d)
-    } else if (flags & 0x0040) != 0 {
-      let a = match pdf_viewer_ttf_f2dot14(data, offset) {
-        Some(value) => value
-        None => return None
-      }
-      let d = match pdf_viewer_ttf_f2dot14(data, offset + 2) {
-        Some(value) => value
-        None => return None
-      }
+    } else if (flags & 0x40) != 0 {
+      let a = pdf_viewer_ttf_f2dot14(data, offset).unwrap()
+      let d = pdf_viewer_ttf_f2dot14(data, offset + 2).unwrap()
       offset += 4
       (a, 0.0, 0.0, d)
-    } else if (flags & 0x0008) != 0 {
-      let scale = match pdf_viewer_ttf_f2dot14(data, offset) {
-        Some(value) => value
-        None => return None
-      }
+    } else if (flags & 8) != 0 {
+      let scale = pdf_viewer_ttf_f2dot14(data, offset).unwrap()
       offset += 2
       (scale, 0.0, 0.0, scale)
     } else {
       (1.0, 0.0, 0.0, 1.0)
     }
-    let tx = if xy_values { arg_1.to_double() } else { 0.0 }
-    let ty = if xy_values { arg_2.to_double() } else { 0.0 }
-    if component_index < 0 || component_index + 1 >= offsets.length() {
+    if component_index + 1 >= offsets.length() {
       return None
     }
     let component_start = offsets[component_index]
@@ -373,23 +375,58 @@ fn pdf_viewer_ttf_composite_contours(
       Some(value) => value
       None => return None
     }
-    if component_start == component_end {
-      more = (flags & 0x0020) != 0
-      continue
+    if component_start < 0 ||
+      component_end < component_start ||
+      component_end > glyf.length {
+      return None
     }
-    let component_contours = match
-      pdf_viewer_ttf_glyph_contours(
-        data,
-        glyf.offset + component_start,
-        glyf.offset + component_end,
-        offsets,
-        component_index,
-        depth + 1,
-      ) {
-      Some(value) => value
-      None => return None
+    let component_contours = if component_start == component_end {
+      []
+    } else {
+      match
+        pdf_viewer_ttf_glyph_contours(
+          data,
+          glyf.offset + component_start,
+          glyf.offset + component_end,
+          offsets,
+          component_index,
+          depth + 1,
+        ) {
+        Some(value) => value
+        None => return None
+      }
+    }
+    let (tx, ty) = if xy_values {
+      if (flags & 0x1800) == 0x1800 {
+        return None
+      }
+      let x = arg_1.to_double()
+      let y = arg_2.to_double()
+      if (flags & 0x800) != 0 {
+        (a * x + c * y, b * x + d * y)
+      } else {
+        (x, y)
+      }
+    } else {
+      // Point numbers are unsigned and index the raw accumulated contours,
+      // before implied on-curve points are inserted for path serialization.
+      let parent = match pdf_viewer_ttf_contour_point(contours[:], arg_1) {
+        Some(point) => point
+        None => return None
+      }
+      let child = match
+        pdf_viewer_ttf_contour_point(component_contours[:], arg_2) {
+        Some(point) =>
+          pdf_viewer_ttf_transform_point(point, a, b, c, d, 0.0, 0.0)
+        None => return None
+      }
+      (parent.x - child.x, parent.y - child.y)
     }
     for contour in component_contours {
+      point_count += contour.length()
+      if point_count > 100000 {
+        return None
+      }
       contours.push(
         [
           for point in contour => {
@@ -398,7 +435,15 @@ fn pdf_viewer_ttf_composite_contours(
         ],
       )
     }
-    more = (flags & 0x0020) != 0
+  }
+  if (flags & 0x100) != 0 {
+    if offset > end - 2 {
+      return None
+    }
+    let instruction_length = pdf_viewer_ttf_u16(data, offset).unwrap()
+    if instruction_length > end - offset - 2 {
+      return None
+    }
   }
   Some(contours)
 }
@@ -450,6 +495,14 @@ fn pdf_viewer_ttf_glyph_contours_of_index(
   }
   let start = glyf.offset + offsets[glyph_index]
   let end = glyf.offset + offsets[glyph_index + 1]
+  if glyf.offset < 0 ||
+    glyf.length < 0 ||
+    glyf.offset > data.length() - glyf.length ||
+    offsets[glyph_index] < 0 ||
+    offsets[glyph_index + 1] < offsets[glyph_index] ||
+    offsets[glyph_index + 1] > glyf.length {
+    return None
+  }
   if start == end {
     Some([])
   } else {
@@ -703,6 +756,51 @@ fn pdf_viewer_ttf_cid_to_gid(
 }
 
 ///|
+/// ToUnicode describes copy/search text, not the TrueType glyph selection.
+/// Use the PDF encoding without its text-only override for nonsymbolic fonts;
+/// symbolic cmaps use the original byte and the documented high-byte windows.
+fn pdf_viewer_ttf_simple_gid(
+  simple : @pdflite.PdfSimpleFont,
+  bytes : Bytes,
+  charcode : Int,
+) -> Int raise @core.PdfError {
+  let symbolic = simple.fontdescriptor
+    .map(descriptor => {
+      (descriptor.flags & 4) != 0 && (descriptor.flags & 32) == 0
+    })
+    .unwrap_or(false)
+  let implicit = simple.encoding is @pdflite.PdfImplicitInFontFile
+  if symbolic || implicit {
+    for
+      code in [
+        charcode,
+        charcode + 0xF000,
+        charcode + 0xF100,
+        charcode + 0xF200,
+      ] {
+      match @pdflite.pdf_truetype_cmap_glyph(bytes[:], code) {
+        Some(gid) if gid > 0 => return gid
+        _ => ()
+      }
+    }
+    return charcode
+  }
+  let glyph_font = @pdflite.PdfFontSimple({
+    ..simple,
+    fontdescriptor: simple.fontdescriptor.map(descriptor => {
+      ..descriptor,
+      tounicode: None,
+    }),
+  })
+  let raw_bytes = glyph_font.content_bytes_of_charcode(charcode)
+  match glyph_font.text_extractor().codepoints_of_text(raw_bytes[:]) {
+    [codepoint, ..] =>
+      @pdflite.pdf_truetype_cmap_glyph(bytes[:], codepoint).unwrap_or(charcode)
+    [] => charcode
+  }
+}
+
+///|
 fn pdf_viewer_ttf_paint_path(
   path : String,
   rendering_mode : Int,
@@ -759,34 +857,24 @@ fn pdf_truetype_path_of_pdf_glyph(
     None => return None
   }
   let font = pdf_read_font_for_viewer(document, font_object)
-  let glyph_index = match font {
+  let bytes = match font {
     @pdflite.PdfFontSimple(
       { fonttype: @pdflite.PdfSimpleFontType::PdfTrueType, .. }
-    ) => {
-      let raw_bytes = font.content_bytes_of_charcode(charcode)
-      match font.text_extractor().codepoints_of_text(raw_bytes[:]) {
-        [codepoint, ..] =>
-          match
-            @pdflite.pdf_truetype_cmap_glyph(
-              match pdf_viewer_ttf_embedded_bytes(document, font) {
-                Some(value) => value[:]
-                None => return None
-              },
-              codepoint,
-            ) {
-            Some(value) => value
-            None => charcode
-          }
-        [] => charcode
+    )
+    | @pdflite.PdfFontCIDKeyed(_) =>
+      match pdf_viewer_ttf_embedded_bytes(document, font) {
+        Some(value) => value
+        None => return None
       }
-    }
+    _ => return None
+  }
+  let glyph_index = match font {
+    @pdflite.PdfFontSimple(
+      { fonttype: @pdflite.PdfSimpleFontType::PdfTrueType, .. } as simple
+    ) => pdf_viewer_ttf_simple_gid(simple, bytes, charcode)
     @pdflite.PdfFontCIDKeyed(cid_font) =>
       pdf_viewer_ttf_cid_to_gid(document, font_object, cid_font, charcode)
     _ => return None
-  }
-  let bytes = match pdf_viewer_ttf_embedded_bytes(document, font) {
-    Some(value) => value
-    None => return None
   }
   pdf_viewer_ttf_outline_path(
     bytes, glyph_index, glyph_matrix, origin_x, origin_y, page_height,

@@ -1,0 +1,43 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/pdflite",
+}
+
+///|
+/// Export the original embedded programs for candidate-library comparison.
+/// This uses pdflite's font resource API, without changing the viewer's path.
+async fn main {
+  let args = @env.args()
+  guard args.length() == 3 else {
+    fail("usage: font_inventory.mbtx input.pdf output-directory")
+  }
+  let document = @pdflite.pdf_read_document_from_bytes(
+    @fs.read_file(args[1]).binary(),
+  )
+  if !@fs.exists(args[2]) {
+    @fs.mkdir(args[2], recursive=true)
+  }
+  let fonts : Array[Json] = []
+  for index, font in document.list_fonts([1]) {
+    let data_path = match document.extract_fontfile_bytes(1, font.name) {
+      Some(bytes) => {
+        let path = args[2] + "/" + index.to_string() + ".bin"
+        @fs.write_file(path, bytes)
+        Some(path)
+      }
+      None => None
+    }
+    fonts.push({
+      "name": font.name,
+      "base_name": font.basefont,
+      "path": data_path.map(Json::string).unwrap_or(Json::null()),
+    })
+  }
+  let report : Json = { "file": args[1], "page": 1, "fonts": fonts }
+  @fs.write_file(args[2] + "/report.json", report.stringify(indent=2))
+  println(report.stringify())
+}

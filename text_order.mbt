@@ -5,7 +5,6 @@ priv struct PdfTextLine {
   items : Array[PdfTextItem]
   key : Double
   vertical : Bool
-  mut rtl_score : Int
   first_index : Int
 }
 
@@ -13,17 +12,10 @@ priv struct PdfTextLine {
 fn pdf_text_direction_score(text : String) -> Int {
   let mut score = 0
   for char in text.iter() {
-    let code = char.to_int()
-    if (code >= 0x0590 && code <= 0x08FF) ||
-      (code >= 0xFB1D && code <= 0xFDFF) ||
-      (code >= 0xFE70 && code <= 0xFEFF) {
-      score += 1
-    } else if (code >= 0x0041 && code <= 0x005A) ||
-      (code >= 0x0061 && code <= 0x007A) ||
-      (code >= 0x00C0 && code <= 0x02AF) ||
-      (code >= 0x0370 && code <= 0x058F) ||
-      (code >= 0x0900 && code <= 0xD7FF) {
-      score -= 1
+    match @bidi.bidi_class(char) {
+      R | AL => score += 1
+      L => score -= 1
+      _ => ()
     }
   }
   score
@@ -77,26 +69,23 @@ fn pdf_text_compare_number(a : Double, b : Double) -> Int {
 }
 
 ///|
-/// Return text items in a stable, page-reading order. Lines are grouped by
-/// their writing axis, then ordered top-to-bottom (or right-to-left for
-/// vertical columns). A line with strong RTL characters is ordered from its
-/// right edge so PDF glyphs emitted in visual order produce logical text.
-fn pdf_text_reading_order(items : ArrayView[PdfTextItem]) -> Array[PdfTextItem] {
+/// Group positioned glyphs into lines inside one reading block. Horizontal
+/// lines use bidi permutations checked against geometry and source identity;
+/// vertical writing retains its content order.
+fn pdf_text_order_in_block(
+  items : ArrayView[PdfTextItem],
+) -> Array[PdfTextItem] {
   let lines : Array[PdfTextLine] = []
   for item in items {
     guard !item.text.is_empty() else { continue }
     let line_index = pdf_text_line_for_item(lines[:], item)
     match line_index {
-      Some(index) => {
-        lines[index].items.push(item)
-        lines[index].rtl_score += pdf_text_direction_score(item.text)
-      }
+      Some(index) => lines[index].items.push(item)
       None =>
         lines.push({
           items: [item],
           key: pdf_text_line_key(item),
           vertical: item.vertical,
-          rtl_score: pdf_text_direction_score(item.text),
           first_index: item.index,
         })
     }
@@ -121,7 +110,6 @@ fn pdf_text_reading_order(items : ArrayView[PdfTextItem]) -> Array[PdfTextItem] 
   })
   let output : Array[PdfTextItem] = []
   for line in lines {
-    let rtl = line.rtl_score > 0
     if line.vertical {
       for item in line.items {
         output.push(item)
@@ -139,18 +127,14 @@ fn pdf_text_reading_order(items : ArrayView[PdfTextItem]) -> Array[PdfTextItem] 
       } else {
         second.bounds.min_x
       }
-      let order = if rtl {
-        pdf_text_compare_number(second_key, first_key)
-      } else {
-        pdf_text_compare_number(first_key, second_key)
-      }
+      let order = pdf_text_compare_number(first_key, second_key)
       if order != 0 {
         order
       } else {
         first.index - second.index
       }
     })
-    for item in line.items {
+    for item in pdf_text_bidi_order(line.items[:]) {
       output.push(item)
     }
   }
@@ -234,9 +218,25 @@ fn pdf_text_separator(previous : PdfTextItem, current : PdfTextItem) -> String {
   if cross > line_threshold {
     return "\n"
   }
-  let gap = delta_x * unit_x + delta_y * unit_y - extent
+  let along = delta_x * unit_x + delta_y * unit_y
+  let gap = if along < 0.0 &&
+    pdf_text_direction_score(previous.text + current.text) > 0 {
+    let current_dx = current.quad.p2.x - current.quad.p1.x
+    let current_dy = current.quad.p2.y - current.quad.p1.y
+    -along - (current_dx * current_dx + current_dy * current_dy).sqrt()
+  } else {
+    along - extent
+  }
   let word_threshold = previous.font_size.abs().max(current.font_size.abs()) *
     0.25
+  let previous_rtl = pdf_text_direction_score(previous.text) > 0
+  let current_rtl = pdf_text_direction_score(current.text) > 0
+  if previous_rtl != current_rtl {
+    // At a bidi run boundary, the next logical glyph need not be the closest
+    // painted glyph. Its displacement can span the rest of an intervening
+    // number/Latin run, which must not become an artificial space.
+    return ""
+  }
   if gap > word_threshold.max(0.001) &&
     !previous.text.has_suffix(" ") &&
     !current.text.has_prefix(" ") {

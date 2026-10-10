@@ -234,7 +234,9 @@ pub fn PdfPageModel::operator_list(Self) -> Array[PdfPageItem]
 pub fn PdfPageModel::render_svg(Self, scale? : Double, rotation? : Int) -> String raise @core.PdfError
 pub fn PdfPageModel::select_text(Self, Int, Int, Int, Int) -> PdfTextRangeSelection?
 pub fn PdfPageModel::text_content(Self) -> PdfTextContent
+pub fn PdfPageModel::text_diagnostics(Self) -> Array[PdfTextDiagnostic]
 pub fn PdfPageModel::text_layer(Self, scale? : Double, rotation? : Int) -> PdfTextLayer
+pub fn PdfPageModel::text_sources(Self) -> Array[PdfTextSourceRange]
 #deprecated
 pub fn PdfPageModel::to_json(Self) -> Json
 #deprecated
@@ -403,6 +405,42 @@ pub fn PdfTextContent::to_json(Self) -> Json
 #deprecated
 pub fn PdfTextContent::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfTextDiagnostic {
+  page : Int
+  source : PdfTextSourceRange
+  kind : PdfTextDiagnosticKind
+  resource : String
+  object_number : Int?
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfTextDiagnostic::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextDiagnostic::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextDiagnostic::to_json(Self) -> Json
+#deprecated
+pub fn PdfTextDiagnostic::to_repr(Self) -> @debug.Repr
+
+pub(all) enum PdfTextDiagnosticKind {
+  ReplacementCharacter
+  MissingFontResource
+  HostFontFallback
+  MissingEmbeddedOutline
+  MissingClipOutline
+  CMapMalformedTokens(Int)
+  CMapIncompleteSection(String)
+  CMapCycle
+  CMapSourceUnavailable
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfTextDiagnosticKind::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextDiagnosticKind::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextDiagnosticKind::to_json(Self) -> Json
+#deprecated
+pub fn PdfTextDiagnosticKind::to_repr(Self) -> @debug.Repr
+
 pub(all) struct PdfTextItem {
   index : Int
   text : String
@@ -487,6 +525,22 @@ pub fn PdfTextRangeSelection::to_json(Self) -> Json
 #deprecated
 pub fn PdfTextRangeSelection::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfTextSourceRange {
+  item_index : Int
+  start : Int
+  end : Int
+  font : String
+  charcode : Int
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfTextSourceRange::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextSourceRange::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextSourceRange::to_json(Self) -> Json
+#deprecated
+pub fn PdfTextSourceRange::to_repr(Self) -> @debug.Repr
+
 pub(all) struct PdfTransparencyGroup {
   id : String
   isolated : Bool
@@ -537,6 +591,7 @@ pub fn PdfViewerDocument::source_length(Self) -> Int
 pub fn PdfViewerDocument::struct_tree_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::summary_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::text_content(Self, Int) -> PdfTextContent? raise @core.PdfError
+pub fn PdfViewerDocument::text_diagnostics(Self, Int) -> Array[PdfTextDiagnostic]? raise @core.PdfError
 pub fn PdfViewerDocument::with_font_fallbacks(Self, Array[PdfFontFallback]) -> Self
 pub fn PdfViewerDocument::with_optional_content_state(Self, PdfOptionalContentState) -> Self
 

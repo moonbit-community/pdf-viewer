@@ -291,3 +291,39 @@ pub extend PdfTextRangeSelection with Eq::{not_equal, equal}
 ///|
 #deprecated
 pub extend PdfTextRangeSelection with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextSourceRange with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextSourceRange with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextSourceRange with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextDiagnosticKind with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextDiagnosticKind with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextDiagnosticKind with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextDiagnostic with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextDiagnostic with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextDiagnostic with ToJson::{to_json}

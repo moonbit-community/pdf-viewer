@@ -18,6 +18,27 @@ TODO 范围：R-02、F-03、F-05、F-06、F-07、T-01、T-02、T-04。
 候选的版本/API 限制见 [生态候选](../codec-candidates.md#字体与-unicode)。
 先适配通用库，PDF charcode/CID/GID、Widths、FontMatrix 和恢复语义由本项目处理。
 
+## 已推进
+
+- 接入 `bidi`、`normalization` 和 `ucd` 0.5.2。搜索使用 Unicode NFKD、
+  字符分类和大小写数据，保留分解、连字展开、组合符号重排后的原文 UTF-16 范围。
+- 混合 RTL/LTR 行使用 UAX #9 置换核对来源顺序和几何，数字串不被整体反转；
+  通栏标题下面的多行双栏按栏读取。提取、搜索、选择和 text layer 共用顺序。
+- TrueType 绘制按 Encoding/Differences 或 symbol cmap 选 GID，ToUnicode 只决定
+  提取文本；复合字形支持点对齐和 scaled offset，并检查 glyph 边界、递归和点数。
+- 新增 `text_sources()`、页面/文档 `text_diagnostics()`。来源保留 item、charcode、
+  字体和 UTF-16 范围；CMap 诊断保留资源路径和直接 stream 对象号。
+  ToUnicode 目标串允许多 scalar、内部空白和空串，源字符码仍限制为 1–4 字节，
+  避免将合法长目标串误报为坏 token。
+- 用独立 `.mbtx` probe 验证 `mizchi/font`：缺 cmap 的 PDF 子集和裸 Type 1
+  程序仍不可用，复合字形剪切/点对齐/缩放偏移与 fixture 预期不符，因此未替换
+  当前字体恢复路径。真实对照和回归记录见 [validation.md](../validation.md#a1-fonts-unicode-and-reading-order)。
+
+这一批没有勾选整个 TODO。后续仍需字体库扩展、完整 cmap 选择和损坏字体覆盖、
+复杂 bidi/表格/旋转布局、PDF byte span 与 CID/GID 来源，以及统一恢复策略和真实
+UseCMap/reader 损坏样本。跨方向边界目前保留显式空白，不推断额外空格；
+无法核对的 bidi 置换保留内容流顺序。
+
 ## 可修改的文件
 
 - `font_resources.mbt`、`type3_outline.mbt`、`svg_text.mbt`、`text_selection.mbt`。

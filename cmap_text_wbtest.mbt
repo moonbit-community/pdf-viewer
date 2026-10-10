@@ -598,3 +598,40 @@ test "CMap recovery cuts indirect UseCMap cycles and records the reason" {
   assert_eq(pdf_viewer_cmap_lookup(recovery.cid_entries[:], 0x41), Some(1))
   assert_eq(pdf_viewer_cmap_lookup(recovery.cid_entries[:], 0x42), Some(2))
 }
+
+///|
+test "CMap Unicode byte strings allow long mappings, whitespace and empty destinations" {
+  let recovery = pdf_viewer_parse_cmap(
+    b"2 beginbfchar <F0010203> <0061 0062 D83DDE00> <41> <> endbfchar 1 beginbfrange <F0010204> <F0010205> <006100620063> endbfrange",
+  )
+  assert_eq(recovery.diagnostics.malformed_tokens, 0)
+  assert_eq(recovery.unicode_entries.length(), 3)
+  assert_eq(
+    pdf_viewer_unicode_lookup(
+      recovery.unicode_entries[:],
+      0xF0010203U.reinterpret_as_int(),
+    ),
+    Some(b"\x00\x61\x00\x62\xD8\x3D\xDE\x00"),
+  )
+  assert_eq(
+    pdf_viewer_unicode_lookup(recovery.unicode_entries[:], 65),
+    Some(b""),
+  )
+  assert_eq(
+    pdf_viewer_unicode_lookup(
+      recovery.unicode_entries[:],
+      0xF0010205U.reinterpret_as_int(),
+    ),
+    Some(b"\x00\x61\x00\x62\x00\x64"),
+  )
+}
+
+///|
+test "CMap long destinations do not expand the allowed source code width" {
+  let recovery = pdf_viewer_parse_cmap(
+    b"1 begincodespacerange <0100000000> <01FFFFFFFF> endcodespacerange 1 beginbfchar <01FFFFFFFF> <0041> endbfchar 1 begincidrange <0100000000> <01FFFFFFFF> 7 endcidrange 1 begincidchar <> 8 endcidchar",
+  )
+  assert_true(recovery.codespaces.is_empty())
+  assert_true(recovery.unicode_entries.is_empty())
+  assert_true(recovery.cid_entries.is_empty())
+}

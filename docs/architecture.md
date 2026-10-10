@@ -208,13 +208,29 @@ worker scheduling and virtualization remain a performance TODO.
 
 `PdfViewerDocument::search` consumes the same page text/content model as
 selection. It returns source UTF-16 offsets, original matched text, source item
-indices and a union bounds rectangle. Case, whole-word and common Latin
-diacritic options are applied in a normalized search string, while each
-normalized code unit retains its source interval so expansions such as `ß` to
-`ss` never leak normalized offsets into the public result. The browser maps the
-item indices to its transparent text layer for result highlighting and emits
-`pdf-search-change`; exact character-range painting, full Unicode normalization,
-reading order/bidi and asynchronous search remain future work.
+indices and a union bounds rectangle. Unicode 16 NFKD, lowercase and general
+categories come from pinned `normalization`/`ucd` packages. Each normalized
+code unit retains its source interval through expansions and canonical mark
+reordering; offsets never refer to the normalized string. The browser maps
+item indices to its transparent text layer and emits `pdf-search-change`.
+Exact substring highlighting, complete locale/case-fold policy and asynchronous
+search remain future work.
+
+`text_columns.mbt` partitions persistent horizontal-page gutters into reading
+blocks before line grouping. `text_bidi.mbt` maps `bidi` code-point permutations
+to complete glyph items, preferring source order when its forward UAX #9
+projection matches geometry. A recovered visual-order candidate must pass the
+same check. Ambiguous/split-glyph permutations preserve source order; rotated
+and vertical layouts retain the earlier line handling. Tables, explicit bidi
+controls and inferred spaces across directional boundaries remain limited.
+
+`text_sources.mbt` shares source UTF-16 ranges with search and the additive
+`PdfPageModel::text_sources()` sidecar. Inferred separators have no source item.
+`text_diagnostics.mbt` exposes observed render fallbacks and replacement text;
+the document-level method additionally reads CMap recovery diagnostics in each
+collected resource scope, retaining the resource path and immediate stream
+object number. It is opt-in, can rebuild a page, and does not modify source
+objects or claim per-glyph corruption from a resource-level observation.
 
 `text_layer.mbt` maps the actual glyph quads through the public viewport and
 retains source item indices. A layer item carries a unit-square affine matrix;
@@ -232,7 +248,7 @@ these page ranges, attaches available file information and emits
 `pdf-selection-change`; it restores ranges after zoom/rotation. Partial
 ligatures retain a complete source glyph quad, and raw PDF byte spans are not
 claimed. The writing-direction separator heuristic is independent of page
-rotation; full reading-order/bidi reconstruction remains a separate task.
+rotation; complex reading-order/bidi reconstruction still needs coverage.
 
 The current browser eagerly mounts every page and yields between pages.
 Worker decoding, cancellation, page virtualization and memory bounds remain

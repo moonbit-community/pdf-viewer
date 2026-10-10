@@ -58,9 +58,13 @@ fn pdf_viewer_cmap_hex_digit(byte : Byte) -> Int? {
 
 ///|
 fn pdf_viewer_cmap_hex_value(view : BytesView) -> (Bytes, UInt)? {
-  guard view.length() > 0 && view.length() <= 8 else { return None }
+  // ToUnicode destinations are byte strings, including empty or multi-scalar
+  // strings. The UInt is used only after source codes are checked as 1–4 bytes.
   let nibbles : Array[Int] = []
   for byte in view {
+    if @core.pdf_is_whitespace_byte(byte.to_int()) {
+      continue
+    }
     match pdf_viewer_cmap_hex_digit(byte) {
       Some(value) => nibbles.push(value)
       None => return None
@@ -195,10 +199,13 @@ fn pdf_viewer_cmap_entry(
 ) -> (UInt, UInt, Int, Int)? {
   match (tokens.get(index), tokens.get(index + 1), tokens.get(index + 2)) {
     (
-      Some(PdfViewerCMapHex(_, first)),
-      Some(PdfViewerCMapHex(_, last)),
+      Some(PdfViewerCMapHex(first_bytes, first)),
+      Some(PdfViewerCMapHex(last_bytes, last)),
       Some(PdfViewerCMapInteger(cid)),
-    ) => Some((first, last, cid, index + 3))
+    ) if first_bytes.length() > 0 &&
+      first_bytes.length() <= 4 &&
+      first_bytes.length() == last_bytes.length() =>
+      Some((first, last, cid, index + 3))
     _ => None
   }
 }
@@ -209,8 +216,9 @@ fn pdf_viewer_cmap_char_entry(
   index : Int,
 ) -> (UInt, Int, Int)? {
   match (tokens.get(index), tokens.get(index + 1)) {
-    (Some(PdfViewerCMapHex(_, code)), Some(PdfViewerCMapInteger(cid))) =>
-      Some((code, cid, index + 2))
+    (Some(PdfViewerCMapHex(bytes, code)), Some(PdfViewerCMapInteger(cid))) if bytes.length() >
+      0 &&
+      bytes.length() <= 4 => Some((code, cid, index + 2))
     _ => None
   }
 }
@@ -221,8 +229,9 @@ fn pdf_viewer_unicode_entry(
   index : Int,
 ) -> (UInt, Bytes, Int)? {
   match (tokens.get(index), tokens.get(index + 1)) {
-    (Some(PdfViewerCMapHex(_, code)), Some(PdfViewerCMapHex(bytes, _))) =>
-      Some((code, bytes, index + 2))
+    (Some(PdfViewerCMapHex(source, code)), Some(PdfViewerCMapHex(bytes, _))) if source.length() >
+      0 &&
+      source.length() <= 4 => Some((code, bytes, index + 2))
     _ => None
   }
 }
@@ -268,7 +277,10 @@ fn pdf_viewer_parse_unicode_ranges(
         Some(PdfViewerCMapHex(first_bytes, first)),
         Some(PdfViewerCMapHex(last_bytes, last)),
         Some(PdfViewerCMapHex(unicode, _)),
-      ) if first_bytes.length() == last_bytes.length() && first <= last => {
+      ) if first_bytes.length() > 0 &&
+        first_bytes.length() <= 4 &&
+        first_bytes.length() == last_bytes.length() &&
+        first <= last => {
         output.push({ first, last, unicode, })
         index += 3
       }
@@ -276,7 +288,9 @@ fn pdf_viewer_parse_unicode_ranges(
         Some(PdfViewerCMapHex(first_bytes, first)),
         Some(PdfViewerCMapHex(last_bytes, last)),
         Some(PdfViewerCMapWord(open)),
-      ) if first_bytes.length() == last_bytes.length() &&
+      ) if first_bytes.length() > 0 &&
+        first_bytes.length() <= 4 &&
+        first_bytes.length() == last_bytes.length() &&
         first <= last &&
         open[:] == b"[" => {
         index += 3
@@ -353,7 +367,10 @@ fn pdf_viewer_parse_cmap(data : BytesView) -> PdfViewerCMapRecovery {
           (
             Some(PdfViewerCMapToken::PdfViewerCMapHex(first_bytes, first)),
             Some(PdfViewerCMapToken::PdfViewerCMapHex(last_bytes, last)),
-          ) if first_bytes.length() == last_bytes.length() && first <= last => {
+          ) if first_bytes.length() > 0 &&
+            first_bytes.length() <= 4 &&
+            first_bytes.length() == last_bytes.length() &&
+            first <= last => {
             output.codespaces.push({
               length: first_bytes.length(),
               first: first.reinterpret_as_int(),

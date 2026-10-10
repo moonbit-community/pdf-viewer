@@ -6,7 +6,7 @@ CLI. That conversion baseline does not measure parity with pdf.js rendering.
 The automated selected-page visual baseline below now measures actual output
 against the same pinned PDF.js build.
 
-The suite currently contains 221 tests on each of wasm, wasm-gc, JavaScript, and
+The suite currently contains 250 tests on each of wasm, wasm-gc, JavaScript, and
 native. It includes 13 annotation tests, 17 CFF tests, 25 Type 1 tests, 5 CID
 layout tests, 9 variable-length CMap tests, 4 text-geometry tests, and 8
 text-clipping tests, one mixed-paint scaling regression, and one tiling-pattern
@@ -26,12 +26,139 @@ The colour stage adds 11 colour-space/state tests, 8 original-image-sample
 tests, 3 additional pattern regressions, 1 public independent fill/stroke
 pattern test and 1 stream-comment reader recovery test. `moon test --target
 all --diagnostic-limit 1` passed **209/209 on each backend**, and `moon check
---target all` passed. The current standalone Chromium run passed all **33**
+--target all` passed. That earlier standalone Chromium run passed all **33**
 interactions, with report/screenshots in `_build/browser-test-1791598489760/`.
 The expanded selected-page baseline in `_build/visual-test-1791598324155/`
 measured **57/57 combinations from 20 PDFs**, **0 failures**, and **55 with
 pixel or text differences**. Its calibrated-colour interior samples below
 are an additional diagnostic, not an exemption from full-page differences.
+
+## A1 fonts, Unicode and reading order
+
+This batch adds 29 regressions: 7 Unicode-search, 6 mixed-direction/column,
+7 TrueType-mapping/compound, 7 source/diagnostic and 2 CMap destination tests.
+`moon test --target all --diagnostic-limit 1` passed **250/250 on
+each backend**. `moon info && moon fmt` and the four-target check passed.
+The 24 pre-existing deprecation warnings remain. Public interface changes are
+additive: three text sidecar types and page/document inspection methods;
+existing public records and source display-list indices are unchanged.
+
+Pinned `bidi`, `normalization` and `ucd` 0.5.2 supply UAX #9,
+Unicode 16 NFKD, lowercase and general-category data. Search preserves source
+UTF-16 intervals through canonical mark ordering, compatibility expansions,
+independent combining accents, supplementary scalars and case-sensitive
+matching. Latin-specific ß/æ/œ policy remains explicit; this is not complete
+locale-sensitive Unicode case folding.
+
+Horizontal reading blocks separate persistent gutters, including a body below
+a spanning heading and RTL columns. Bidi code-point permutations are collapsed
+to complete glyph items and checked against visual geometry. Source order is
+preferred when its forward projection agrees; ambiguous or split-glyph
+permutations retain content order. Numeric runs, multi-scalar ToUnicode,
+ligatures and surrogate selections share source identity across copy, search
+and the DOM text layer. Complex tables, rotations, explicit bidi controls and
+inferred spaces across directional run boundaries still need work.
+
+TrueType selection now uses Encoding/Differences independently from ToUnicode;
+symbol fonts also probe the F000/F100/F200 windows. PDF advances and text matrices
+remain unchanged. Compound contours preserve shear, align unsigned parent/child
+point numbers, transform scaled offsets and validate glyph-local records,
+instructions, recursion and point count. These fixtures follow the
+[OpenType composite-glyph description](https://learn.microsoft.com/en-us/typography/opentype/spec/glyf#composite-glyph-description).
+The existing pdflite cmap reader still handles formats 0/4/6, with format 12 and
+platform/encoding selection pending.
+
+`text_sources()` exposes glyph-owned half-open ranges in the logical
+`text_content().text`, font names and charcodes. Inferred separators have no
+fake glyph owner. It does not claim raw PDF byte spans or complete CID/GID
+provenance. Page diagnostics report observable replacement text, host fallback,
+missing resources/outlines and missing clipping outlines; document diagnostics
+also expose malformed/incomplete CMaps, cycles and unavailable source streams,
+with resource path and immediate object number. Resource-level observations do
+not prove that each associated glyph is damaged. Inspection is opt-in and can
+rebuild a page; browser font-loading results and the bridge/UI are not included.
+The recovery tokenizer now distinguishes 1–4-byte source codes from Unicode
+byte-string destinations, permitting longer, whitespace-separated and empty
+hex destinations. This avoids reporting valid multi-scalar ToUnicode values
+as malformed and retains lazy range increments; oversized source codes remain
+excluded.
+
+### Font candidate probe
+
+These commands extract original program bytes and call the candidate's public
+GID/metrics interface; the fixture container itself is built with the candidate's
+public sfnt writer. No font files are vendored.
+
+```bash
+moon run tools/font_inventory.mbtx reference/pdf.js/test/pdfs/issue14462_reduced.pdf _build/a1-font-issue14462
+moon run tools/font_library_probe.mbtx _build/a1-font-issue14462/0.bin
+moon run tools/font_inventory.mbtx reference/pdf.js/test/pdfs/ArabicCIDTrueType.pdf _build/a1-font-arabic
+moon run tools/font_library_probe.mbtx _build/a1-font-arabic/0.bin
+moon run tools/font_inventory.mbtx reference/pdf.js/test/pdfs/TrueType_without_cmap.pdf _build/a1-font-no-cmap
+moon run tools/font_library_probe.mbtx _build/a1-font-no-cmap/0.bin
+moon run tools/font_library_probe.mbtx --synthetic _build/a1-font-fixture.ttf
+```
+
+`mizchi/font` 0.7.4 returns None for all three selected programs:
+`issue14462_reduced.pdf` embeds a PFB Type 1 program, while the other two
+TrueType programs omit cmap. This does not measure all fonts in those files or
+establish that the library rejects ordinary complete fonts. The authored sfnt
+parses all 6 GIDs and returns advance 600 for each; the candidate's compound
+bounds disagree with the expected raw-point transforms:
+
+| Authored GID | Expected bounds | Candidate bounds |
+| --- | --- | --- |
+| 3: shear | [0, 0, 200, 200] | [0, 0, 100, 200] |
+| 4: point attachment | [0, 0, 300, 400] | [0, 0, 200, 200] |
+| 5: scaled offset | [50, 100, 100, 200] | [100, 200, 150, 300] |
+
+Reports are in `_build/a1-font-library-*.json`. The candidate probe ran on
+native; it is not a four-backend adoption test or a malformed-font fuzz result.
+Current TrueType/CFF/Type 1 recovery remains in use while upstream extension is
+evaluated. The new viewer tests exercise the same authored bytes/GIDs, plus
+Encoding/ToUnicode disagreement, Differences, symbol mapping, truncation,
+invalid point references and cyclic components.
+
+### Real PDF comparison
+
+The four-file `tools/text_cases.json` selection uses the pinned PDF.js
+revision above, Chromium, white background and scale 2. The final A1 report
+is `_build/visual-test-1791627482580/`; the isolated `7ab1cec` comparison
+is `_build/a1-baseline/_build/visual-test-1791626838381/`. Both measured
+**4/4 with 0 failures and 4 differences**. Matching SHA-256 values of each
+before/after viewer screenshot confirm identical selected-page paint; this is
+a comparison against the prior implementation, not pixel parity with PDF.js.
+
+| Page 1 sample | Pixels above channel tolerance 8, before → after | Raw text outcome |
+| --- | ---: | --- |
+| issue14462_reduced.pdf | 1,389 → 1,389 | Equal to reference |
+| tracemonkey.pdf | 199,680 → 199,680 | Columns no longer interleave; still differs |
+| ArabicCIDTrueType.pdf | 11,566 → 11,566 | Still differs; no claim of Arabic parity |
+| TrueType_without_cmap.pdf | 508 → 508 | Equal to reference |
+
+`tracemonkey.pdf` now extracts the Abstract/Introduction left column before
+the right column, instead of joining alternating columns into shared lines.
+Its nonspace count is still 4,281 versus reference 4,295; the runner compares
+raw sequences without ligature/Unicode normalization. First nonspace mismatch
+moves from UTF-16 position 565 to 607, which alone is not a compatibility score.
+Paragraph separators, ligatures and font/raster differences remain.
+
+
+### Browser checks
+
+The unchanged official `tools/browser_test.mbtx` run aborts at the
+Shift+ArrowLeft assertion on this macOS Chrome host. The `7ab1cec` baseline
+reproduces the same failure. A temporary diagnostic copy in
+`_build/a1-browser-probe.mbtx` runs the same 33 assertions, records failures
+instead of aborting at the first one, and still exits nonzero.
+
+The current report `_build/browser-test-1791627557254/report.json` and
+baseline report `_build/browser-test-1791627447829/report.json` both record
+**31 passed, 2 failed**: Shift+ArrowLeft selection and mouse dragging on rotated,
+scaled glyphs. Search, source ranges, copy, programmatic rotation/zoom
+restoration, vertical text, multipage selection and file-reopen checks passed.
+These two failures remain open browser/host work; this batch does not claim a
+passing complete browser suite, and the official runner was not relaxed.
 
 ## Parallel-work baseline
 
@@ -49,7 +176,7 @@ and native each passed **221/221**, with 24 existing deprecation warnings.
 This is a fresh build/test baseline for collaboration, not a new visual run;
 the image and browser reports below retain their original dates and coverage.
 
-The current split moves font resources, Type 3 glyphs, SVG text output and text
+The split moved font resources, Type 3 glyphs, SVG text output and text
 selection unchanged into four dedicated files in the root package. No features
 or dependencies were added, and the generated public interfaces are unchanged.
 `moon info && moon fmt`, `moon test`, `moon check --target all` and
@@ -647,11 +774,11 @@ Limits: these are Chromium interaction checks and structural geometry
 assertions, **not automated PDF.js pixel parity** or an all-browser fidelity
 score. The browser eagerly mounts all pages, so Worker scheduling,
 virtualization, cancellation, memory limits and performance budgets remain
-pending. The body layer uses source paint order plus a writing-direction
-separator heuristic; general reading order/bidi and raw PDF byte spans are
-not completed. Annotation appearances and readonly widgets still need their
-own DOM interaction layer. Search currently highlights complete source items;
-exact character-range painting and full Unicode normalization remain TODO.
+pending. The body layer now uses the A1 block/line/bidi reading-order view;
+complex layouts and raw PDF byte spans are not completed. Annotation
+appearances and readonly widgets still need their own DOM interaction layer.
+Search currently highlights complete source items; exact character-range
+painting and complete locale/case-fold policy remain TODO.
 Scale and rotation still rebuild all mounted pages even though the page models
 are cached.
 
@@ -717,9 +844,9 @@ The browser bridge exposes the same operation as `search_pdf`. The standalone
 toolbar adds the three options, displays the result count, scrolls to the active
 page and highlights source text-layer items. The latest Chromium run is
 `_build/browser-test-1791598489760/report.json`, with all 33 checks passing.
-The API does not yet reconstruct PDF.js reading order/bidi, perform full Unicode
-normalization, highlight only the matching substring inside a multi-character
-item, or move the search work to a cancellable Worker.
+A1 now supplies Unicode NFKD source mapping and checked mixed-direction/column
+ordering. Complex PDF.js reading-order cases, substring highlighting inside a
+multi-character item and cancellable Worker search remain incomplete.
 
 ## Automated PDF.js visual baseline
 
