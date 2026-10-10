@@ -35,8 +35,9 @@ are an additional diagnostic, not an exemption from full-page differences.
 
 ## Parallel-work baseline
 
-The eight workstream briefs in [PARALLEL.md](PARALLEL.md) assign each of the
-33 remaining TODO IDs exactly once; the 17 completed IDs are unchanged.
+The earlier eight-workstream split assigned each of the 33 remaining TODO IDs
+exactly once; the 17 completed IDs were unchanged. It has been superseded by
+the two core workstreams in [PARALLEL.md](PARALLEL.md).
 Two agents audited the font/text and render/host boundaries read-only. No
 feature implementation was delegated as part of this documentation split.
 The unfinished JPEG parser is retained as `docs/drafts/jpeg-parser.mbt.txt`,
@@ -47,6 +48,14 @@ and `git diff --check` passed. Sequential tests on wasm, wasm-gc, JavaScript
 and native each passed **221/221**, with 24 existing deprecation warnings.
 This is a fresh build/test baseline for collaboration, not a new visual run;
 the image and browser reports below retain their original dates and coverage.
+
+The current split moves font resources, Type 3 glyphs, SVG text output and text
+selection unchanged into four dedicated files in the root package. No features
+or dependencies were added, and the generated public interfaces are unchanged.
+`moon info && moon fmt`, `moon test`, `moon check --target all` and
+`git diff --check` passed. The existing deprecation warnings remain. This file
+organization change has no new visual comparison run and does not change TODO
+completion counts.
 
 ## Image interpolation, raw alpha masks and malformed simple-font recovery
 

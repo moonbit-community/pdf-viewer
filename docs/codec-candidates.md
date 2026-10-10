@@ -149,7 +149,7 @@ moon fetch --no-update trkbt10/jpeg2000@0.2.0
 moon fetch --no-update enanandesu/icc@0.1.1
 ```
 
-## W3 的下一步
+## 图像解码的下一步
 
 先用独立临时 probe/fixture 核对现成 JPEG API，比较固定 PDF.js 像素、
 decoder 的输出和分配/耗时，尤其 `issue13931.pdf` 的 JPEG + SMask + Matte。

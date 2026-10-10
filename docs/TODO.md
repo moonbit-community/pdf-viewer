@@ -9,9 +9,9 @@
 这里的“对齐”包括可见输出、文本与选择、独立浏览器体验和稳定性，
 不要求照抄 PDF.js 的内部实现或所有返回值结构。
 
-剩余任务已按源码边界拆为 **8 个协作模块**，每项只归属一个模块。
-文件负责人、共享入口、依赖和可并行切片见 [多 Agent 协作拆分](PARALLEL.md)。
-模块拆分不改变完成状态；本文件仍是 50 项 TODO 的唯一验收/统计清单。
+当前内核按字体/文字、图形/图像两条主线推进，文件边界见 [两条工作线](PARALLEL.md)。
+浏览器与后续阅读器功能另行推进。主线拆分不改变完成状态；
+本文件仍是 50 项 TODO 的唯一验收/统计清单。
 
 ## 还差多少
 
@@ -113,8 +113,8 @@ JPEG + SMask + Matte、color-key 边缘和复杂合成仍待完成，不能据�
 | I-02 | 继续检索 MoonBit JBIG2；评估成熟解码器的适配/绑定或移植 | globals/segment/Mask 接口、目标与资源限额；尚未确认可直接用的 MoonBit 包，不因此默认从零写 codec |
 | I-04 | `mizchi/image` / `walkzzz/image` JPEG 解码；现有 raw mask、Matte 和采样代码 | 原始组件与 RGB 输出边界、PDF ColorTransform/Decode、encoded-image alpha/Matte；先复用，再补具体编码缺口 |
 | C-01 | 评估 LittleCMS 等 ICC 转换引擎；`enanandesu/icc` 只可辅助元数据/诊断 | ICCBased 的组件/Range/alternate、输出空间与各后端适配；元数据解析不等于颜色转换 |
-| C-03 | W4 的共享色彩转换与 W5/W6 的合成后端 | PDF tint/domain/colorant 与 overprint 色版语义；不另建第二套颜色引擎 |
-| M-01、M-02、M-03、H-01、H-02、H-03 | W5 选定后端的 surface、clip、blend、渐变/网格绘制能力 | PDF group/backdrop/knockout、BC/TR、pattern 资源/矩阵与 patch 插值适配；通用混合/光栅算法优先复用，确认缺口才补 |
+| C-03 | A2 的共享色彩转换与合成后端 | PDF tint/domain/colorant 与 overprint 色版语义；不另建第二套颜色引擎 |
+| M-01、M-02、M-03、H-01、H-02、H-03 | A2 选定后端的 surface、clip、blend、渐变/网格绘制能力 | PDF group/backdrop/knockout、BC/TR、pattern 资源/矩阵与 patch 插值适配；通用混合/光栅算法优先复用，确认缺口才补 |
 | A-01、A-02、A-03、A-04 | pdflite 批注/字段模型、字体 metrics；原生 DOM/表单控件与 Pointer Events | AP/DA/DR、字段继承/状态、屏幕/打印外观、旋转命中和 popup/link；通用输入控件不从零实现 |
 | X-01 | pdflite structure tree 与浏览器 DOM/ARIA | tagged PDF 来源与阅读顺序关联、辅助技术验收；不另写通用可访问性框架 |
 | X-02 | `moonbit-community/XMLParser` | XFA 的模板/数据关联、分页布局和字体适配；XML parser 只覆盖解析子任务 |
@@ -208,7 +208,7 @@ JPEG + SMask + Matte、color-key 边缘和复杂合成仍待完成，不能据�
 ## 推荐推进顺序
 
 1. 做三组最小复用验证：`bidi` 的来源映射、`mizchi/font` 的按 GID 轮廓、现成 JPEG 解码的 SMask/Matte；保留 fixture 和候选结论，再接主路径。
-2. 用 Canvas 2D 与现有 MoonBit 绘图库验证完整 CTM/clip/blend 的代表样本，确定 W5/W6 共用后端；宿主用原生 Worker/观察器推进页面调度。
+2. A2 用 Canvas 2D 与现有 MoonBit 绘图库验证完整 CTM/clip/blend 的代表样本，确定绘制/合成共用后端；宿主调度留到后续，用原生 Worker/观察器。
 3. 验证/扩展 JPX 的多组件 API；检索 JBIG2 和 ICC 引擎的目标适配，记录不能直接复用的具体原因。
 4. F-03、F-07 及 PDF group/mask/pattern/shading：依赖复用结论补 PDF 语义，沿用 V-01 做真实对照。
 5. A-01 至 A-04、reader、可访问性和 CI；后期 range/XFA 先复用传输/XML 解析，再补 PDF 读取/布局。

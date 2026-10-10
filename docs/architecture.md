@@ -262,10 +262,13 @@ The remaining implementation stages are ordered by the visible compatibility gap
 4. Canvas/WebGL output and incremental page loading for large documents.
 
 The complete feature backlog and acceptance rules live in
-[`TODO.md`](TODO.md). Ownership, shared-model integration boundaries and eight
-agent workstreams are recorded in [`PARALLEL.md`](PARALLEL.md); these are work
-boundaries, not eight isolated MoonBit packages. Multiple-FD CID-keyed Type 1 is an extension rather than
-a parity requirement: the pinned PDF.js Type 1 parser also supports only one FD.
+[`TODO.md`](TODO.md). The two current core workstreams, text/fonts and
+graphics/images, are recorded in [`PARALLEL.md`](PARALLEL.md). Font resources,
+Type 3 glyphs, SVG text output and text selection have been moved unchanged to
+`font_resources.mbt`, `type3_outline.mbt`, `svg_text.mbt` and
+`text_selection.mbt` within the existing root package. Multiple-FD CID-keyed
+Type 1 is an extension rather than a parity requirement: the pinned PDF.js
+Type 1 parser also supports only one FD.
 
 Annotation parsing and SVG lowering live in `annotations.mbt` and
 `annotations_svg.mbt`. The viewer reads the original `/Annots` array: popup
