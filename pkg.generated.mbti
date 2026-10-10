@@ -427,6 +427,7 @@ pub(all) enum PdfTextDiagnosticKind {
   HostFontFallback
   MissingEmbeddedOutline
   MissingClipOutline
+  FontStreamChecksumRecovered
   CMapMalformedTokens(Int)
   CMapIncompleteSection(String)
   CMapCycle

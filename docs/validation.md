@@ -6,7 +6,7 @@ CLI. That conversion baseline does not measure parity with pdf.js rendering.
 The automated selected-page visual baseline below now measures actual output
 against the same pinned PDF.js build.
 
-The suite currently contains 270 tests on each of wasm, wasm-gc, JavaScript, and
+The suite currently contains 285 tests on each of wasm, wasm-gc, JavaScript, and
 native. It includes 13 annotation tests, 17 CFF tests, 25 Type 1 tests, 5 CID
 layout tests, 9 variable-length CMap tests, 4 text-geometry tests, and 8
 text-clipping tests, one mixed-paint scaling regression, and one tiling-pattern
@@ -161,13 +161,73 @@ tolerance fall from **508 to 355**, and missing-ink pixels from **449 to 59**.
 Its extracted text remains equal to PDF.js; remaining edge/paint differences
 are still counted, not waived.
 
-`issue13316_reduced.pdf` remains at **3,771** changed pixels and still extracts
-`A C D E F`; the new fallback is not end-to-end validated by that sample.
-Running the standalone font inventory on it raises `InvalidFlateData`, so
-reader/font extraction recovery still requires investigation. The named
-Unicode-platform conflict is covered by authored regressions and the unchanged
+At this post stage, `issue13316_reduced.pdf` remained at **3,771** changed pixels
+and extracted `A C D E F`; the standalone font inventory raised
+`InvalidFlateData`. The following checksum-recovery batch resolves this case.
+The named Unicode-platform conflict is covered by authored regressions and the unchanged
 `issue4800.pdf`; `issue13433.pdf` was not measured because downloading its
-pinned `.link` target timed out. These limitations keep F-05/R-02 open.
+pinned `.link` target timed out. F-05/R-02 remain open.
+
+### Font stream checksum recovery
+
+`tools/font_stream_probe.mbtx` identifies an Adler-32 `ChecksumMismatch` in
+`issue13316_reduced.pdf` object 12 (ToUnicode, 638 encoded bytes) and object 31
+(FontFile2, 52,139 encoded bytes). Both strict pdflite decodes raise
+`InvalidFlateData`; the pinned PDF.js Flate reader does not check that trailer
+checksum. The viewer now directly pins pdflite's existing
+`moonbit-community/flate` 0.8.1 engine instead of adding another decompressor.
+After strict decoding fails, its streaming zlib decoder must identify a
+complete checksum mismatch; its bounded raw DEFLATE decoder then retrieves
+the complete body. Invalid headers, preset dictionaries, invalid/truncated
+DEFLATE and missing checksum trailers remain failures. Only one Flate filter
+with no transforming predictor is eligible. Recovery accepts at most 4 MiB
+compressed input and 16 MiB output; its eight-entry byte-only cache retains
+at most 8 MiB input and 16 MiB output. Normal pdflite decoding limits remain
+unchanged.
+
+Font programs, CIDToGIDMap and external/inherited CMaps share the adapter.
+Recovered ToUnicode is retried in a shadow dictionary so simple-font glyph
+recovery and copied text see the same descriptor. Metrics, PDF objects and
+original encoded streams are preserved. Document `text_diagnostics()` adds
+`FontStreamChecksumRecovered`, including the exact recovered parent's
+resource path and immediate object number; checksum inspection walks up to
+64 CMap streams and cuts cycles. This records a recovery decision, not proof
+that the body equals the original producer's bytes. The sole public `.mbti`
+change is the new diagnostic enum case; existing records are unchanged.
+
+Fifteen new regressions cover complete checksum errors, every truncated
+prefix, invalid headers/dictionary/reserved blocks, exact output limits and
+final-step bytes, input larger than the decoder's window, trailing bytes,
+indirect filters/parameters/lengths, predictor/filter-chain rejection on
+cache hits, input/output/entry eviction, preserved source objects, valid-stream
+semantics, unrecoverable-font fallback, and end-to-end TrueType, Type 1, CFF,
+CIDToGIDMap and inherited CMap painting/clipping/copying/embedding. The suite
+passed **285/285 on each of wasm, wasm-gc, JavaScript and native**.
+`moon info && moon fmt`, script formatting and `moon check --target all` passed;
+the same 24 pre-existing deprecation warnings remain. The stream probe also
+ran against the real sample. Generated browser JS grows from 12,285,375 to
+12,316,533 bytes; `gzip -c` grows from 2,790,651 to 2,795,296 (**4,645 bytes**).
+This is artifact size, not a performance measurement.
+
+The same ten `tools/font_post_cases.json` pages at scale 2/rotation 0 were
+measured against the pinned PDF.js build. Current report
+`_build/visual-test-1791645717953/` and detached `fe4d051` baseline
+`_build/a1-flate-baseline/_build/visual-test-1791645527234/` both measured
+**10/10, 0 failures, 0 runtime exceptions and 0 placeholders**. Nine viewer
+PNG SHA-256 values are identical. `issue13316_reduced.pdf` now paints the five
+Chinese glyphs and extracts **`开 票 通 知 单`**, exactly matching reference
+text including spaces. Changed pixels above tolerance fall from **3,771 to
+2,033**; missing-ink pixels fall from **2,226 to 527**, with **3** extra-ink
+pixels. Viewport geometry matches. Stroke weight and raster edges still differ,
+and all ten pages retain measured pixel/text differences; this is recovery of
+this sample, not full font or PDF.js parity. Filter chains, predictors and
+broader damaged-font/document recovery keep R-02/F-05/F-06/T-04 open.
+
+```bash
+moon run tools/font_stream_probe.mbtx reference/pdf.js/test/pdfs/issue13316_reduced.pdf _build/a1-stream-issue13316
+moon test --target all --diagnostic-limit 1
+moon run tools/visual_test.mbtx tools/font_post_cases.json '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+```
 
 ### Font candidate probe
 

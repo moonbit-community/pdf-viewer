@@ -87,6 +87,7 @@ JP2 colour/alpha、PDF `/SMaskInData`、支持的编码 profile、目标和内�
 | [mizchi/font](https://mooncakes.io/docs/mizchi/font@0.7.4) | 0.7.4，Apache-2.0；已固定接入独立 cmap/post 接口，四后端回归通过；完整字体解析仍为 probe | `parse_cmap(BinaryReader, Int)` 支持 0/4/6/12；`parse_post(BinaryReader, Int, Int)` 读取字形名；`parse_font(Bytes)`、按 GID 取轮廓/metrics | cmap/post 前加 PDF 选表、字形名优先级、边界/展开限额和缓存；完整 parser 的缺 cmap/裸 Type 1、复合轮廓限制仍需保留现有恢复分支 |
 | [moonbit-community/bidi](https://mooncakes.io/docs/moonbit-community/bidi@0.5.2) | 0.5.2，Apache-2.0；已固定接入，四后端回归通过 | UAX #9 的 `process`、levels 和 `reorder` 字符置换 | code point→glyph item 映射核对几何和内容流顺序；不直接改绘制文本；复杂 inverse bidi、表格和旋转布局仍有限制 |
 | [moonbit-community/normalization](https://mooncakes.io/docs/moonbit-community/normalization@0.5.2) / [ucd](https://mooncakes.io/docs/moonbit-community/ucd@0.5.2) | 均为 0.5.2，Apache-2.0；已固定接入，四后端回归通过 | Unicode 16 NFKD、大小写映射和字符分类 | 分解/兼容展开/组合符号重排保留原文 UTF-16 来源；搜索策略额外折叠 ß、æ、œ，不承诺完整 locale/case-fold 语义；不改原文或 glyph 编码 |
+| [moonbit-community/flate](https://mooncakes.io/docs/moonbit-community/flate@0.8.1) | 0.8.1，Apache-2.0；pdflite 已使用同版本，现固定为直接依赖；四后端回归通过 | zlib 流式校验、带输出上限的 raw DEFLATE 解码 | 字体/CMap 的完整流仅在 Adler-32 不匹配时恢复；单层 Flate、无变换 predictor，4 MiB 输入/16 MiB 恢复输出上限；保留严格解码和源对象，不增加另一套解压器 |
 
 `mizchi/font` 的 `parse_font` 识别 sfnt/WOFF/TTC 等封装；当前 parser 还要求
 `head/maxp/hhea/hmtx/cmap` 等表。PDF 子集字体可能缺表，裸 CFF 也不具有这些表，
@@ -109,6 +110,13 @@ Macintosh 字形名表。version 3 无字形名，弃用的 2.5 及厂商格式�
 131072 个名称。Windows/Symbol cmap 的有效映射优先，Unicode 平台 cmap
 优先显式 Encoding/Differences 名称；未知名称且无可用 post 时允许显式
 ToUnicode 恢复。字形名到 Unicode 仍用 pdflite；不另抄 Adobe/Mac 名称表。
+
+字体流恢复也复用现有 Flate 引擎：先保留 pdflite 严格解码，失败后用库区分
+`ChecksumMismatch` 与其它错误，再用同库的有上限 raw 解码取得完整正文。
+`issue13316_reduced.pdf` 的字体与 ToUnicode 都属于校验和不匹配，已恢复中文
+绘制、提取及嵌入资源；filter chain、predictor、缺失 trailer 等恢复仍未扩大。
+`tools/font_stream_probe.mbtx` 分别记录严格 PDF 解码和 zlib 的错误种类，避免
+单个损坏字体掩盖其它 stream。验证与剩余像素差异见 [A1 验证](validation.md#font-stream-checksum-recovery)。
 
 `bidi.reorder_string` 输出视觉顺序且会做镜像；不能直接拿它作为逻辑复制文本，
 也不能重复重排已由 PDF 定位的字形。A1 使用置换与 Unicode 分类，

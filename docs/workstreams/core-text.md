@@ -32,10 +32,16 @@ TODO 范围：R-02、F-03、F-05、F-06、F-07、T-01、T-02、T-04。
 - 继续复用其 post 接口，支持 version 1/2 字形名、Differences 自定义名称和
   Unicode 平台 cmap 的名称优先级；未知名称且无可用 post 时允许显式 ToUnicode
   恢复。检查 post/loca/glyf 边界、空字形和重复名称，缓存限制源数据和解码数量。
+- 复用 pdflite 同版本的 `moonbit-community/flate` 0.8.1，恢复完整字体/CMap
+  Flate 流的 Adler-32 不匹配；有输入、输出和缓存上限，源对象保持不变。
+  覆盖 TrueType、Type 1、CFF、CIDToGIDMap 与继承 CMap 的绘制/裁剪/提取。
+  真实 `issue13316_reduced.pdf` 已恢复「开 票 通 知 单」，仍保留像素差异记录。
 - 新增 `text_sources()`、页面/文档 `text_diagnostics()`。来源保留 item、charcode、
   字体和 UTF-16 范围；CMap 诊断保留资源路径和直接 stream 对象号。
   ToUnicode 目标串允许多 scalar、内部空白和空串，源字符码仍限制为 1–4 字节，
   避免将合法长目标串误报为坏 token。
+  文档诊断新增 `FontStreamChecksumRecovered`，能定位字体程序/CMap 及父流的
+  实际资源路径和对象号；观察不表示已证明恢复 bytes 与原始 bytes 一致。
 - 用独立 `.mbtx` probe 验证 `mizchi/font`：缺 cmap 的 PDF 子集和裸 Type 1
   程序仍不可用，复合字形剪切/点对齐/缩放偏移与 fixture 预期不符，因此未替换
   当前字体恢复路径。真实对照和回归记录见 [validation.md](../validation.md#a1-fonts-unicode-and-reading-order)。

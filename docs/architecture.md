@@ -75,6 +75,21 @@ explicit Encoding/Differences names. Unknown names without usable post names
 may recover through an explicit ToUnicode entry. Known Encoding names continue
 to select independently of copied Unicode; PDF advances and matrices are kept.
 
+`font_stream_recovery.mbt` reuses pdflite's pinned
+`moonbit-community/flate` 0.8.1 engine for font programs, CIDToGIDMap and CMaps.
+The strict decoder remains first; a complete zlib body/trailer with an
+Adler-32 mismatch may be recovered by a bounded raw decode using that engine.
+Invalid headers, dictionaries and truncated/invalid DEFLATE remain failures.
+Recovery accepts one Flate filter without a transforming predictor, at most
+4 MiB compressed input and 16 MiB output. Its shared cache retains only bytes,
+with eight entries, 8 MiB input and 16 MiB output. These limits describe the
+recovery path; pdflite's normal decoding limits are unchanged. ToUnicode retry
+uses a shadow font dictionary so painting and copying share the recovered
+descriptor. No source stream is changed. Opt-in document diagnostics report
+`FontStreamChecksumRecovered` with the stream's resource path/object number,
+including inherited CMap streams; completing DEFLATE does not prove that the
+recovered bytes equal the producer's original bytes.
+
 Text paint geometry is carried separately as `glyph_transform`: a one-em,
 y-up glyph coordinate system mapped to PDF page coordinates, including CTM,
 the per-glyph text matrix, font size, horizontal scale, rise, and vertical

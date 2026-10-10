@@ -1366,9 +1366,10 @@ fn pdf_type1_path_of_pdf_glyph(
     Some(None) => return None
     None => {
       let parsed = try {
-        let bytes = document
-          .pdf_decode_stream(@syntax.PdfIndirect(number))
-          .stream_bytes()
+        let bytes = pdf_decode_font_stream_with_recovery(
+          document,
+          @syntax.PdfIndirect(number),
+        ).stream_bytes()
         pdf_type1_parse_font(bytes)
       } catch {
         _ => None

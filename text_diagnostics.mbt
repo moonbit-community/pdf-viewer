@@ -8,6 +8,7 @@ pub(all) enum PdfTextDiagnosticKind {
   HostFontFallback
   MissingEmbeddedOutline
   MissingClipOutline
+  FontStreamChecksumRecovered
   CMapMalformedTokens(Int)
   CMapIncompleteSection(String)
   CMapCycle
@@ -17,8 +18,9 @@ pub(all) enum PdfTextDiagnosticKind {
 ///|
 /// A diagnostic tied to a glyph and resource. CMap observations describe the
 /// resource as a whole, not proof that this particular glyph was misdecoded.
-/// object_number identifies the immediate CMap stream when available; an
-/// inherited fault may originate in one of its parents.
+/// object_number identifies the inspected font/CMap stream when available;
+/// an inherited CMap fault may originate in one of its parents. Checksum
+/// recovery means the DEFLATE body completed, not proof of original bytes.
 pub(all) struct PdfTextDiagnostic {
   page : Int
   source : PdfTextSourceRange
@@ -97,9 +99,60 @@ fn pdf_text_cmap_diagnostic_kinds(
 }
 
 ///|
+fn pdf_text_font_stream_objects(
+  document : @pdflite.PdfDocument,
+  font_object : @syntax.PdfObject,
+) -> Array[(String, @syntax.PdfObject)] {
+  let output : Array[(String, @syntax.PdfObject)] = []
+  let font_object = document.direct(font_object)
+  for key in ["/Encoding", "/ToUnicode"] {
+    let seen : Map[Int, Bool] = Map([])
+    let mut path = key
+    let mut object = font_object.lookup_immediate(pdf_name_key(key))
+    for _ in 0..<64 {
+      guard object is Some(current) else { break }
+      if current is @syntax.PdfIndirect(number) {
+        guard !seen.contains(number) else { break }
+        seen[number] = true
+      }
+      guard document.direct(current) is @syntax.PdfStreamObject(stream) else {
+        break
+      }
+      output.push((path, current))
+      path += "/UseCMap"
+      object = stream.dictionary.lookup_immediate(pdf_name_key("/UseCMap"))
+    }
+  }
+  let (descendant, prefix) = match
+    document.lookup_direct(pdf_name_key("/DescendantFonts"), font_object) {
+    Some(@syntax.PdfArray([descendant, ..])) =>
+      (document.direct(descendant), "/DescendantFonts[0]")
+    _ => (font_object, "")
+  }
+  match descendant.lookup_immediate(pdf_name_key("/CIDToGIDMap")) {
+    Some(object) => output.push((prefix + "/CIDToGIDMap", object))
+    None => ()
+  }
+  match document.lookup_direct(pdf_name_key("/FontDescriptor"), descendant) {
+    Some(descriptor) =>
+      for key in ["/FontFile", "/FontFile2", "/FontFile3"] {
+        match descriptor.lookup_immediate(pdf_name_key(key)) {
+          Some(object) =>
+            output.push((prefix + "/FontDescriptor" + key, object))
+          None => ()
+        }
+      }
+    None => ()
+  }
+  output
+}
+
+///|
 /// Also expose viewer CMap recovery observations. This opt-in inspection
 /// rebuilds the page and collects its text-resource scopes; it respects the
 /// document's optional-content state and leaves source PDF objects unchanged.
+/// Recovered checksums include font programs, CIDToGIDMap and up to 64 streams
+/// in each CMap chain; object_number identifies the recovered stream itself.
 /// Invalid page numbers return None.
 pub fn PdfViewerDocument::text_diagnostics(
   self : PdfViewerDocument,
@@ -112,6 +165,7 @@ pub fn PdfViewerDocument::text_diagnostics(
     sources[source.item_index] = source
   }
   let cached : Map[Int, Array[PdfTextDiagnosticKind]] = Map([])
+  let checksums : Map[Int, Bool] = Map([])
   let entries = pdf_collected_entries_of_page(
     self.document,
     self.pages[page_number - 1],
@@ -128,6 +182,37 @@ pub fn PdfViewerDocument::text_diagnostics(
       source.font,
     )
     guard font_object is Some(font_object) else { continue }
+    for
+      (path, object) in pdf_text_font_stream_objects(self.document, font_object) {
+      guard self.document.direct(object) is @syntax.PdfStreamObject(_) else {
+        continue
+      }
+      let number = match object {
+        @syntax.PdfIndirect(number) => Some(number)
+        _ => None
+      }
+      let recovered = match number {
+        Some(number) if checksums.get(number) is Some(recovered) => recovered
+        _ => {
+          let recovered = pdf_decode_font_stream_result(self.document, object).1 catch {
+              _ => false
+            }
+          if number is Some(number) {
+            checksums[number] = recovered
+          }
+          recovered
+        }
+      }
+      if recovered {
+        output.push({
+          page: page_number,
+          source,
+          kind: FontStreamChecksumRecovered,
+          resource: source.font + path,
+          object_number: number,
+        })
+      }
+    }
     for key in ["/Encoding", "/ToUnicode"] {
       let object = self.document.lookup_direct(pdf_name_key(key), font_object)
       // Named encodings are not streams and are handled by the reader or

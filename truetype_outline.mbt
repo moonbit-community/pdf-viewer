@@ -701,7 +701,10 @@ fn pdf_viewer_ttf_embedded_bytes(
   match font.embedded_fontfile_number() {
     Some(number) =>
       Some(
-        document.pdf_decode_stream(@syntax.PdfIndirect(number)).stream_bytes(),
+        pdf_decode_font_stream_with_recovery(
+          document,
+          @syntax.PdfIndirect(number),
+        ).stream_bytes(),
       )
     None => None
   }
@@ -740,7 +743,9 @@ fn pdf_viewer_ttf_cid_to_gid(
             Some(@syntax.PdfNameObject(name)) if name ==
               pdf_name_key("/Identity") => cid
             Some(@syntax.PdfStreamObject(_) as map_object) => {
-              let bytes = document.pdf_decode_stream(map_object).stream_bytes()
+              let bytes = pdf_decode_font_stream_with_recovery(
+                document, map_object,
+              ).stream_bytes()
               let offset = cid * 2
               match pdf_viewer_ttf_u16(bytes[:], offset) {
                 Some(value) => value

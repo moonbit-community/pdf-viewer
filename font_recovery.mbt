@@ -1,8 +1,17 @@
 ///|
-/// Retain the strict reader's workflow, adding a descriptor only to a local
-/// dictionary when a malformed non-embedded CIDFont omits the required entry.
-/// The source document and its descendant font objects remain unchanged.
+/// Retain the strict reader's workflow, recovering metrics and a complete
+/// checksum-mismatched ToUnicode through local dictionaries. The source
+/// document and its font/descriptor/stream objects remain unchanged.
 fn pdf_read_font_for_viewer(
+  document : @pdflite.PdfDocument,
+  object : @syntax.PdfObject,
+) -> @pdflite.PdfFont raise @core.PdfError {
+  let font = pdf_read_font_with_viewer_metrics(document, object)
+  pdf_font_with_recovered_tounicode(document, object, font)
+}
+
+///|
+fn pdf_read_font_with_viewer_metrics(
   document : @pdflite.PdfDocument,
   object : @syntax.PdfObject,
 ) -> @pdflite.PdfFont raise @core.PdfError {

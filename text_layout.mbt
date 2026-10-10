@@ -35,7 +35,24 @@ fn pdf_apply_op_for_viewer(
         }
         error => raise error
       }
-      (result, [])
+      let next = result.state
+      let current_font = match
+        pdf_viewer_ttf_font_object(document, resources, next.text_state.font) {
+        Some(object) =>
+          pdf_font_with_recovered_tounicode(
+            document,
+            object,
+            next.text_state.current_font,
+          )
+        None => next.text_state.current_font
+      }
+      (
+        {
+          ..result,
+          state: { ..next, text_state: { ..next.text_state, current_font, }, },
+        },
+        [],
+      )
     }
     @content.Op_Tj(_)
     | @content.Op_TJ(_)

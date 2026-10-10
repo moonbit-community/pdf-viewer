@@ -149,8 +149,23 @@ fn pdf_font_resource_of(
   fallbacks : ArrayView[PdfFontFallback],
 ) -> PdfFontResource {
   let base_name = pdf_font_base_name_of(document, page_number, name)
-  let bytes = document.extract_fontfile_bytes(page_number, name) catch {
+  let bytes = try document.extract_fontfile_bytes(page_number, name) catch {
+    @core.InvalidFlateData =>
+      try {
+        for entry in document.list_fonts([page_number]) {
+          if entry.name == name {
+            let font = pdf_read_font_for_viewer(document, entry.font)
+            break pdf_viewer_ttf_embedded_bytes(document, font)
+          }
+        } nobreak {
+          None
+        }
+      } catch {
+        _ => None
+      }
     _ => None
+  } noraise {
+    bytes => bytes
   }
   let fallback = pdf_font_fallback_for(fallbacks, name, base_name)
   pdf_font_resource_from_bytes(name, base_name, bytes, name, fallback~)

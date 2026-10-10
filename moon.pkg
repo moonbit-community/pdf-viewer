@@ -7,6 +7,8 @@ import {
   "moonbit-community/bidi",
   "moonbit-community/normalization",
   "moonbit-community/ucd",
+  "moonbit-community/flate" @raw_flate,
+  "moonbit-community/flate/zlib" @font_zlib,
   "mizchi/font",
   "moonbitlang/pdflite",
   "moonbitlang/pdflite/content",

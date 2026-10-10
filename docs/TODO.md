@@ -137,7 +137,7 @@ JPEG + SMask + Matte、color-key 边缘和复杂合成仍待完成，不能据�
 ## 文档载入与页面
 
 - [x] R-01 / P1：`open_document_with_passwords` 和浏览器密码重试入口已接入；40-bit ARC4、128-bit ARC4 和 AESV2 覆盖正确/错误用户密码、所有者密码与页面文字读取，四后端验证通过。空密码重试也不会回到未认证路径。浏览器弹窗仍需要带真实加密文件的专门 Chromium 对话框回归。
-- [ ] R-02 / P1：扩大 xref stream、object stream、损坏 xref/页树和资源继承恢复的真实样本覆盖；失败可定位。已修正合法的 `endstream % comment` 后接 `endobj` 导致 reader 丢弃页面内容的分支，按 `/Length` 和 active xref 恢复；真实 `calgray.pdf`/`calrgb.pdf` 已从整页空白恢复可见内容。不能据此声称完整损坏 PDF 恢复。
+- [ ] R-02 / P1：扩大 xref stream、object stream、损坏 xref/页树和资源继承恢复的真实样本覆盖；失败可定位。已修正合法的 `endstream % comment` 后接 `endobj` 导致 reader 丢弃页面内容的分支，按 `/Length` 和 active xref 恢复；真实 `calgray.pdf`/`calrgb.pdf` 已从整页空白恢复可见内容。字体/CMap 单层 Flate 的完整正文和 trailer 若只有校验和不匹配，现复用同版本 Flate 引擎限额恢复；`issue13316_reduced.pdf` 已恢复中文绘制与提取。filter chain、predictor 和其它损坏流仍未覆盖，不能据此声称完整损坏 PDF 恢复。
 - [ ] R-03 / P2：复用 Fetch/Streams/Range 数据源，先验证或扩展 pdflite 的分段读取接口，使大文件不必完整下载后才能打开第一页；不另建 PDF reader。
 - [x] P-01 / P1：页面模型现在验证有效 CropBox/MediaBox 交集、非法/相离回退、非零原点和正值 UserUnit；viewport 保留请求的 `scale` 并用 `scale * user_unit` 计算矩阵与尺寸，SVG 绘制共用该有效缩放。合成边界回归和真实 `issue19176.pdf`（`/UserUnit 72`）的 PDF.js 对照均通过，见 [validation.md](validation.md#page-boundaries-and-userunit)。宿主额外 devicePixelRatio 仍由浏览器层决定。
 - [ ] P-02 / P1：补宿主可用的任务生命周期、错误分类、资源释放和 API 行为测试；记录与 PDF.js 公开模型的差异。
@@ -158,7 +158,7 @@ JPEG + SMask + Matte、color-key 边缘和复杂合成仍待完成，不能据�
 - [ ] T-01 / P0：提取、复制/框选、搜索和 DOM text layer 共用页面逻辑顺序，paint-order display list 与 item index 保持不变。已接入 `moonbit-community/bidi` 0.5.2，按 Unicode UAX #9 置换核对内容流顺序和几何，混合 RTL/LTR 保留数字串，多 scalar glyph 不拆分；水平页先按持续栏间空隙分块，覆盖通栏标题和 RTL 双栏。6 项新增顺序回归通过，真实 `tracemonkey.pdf` 第一页从左右栏交错变为逐栏提取。复杂 bidi 控制、表格/旋转布局、细粒度字形边界和跨方向空格推断仍待补齐，见 [A1 验证](validation.md#a1-fonts-unicode-and-reading-order)。
 - [ ] T-02 / P1：补字符码/CID/GID、原始 byte span、文本 run/段落与 selection source 的稳定映射；长文本可定位回源。 已提供 `PdfPageModel::text_sources()` sidecar，返回逻辑 UTF-16 范围、稳定 item index、charcode 和字体；推断分隔符保留无源空隙，连字/surrogate pair 属于完整源 glyph。未提供 byte span 或完整 CID/GID，因此保持未勾选。
 - [x] T-03 / P0：全面对齐 Tw 的编码语义：只有原始单字节 0x20 应用 word spacing。所有 CID 字体共用按 byte length 判定的主路径；4 个独立字距测试及外部 CMap/纵排测试覆盖 standard、simple、Type 3、Identity 与预定义 UTF8/UTF16/UTF32。ToUnicode 把别的字符映射为空格也不会触发 Tw，见 [validation.md](validation.md#adobe-predefined-cmaps-vertical-layout-and-word-spacing)。
-- [ ] T-04 / P1：统一损坏字符串、未知字符、缺失 ToUnicode/metrics 的回退和诊断；绘制与提取失败不能静默丢失全部文字。 页面/文档 `text_diagnostics()` 已暴露替换字符、宿主字体回退、缺轮廓/clip 和 CMap 恢复观察，可定位页、item、charcode、字体/资源与直接对象号；这是显式诊断 API，未统一所有 ToUnicode/metrics 回退，也不把字面 U+FFFD 或正常宿主回退判为文件损坏。
+- [ ] T-04 / P1：统一损坏字符串、未知字符、缺失 ToUnicode/metrics 的回退和诊断；绘制与提取失败不能静默丢失全部文字。 页面/文档 `text_diagnostics()` 已暴露替换字符、宿主字体回退、缺轮廓/clip 和 CMap 恢复观察，可定位页、item、charcode、字体/资源与直接对象号。新增字体/CMap 校验和恢复诊断，包含父 CMap 的实际对象号；不修改源对象。这是显式诊断 API，未统一所有 ToUnicode/metrics 回退，也不把字面 U+FFFD 或正常宿主回退判为文件损坏。
 
 ## 绘制、图片与色彩
 

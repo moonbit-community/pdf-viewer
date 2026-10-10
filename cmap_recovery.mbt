@@ -720,7 +720,9 @@ fn pdf_viewer_cmap_recovery_of_object(
     }
     seen[number] = true
   }
-  let bytes = try document.pdf_decode_stream(object).stream_bytes() catch {
+  let bytes = try
+    pdf_decode_font_stream_with_recovery(document, object).stream_bytes()
+  catch {
     _ => None
   } noraise {
     value => Some(value)

@@ -32,5 +32,6 @@ import {
   "moonbit-community/bidi@0.5.2",
   "moonbit-community/normalization@0.5.2",
   "moonbit-community/ucd@0.5.2",
+  "moonbit-community/flate@0.8.1",
   "mizchi/font@0.7.4",
 }
