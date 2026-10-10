@@ -6,7 +6,7 @@ CLI. That conversion baseline does not measure parity with pdf.js rendering.
 The automated selected-page visual baseline below now measures actual output
 against the same pinned PDF.js build.
 
-The suite currently contains 259 tests on each of wasm, wasm-gc, JavaScript, and
+The suite currently contains 270 tests on each of wasm, wasm-gc, JavaScript, and
 native. It includes 13 annotation tests, 17 CFF tests, 25 Type 1 tests, 5 CID
 layout tests, 9 variable-length CMap tests, 4 text-geometry tests, and 8
 text-clipping tests, one mixed-paint scaling regression, and one tiling-pattern
@@ -85,8 +85,8 @@ excluded.
 
 ### Standalone cmap integration
 
-`mizchi/font` 0.7.4 is pinned in the root dependencies and used only for the
-validated standalone cmap path. PDF selection prefers Windows Unicode/Symbol,
+`mizchi/font` 0.7.4 is pinned in the root dependencies and used for validated
+standalone cmap and post paths. PDF selection prefers Windows Unicode/Symbol,
 then MacRoman, with full-repertoire Unicode records for supplementary scalars;
 directory order no longer merges conflicting records. MacRoman reverse lookup
 reuses pdflite. Selected missing glyphs remain GID 0 instead of borrowing the
@@ -97,8 +97,8 @@ format 4 array/range offsets, format 12 group ordering, Unicode/GID bounds and
 expansion limits. It corrects signed remainders to 16-bit glyph IDs and checks
 maxp. A shared cache retains cmap bytes only, with limits of 8 entries, 1 MiB
 input and 262,144 decoded mappings; each format 12 table can expand at most
-131,072 codepoints. Other cmap formats, post-table glyph-name recovery and
-broader damaged-font/host-loading behavior remain open.
+131,072 codepoints. Other cmap formats and broader damaged-font/host-loading
+behavior remain open; post-table recovery is covered by the next batch below.
 
 Nine additional tests cover supplementary glyph painting and clipping with
 independent ToUnicode, Unicode-platform format 12, conflicting/duplicate
@@ -116,6 +116,58 @@ links unrelated reverse CMap tables. Against the `100fc23` browser build,
 the final generated JS grows from 12,227,920 to 12,248,518 bytes; `gzip -c`
 grows from 2,782,919 to 2,785,682 bytes (**2,763 bytes**). This checks artifact
 size, not page-load performance; no shared build/visual runner was changed.
+
+### Standalone post integration
+
+The next batch reuses `mizchi/font.parse_post` for version 2 names. Version 1
+supplies equivalent standard-name indices to that reader; version 3 supplies
+no names. Deprecated 2.5 and vendor formats remain unsupported. The adapter
+checks maxp counts, all name indices and Pascal-string reads within the declared
+post table, following the [OpenType post specification](https://learn.microsoft.com/en-us/typography/opentype/spec/post).
+The shared cache retains only post bytes/names, keyed by bytes and glyph count,
+and is limited to eight entries, 1 MiB of input and 131,072 decoded names.
+Post lookup preserves the first duplicate name and excludes .notdef, empty
+glyphs and loca/glyf reads outside declared tables.
+
+Valid Windows/Symbol cmap mappings take priority. Unicode-platform cmap
+mappings use the original byte for BMP lookup, then prefer explicit PDF
+Encoding/Differences post names. Supplementary glyphs retain Unicode lookup.
+Missing cmap mappings and absent-cmap fonts can recover through post names.
+Unknown PDF glyph names are distinguished from pdflite's raw-code fallback
+using its existing glyph resolver. Only an unknown name with no usable post
+names may use an explicit ToUnicode entry to find a cmap glyph; known names
+remain independent of copied Unicode. PDF glyph-list and Macintosh name tables
+are reused, not duplicated in the viewer.
+
+Eleven new regressions cover custom-name painting/clipping/copy separation,
+Windows and Symbol priority, Unicode-platform overrides and supplementary
+glyphs, missing cmap, versions 1/2/3, the restricted ToUnicode fallback,
+truncated strings, count/index bounds, duplicate/.notdef/empty glyphs,
+loca/glyf/head bounds, cache isolation and input/decoded-name eviction.
+The four-backend suite passed **270/270 on each backend**. The public `.mbti`
+interface is unchanged. Against `deb27b1`, generated browser JS grows from
+12,248,518 to 12,285,375 bytes; `gzip -c` grows from 2,785,682 to 2,790,651
+(**4,969 bytes**). This is artifact size, not a load/performance measurement.
+
+`tools/font_post_cases.json` measures the previous nine fonts plus
+`issue13316_reduced.pdf`, at the pinned PDF.js revision, page 1, scale 2,
+rotation 0. Current `_build/visual-test-1791641615896/` and detached `deb27b1`
+baseline `_build/a1-post-baseline/_build/visual-test-1791641621559/` both
+measured **10/10**, with **0 runtime failures**, **0 placeholders** and
+**10 existing pixel/text differences from PDF.js**. Nine viewer PNG hashes
+are identical between the builds. `TrueType_without_cmap.pdf` restores the
+previously missing four-glyph word through post names: changed pixels above
+tolerance fall from **508 to 355**, and missing-ink pixels from **449 to 59**.
+Its extracted text remains equal to PDF.js; remaining edge/paint differences
+are still counted, not waived.
+
+`issue13316_reduced.pdf` remains at **3,771** changed pixels and still extracts
+`A C D E F`; the new fallback is not end-to-end validated by that sample.
+Running the standalone font inventory on it raises `InvalidFlateData`, so
+reader/font extraction recovery still requires investigation. The named
+Unicode-platform conflict is covered by authored regressions and the unchanged
+`issue4800.pdf`; `issue13433.pdf` was not measured because downloading its
+pinned `.link` target timed out. These limitations keep F-05/R-02 open.
 
 ### Font candidate probe
 

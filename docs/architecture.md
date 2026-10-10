@@ -57,11 +57,23 @@ The viewer selects a Windows Unicode/Symbol or MacRoman cmap before calling
 glyph names use pdflite's reverse encoding lookup; supplementary scalars use
 full-repertoire Unicode tables. Declared table bounds, segment/range ordering,
 glyph IDs and expansion counts are checked before the library reads bytes.
-Missing mappings in a selected table remain GID 0; missing/unusable tables
-retain the existing raw-GID recovery. A bounded shared cache holds only cmap
+Missing mappings in a selected table may recover through explicit post names;
+unresolved mappings remain GID 0. Missing/unusable tables retain the existing
+raw-GID recovery after trying post. A bounded shared cache holds only cmap
 bytes and decoded mappings: eight entries, 1 MiB input and 262,144 mappings.
 It retains no complete font or PDF document. General font parsing and outlines
 still use the existing recovery paths because PDF subsets can omit tables.
+
+`truetype_post.mbt` reuses the same library's standalone `parse_post` for version
+2 names and supplies equivalent indices for version 1's standard names. Version
+3 supplies no names. Counts and Pascal strings are checked within the declared
+table before library reads. A separate cache retains at most eight post tables,
+1 MiB of source and 131,072 names, keyed by table bytes and maxp glyph count.
+The first matching name must select a nonempty glyph within loca/glyf bounds.
+Windows/Symbol cmap mappings retain priority; Unicode-platform cmaps prefer
+explicit Encoding/Differences names. Unknown names without usable post names
+may recover through an explicit ToUnicode entry. Known Encoding names continue
+to select independently of copied Unicode; PDF advances and matrices are kept.
 
 Text paint geometry is carried separately as `glyph_transform`: a one-em,
 y-up glyph coordinate system mapped to PDF page coordinates, including CTM,

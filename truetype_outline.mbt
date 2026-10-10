@@ -756,9 +756,9 @@ fn pdf_viewer_ttf_cid_to_gid(
 }
 
 ///|
-/// ToUnicode describes copy/search text, not the TrueType glyph selection.
-/// Use the PDF encoding without its text-only override for nonsymbolic fonts;
-/// symbolic cmaps use the original byte and the documented high-byte windows.
+/// Encoding/Differences select the glyph independently of copied Unicode.
+/// Unicode-platform cmaps prefer explicit post names; other cmaps use post
+/// only for missing mappings. An unknown name without post may use ToUnicode.
 fn pdf_viewer_ttf_simple_gid(
   simple : @pdflite.PdfSimpleFont,
   bytes : Bytes,
@@ -770,48 +770,92 @@ fn pdf_viewer_ttf_simple_gid(
     })
     .unwrap_or(false)
   let implicit = simple.encoding is @pdflite.PdfImplicitInFontFile
-  if symbolic || implicit {
-    let cmap = match
-      pdf_viewer_ttf_cmap(bytes[:], symbolic || implicit, false) {
-      Some(cmap) => cmap
-      None => return charcode
-    }
-    for
-      code in [
-        charcode,
-        charcode + 0xF000,
-        charcode + 0xF100,
-        charcode + 0xF200,
-      ] {
-      let gid = pdf_viewer_ttf_cmap_gid(bytes[:], cmap, code)
-      if gid > 0 {
-        return gid
-      }
-    }
-    return 0
+  let names = pdf_viewer_ttf_post(bytes[:])
+  let glyph = if implicit {
+    None
+  } else {
+    pdf_viewer_ttf_encoding_glyph(simple, charcode)
   }
-  let glyph_font = @pdflite.PdfFontSimple({
-    ..simple,
-    fontdescriptor: simple.fontdescriptor.map(descriptor => {
-      ..descriptor,
-      tounicode: None,
-    }),
-  })
-  let raw_bytes = glyph_font.content_bytes_of_charcode(charcode)
-  match glyph_font.text_extractor().codepoints_of_text(raw_bytes[:]) {
-    [codepoint, ..] => {
-      let cmap = match pdf_viewer_ttf_cmap(bytes[:], false, codepoint > 65535) {
-        Some(cmap) => cmap
-        None => return charcode
+  let mut codepoint = match glyph {
+    Some(glyph) => glyph.codepoints.get(0)
+    None => None
+  }
+  if !symbolic && !implicit && codepoint is None && names is None {
+    // This narrow recovery must not override an Encoding name or a post table.
+    match simple.fontdescriptor {
+      Some({ tounicode: Some(entries), .. }) =>
+        for (code, unicode) in entries {
+          if code == charcode {
+            codepoint = pdf_viewer_ttf_tounicode_first(unicode[:])
+            break
+          }
+        }
+      _ => ()
+    }
+  }
+  let supplementary = !symbolic &&
+    !implicit &&
+    codepoint.map(code => code > 65535).unwrap_or(false)
+  let cmap = pdf_viewer_ttf_cmap(bytes[:], symbolic || implicit, supplementary)
+  let gid = match cmap {
+    Some(cmap) if symbolic || implicit =>
+      for
+        code in [
+          charcode,
+          charcode + 0xF000,
+          charcode + 0xF100,
+          charcode + 0xF200,
+        ] {
+        let gid = pdf_viewer_ttf_cmap_gid(bytes[:], cmap, code)
+        if gid > 0 {
+          break gid
+        }
+      } nobreak {
+        0
       }
-      let code = if cmap.platform == 1 && cmap.encoding == 0 {
-        pdf_viewer_ttf_macroman_code(simple, codepoint).unwrap_or(-1)
+    Some(cmap) => {
+      let code = if cmap.platform == 0 && !supplementary {
+        charcode
+      } else if cmap.platform == 1 && cmap.encoding == 0 {
+        match codepoint {
+          Some(code) => pdf_viewer_ttf_macroman_code(simple, code).unwrap_or(-1)
+          None => -1
+        }
       } else {
-        codepoint
+        codepoint.unwrap_or(-1)
       }
       pdf_viewer_ttf_cmap_gid(bytes[:], cmap, code)
     }
-    [] => charcode
+    None => 0
+  }
+  if gid == 0 || cmap.map(cmap => cmap.platform == 0).unwrap_or(false) {
+    match (names, glyph) {
+      (Some(names), Some(glyph)) => {
+        let named_gid = pdf_viewer_ttf_post_gid(
+          bytes[:],
+          names,
+          glyph.glyphname,
+        )
+        if named_gid > 0 {
+          return named_gid
+        }
+      }
+      _ => ()
+    }
+  }
+  if cmap is None {
+    charcode
+  } else {
+    gid
+  }
+}
+
+///|
+fn pdf_viewer_ttf_tounicode_first(bytes : BytesView) -> Int? {
+  try @pdflite.pdf_codepoints_of_utf16be(bytes) catch {
+    _ => None
+  } noraise {
+    codepoints => codepoints.get(0)
   }
 }
 
