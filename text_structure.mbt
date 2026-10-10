@@ -59,10 +59,21 @@ fn pdf_text_same_orientation(first : PdfTextItem, second : PdfTextItem) -> Bool 
 }
 
 ///|
+fn pdf_text_baseline(item : PdfTextItem) -> PdfPoint {
+  match item.glyph_transform {
+    Some([_, _, _, _, x, y]) => { x, y, }
+    _ => item.quad.p1
+  }
+}
+
+///|
 fn pdf_text_run_continues(
   previous : PdfTextItem,
   current : PdfTextItem,
 ) -> Bool {
+  if pdf_text_control_only(previous.text) || pdf_text_control_only(current.text) {
+    return previous.font == current.font
+  }
   if previous.font != current.font ||
     !pdf_text_same_orientation(previous, current) ||
     pdf_text_separator(previous, current) == "\n" {
@@ -95,6 +106,9 @@ fn pdf_text_paragraph_break(
   previous : PdfTextItem,
   current : PdfTextItem,
 ) -> Bool {
+  if pdf_text_control_only(previous.text) || pdf_text_control_only(current.text) {
+    return false
+  }
   if !pdf_text_same_orientation(previous, current) {
     return true
   }

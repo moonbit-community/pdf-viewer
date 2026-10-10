@@ -17,12 +17,8 @@ fn pdf_text_source_ranges(
 ) -> Array[PdfTextSourceRange] {
   let output : Array[PdfTextSourceRange] = []
   let mut offset = 0
-  let mut previous : PdfTextItem? = None
-  for item in items {
-    match previous {
-      Some(last) => offset += pdf_text_separator(last, item).length()
-      None => ()
-    }
+  for index, item in items {
+    offset += pdf_text_separator_at(items, index).length()
     output.push({
       item_index: item.index,
       start: offset,
@@ -31,7 +27,6 @@ fn pdf_text_source_ranges(
       charcode: item.charcode,
     })
     offset += item.text.length()
-    previous = Some(item)
   }
   output
 }

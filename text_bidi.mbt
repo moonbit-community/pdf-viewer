@@ -1,7 +1,7 @@
 ///|
 /// Collapse the library's code-point permutation to PDF glyph/source items.
-/// A glyph with a multi-scalar ToUnicode mapping is kept intact. A permutation
-/// that would split it, or erase a formatting-only source item, is unavailable.
+/// A glyph with a multi-scalar ToUnicode mapping is kept intact. Formatting
+/// glyphs remain in logical source text, but do not assert a painted position.
 fn pdf_text_bidi_permutation(
   items : ArrayView[PdfTextItem],
   direction : @bidi.Direction,
@@ -21,6 +21,9 @@ fn pdf_text_bidi_permutation(
   let mut previous : Int? = None
   for position in positions {
     let owner = owners[position]
+    if pdf_text_control_only(items[owner].text) {
+      continue
+    }
     if previous == Some(owner) {
       continue
     }
@@ -31,7 +34,8 @@ fn pdf_text_bidi_permutation(
     permutation.push(owner)
     previous = Some(owner)
   }
-  if permutation.length() == items.length() {
+  if permutation.length() ==
+    items.filter(item => !pdf_text_control_only(item.text)).length() {
     Some(permutation)
   } else {
     None
@@ -46,8 +50,12 @@ fn pdf_text_bidi_matches_visual(
 ) -> Bool {
   match pdf_text_bidi_permutation(logical, direction) {
     Some(permutation) => {
+      let visible = visual.filter(item => !pdf_text_control_only(item.text))
+      if permutation.length() != visible.length() {
+        return false
+      }
       for position, item in permutation {
-        if logical[item].index != visual[position].index {
+        if logical[item].index != visible[position].index {
           return false
         }
       }
@@ -69,11 +77,16 @@ fn pdf_text_bidi_order(visual : ArrayView[PdfTextItem]) -> Array[PdfTextItem] {
   for item in source {
     source_text.write_string(item.text)
   }
-  if !@bidi.requires_bidi(source_text.to_string()) {
+  let controls = source.any(item => pdf_text_control_only(item.text))
+  if !controls && !@bidi.requires_bidi(source_text.to_string()) {
     return visual.to_owned()
   }
   let direction = @bidi.detect_direction(source_text.to_string())
   if pdf_text_bidi_matches_visual(source[:], visual, direction) {
+    return source
+  }
+  // Invisible embedding/isolate positions cannot establish an inverse order.
+  if controls {
     return source
   }
   match pdf_text_bidi_permutation(visual, direction) {
@@ -89,4 +102,25 @@ fn pdf_text_bidi_order(visual : ArrayView[PdfTextItem]) -> Array[PdfTextItem] {
   // or explicit embeddings without source controls). Keep the original PDF
   // sequence instead of reversing every Latin and numeric run.
   source
+}
+
+///|
+fn pdf_text_control_only(text : String) -> Bool {
+  !text.is_empty() && text.iter().all(pdf_text_control_char)
+}
+
+///|
+fn pdf_text_control_char(char : Char) -> Bool {
+  let code = char.to_int()
+  let kind = @bidi.bidi_class(char)
+  code < 32 ||
+  code == 127 ||
+  code == 0x061C ||
+  code == 0x200E ||
+  code == 0x200F ||
+  code == 0x2028 ||
+  code == 0x2029 ||
+  kind.is_x9_removed() ||
+  kind.is_isolate_initiator() ||
+  kind == @bidi.PDI
 }

@@ -56,8 +56,8 @@ to complete glyph items and checked against visual geometry. Source order is
 preferred when its forward projection agrees; ambiguous or split-glyph
 permutations retain content order. Numeric runs, multi-scalar ToUnicode,
 ligatures and surrogate selections share source identity across copy, search
-and the DOM text layer. Complex tables, rotations, explicit bidi controls and
-inferred spaces across directional run boundaries still need work.
+and the DOM text layer. The rotation/control/table follow-up below expands these cases while retaining
+content order for ambiguous bidi permutations.
 
 TrueType selection now uses Encoding/Differences independently from ToUnicode;
 symbol fonts also probe the F000/F100/F200 windows. PDF advances and text matrices
@@ -1313,3 +1313,22 @@ its clip. After the transform fixes, text was legible, the blue FreeText
 appeared, and placement was visually close in these two samples. This was a
 manual spot check against Poppler, **not** an automated pixel comparison or a
 pdf.js fidelity score.
+
+### Rotated blocks, tables and bidi controls
+
+Eight authored regressions cover 90°/180° and sheared baselines, a rotated
+heading over two columns, compact three-row tables versus long aligned columns,
+RLO/PDF and RLI/PDI controls with remote zero-width geometry, supplementary
+scalars, explicit newline glyphs and gaps between opposite-direction runs.
+Reading order projects temporary geometry and returns the original paint items,
+quads and indices. Copy, search, selection, DOM separators and source intervals
+share the context-aware separator calculation. These are geometric heuristics
+for untagged PDFs; ambiguous short columns and bidi permutations retain the
+documented fallback instead of inventing document semantics.
+
+All four backends pass **345/345**; interface generation/formatting and
+`moon check --target all` pass with the existing 24 warnings. The ten-file
+provenance replay is **10/10** with 5,409 logical glyphs, 6,252 captured source
+bytes, and no source/lexical/run/paragraph join failures. Artifacts:
+`_build/text-provenance-1791654528774/report.json`. Rendering still has the
+previously recorded raster differences; these checks validate text identity.

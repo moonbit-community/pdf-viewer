@@ -4,7 +4,7 @@
 fn pdf_text_is_horizontal(item : PdfTextItem) -> Bool {
   let dx = item.quad.p2.x - item.quad.p1.x
   let dy = item.quad.p2.y - item.quad.p1.y
-  !item.vertical && dx.abs() > 0.000001 && dy.abs() < dx.abs() * 0.01
+  !item.vertical && dx > 0.000001 && dy.abs() < dx * 0.01
 }
 
 ///|
@@ -85,6 +85,11 @@ fn pdf_text_reading_blocks(
     return [items.to_owned()]
   }
   let height = pdf_text_typical_height(items)
+  // Synchronized rows of short cells are a compact table, not prose columns.
+  // Long aligned prose lines remain eligible for persistent-gutter splitting.
+  if pdf_text_compact_table(items, height) {
+    return [items.to_owned()]
+  }
   match pdf_text_projection_gap(items, true, height * 1.5) {
     Some(cut) => {
       let left : Array[PdfTextItem] = []
@@ -137,12 +142,185 @@ fn pdf_text_reading_blocks(
 /// Separate persistent column gutters before grouping lines, so adjacent
 /// columns are not merged into one long row.
 fn pdf_text_reading_order(items : ArrayView[PdfTextItem]) -> Array[PdfTextItem] {
-  if items.is_empty() || !items.iter().all(pdf_text_is_horizontal) {
-    return pdf_text_order_in_block(items)
+  if items.any(item => pdf_text_control_only(item.text)) {
+    let visible = items.filter(item => !pdf_text_control_only(item.text))
+    if visible.is_empty() {
+      let source = items.to_owned()
+      source.sort_by((a, b) => a.index.compare(b.index))
+      return source
+    }
+    let originals : Map[Int, PdfTextItem] = Map([])
+    let geometry = [
+      for item in items => {
+        originals[item.index] = item
+        if !pdf_text_control_only(item.text) {
+          item
+        } else {
+          let following = visible.filter(other => other.index > item.index)
+          following.sort_by((a, b) => a.index.compare(b.index))
+          let preceding = visible.filter(other => other.index < item.index)
+          preceding.sort_by((a, b) => b.index.compare(a.index))
+          let closing = item.text
+            .iter()
+            .all(char => {
+              @bidi.bidi_class(char) is (@bidi.PDI | @bidi.PDF) ||
+              char == '\n' ||
+              char == '\r'
+            })
+          let (preferred, alternate) = if closing {
+            (preceding.get(0), following.get(0))
+          } else {
+            (following.get(0), preceding.get(0))
+          }
+          let anchor = preferred.unwrap_or(alternate.unwrap_or(visible[0]))
+          {
+            ..item,
+            bounds: anchor.bounds,
+            quad: anchor.quad,
+            glyph_transform: anchor.glyph_transform,
+            font_size: anchor.font_size,
+            vertical: anchor.vertical,
+          }
+        }
+      }
+    ]
+    return [
+      for item in pdf_text_reading_order_geometry(geometry[:]) => {
+        originals[item.index]
+      }
+    ]
+  }
+  pdf_text_reading_order_geometry(items)
+}
+
+///|
+fn pdf_text_reading_order_geometry(
+  items : ArrayView[PdfTextItem],
+) -> Array[PdfTextItem] {
+  if items.is_empty() {
+    return []
+  }
+  if !items.iter().all(pdf_text_is_horizontal) {
+    return pdf_text_oriented_reading_order(items)
   }
   let output : Array[PdfTextItem] = []
   for block in pdf_text_reading_blocks(items, 0) {
     output.append(pdf_text_order_in_block(block[:]))
+  }
+  output
+}
+
+///|
+fn pdf_text_compact_table(
+  items : ArrayView[PdfTextItem],
+  height : Double,
+) -> Bool {
+  let cut = pdf_text_projection_gap(items, true, height * 1.5)
+  guard cut is Some(cut) else { return false }
+  let left = items.filter(item => {
+    (item.bounds.min_x + item.bounds.max_x) / 2.0 < cut
+  })
+  let right = items.filter(item => {
+    (item.bounds.min_x + item.bounds.max_x) / 2.0 >= cut
+  })
+  let cells = fn(values : ArrayView[PdfTextItem]) -> Array[(Double, Int)] {
+    let rows : Array[(Double, Int)] = []
+    for item in values {
+      if item.text.trim().is_empty() {
+        continue
+      }
+      let key = pdf_text_line_key(item)
+      match rows.search_by(row => (row.0 - key).abs() < height * 0.25) {
+        Some(at) => rows[at] = (rows[at].0, rows[at].1 + item.text.length())
+        None => rows.push((key, item.text.length()))
+      }
+    }
+    rows.sort_by((a, b) => pdf_text_compare_number(b.0, a.0))
+    rows
+  }
+  let a = cells(left[:])
+  let b = cells(right[:])
+  guard a.length() >= 3 && a.length() == b.length() else { return false }
+  for index in 0..<a.length() {
+    if (a[index].0 - b[index].0).abs() > height * 0.25 ||
+      a[index].1 > 24 ||
+      b[index].1 > 24 {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Use a coordinate view to order rotated/skewed blocks. Only source indices
+/// from that view escape; returned glyphs retain their original PDF quads.
+fn pdf_text_project_for_reading(
+  item : PdfTextItem,
+  axis : (Double, Double),
+) -> PdfTextItem {
+  let point = fn(point : PdfPoint) -> PdfPoint {
+    {
+      x: point.x * axis.0 + point.y * axis.1,
+      y: point.x * -axis.1 + point.y * axis.0,
+    }
+  }
+  let quad : PdfQuad = {
+    p0: point(item.quad.p0),
+    p1: point(item.quad.p1),
+    p2: point(item.quad.p2),
+    p3: point(item.quad.p3),
+  }
+  let bounds : PdfBounds = {
+    min_x: quad.p0.x.min(quad.p1.x).min(quad.p2.x).min(quad.p3.x),
+    min_y: quad.p0.y.min(quad.p1.y).min(quad.p2.y).min(quad.p3.y),
+    max_x: quad.p0.x.max(quad.p1.x).max(quad.p2.x).max(quad.p3.x),
+    max_y: quad.p0.y.max(quad.p1.y).max(quad.p2.y).max(quad.p3.y),
+  }
+  let glyph_transform = item.glyph_transform.map(matrix => {
+    match matrix {
+      [a, b, c, d, e, f] =>
+        [
+          a * axis.0 + b * axis.1,
+          a * -axis.1 + b * axis.0,
+          c * axis.0 + d * axis.1,
+          c * -axis.1 + d * axis.0,
+          e * axis.0 + f * axis.1,
+          e * -axis.1 + f * axis.0,
+        ]
+      _ => matrix
+    }
+  })
+  { ..item, quad, bounds, glyph_transform, }
+}
+
+///|
+fn pdf_text_oriented_reading_order(
+  items : ArrayView[PdfTextItem],
+) -> Array[PdfTextItem] {
+  let groups : Array[Array[PdfTextItem]] = []
+  let originals : Map[Int, PdfTextItem] = Map([])
+  for item in items {
+    originals[item.index] = item
+    match groups.search_by(group => pdf_text_same_orientation(group[0], item)) {
+      Some(at) => groups[at].push(item)
+      None => groups.push([item])
+    }
+  }
+  let output : Array[PdfTextItem] = []
+  for group in groups {
+    if group[0].vertical {
+      output.append(pdf_text_order_in_block(group[:]))
+      continue
+    }
+    let axis = pdf_text_writing_axis(group[0])
+    let projected = [
+      for item in group => pdf_text_project_for_reading(item, axis)
+    ]
+    for block in pdf_text_reading_blocks(projected[:], 0) {
+      for item in pdf_text_order_in_block(block[:]) {
+        output.push(originals[item.index])
+      }
+    }
   }
   output
 }
