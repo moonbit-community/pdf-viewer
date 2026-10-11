@@ -204,7 +204,9 @@ fn layers_view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
     model.printing
   @html.div(
     class="layers-panel",
-    attrs=@html.Attrs::build().aria_busy(model.layers_busy.to_string()),
+    attrs=@html.Attrs::build()
+      .aria_busy(model.layers_busy.to_string())
+      .data_set("config-index", selected.to_string()),
     [
       @html.label(class="layer-config-label", [
         @html.text("图层配置"),

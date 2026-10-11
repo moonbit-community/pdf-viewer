@@ -31,11 +31,11 @@ async function idle(){
     return Boolean(ready());
   });
 }
-async function waitLayers(expected){
-  await page.waitForFunction(expected=>Object.entries(expected).every(([id,visible])=>{
+async function waitLayers(expected,config){
+  await page.waitForFunction(({expected,config})=>(config===undefined||document.querySelector('.layers-panel')?.dataset.configIndex===String(config)) && Object.entries(expected).every(([id,visible])=>{
     const control=document.querySelector('#layer-'+id);
     return control && control.checked===visible;
-  })&&!document.querySelector('#layers-config').disabled,expected);await idle();
+  })&&!document.querySelector('#layers-config').disabled,{expected,config});await idle();
 }
 const text=()=>page.locator('#pages .page[data-page="1"] .text-layer').evaluate(node=>node.textContent);
 const layerText=result=>result.layer.items.map(item=>item.text).join('');
@@ -79,10 +79,10 @@ try{
     assert.deepEqual((await rpc('render_page',[2,1,0])).layer.items,[]);
   });
   await check('Layer configurations reset overrides and locked radio failures stay atomic',async()=>{
-    await page.locator('#layers-config').selectOption('0');await waitLayers({6:false,7:true,8:false,9:false});
+    await page.locator('#layers-config').selectOption('0');await waitLayers({6:false,7:true,8:false,9:false},0);
     await page.locator('#layer-7').click();await waitLayers({7:false});
     await page.locator('#layers-reset').click();await waitLayers({7:true});
-    await page.locator('#layers-config').selectOption('1');await waitLayers({6:true,7:false});
+    await page.locator('#layers-config').selectOption('1');await waitLayers({6:true,7:false},1);
     await page.evaluate(()=>{
       const original=pdfViewerHost.pdf.call.bind(pdfViewerHost.pdf);
       pdfViewerHost.pdf.call=async(method,args,options)=>{
@@ -101,7 +101,26 @@ try{
     assert.equal(await page.locator('#layer-7').isChecked(),false);
     const failed=await rpc('set_optional_content_visibility',[6,false]);assert.equal(failed.ok,false);assert.equal(failed.code,'layer-error');
     assert.match(await text(),/Alpha/);assert.doesNotMatch(await text(),/Beta/);
-    await page.locator('#layers-config').selectOption('-1');await waitLayers({6:true,7:false});
+    await page.evaluate(()=>{
+      const original=pdfViewerHost.pdf.call.bind(pdfViewerHost.pdf);
+      pdfViewerHost.pdf.call=async(method,args,options)=>{
+        const result=await original(method,args,options);
+        if(method==='set_optional_content_config'&&args[0]===-1){
+          pdfViewerHost.pdf.call=original;
+          window.layerConfigResponseReady=true;
+          await new Promise(resolve=>{window.releaseLayerConfigResponse=resolve;});
+        }
+        return result;
+      };
+    });
+    await page.locator('#layers-config').selectOption('-1');
+    await page.waitForFunction(()=>window.layerConfigResponseReady);
+    // Both configurations have the same checked groups; wait for the accepted
+    // configuration rather than mistaking the previous group state for success.
+    assert.equal(await page.locator('.layers-panel').getAttribute('data-config-index'),'1');
+    assert.equal(await page.locator('#layers-config').isDisabled(),true);
+    await page.evaluate(()=>{window.releaseLayerConfigResponse();});
+    await waitLayers({6:true,7:false},-1);
     assert.equal(await page.locator('#error').isVisible(),false);
   });
   await check('Layer changes clear stale native selection and search results',async()=>{
