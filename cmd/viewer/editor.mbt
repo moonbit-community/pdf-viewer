@@ -142,6 +142,9 @@ async fn editor_save() -> Unit {
     editor.pending_input = false
     if state.file is Some(file) {
       download_native(file, state.file_name)
+      editor.saved = "[]"
+      editor.status = "已下载 PDF"
+      notify()
     }
     return
   }

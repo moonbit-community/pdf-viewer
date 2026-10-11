@@ -338,6 +338,26 @@ try {
     await page.locator('#edit-redo').click();
     await page.waitForFunction(()=>document.querySelector('#editor-dirty').textContent==='');await idle();
     assert.equal(await page.locator('#editor-dirty').innerText(),'');
+    await page.locator('#edit-undo').click();await waitField('person',['你好 MoonBit']);
+    await page.locator('#edit-undo').click();
+    await page.waitForFunction(()=>{
+      const layer=document.querySelector('.page[data-page="1"] .editor-layer');
+      return layer && !JSON.parse(layer.dataset.entries).some(entry=>entry.contents==='Another session');
+    });await idle();
+    const originalBytes=readFileSync(saved);
+    const originalDownload=await captureDownload();
+    assert.deepEqual(readFileSync(originalDownload),originalBytes);
+    assert.equal(await page.locator('#editor-dirty').innerText(),'');
+    await page.locator('#edit-redo').click();
+    await page.waitForFunction(()=>{
+      const layer=document.querySelector('.page[data-page="1"] .editor-layer');
+      return layer && JSON.parse(layer.dataset.entries).some(entry=>entry.contents==='Another session');
+    });await idle();
+    assert.equal(await page.locator('#editor-dirty').innerText(),'未保存');
+    await page.locator('#edit-redo').click();await waitField('person',['Saved from active field']);
+    assert.equal(await page.locator('#editor-dirty').innerText(),'未保存');
+    await captureDownload();
+    assert.equal(await page.locator('#editor-dirty').innerText(),'');
   });
   await check('Unsaved edits can cancel document replacement without losing changes',async()=>{
     await page.locator('#editor-text').fill('Unsaved note');await frame();

@@ -20,6 +20,7 @@ can be undone.
 
 **下载** or Ctrl/Cmd+S saves a new PDF with the current edits. Downloading records
 the saved snapshot, so undoing away from it marks the document as unsaved.
+Downloading after undoing every edit records the original PDF as the saved snapshot.
 Replacing a document with unsaved edits asks whether to discard them; closing
 the browser also uses its native unsaved-change prompt. A host calling
 `loadFile`/`closeDocument` directly controls replacement itself.
