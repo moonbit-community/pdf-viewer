@@ -130,11 +130,18 @@ async function waitLength(number,count){
     return layer && JSON.parse(layer.dataset.entries).length===count;
   },{number,count});await idle();
 }
+async function waitSaved(){
+  // The download event can arrive before Rabbita publishes the saved snapshot.
+  await page.waitForFunction(()=>document.querySelector('#editor-dirty').textContent==='' &&
+    document.querySelector('#editor-status').textContent.startsWith('已下载') &&
+    !document.querySelector('#edit-toggle').disabled);
+  await idle();
+}
 async function captureDownload(){
   const promise=page.waitForEvent('download');
   await page.locator('#download').click();
   const download=await promise,dest=resolve(output,download.suggestedFilename());
-  await download.saveAs(dest);await idle();return dest;
+  await download.saveAs(dest);await waitSaved();return dest;
 }
 async function openEncrypted(name,password){
   assert.equal(await page.locator('#editor-dirty').innerText(),'','Previous encrypted session must be saved');
@@ -358,7 +365,7 @@ try {
     const promise=page.waitForEvent('download');
     await field.press(process.platform==='darwin'?'Meta+s':'Control+s');
     const download=await promise,dest=resolve(output,'keyboard-saved.pdf');
-    await download.saveAs(dest);await idle();
+    await download.saveAs(dest);await waitSaved();
     const task=pdfjs.getDocument({data:new Uint8Array(readFileSync(dest)),verbosity:0});
     const annotations=await (await (await task.promise).getPage(1)).getAnnotations();
     assert.equal(annotations.find(annotation=>annotation.fieldName==='person').fieldValue,'Saved from active field');
