@@ -52,7 +52,8 @@ functions into a VM; Worker/Canvas and scheduler tests remain separately runnabl
 `node tools/editor_browser_test.mjs <viewer-url>` exercises 22 editing paths using
 native Chromium inputs and Pointer Events. It covers inherited fields, duplicate
 choice exports, moving/resizing, multiple signature strokes, undo/redo, active-input
-Ctrl/Cmd+S, saved-state tracking, replacement races, Range hydration and a real
+Ctrl/Cmd+S, saved-state tracking, replacement races (including late preparation
+and image-decoder failures), Range hydration and a real
 PDF.js form fixture. The pinned PDF.js reader reopens the downloaded bytes and
 renders saved annotation appearances; Chromium also exports edited print output.
 CI retains these reports and PDFs alongside the existing reader reports. See

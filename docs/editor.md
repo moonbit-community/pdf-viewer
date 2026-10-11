@@ -96,7 +96,8 @@ million pixels; snapshots are limited to 10,000 entries.
 The browser bridge exports `editor_info`, `prepare_editor`, `apply_edits` and
 `save_pdf`. It keeps the original document as the baseline and applies full
 undo/redo snapshots against it. Page/thumbnail caches clear after edits.
-The app checks document generations before publishing async replies.
+The app checks document generations before publishing async replies or errors,
+including preparation and image-decoder failures from a replaced document.
 
 ## Validation and remaining work
 

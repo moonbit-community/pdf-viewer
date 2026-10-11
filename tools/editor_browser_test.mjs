@@ -377,6 +377,41 @@ try {
     await page.evaluate(()=>window.releaseLateEdit());await page.waitForFunction(()=>window.lateEditReleased);await frame();
     assert.deepEqual((await entries()).find(entry=>entry.field_name==='person').values,['Before']);
     assert.equal(await page.locator('#editor-toolbar').isVisible(),false);
+    // A failed preparation from a closed document must not report an error
+    // into its replacement, even when the transport already returned.
+    await page.evaluate(()=>{
+      const client=globalThis.pdfViewerHost.pdf,call=client.call.bind(client);
+      const gate=new Promise((_,reject)=>{window.rejectLatePreparation=()=>reject(new Error('Late preparation failure'));});
+      window.restorePreparationClient=()=>{client.call=call;};
+      client.call=(method,args,options)=>{
+        const result=call(method,args,options);
+        if(method!=='editor_info') return result;
+        return result.then(async value=>{window.latePreparationReady=true;await gate;return value;})
+          .catch(error=>{window.latePreparationReleased=true;throw error;});
+      };
+    });
+    await page.locator('#edit-toggle').click();await page.waitForFunction(()=>window.latePreparationReady);
+    await page.evaluate(async()=>{window.restorePreparationClient();(await import('./viewer.js')).closeDocument();});
+    await page.locator('#file-input').setInputFiles(source);await waitField('person',['Before']);
+    await page.evaluate(()=>window.rejectLatePreparation());await page.waitForFunction(()=>window.latePreparationReleased);await frame();
+    assert.equal(await page.locator('#error').innerText(),'');
+    // Decode failures also belong to the document and picker generation that
+    // started them; replacing it must suppress a delayed decoder rejection.
+    await page.locator('#edit-toggle').click();
+    await page.locator('.page[data-page="1"] [data-field-name="person"]').waitFor();
+    await page.evaluate(()=>{
+      window.originalEditorBitmap=createImageBitmap;
+      window.createImageBitmap=()=>new Promise((_,reject)=>{
+        window.lateBitmapReady=true;
+        window.rejectLateBitmap=()=>{window.lateBitmapReleased=true;reject(new Error('Late bitmap failure'));};
+      });
+    });
+    await page.locator('#signature-image').setInputFiles(imagePath);await page.waitForFunction(()=>window.lateBitmapReady);
+    await page.evaluate(async()=>{window.createImageBitmap=window.originalEditorBitmap;(await import('./viewer.js')).closeDocument();});
+    await page.locator('#file-input').setInputFiles(source);await waitField('person',['Before']);
+    await page.evaluate(()=>window.rejectLateBitmap());await page.waitForFunction(()=>window.lateBitmapReleased);await frame();
+    assert.equal(await page.locator('#error').innerText(),'');
+    assert.equal(await page.locator('#editor-toolbar').isVisible(),false);
   });
   await check('HTTP Range editing completes the source and retains unvisited objects',async()=>{
     await page.goto(base+'/?file=/_test/range-large.pdf');await idle();

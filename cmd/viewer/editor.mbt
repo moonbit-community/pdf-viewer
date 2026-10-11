@@ -189,10 +189,11 @@ async fn editor_handle(action : EditorAction) -> Unit {
         notify()
         let result = call("editor_info") catch {
           error => {
-            if generation == state.document_generation {
-              editor.applying = false
-              notify()
+            if generation != state.document_generation {
+              return
             }
+            editor.applying = false
+            notify()
             raise error
           }
         }
@@ -310,7 +311,15 @@ async fn editor_handle(action : EditorAction) -> Unit {
       let generation = state.document_generation
       editor.image_generation += 1
       let token = editor.image_generation
-      let image = native_signature_image(file).wait()
+      let image = native_signature_image(file).wait() catch {
+        error => {
+          if generation != state.document_generation ||
+            token != editor.image_generation {
+            return
+          }
+          raise error
+        }
+      }
       if generation != state.document_generation ||
         token != editor.image_generation {
         return
