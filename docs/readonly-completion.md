@@ -2,8 +2,9 @@
 
 The six remaining items in the 50-item readonly inventory are implemented.
 This inventory measures delivered paths, not visual compatibility or the full
-reader roadmap. Annotation editing, form filling/saving, cryptographic signing,
-layer controls and manual assistive-technology acceptance remain separate work.
+reader roadmap. [Annotation editing, form filling/saving and handwritten/image
+signatures](editor.md) now have separate editor acceptance. Cryptographic signing,
+layer controls and manual assistive-technology acceptance remain further work.
 
 ## Annotations and readonly fields
 
@@ -25,7 +26,8 @@ readonly implementation.
 A-03 retains choice export/display pairs and selection indices, including
 duplicate export values, list scrolling/selected colours and combo labels;
 handles button captions, inherited values/defaults and radio identity through
-Kids/Opt. These are display paths, not editable controls or a PDF writer.
+Kids/Opt. These are readonly display paths; editable controls and the pdflite
+writer are connected separately by the [editor](editor.md).
 
 ## Dynamic XFA
 

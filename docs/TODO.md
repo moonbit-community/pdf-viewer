@@ -227,22 +227,29 @@ A1 独立收尾记录为四后端 374 个测试通过及 39 项浏览器交互�
 
 1. 保持合并后的 A1 字体/来源和 A2 Canvas/合成主路径回归；Default Standard 14 独立 pen 已验收，显式宿主 override 的能力诊断与嵌套资源策略须持续覆盖。
 2. 保持 [6 项已修复回归](readonly-completion.md#continuous-checks) 的定向检查及合并后 Canvas/DOM、可访问性、调度与压力基线。现有缓存/工作集限制不是总进程 RSS 保证。
-3. 只读 50 项完成后，保留固定 CI/视觉差异记录；下一阶段推进下方编辑、填写/保存和签名路线。
+3. 保持只读 50 项与编辑、填写/保存、手写/图片签名的固定 CI；继续扩展真实表单与批注样本，不把主路径完成解释为所有文档兼容。
 4. 扩大真实 PDF 的同策略对照，保留原始整页差异；不要用覆盖率、导出成功数或目标测试数代替视觉兼容率。
 
-## 完整阅读器的后续接入
+## 完整阅读器的编辑接入
 
-这些能力是产品目标的一部分，尚未拆入上述 50 项，也未计为完成：
+这些能力不计入上述只读 50 项；以下主路径已接入 MoonBit/Rabbita 阅读器，
+具体操作、测试和限制见 [编辑验收](editor.md)：
 
-| 能力 | 优先复用 | 需要实现与验收 |
+| 能力 | 已复用 | 已接入与验收 |
 | --- | --- | --- |
-| 批注编辑与保存 | pdflite 批注/对象模型、`pdf_write_document` / `pdf_write_document_incremental_update`；DOM/Pointer Events | 编辑状态、撤销/重做、AP 外观、资源/对象更新；保存后重新打开并验证内容与外观 |
-| 表单填写与保存 | 原生 input/select 等控件、pdflite 字段/对象模型与 writer | 字段继承、export/display、radio 状态、值与 AP 同步、保存重开；只读 A-03 不代表已完成填写 |
-| 手写/图片签名 | Canvas/Pointer Events、已有图像/路径及批注 AP 写入路径 | 笔迹/图片采集、放置/缩放、持久化与重开；数字证书签名若纳入目标，另评估密码/CMS 库和 PDF 签名适配 |
+| 批注编辑与保存 | pdflite 批注/对象模型、content ops 与 `pdf_write_document`；DOM/Pointer Events | FreeText/Highlight/Ink/Stamp 新增、文本/样式修改、移动/缩放/删除与撤销/重做；下载重开和 PDF.js 实际绘制 AP |
+| 表单填写与保存 | 原生 input/textarea/select、pdflite 字段模型、外观布局与 writer | Tx/Ch/Btn、跨页共享继承字段、export/display 与重复值索引、radio V/AS、只读/MaxLen；活动输入 Ctrl/Cmd+S 与真实 PDF.js fixture 保存重开 |
+| 手写/图片签名 | Canvas/Pointer Events、既有图像/路径与批注 AP | 多笔画签名、逐笔撤销、透明图片采集、放置/移动/缩放；Ink/Stamp 持久化和 PDF.js 重开绘制 |
 
-pdflite 的 writer API 已在当前依赖中，viewer 尚未接编辑/保存主路径；
-现有浏览器下载仍返回载入的原始文件。writer 和增量写入不能单独证明表单或签名完成，
-但也没有理由先从零写 PDF serializer。
+浏览器下载在有修改时返回完整重写的 PDF；无修改时保留原文件。
+核心采用原文档副本和完整编辑快照，失败不修改原文档；HTTP Range 编辑先完成来源下载，
+保留未访问对象。没有另造 serializer，也未接增量写入。
+10 项核心编辑回归与 22 项 Chromium 编辑检查进入 CI。
+
+仍待完成：加密 PDF 编辑/保存、动态 XFA 编辑、证书/CMS 数字签名、
+字段脚本/计算、rich-text 编辑、OCG usage/RBGroups/Locked 面板和人工辅助技术验收。
+中文新内容保留 Unicode 值，外观可用浏览器字体的栅格回退，不能承诺原字体排版。
+既有整页视觉差异仍保留，不能据此宣称全面对齐 PDF.js。
 
 ## 扩展项与维护
 

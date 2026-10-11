@@ -64,7 +64,64 @@ main:focus-visible {
   background: #fafbfd;
   border-bottom: 1px solid #ccd3df;
   font-size: 13px;
+  flex-wrap: wrap;
 }
+.toolbar > button { flex-shrink: 0; white-space: nowrap; }
+.editor-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background: #fafbfd;
+  border-bottom: 1px solid #ccd3df;
+  font-size: 12px;
+}
+.editor-toolbar[hidden] { display: none; }
+.editor-tools { display: flex; gap: 4px; }
+.editor-tools [aria-pressed="true"] { color: white; background: #254fa4; }
+#editor-text { width: 170px; }
+#editor-size { width: 65px; }
+#editor-color { width: 36px; padding: 2px; }
+.editor-image-picker { display: flex; align-items: center; gap: 4px; }
+.editor-image-picker input { max-width: 145px; font-size: 11px; }
+#editor-status { flex: 1; min-width: 200px; color: #506077; }
+#editor-dirty { color: #a34a00; }
+.editor-layer { position: absolute; inset: 0; pointer-events: none; z-index: 7; }
+.editor-field, .editor-annotation {
+  position: absolute;
+  top: 0; left: 0;
+  margin: 0;
+  pointer-events: auto;
+  min-width: 0; min-height: 0;
+}
+.editor-field {
+  font: 12px sans-serif;
+  color: black;
+  background: #fff;
+  border: 1px solid #6989be;
+  border-radius: 0;
+  padding: 2px;
+  resize: none;
+}
+.editor-field:disabled { background: #eef1f6; opacity: 1; }
+.editor-field[type="checkbox"], .editor-field[type="radio"] { padding: 0; }
+.editor-annotation {
+  background: transparent;
+  border: 1px dashed #5473a7;
+  border-radius: 0;
+  padding: 0;
+  cursor: move;
+}
+.editor-annotation:hover, .editor-annotation[aria-pressed="true"] { background: #254fa41a; border: 1px solid #254fa4; }
+.editor-resize { position: absolute; right: -4px; bottom: -4px; width: 9px; height: 9px; background: #254fa4; cursor: nwse-resize; }
+.editor-preview { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#pages[data-editing="true"][data-edit-tool="ink"] .page,
+#pages[data-editing="true"][data-edit-tool="signature"] .page { touch-action: none; cursor: crosshair; }
+#pages[data-editing="true"][data-edit-tool="text"] .page,
+#pages[data-editing="true"][data-edit-tool="highlight"] .page,
+#pages[data-editing="true"][data-edit-tool="image"] .page { cursor: crosshair; }
 .brand {
   color: #29384f;
   text-decoration: none;
@@ -89,7 +146,7 @@ main:focus-visible {
 }
 .file-controls {
   flex: 1;
-  min-width: 110px;
+  min-width: 220px;
 }
 #file-name {
   max-width: 250px;
@@ -577,6 +634,7 @@ h1 {
     display: block;
   }
   .toolbar,
+  .editor-toolbar,
   .status-bar,
   #error,
   #sidebar {

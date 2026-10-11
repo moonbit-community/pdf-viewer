@@ -1,6 +1,6 @@
 # PDF Viewer
 
-A read-only PDF viewer and rendering library written in [MoonBit](https://www.moonbitlang.com/),
+A PDF viewer, editor and rendering library written in [MoonBit](https://www.moonbitlang.com/),
 built on [`moonbitlang/pdflite`](https://mooncakes.io/docs/moonbitlang/pdflite).
 The browser interface uses the MoonBit [Rabbita](https://mooncakes.io/docs/moonbit-community/rabbita)
 framework; its views and reader controller are in [`cmd/viewer/`](cmd/viewer/).
@@ -16,6 +16,9 @@ page APIs, a Canvas2D pixel backend, and SVG compatibility output for native app
 - Zoom, rotate, select and copy text, and search across pages.
 - Decode in a browser Worker, mount nearby pages/thumbnails, and retain bounded page/render caches.
 - Print the complete document at its original page sizes using the toolbar or Ctrl/Cmd+P.
+- Create text annotations, highlights and ink; move, resize, delete, undo and redo edits.
+- Fill AcroForm text, choice, checkbox and radio fields, then download and reopen the edited PDF.
+- Add handwritten or image signatures with portable PDF annotation appearances.
 - Open password-protected documents and inspect document information and attachments.
 - Export native page plans for Canvas rendering, or SVG compatibility output.
 - Access page geometry, text, display lists, and selection data through MoonBit APIs.
@@ -42,6 +45,11 @@ Local files are read and decoded in the browser. The locked npm dependencies
 provide the LittleCMS and standalone JBIG2 assets; the build verifies and copies
 them locally. Generated JS/Wasm assets are ignored by Git, and opening a PDF
 does not fetch them from npm or a CDN.
+
+Select **编辑** to fill fields or use the annotation/signature tools, then
+**下载** (Ctrl/Cmd+S) to save the edited PDF. See [editing and saving](docs/editor.md)
+for controls, supported fields and limitations. Handwritten/image signatures are
+visual annotations; certificate signing is separate work.
 
 ## Command-Line Usage
 
@@ -92,6 +100,8 @@ not install npm dependencies automatically.
 
 - [Implementation details, API reference, and development commands](docs/development.md)
 - [Architecture](docs/architecture.md)
+- [Editing, form filling, signatures and saving](docs/editor.md)
+- [MoonBit/Rabbita browser interface](docs/frontend.md)
 - [Compatibility roadmap](docs/TODO.md)
 - [Validation methodology and results](docs/validation.md)
 - [Contributor workstreams](docs/PARALLEL.md)
@@ -101,8 +111,9 @@ The standalone viewer supports readonly annotation/field fallbacks, HTTP Range
 loading, and dynamic XFA pages. XFA layout and native controls reuse the pinned
 Apache-licensed PDF.js XFA components; the PDF reader and Canvas pipeline remain
 this project's pdflite/MoonBit implementation. See [readonly acceptance and
-CI limits](docs/readonly-completion.md), including known visual differences and
-the separate editing, saving and signing roadmap.
+CI limits](docs/readonly-completion.md) and [editor acceptance](docs/editor.md).
+Encrypted PDF editing, dynamic XFA editing and certificate signatures remain
+unsupported, and known visual differences prevent a claim of full PDF.js parity.
 
 ## License
 

@@ -16,6 +16,14 @@ async fn print_document_async() -> Unit {
   if state.count == 0 {
     return
   }
+  let document_generation = state.document_generation
+  editor_flush_field()
+  while editor.applying {
+    native_frame().wait()
+    if document_generation != state.document_generation {
+      return
+    }
+  }
   clear_print()
   let generation = state.document_generation
   let token = print_generation.val

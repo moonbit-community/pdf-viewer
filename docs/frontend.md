@@ -13,6 +13,15 @@ MoonBit. Navigation and page/text mounting live in `pages.mbt`, search and nativ
 selection in their corresponding files, and file/print lifecycle in `document.mbt`
 and `print.mbt`. Native browser events are connected in `events.mbt`.
 
+The editor follows the same boundary: `editor_model.mbt` defines its typed state,
+`editor_view.mbt` builds Rabbita controls, and `editor.mbt` applies snapshots,
+undo/redo and saving. Native field mounting and PDF-space pointer geometry live in
+`editor_layers.mbt` and `editor_gestures.mbt`. `editor_platform.mbt` binds pixel
+acquisition, Canvas previews and native control properties. It contains no
+JavaScript editor state or application controller. The root editor package reuses
+pdflite objects, content operations and its complete-document writer; there is no
+second PDF serializer.
+
 Rabbita owns the application DOM. The empty `#pages`, `#print-pages` and thumbnail
 preview containers retain their identity across view updates; rendering adapters
 own their contents. This preserves Canvas pixels, native selection endpoints and
@@ -39,3 +48,12 @@ repeated page clicks, files captured during native drop events, and real warning
 published by page/thumbnail/print rendering.
 These checks replace the former test that extracted JavaScript controller
 functions into a VM; Worker/Canvas and scheduler tests remain separately runnable.
+
+`node tools/editor_browser_test.mjs <viewer-url>` exercises 22 editing paths using
+native Chromium inputs and Pointer Events. It covers inherited fields, duplicate
+choice exports, moving/resizing, multiple signature strokes, undo/redo, active-input
+Ctrl/Cmd+S, saved-state tracking, replacement races, Range hydration and a real
+PDF.js form fixture. The pinned PDF.js reader reopens the downloaded bytes and
+renders saved annotation appearances; Chromium also exports edited print output.
+CI retains these reports and PDFs alongside the existing reader reports. See
+[editor behavior and limits](editor.md).

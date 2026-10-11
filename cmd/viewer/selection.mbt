@@ -364,6 +364,9 @@ extern "js" fn native_copy_pending(
 
 ///|
 fn copy_event(event : @dom.ClipboardEvent) -> Unit {
+  if native_input_focused() {
+    return
+  }
   if state.selection is Some(_) &&
     native_selection_range().to_option() is Some(_) {
     native_copy(event, state.selection_text)
@@ -390,6 +393,10 @@ fn copy_event(event : @dom.ClipboardEvent) -> Unit {
     )
   }
 }
+
+///|
+extern "js" fn native_input_focused() -> Bool =
+  #| () => Boolean(document.activeElement?.matches('input,textarea,select,[contenteditable="true"]'))
 
 ///|
 extern "js" fn selection_can_modify() -> Bool =

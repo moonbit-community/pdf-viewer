@@ -271,13 +271,24 @@ fn view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
           emit(Print),
         ),
         @html.button(
+          id="edit-toggle",
+          disabled=disabled || model.editor.busy,
+          on_click=emit(Edit(Toggle)),
+          if model.editor.enabled {
+            "结束编辑"
+          } else {
+            "编辑 / 填写"
+          },
+        ),
+        @html.button(
           id="download",
-          disabled~,
+          disabled=disabled || model.editor.busy,
           on_click=emit(Download),
           "下载",
         ),
       ],
     ),
+    editor_view(model.editor, emit),
     @html.main_(
       id="viewer",
       class=viewer_class,

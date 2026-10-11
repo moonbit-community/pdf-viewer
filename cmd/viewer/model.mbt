@@ -57,6 +57,7 @@ struct Model {
   can_copy : Bool
   printing : Bool
   drag_over : Bool
+  editor : EditorModel
 } derive(Eq)
 
 ///|
@@ -87,6 +88,7 @@ enum Msg {
   PointerDown
   Scroll
   ViewerKey(@dom.KeyboardEvent)
+  Edit(EditorAction)
 }
 
 ///|
@@ -228,6 +230,7 @@ fn snapshot() -> Model {
     can_copy: state.selection_text != "",
     printing: state.printing,
     drag_over: state.drag_over,
+    editor: editor_snapshot(),
   }
 }
 

@@ -84,6 +84,18 @@ async function handleMessage(event) {
     if (["open_pdf", "open_pdf_with_password", "close_pdf"].includes(method)) {
       rangeDocument = rangeSource = null;
     }
+    if (["editor_info", "apply_edits", "save_pdf"].includes(method)) {
+      if (xfa) throw Object.assign(new Error("动态 XFA 文档暂不支持编辑和保存"), {code:"edit-unavailable"});
+      // A writer needs every indirect object, including objects never visited
+      // by lazy page rendering. Complete and re-open the source once before
+      // entering the editor, retaining the HTTP validator checks.
+      if (rangeDocument) {
+        const opened=JSON.parse(bridge.prepare_editor(await rangeSource.complete("PDF editing")));
+        if (!opened.ok) throw Object.assign(new Error(opened.error),{code:opened.code});
+        rangeDocument=null;
+        clearRenders();
+      }
+    }
     if (rangeDocument && method !== "open_pdf_url" && (!xfa || ["document_info", "download_metadata", "download_attachment"].includes(method))) {
       try { await rangeDocument.prepare(method, args); }
       catch (error) {
@@ -117,6 +129,7 @@ async function handleMessage(event) {
       }
     }
     if (method === "close_pdf") {xfa?.dispose();xfa = null;}
+    if (method === "apply_edits" && JSON.parse(result).ok) clearRenders();
     if (["render_page", "render_print_page"].includes(method) && rangeSource && rangeSource.stats.first_page_bytes === null && JSON.parse(result).ok) {
       rangeSource.stats.first_page_bytes = rangeSource.stats.received_bytes;
     }

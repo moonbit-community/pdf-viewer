@@ -453,6 +453,15 @@ and named page/history actions use the viewer navigation state. Unknown/remote
 targets stay disabled. The visual SVG is inert to avoid duplicate interactive
 links. Widget editing remains outside the readonly layer.
 
+The MoonBit/Rabbita editor mounts a separate native field and annotation layer.
+It converts pointer gestures through the inverse viewport matrix, applies immutable
+snapshots through `with_editor_changes`, and invalidates page/thumbnail caches.
+The Worker keeps the original snapshot baseline and uses pdflite's complete
+writer for downloads. It completes validated Range sources before editing, so
+unvisited objects are retained. Explicit AP streams persist text, choices, button
+states and Ink/Stamp signatures across readers. See [editor details](editor.md)
+for Unicode raster fallback, encryption/XFA restrictions and validation.
+
 `accessibility.mbt` associates tagged structure with the existing collector's
 glyph indices and string/Form provenance. A bounded marked-content pass keeps
 the originating MCID stream distinct from the Form invocation that paints its

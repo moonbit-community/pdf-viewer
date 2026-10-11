@@ -97,6 +97,7 @@ fn browser_parse_font_fallbacks(
 
 ///|
 fn browser_install_document(document : @pdf.PdfViewerDocument) -> String {
+  editor_original.val = None
   current_document.val = Some(document)
   browser_clear_pages()
   let labels = document.page_labels() catch { _ => [] }
@@ -122,6 +123,7 @@ fn browser_error_with_code(code : String, message : String) -> String {
 
 ///|
 pub fn close_pdf() -> Unit {
+  editor_original.val = None
   current_range.val = None
   current_document.val = None
   browser_clear_pages()
@@ -255,6 +257,13 @@ fn browser_render_page(
       "svg": svg,
       "canvas": page.canvas_plan(scale~, rotation~),
       "layer": page.text_layer(scale~, rotation~),
+      "editor": if printing {
+        Json::array([])
+      } else {
+        current_document.val
+        .bind(document => document.editor_page_json(number))
+        .unwrap_or(Json::array([]))
+      },
       "annotations": if printing {
         Json::array([])
       } else {

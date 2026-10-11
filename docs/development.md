@@ -269,6 +269,8 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs vertical 1,2,3
 | document outline/info/attachments in browser | `document_info()` / `download_attachment(index)` / `download_metadata()` |
 | readonly annotation interactions | `PdfViewerDocument::annotation_layer_json(n)`；PDF-space 坐标、原 `/Annots` 索引、popup 内容和链接目标 |
 | annotation print intent | `PdfPageModel::with_print_annotations()`；bridge `render_print_page`，与屏幕缓存分开 |
+| annotation editing and AcroForm filling | `PdfViewerDocument::editor_page_json(n)` / `with_editor_changes(changes)`；稳定 ID、PDF-space 几何及编辑快照 |
+| save edited PDF | `PdfViewerDocument::save_bytes()`；pdflite 完整 writer，显式 AP；浏览器 bridge `apply_edits` / `save_pdf` |
 | page-local accessible semantics | `PdfViewerDocument::accessibility_page_json(n)`；结构树、稳定 glyph indices、Form 调用与批注 OBJR；bridge 显示响应的 `accessibility` |
 
 文档读取补充 API：`outline_json()`、`page_labels_json()`、`page_labels()`、
@@ -280,6 +282,9 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs vertical 1,2,3
 display-list 过滤；使用 `with_optional_content_state(pdf_optional_content_state(on=[...], off=[...]))`
 可以按 pdflite 的 OCG 对象号切换显示，隐藏内容不会进入文本、选择或 SVG。浏览器图层面板和
 usage/RBGroups 等交互语义仍是后续图层工作。
+
+批注编辑、表单填写、手写/图片签名、撤销/重做和下载保存已接入 MoonBit/Rabbita
+界面。完整行为、保存重开验收和加密/XFA/证书签名等限制见 [编辑验收](editor.md)。
 
 文字 API 共用逻辑阅读顺序，绘制列表的原始 index 不变。搜索复用 Unicode NFKD
 和字符分类，兼容展开与组合符号重排后的结果返回原文 UTF-16 范围。

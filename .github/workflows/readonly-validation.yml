@@ -123,6 +123,7 @@ jobs:
           trap 'kill "$ci_dev_pid" 2>/dev/null || true' EXIT
           for attempt in {1..60}; do curl --fail --silent http://127.0.0.1:4314/ > /dev/null && break || sleep 1; done
           moon run tools/browser_test.mbtx http://127.0.0.1:4314 "$PDF_CHROMIUM"
+          node tools/editor_browser_test.mjs http://127.0.0.1:4314
           node tools/ci/check_reports.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
@@ -132,6 +133,7 @@ jobs:
             _build/reader-corpus-*/
             _build/visual-test-*/
             _build/browser-test-*/
+            _build/editor-test-*/
             _build/ci-corpus/manifest.json
             _build/ci-dev.log
             web/_test/manifest.json

@@ -1,5 +1,6 @@
 ///|
 pub fn close_document() -> Unit {
+  reset_editor()
   clear_xfa_fonts()
   state.document_generation += 1
   state.generation += 1

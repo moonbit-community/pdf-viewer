@@ -57,7 +57,7 @@ async fn handle(message : Msg) -> Unit {
   match message {
     Publish(_) => ()
     Open => click_element("file-input")
-    FileChanged(file) => load_document(file, "")
+    FileChanged(file) => if editor_can_replace() { load_document(file, "") }
     Navigate(number, push) => go_to_page(number, push~)
     MovePage(delta) => go_to_page(state.current_page + delta, push=true)
     ChangeZoom(zoom) => {
@@ -101,10 +101,7 @@ async fn handle(message : Msg) -> Unit {
       }
     JumpSearch(delta) => jump_search(delta)
     Print => print_document_async()
-    Download =>
-      if state.file is Some(file) {
-        download_native(file, state.file_name)
-      }
+    Download => editor_save()
     Copy =>
       if state.selection is Some(_) {
         write_clipboard(state.selection_text).wait()
@@ -122,18 +119,20 @@ async fn handle(message : Msg) -> Unit {
     Drop(file) => {
       state.drag_over = false
       notify()
-      if file is Some(file) {
+      if file is Some(file) && editor_can_replace() {
         load_document(file, "")
       }
     }
     PointerDown => if state.selection_restore { clear_selection() }
     Scroll => viewer_scroll()
     ViewerKey(event) => selection_key(event)
+    Edit(action) => editor_handle(action)
   }
 }
 
 ///|
 fn initialize_events() -> Unit {
+  initialize_editor_events()
   let document = @dom.document()
   let window = @dom.window()
   document.add_event_listener("selectionchange", _ => {

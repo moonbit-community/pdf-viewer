@@ -137,6 +137,7 @@ async fn mount_page(result : @js.Value, current : () -> Bool) -> @dom.Element {
   append_element(page, paint)
   append_element(page, text)
   append_element(page, annotations)
+  append_element(page, editor_layer(result))
   if accessibility is Some(layer) {
     append_element(page, layer)
   }

@@ -46,6 +46,27 @@ export function checkVisual(report,baseline){
   assert.equal(seen.size,cases.size);
 }
 
+export const requiredEditorChecks=[
+  'Unicode text filling synchronizes inherited widgets across pages',
+  'Choice controls preserve export values and multiple selection indices',
+  'Existing annotation changes accumulate across text and geometry updates',
+  'Handwriting groups multiple strokes and supports undoing one stroke',
+  'Download writes PDF.js-readable values and annotation appearances',
+  'PDF.js paints saved handwritten and image signatures through portable AP',
+  'Ctrl S flushes the active form input before saving',
+  'Late editing replies cannot publish into a replacement document',
+  'HTTP Range editing completes the source and retains unvisited objects',
+  'Real PDF.js form fixture fills saves and reopens with the selected export value',
+];
+export function checkEditor(report){
+  assert.equal(report.ok,true,'Editor acceptance failed');
+  assert.equal(report.failed,null);
+  assert.deepEqual(report.errors,[],'Editor raised a browser error');
+  assert.ok(report.checks.length>=22,'Editor checks were dropped');
+  assert.equal(new Set(report.checks).size,report.checks.length,'Duplicate editor checks');
+  for(const name of requiredEditorChecks) assert.ok(report.checks.includes(name),'Missing editor regression: '+name);
+}
+
 if(process.argv[1]?.endsWith('/check_reports.mjs')){
   const corpus=latest('reader-corpus-'),visual=latest('visual-test-'),browser=latest('browser-test-');
   checkCorpus(read(`${corpus}/report.json`),read('tools/ci/corpus.json'));
@@ -66,5 +87,7 @@ if(process.argv[1]?.endsWith('/check_reports.mjs')){
   assert.equal(dom.remaining_readonly.xfa_printed_pages,2);
   assert.equal(dom.remaining_readonly.real_xfa_pages,7);
   assert.ok(dom.remaining_readonly.range_first_page.first_page_bytes<dom.remaining_readonly.range_first_page.total_bytes/10);
-  console.log(`Accepted corpus, browser and visual reports: ${corpus}, ${browser}, ${visual}. Visual differences remain recorded.`);
+  const editor=latest('editor-test-');
+  checkEditor(read(editor+'/report.json'));
+  console.log(`Accepted corpus, browser, editor and visual reports: ${corpus}, ${browser}, ${editor}, ${visual}. Visual differences remain recorded.`);
 }

@@ -997,6 +997,7 @@ pub fn PdfViewerDocument::attachment_bytes(Self, Int) -> Bytes? raise @core.PdfE
 pub fn PdfViewerDocument::attachment_manifest_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::attachments_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::destination_for_page(Self, Int) -> PdfDestination? raise @core.PdfError
+pub fn PdfViewerDocument::editor_page_json(Self, Int) -> Json?
 pub fn PdfViewerDocument::font_fallbacks(Self) -> Array[PdfFontFallback]
 pub fn PdfViewerDocument::info_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::metadata_bytes(Self) -> Bytes? raise @core.PdfError
@@ -1018,6 +1019,7 @@ pub fn PdfViewerDocument::pages(Self) -> Array[PdfPageModel] raise @core.PdfErro
 pub fn PdfViewerDocument::reader_diagnostics(Self) -> Array[PdfReaderDiagnostic]
 pub fn PdfViewerDocument::render_svg(Self, Int, scale? : Double) -> String? raise @core.PdfError
 pub fn PdfViewerDocument::render_svg_with_rotation(Self, Int, Int, scale? : Double) -> String? raise @core.PdfError
+pub fn PdfViewerDocument::save_bytes(Self) -> Bytes raise @core.PdfError
 pub fn PdfViewerDocument::search(Self, String, options? : PdfSearchOptions, page? : Int?) -> Array[PdfSearchResult] raise @core.PdfError
 pub fn PdfViewerDocument::select(Self, Int, PdfBounds) -> PdfSelection? raise @core.PdfError
 pub fn PdfViewerDocument::source_length(Self) -> Int
@@ -1028,6 +1030,7 @@ pub fn PdfViewerDocument::text_diagnostics(Self, Int) -> Array[PdfTextDiagnostic
 pub fn PdfViewerDocument::text_lexical_sources(Self, Int) -> Array[PdfTextLexicalSource]? raise @core.PdfError
 pub fn PdfViewerDocument::text_provenance(Self, Int) -> Array[PdfTextProvenance]? raise @core.PdfError
 pub fn PdfViewerDocument::text_recovery_diagnostics(Self, Int) -> Array[PdfTextRecoveryDiagnostic]? raise @core.PdfError
+pub fn PdfViewerDocument::with_editor_changes(Self, Json) -> Self raise @core.PdfError
 pub fn PdfViewerDocument::with_font_fallbacks(Self, Array[PdfFontFallback]) -> Self
 pub fn PdfViewerDocument::with_optional_content_state(Self, PdfOptionalContentState) -> Self
 pub fn PdfViewerDocument::xfa_font_glyphs_json(Self, String, String) -> Json raise @core.PdfError
