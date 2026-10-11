@@ -19,6 +19,11 @@ pub fn PdfViewerDocument::page_viewport(
     height: box.max_y - box.min_y,
     user_unit: pdf_page_user_unit(self.document, page),
     rotation: @page.pdf_page_int_of_rotation(page.rotate),
+    // Geometry-only placeholder: no colour resources are resolved here.
+    blend_space: "DeviceRGB",
+    blend_profile_id: None,
+    blend_calibration: None,
+    icc_profiles: [],
     fonts: [],
     items: [],
     annotations: [],

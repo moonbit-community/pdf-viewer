@@ -38,6 +38,9 @@ fn pdf_svg_text_can_join(previous : PdfTextItem, current : PdfTextItem) -> Bool 
   previous.font == current.font &&
   previous.font_size == current.font_size &&
   previous.fill_alpha == current.fill_alpha &&
+  previous.stroke == current.stroke &&
+  previous.text_object_id == current.text_object_id &&
+  previous.text_knockout == current.text_knockout &&
   previous.blend_mode == current.blend_mode &&
   same_transform &&
   previous.rendering_mode == current.rendering_mode &&
@@ -45,6 +48,7 @@ fn pdf_svg_text_can_join(previous : PdfTextItem, current : PdfTextItem) -> Bool 
   previous.stroke_color == current.stroke_color &&
   (previous_angle - current_angle).abs() <= 0.01 &&
   previous.clip_path == current.clip_path &&
+  previous.clips == current.clips &&
   previous.soft_mask == current.soft_mask
 }
 
@@ -125,6 +129,11 @@ fn pdf_svg_text(
       }
     }
     output.write_string("</g>")
+    return
+  }
+  // Runs have one rendering mode. Type 3 charprocs have already taken the
+  // outline branch above; invisible fallback text needs no SVG payload.
+  if items[0].rendering_mode == 3 {
     return
   }
   let first = items[0]
@@ -211,8 +220,18 @@ fn pdf_svg_text(
   } else {
     "none"
   }
-  let stroke_width = if stroke == "none" { 0.0 } else { font_size * 0.04 }
-  pdf_svg_clip_defs(output, first.index, first.clip_path, scale)
+  let pen = if stroke == "none" {
+    ""
+  } else {
+    pdf_svg_fallback_text_pen(first, scale)
+  }
+  pdf_svg_clip_defs(
+    output,
+    first.index,
+    first.clip_path,
+    scale,
+    clips=first.clips,
+  )
   pdf_svg_soft_mask_defs(output, first.index, page, first.soft_mask, scale)
   pdf_svg_soft_mask_open(output, first.index, first.soft_mask)
   pdf_svg_clip_open(output, first.index, first.clip_path)
@@ -235,9 +254,9 @@ fn pdf_svg_text(
     pdf_escape_xml(fill) +
     "\" stroke=\"" +
     pdf_escape_xml(stroke) +
-    "\" stroke-width=\"" +
-    stroke_width.to_string() +
-    "\" fill-opacity=\"" +
+    "\"" +
+    pen +
+    " fill-opacity=\"" +
     first.fill_alpha.to_string() +
     "\"" +
     pdf_svg_blend_style(first.blend_mode) +
@@ -261,7 +280,13 @@ fn pdf_svg_outline_text(
   match item.type3_outline {
     None => ()
     Some(outline) => {
-      pdf_svg_clip_defs(output, item.index, item.clip_path, scale)
+      pdf_svg_clip_defs(
+        output,
+        item.index,
+        item.clip_path,
+        scale,
+        clips=item.clips,
+      )
       pdf_svg_soft_mask_defs(output, item.index, page, item.soft_mask, scale)
       pdf_svg_soft_mask_open(output, item.index, item.soft_mask)
       pdf_svg_clip_open(output, item.index, item.clip_path)

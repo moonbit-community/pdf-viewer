@@ -129,6 +129,10 @@ test "Interpolate and inline I survive the reader and SVG sampling path" {
 test "image placement rounds both edges and retains a minimum pixel width" {
   let page : PdfPageModel = {
     number: 1,
+    blend_space: "DeviceRGB",
+    blend_profile_id: None,
+    blend_calibration: None,
+    icc_profiles: [],
     origin_x: 0.0,
     origin_y: 0.0,
     width: 10.25,

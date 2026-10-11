@@ -1,0 +1,78 @@
+[
+  {
+    "name": "type4-nonlinear-alpha-seam",
+    "pixels": 10000,
+    "maxOracleError": 0.7481875000000002,
+    "referenceMeanError": 22.209,
+    "pdfjs": "6.4.299"
+  },
+  {
+    "name": "type5-nonlinear-lattice",
+    "pixels": 10000,
+    "maxOracleError": 0.49637500000000045,
+    "referenceMeanError": 43.3493,
+    "pdfjs": "6.4.299"
+  },
+  {
+    "name": "type6-nonlinear-coons",
+    "pixels": 10000,
+    "maxOracleError": 0.49637500000000045,
+    "referenceMeanError": 40.9416,
+    "pdfjs": "6.4.299"
+  },
+  {
+    "name": "type7-nonlinear-tensor",
+    "pixels": 10000,
+    "maxOracleError": 0.49637500000000045,
+    "referenceMeanError": 40.9416,
+    "pdfjs": "6.4.299"
+  },
+  {
+    "name": "type1-two-inputs",
+    "pixels": 10000,
+    "maxOracleError": 0.4750000000000014,
+    "referenceMeanError": 1.4783666666666666,
+    "pdfjs": "6.4.299"
+  },
+  {
+    "name": "axial-false-extend",
+    "pixels": 10000,
+    "maxOracleError": 0.375,
+    "referenceMeanError": 0,
+    "pdfjs": "6.4.299"
+  },
+  {
+    "name": "radial-false-extend",
+    "pixels": 10000,
+    "maxOracleError": 0.4959340489592421,
+    "referenceMeanError": 0,
+    "pdfjs": "6.4.299"
+  },
+  {
+    "name": "axial-high-exponent-zoom",
+    "pixels": 10000,
+    "maxOracleError": 0.3825676147669316,
+    "referenceMeanError": 2.45,
+    "pdfjs": "6.4.299"
+  },
+  {
+    "name": "axial-narrow-stitch-boundary",
+    "pixels": 10000,
+    "maxOracleError": 0,
+    "referenceMeanError": 0,
+    "pdfjs": "6.4.299"
+  },
+  {
+    "name": "type1-checker-discontinuities",
+    "pixels": 10000,
+    "maxOracleError": 0,
+    "referenceMeanError": 6.4733,
+    "pdfjs": "6.4.299"
+  },
+  {
+    "name": "type4-cmyk-source-planes",
+    "pixels": 40000,
+    "maxPlaneError": 1.484375,
+    "maxPremultipliedPlaneError": 0.7450980392156863
+  }
+]

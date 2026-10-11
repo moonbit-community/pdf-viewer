@@ -1,0 +1,9 @@
+// T.800-2015 Annex A.8 packet header parsing
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/core",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/geometry",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/input",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/packet",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/subband",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/math",
+}

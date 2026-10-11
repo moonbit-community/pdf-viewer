@@ -1,0 +1,5 @@
+// T.800-2015 Annex C: MQ Arithmetic Coding
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/core",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/math",
+}

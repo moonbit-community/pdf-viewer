@@ -1,0 +1,300 @@
+{
+  "date": "2026-10-10",
+  "js": {
+    "pdfjsVersion": "6.4.299",
+    "runtime": "v24.19.0",
+    "records": [
+      {
+        "name": "JBIG2Globals-11",
+        "elapsedMs": 4.910931000000005,
+        "heapBytes": 16777216,
+        "outputBytes": 26520,
+        "outputAllocatedBytes": 26520,
+        "inputBytes": 1034,
+        "segments": 2,
+        "references": 0,
+        "types": [
+          48,
+          38
+        ],
+        "warmMedianMs": 2.2554719999999975,
+        "sampleSha256": "469c58b23c9e91c3ea531970ee63917923fc579f1ef4193bd03fe94dcbbb8eea"
+      },
+      {
+        "name": "JBIG2Globals-12",
+        "elapsedMs": 6.107989000000032,
+        "heapBytes": 16777216,
+        "outputBytes": 26520,
+        "outputAllocatedBytes": 26520,
+        "inputBytes": 1034,
+        "segments": 2,
+        "references": 0,
+        "types": [
+          48,
+          38
+        ],
+        "warmMedianMs": 2.734375,
+        "sampleSha256": "469c58b23c9e91c3ea531970ee63917923fc579f1ef4193bd03fe94dcbbb8eea"
+      },
+      {
+        "name": "JBIG2Globals-13",
+        "elapsedMs": 221.16815300000002,
+        "heapBytes": 17891328,
+        "outputBytes": 4497570,
+        "outputAllocatedBytes": 4497570,
+        "inputBytes": 422406,
+        "segments": 4,
+        "references": 2,
+        "types": [
+          0,
+          48,
+          6
+        ],
+        "warmMedianMs": 211.10977200000002,
+        "sampleSha256": "8ff695ab6594f6a18fa9a17719fba6cf9becfae852ab396b02eb1ab19ac3ae34"
+      },
+      {
+        "name": "jbig2_symbol_offset-6",
+        "elapsedMs": 0.5618649999998979,
+        "heapBytes": 16777216,
+        "outputBytes": 238,
+        "outputAllocatedBytes": 238,
+        "inputBytes": 191,
+        "segments": 3,
+        "references": 1,
+        "types": [
+          48,
+          0,
+          7
+        ],
+        "warmMedianMs": 0.2007650000000467,
+        "sampleSha256": "10eb26651db10a1269df9235ecdabffdd8bde06c457418408747dffcfa279754"
+      },
+      {
+        "name": "jbig2_file_header-4",
+        "elapsedMs": 0.30908399999998437,
+        "heapBytes": 16777216,
+        "outputBytes": 1536,
+        "outputAllocatedBytes": 1536,
+        "inputBytes": 125,
+        "segments": 4,
+        "references": 0,
+        "types": [
+          48,
+          38,
+          49,
+          51
+        ],
+        "warmMedianMs": 0.4568410000001677,
+        "sampleSha256": "e774b45e142bc9dd40db2cee035428ce009133e6b2bcb50e9d49185a2f0872dc"
+      },
+      {
+        "name": "bitmap-mmr-5",
+        "elapsedMs": 3.401599000000033,
+        "heapBytes": 16777216,
+        "outputBytes": 20000,
+        "outputAllocatedBytes": 20000,
+        "inputBytes": 385,
+        "segments": 2,
+        "references": 0,
+        "types": [
+          48,
+          39
+        ],
+        "warmMedianMs": 0.34578800000008414,
+        "sampleSha256": "f195624b2fc5505fdbbd3473c58eaf6b22b4f376b57ced779a4357d8bd12bc4f"
+      },
+      {
+        "name": "bitmap-symbol-symhuff-texthuff-5",
+        "elapsedMs": 4.6011459999999715,
+        "heapBytes": 16777216,
+        "outputBytes": 20000,
+        "outputAllocatedBytes": 20000,
+        "inputBytes": 471,
+        "segments": 3,
+        "references": 1,
+        "types": [
+          48,
+          0,
+          6
+        ],
+        "warmMedianMs": 0.3330390000000989,
+        "sampleSha256": "f195624b2fc5505fdbbd3473c58eaf6b22b4f376b57ced779a4357d8bd12bc4f"
+      },
+      {
+        "name": "bitmap-symbol-refine-5",
+        "elapsedMs": 4.020993999999973,
+        "heapBytes": 16777216,
+        "outputBytes": 20000,
+        "outputAllocatedBytes": 20000,
+        "inputBytes": 448,
+        "segments": 4,
+        "references": 2,
+        "types": [
+          48,
+          0,
+          4,
+          42
+        ],
+        "warmMedianMs": 2.661006999999927,
+        "sampleSha256": "f195624b2fc5505fdbbd3473c58eaf6b22b4f376b57ced779a4357d8bd12bc4f"
+      },
+      {
+        "name": "bitmap-halftone-5",
+        "elapsedMs": 3.150024999999914,
+        "heapBytes": 16777216,
+        "outputBytes": 20000,
+        "outputAllocatedBytes": 20000,
+        "inputBytes": 549,
+        "segments": 3,
+        "references": 1,
+        "types": [
+          48,
+          16,
+          23
+        ],
+        "warmMedianMs": 0.8691659999999501,
+        "sampleSha256": "f195624b2fc5505fdbbd3473c58eaf6b22b4f376b57ced779a4357d8bd12bc4f"
+      },
+      {
+        "name": "bitmap-composite-and-xnor-5",
+        "elapsedMs": 2.4857600000000275,
+        "heapBytes": 16777216,
+        "outputBytes": 20000,
+        "outputAllocatedBytes": 20000,
+        "inputBytes": 576,
+        "segments": 6,
+        "references": 0,
+        "types": [
+          48,
+          39
+        ],
+        "warmMedianMs": 2.381797000000006,
+        "sampleSha256": "68729cd515c668992c596df83a7437956a7f5a9df0d603e26b43aa3fc4a88f28"
+      }
+    ],
+    "comparisons": [
+      {
+        "name": "JBIG2Globals-13",
+        "comparedBytes": 4497570,
+        "differingBytes": 0
+      },
+      {
+        "name": "JBIG2Globals-11+explicit-mask",
+        "comparedBytes": 843744,
+        "differingBytes": 0
+      },
+      {
+        "name": "jbig2_symbol_offset-6",
+        "comparedBytes": 238,
+        "differingBytes": 0
+      },
+      {
+        "name": "jbig2_file_header-4",
+        "comparedBytes": 1536,
+        "differingBytes": 0
+      },
+      {
+        "name": "bitmap-mmr-5",
+        "comparedBytes": 20000,
+        "differingBytes": 0
+      },
+      {
+        "name": "bitmap-symbol-symhuff-texthuff-5",
+        "comparedBytes": 20000,
+        "differingBytes": 0
+      },
+      {
+        "name": "bitmap-symbol-refine-5",
+        "comparedBytes": 20000,
+        "differingBytes": 0
+      },
+      {
+        "name": "bitmap-halftone-5",
+        "comparedBytes": 20000,
+        "differingBytes": 0
+      },
+      {
+        "name": "bitmap-composite-and-xnor-5",
+        "comparedBytes": 20000,
+        "differingBytes": 0
+      }
+    ]
+  },
+  "native": {
+    "records": [
+      {
+        "name": "JBIG2Globals-11",
+        "median_ms": 2.3931649993755855,
+        "output_bytes": 26520,
+        "differing_bytes": 0
+      },
+      {
+        "name": "JBIG2Globals-12",
+        "median_ms": 2.3294409984373488,
+        "output_bytes": 26520,
+        "differing_bytes": 0
+      },
+      {
+        "name": "JBIG2Globals-13",
+        "median_ms": 162.45189199980814,
+        "output_bytes": 4497570,
+        "differing_bytes": 0
+      },
+      {
+        "name": "jbig2_symbol_offset-6",
+        "median_ms": 1.4102060013101436,
+        "output_bytes": 238,
+        "differing_bytes": 0
+      },
+      {
+        "name": "jbig2_file_header-4",
+        "median_ms": 1.3867609959561378,
+        "output_bytes": 1536,
+        "differing_bytes": 0
+      },
+      {
+        "name": "bitmap-mmr-5",
+        "median_ms": 1.4091639968683012,
+        "output_bytes": 20000,
+        "differing_bytes": 0
+      },
+      {
+        "name": "bitmap-symbol-symhuff-texthuff-5",
+        "median_ms": 1.5792039994266815,
+        "output_bytes": 20000,
+        "differing_bytes": 0
+      },
+      {
+        "name": "bitmap-symbol-refine-5",
+        "median_ms": 2.5024799979291856,
+        "output_bytes": 20000,
+        "differing_bytes": 0
+      },
+      {
+        "name": "bitmap-halftone-5",
+        "median_ms": 2.4208450049627572,
+        "output_bytes": 20000,
+        "differing_bytes": 0
+      },
+      {
+        "name": "bitmap-composite-and-xnor-5",
+        "median_ms": 2.4209850016632117,
+        "output_bytes": 20000,
+        "differing_bytes": 0
+      }
+    ],
+    "malformed_ms": 1.4177820048644207,
+    "max_child_rss_kib": 28292,
+    "timeout_ms": 2500,
+    "additional_child_address_space_limit": 134217728
+  },
+  "js_mutation_sweep": {
+    "cases": 2000,
+    "accepted": 758,
+    "rejected": 1242,
+    "max_case_ms": 4.8674,
+    "elapsed_ms": 476.6645,
+    "outer_deadline_ms": 10000
+  }
+}

@@ -11,13 +11,20 @@
 - 按 PDF.js 语义求 CropBox/MediaBox 有效交集，保留非零页面原点和 `/UserUnit`；
   计算带缩放和旋转的 `PdfViewport`，旋转语义与 pdf.js 的顺时针页面旋转一致，
   实际矩阵和 SVG 尺寸使用 `scale * user_unit`；
-- 将文字、矢量路径、图片和渐变输出为自包含 SVG；JPEG、原始像素图片和 inline image
-  会转成浏览器可用的 data URL。JPEG2000、JBIG2 会保留原始媒体类型和 bytes，是否能
-  在浏览器中显示取决于宿主解码器；
-- 依据声明的颜色空间转换 DeviceGray/RGB/CMYK、CalGray、CalRGB、Lab、Indexed 和
-  Separation/DeviceN tint。路径、文字、渐变和原始图片共用转换；原始图片按
-  1/2/4/8/16-bit 样本、行 padding 和 `/Decode` 处理，color-key `/Mask` 在原始整数
-  样本中比较。CMYK 使用 PDF.js 的 SWOP 拟合回退，ICCBased 目前仍只使用 alternate；
+- `PdfPageModel.canvas_plan()` 输出结构化计划，由 `web/pdf-runtime.mjs` /
+  `web/pdf-canvas.mjs` 进入 Canvas2D 像素主路径；网页正文、缩略图和 native CLI→plan→PNG
+  共用该表示。`render_svg()` 保留自包含 SVG 兼容输出及近似分支诊断，不能替代像素合成；
+  公开入口与目标矩阵见 [A2 验收](a2-acceptance.md)；
+- JPEG、raw/inline、JPX 和 JBIG2 进入原始样本与 PNG 资源管线，不依赖浏览器原生
+  image/jp2 或 image/jbig2 支持。[JPX](../codecs/jpx/README.md) 使用四目标 MoonBit
+  解码器；[JBIG2](../codecs/jbig2/README.md) 使用 JS extraWasm / native Linux 适配，
+  其它未接宿主的目标明确报不可用；
+- DeviceGray/RGB/CMYK、CalGray、CalRGB、Lab、Indexed 和 Separation/DeviceN tint
+  共用转换；原始样本保留 `/Decode`、color-key 和 Matte 的原色彩空间语义。
+  ICCBased、输出 profile、Range、intent、OutputIntent 和 Default 色彩资源已接入
+  LittleCMS，JS 使用随包 extraWasm，native Linux 动态加载 LittleCMS2；独立 Moon
+  Wasm/Wasm-GC 保留合法 Alternate 并暴露能力。无 profile 的设备 CMYK 显示仍可用
+  PDF.js SWOP 拟合。见 [色彩记录](a2-colour-validation.md)；
 - 保留文字原始四边形，遇到旋转文字时按 glyph 方向生成 SVG transform；路径 display
   list 保留线帽、连接方式和虚线参数；
 - 对嵌入 TrueType 的 `glyf/loca` 轮廓做 viewer 侧解析，支持简单字形和常见 composite
@@ -39,12 +46,13 @@
 - 文字保留实际的 `glyph_transform`（CTM、text matrix、字号、水平缩放、rise 和基线）；
   TrueType 轮廓按 em 绘制，不再把字体总包围盒压进单字的 advance box。SVG 普通文字
   也使用同一矩阵和 alphabetic baseline，避免 FreeText 外观中的文字落到裁剪区域之外；
-- 保留 PDF text rendering mode、填充/描边颜色，并按 paint-site CTM 缩放路径线宽和虚线
-  间距；文字 clipping mode 4–7 会在 `ET` 后按字形轮廓建立 clip path，同一 text object
-  中的字形合并，后续 text object 求交，并遵守 `q/Q` 和 Form 的作用域。裁剪轮廓目前来自
-  CFF、Type 1（含单 FD 的 CID-keyed 字体）和嵌入 TrueType 字体；其它字体没有可解码
-  轮廓时不会伪造空 clip；非均匀 CTM 的
-  椭圆文字笔画仍需更底层的 glyph/path renderer；
+- 保留 PDF text rendering mode、填充/描边颜色、完整 graphics CTM 和独立 pen，
+  Canvas 路径/文字描边保留非均匀缩放、剪切、线宽和虚线。文字 clipping mode 4–7
+  在 `ET` 后按已有字形轮廓建立 clip，同一 text object 合并，后续求交并遵守 `q/Q` / Form。
+  CFF、Type 1、嵌入 TrueType 和随包 Standard 14 复用 A1 轮廓；不能取得轮廓时不伪造空 clip。
+  显式宿主 override / 非标准宿主 fallback 的独立非相似描边仍需轮廓能力，否则报告
+  `PDF_TEXT_STROKE_GEOMETRY`。见 [Standard 14 pen](validation/standard14-pen.md)
+  和 [宿主边界](validation/host-text-pen.md)；
 - 按 PDF 用户空间矩形返回文本、边界和源 display-list item 索引，供上层做
   cursor/框选和 Agent 上下文压缩；
 - 暴露 annotation 几何、原始 `/Annots` 索引、屏幕/打印标记、URI 和 PDF 编码的文本。
@@ -57,47 +65,61 @@
 - 提供 outline、page labels、attachments、optional content、structure tree、info 和
   metadata 读取入口；独立浏览器已提供目录、信息、页标签和附件/XMP 下载面板；JSON
   保留 pdflite 的 schema，尚未适配为 pdf.js 的返回结构；
-- 跟踪 ExtGState 的填充/描边透明度和 SVG 可表达的 blend mode；
-- 读取 Form XObject 的 `/Group /Transparency` 边界，把 isolated/non-isolated、knockout
-  标记和嵌套 `group_path` 带入 display list；SVG 对 isolated 组使用 `isolation:isolate`，
-  并保留 data 属性供后续 Canvas/WebGL compositor 使用；
-- 对路径型彩色和 uncolored tiling pattern 生成 SVG `<pattern>`，应用调用处的基础
-  色彩和 pattern matrix；填充的 `pattern` 和描边的 `stroke_pattern` 独立保留，单元和
-  嵌套 Form 按各自资源解析颜色。多段显式 clipping 以嵌套 clipPath 表达；复杂单元的
-  文字、透明组和重复边界仍待补齐。PatternType 2 的填充会解析为 mesh 并裁剪到原始
-  路径，shading pattern 的描边尚未实现；
-- 解析 PDF ShadingType 4/5/6/7 的二进制 mesh stream，支持 Gouraud、Coons patch 和
-  tensor patch 的三角化。`PdfMeshTriangle` 保留每个顶点的 PDF-space 坐标和颜色；SVG
-  后端用 barycentric 微三角近似 Gouraud 插值，Canvas/WebGL 宿主可以直接使用原始顶点颜色做
-  像素级插值；
-- 支持 PDF ImageMask、普通 `/Mask` color-key、图片 `/SMask`，以及常见的 Form soft
-  mask；mask 会在图片的局部坐标系中合成，再交给页面 affine transform。Form mask 已处理
-  `/BBox`、`/S /Alpha`、`/S /Luminosity` 和常见 `/TR` transfer function，资源字典会随
-  Form 继承，路径的填充和描边分别转换颜色。inline CCITT 已通过 pdflite 解码为 PNG；
-  复杂 backdrop/knockout 合成、backdrop 色彩空间和 JPEG2000/JBIG2 mask 仍未补齐；
+- ExtGState 填充/描边透明度、16 种 PDF blend、独立 shape/alpha、isolated/non-isolated
+  backdrop、knockout、嵌套组、组色彩空间及文字 TK 已进入共享 Canvas 合成路径；
+  Alpha/Luminosity soft mask 保留安装 CTM、BC、TR、边界与作用域。SVG 只提供兼容降级，
+  实际合成及参考分歧见 [透明合成记录](a2-compositing-validation.md)；
+- 彩色/uncolored tiling pattern 保留独立 fill/stroke、调用基础色、base matrix 和正负
+  lattice；完整单元计划包含文字、图片、Form、透明组、clip 和局部资源，逐 tile 使用实际
+  backdrop。PatternType 2 的填充/描边及自身 ExtGState 通过共享 replay 处理，见
+  [shading pattern](a2-shading-pattern-validation.md) 和 [pattern stencil](validation/image-patterns.md)；
+- ShadingType 1–7 保留函数或原始样本分量，先插值再应用 Function/色彩转换；支持
+  axial/radial Extend、Gouraud、Coons/tensor、受检验的 lookup 与设备空间细分。
+  SVG 微三角仍是兼容近似；超预算或不支持的采样显式报错，见 [shading](a2-shading-validation.md)；
+- ImageMask、原始域 color-key、JPEG/JPX/JBIG2 的 explicit/soft mask、嵌入 alpha 和
+  Matte 共用有界图像管线；保留 SMask 优先级，避免重复 alpha，并提供减采样路径。
+  真实样本和保留的采样/边缘差异见 [图像采样](validation/image-sampling.md)
+  与 [JPEG](jpeg-decoder.md)；
 - 提供 native CLI，方便用真实 PDF 调试，而不需要先接入浏览器。
 - 提供独立浏览器 viewer，本地文件和拖放载入、多页滚动、缩放、旋转、下载可用。
   页面正文有透明 DOM text layer，原生 cursor 拖选、复制、Shift＋方向键和文档全选
   会映射回 MoonBit 的 glyph/item；跨页选区保留文件信息，缩放/旋转后恢复原生高亮。
 
-渲染器会把相邻且共享同一个 soft mask 的 display-list item 放进一个 SVG mask
-compositor group，再输出文字、路径和图片。这与 pdf.js 先合成 source group、再应用
-soft mask 的顺序一致。Form XObject 的透明组边界也会保留下来；isolated 组可以直接
-映射到 SVG isolation，non-isolated 组和 knockout 组目前保留结构化标记，完整的
-backdrop/knockout 像素合成仍需要 Canvas/WebGL compositor。
+Canvas 主路径从结构化计划 replay，保留组、mask、pattern 和 shading 的源顺序与资源，
+不会先把整页 SVG 栅格化后冒充 PDF 合成。`initializePdfGraphics()` 在解析前安装
+JS codec/CMM 宿主；`renderPdfPage()` 安装共享 pattern/shading painter 并调用
+`renderPdfCanvas()`。strict replay 拒绝未解决的能力缺口；viewer 的 warning preview
+保留诊断和可见警告。资源缓存/深度/工作面预算已有边界，但不代表全文档峰值 RSS 或硬取消。
+详见 [A2 目标、资源限制与公开入口](a2-acceptance.md)。
+
+A2 的 shipped web bridge/runtime 已在 native Canvas 宿主验证；合并最新 master 后，
+Chromium 的 Canvas/DOM、可访问性、交互与压力回归 93/93 通过。
+原作者环境的 socket EPERM 属于历史验证限制，最新结果与 6 项开放回归见
+[A2 合并验收](a2-acceptance.md#latest-master-integration-2026-10-11)。
 
 ## 本地运行
 
-独立浏览器入口：
+先安装 MoonBit 和 Node 22.13.0+ / npm，再安装锁定的浏览器资产依赖；独立浏览器入口：
 
 ```bash
+npm ci --prefix tools/web-assets --ignore-scripts --omit=optional
 moon run tools/dev.mbtx 4312
 ```
 
+`tools/web-assets/package.json` 固定 `lcms-wasm@1.0.5` 和
+`pdfjs-dist@6.4.299`，lockfile 固定依赖树与包完整性。构建调用
+`node tools/prepare_web_assets.mjs`，验证版本和资产 SHA-256 后复制 LittleCMS
+JS/Wasm 与独立 JBIG2 Wasm；这些生成资产不进入 Git。构建不会自动安装 npm
+依赖，更新 lockfile 后应重新执行 `npm ci`。单独运行 JS codec/CMM 测试前也可
+直接执行 prepare 命令。native JBIG2 C++ 源码和文本许可证继续随仓库维护。
+这是固定发布资产的可重复获取，不代表已验证从 C 源码逐字节重建 Wasm。
+
 打开 `http://127.0.0.1:4312/`，选择或拖入本地 PDF；文件读取和 PDF 解码在浏览器中进行。
-解码、搜索和页面渲染运行在 module Worker，正文与缩略图按可见范围挂载。
-部署时提供完整 `web/` 目录，包括 `pdf-client.js`、`pdf-worker.js`、`page-scheduler.js`、`annotation-layer.js`、`accessibility-layer.js`
-和生成的 `_generated/pdf.js`，通过 HTTP 服务加载这些 ES modules。
+解码、搜索和 Canvas 计划生成运行在 module Worker；主线程执行 Canvas replay，
+正文与缩略图按可见范围挂载。Worker 与主线程分别初始化所需的图像/色彩宿主。
+部署时提供完整 `web/` 目录，包括 `pdf-client.js`、`pdf-worker.js`、`page-scheduler.js`、
+`annotation-layer.js`、`accessibility-layer.js`，以及 Canvas runtime、随包 codec/CMM 资产和生成的 `_generated/pdf.js`，
+通过 HTTP 服务加载这些 ES modules。
 宿主诊断可在浏览器控制台读取：
 
 ```js
@@ -149,7 +171,9 @@ JSON 包含原始像素差异、viewport/文本比较和样本 hash。普通模�
 输入/渲染失败始终计入失败并返回非零，不会当作空白页匹配。
 
 部署到静态服务器时，先执行 `moon run tools/build_web.mbtx`，然后发布 `web/`，
-包含生成的 `_generated/pdf.js`。部署不需要 pdflite 的 native 程序，也不需要 PDF.js。
+包含生成的 `_generated/pdf.js`、codec/CMM 资产和许可证。部署不需要 pdflite 的
+native 程序；`pdfjs-dist` 仅提供独立 JBIG2 资产，不部署 PDF.js renderer。
+Worker 和主线程通过原有同源 URL 加载这些资产，打开 PDF 时不会请求 npm/CDN。
 
 先安装 MoonBit，然后在本目录执行：
 
@@ -171,11 +195,20 @@ moon run --target native cmd/main -- ./sample.pdf /tmp/page-1.svg
 moon run --target native cmd/main -- ./sample.pdf /tmp/page-3.svg 3
 ```
 
-这个命令只负责调试输入文件和输出 SVG；浏览器宿主可以直接调用同一组
-`open_document`、`page`、`render_svg` API。
+这些 `.svg` 命令选择兼容输出。像素主路径先导出公开 Canvas 计划，再由宿主 replay：
 
-CLI 成功写入 SVG 返回 `0`；读取、渲染、页码越界或写文件失败返回 `1`；参数错误返回
-`2`。批量验证可以直接运行 MoonBit 脚本：
+```bash
+moon run --target native cmd/main -- ./sample.pdf /tmp/page-1.canvas.json 1
+PDF_CANVAS_PACKAGE=/absolute/path/to/canvas-host/package.json \
+  node tools/render_canvas.mjs /tmp/page-1.canvas.json /tmp/page-1.png
+```
+
+首次使用须先构建 shared web bridge 并准备 Canvas 宿主，见
+[native Canvas setup](validation/native-canvas-setup.md)。库宿主可继续使用
+`open_document`、`page`、`render_svg`，或从 `page.canvas_plan()` 取得同一绘制计划。
+
+CLI 成功写入输出返回 `0`；读取、渲染、页码越界或写文件失败返回 `1`；参数错误返回
+`2`。SVG 批量验证可以直接运行 MoonBit 脚本：
 
 ```bash
 moon run tools/corpus.mbtx
@@ -228,7 +261,8 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs vertical 1,2,3
 | text/font recovery diagnostics | `PdfViewerDocument::text_recovery_diagnostics(n)`；包括空复制字形、原字符串 bytes 和实际字体/CMap 对象号；既有 `text_diagnostics` API 保留 |
 | skipped damaged page-tree branches | `PdfViewerDocument::reader_diagnostics()`；资源路径、对象号和原因 |
 | `PDFPageProxy.getOperatorList()` | `PdfViewerDocument::operator_list(n)` |
-| `PDFPageProxy.render(...)` | `PdfViewerDocument::render_svg(n, scale~)` / `render_svg_with_rotation(...)` / cached `PdfPageModel::render_svg(...)` |
+| `PDFPageProxy.render(...)` | `PdfPageModel::canvas_plan(scale~, rotation~)` → `renderPdfPage()` / `renderPdfCanvas()`；兼容 API 保留 `PdfViewerDocument::render_svg(n, scale~)` / `render_svg_with_rotation(...)` / `PdfPageModel::render_svg(...)` |
+| graphics capability diagnostics | `PdfPageModel::graphics_diagnostics()`；Canvas plan 的 `diagnostics`、replay 结果和 SVG metadata 保留相关诊断 |
 | `PDFFindController`-style text search | `PdfViewerDocument::search(query, options~)`; browser bridge `search_pdf` |
 | named/explicit destination | `named_destinations()` / `named_destination(name)` / `destination_for_page(page_number)` |
 | outline entries with navigation | `outline_navigation_json()` |
@@ -277,8 +311,12 @@ CMap 坏 token、未闭合段、继承环和不可取得的 stream，并保留�
 宿主可以用 `PdfFontFallback` 和 `with_font_fallbacks([...])` 为未嵌入字体指定本机 CSS
 字体族；嵌入的 TrueType/OpenType 程序仍优先使用文档内字节。浏览器 bridge 还导出
 `set_font_fallbacks(json)`，JSON 项形如 `{"pdf_name":"Helvetica","family":"Arial"}`，
-可选 `weight`/`style` 只影响文字层的 CSS 元数据。viewer 不携带宿主字体文件，也不把字体
-文件写入文档或下载结果。
+显式匹配的 override 会抑制随包 Standard 14 程序/轮廓，选择宿主文字路径；可选
+`weight`/`style` 参与宿主 SVG 文字与文字层的字体选择，不只是文字层元数据。
+独立非相似文字描边若无宿主轮廓 callback，strict replay 会拒绝并保留几何诊断。
+清空 override 会清除页面缓存并恢复默认 bundled 路径，见
+[Standard 14 pen](validation/standard14-pen.md)。viewer 随包标准字体有单独的
+[来源与许可](../assets/standard14/README.md)，不会把用户的宿主字体文件写入 PDF 或下载结果。
 
 destination API 把 PDF 内部跳转转换为 viewer 自有的 `PdfDestination`。它保留
 `XYZ`/`Fit` 族的视图参数、当前文档的一基页码和 `resolved` 状态；指向其他文件的
@@ -293,12 +331,12 @@ ARC4、128-bit ARC4 和 AESV2，浏览器 viewer 在本地弹出密码提示并�
 
 这不是声称已经达到 pdf.js 的覆盖率。字体、CMap 继承、来源和确定性 Standard 14 主路径已经接通；
 罕见字体格式、无法恢复的损坏流、歧义几何布局与像素差异保留在验证报告中。
-ICC 色彩管理、soft mask 的完整组合成语义、透明组的完整 backdrop/knockout 合成、
-tiling pattern 的精确矩阵/裁剪和复杂单元、mesh 的最终像素级 Gouraud 合成、完整
-annotation appearance/form 行为仍是后续工作；
-当前 API 会先把可解析内容的页面位置和类型留在
-display list 中，避免宿主丢失结构化信息。现阶段 SVG 输出适合调试和建立回归基线，不能
-当作 pdf.js 的像素级替代品。
+A2 的 ICC、组/mask、pattern、shading 与 affine pen 已进入 Canvas 主路径，
+目标差异、资源限制和真实页面残差见 [A2 验收](a2-acceptance.md)。完整 annotation
+appearance/form 行为、人工辅助技术/特殊标签覆盖、CI 和更大的真实文档基线仍是后续工作。
+宿主生命周期、Worker/取消、虚拟化与有界缓存已接入，并完成 A2 合并后的 DOM/压力复跑；
+缓存预算不保证全文档峰值内存。SVG 输出保留调试/兼容用途及明确诊断，
+不能当作 Canvas 主路径或 PDF.js 整页像素一致的替代证明。
 
 四字节字符码的高位保留在 `PdfTextItem.charcode` 的 `Int` 位模式中，可能显示为负数；
 MoonBit 宿主可用 `reinterpret_as_uint()` 取得无符号值。原始 byte span 通过来源 sidecar 暴露，
@@ -335,7 +373,8 @@ SVG 渲染遇到其它角度会返回 `PageRotationExpected`，不会静默近�
 ## 参考实现和测试策略
 
 `pdflite` 负责 PDF 语法、资源解析和内容条目生成；viewer 层负责页面模型、viewport、
-glyph/mesh 补充解码、批注外观、SVG 序列化和选择映射。后续每补一个 renderer 特性，就从 pdf.js 的 corpus 选一个最小
+glyph/图像补充解码、色彩/合成适配、批注外观、Canvas 计划、SVG 兼容输出和选择映射。
+后续每补一个 renderer 特性，就从 pdf.js 的 corpus 选一个最小
 fixture，同时保留一个 MoonBit snapshot/断言测试，先验证结构化输出，再验证浏览器视觉
 输出。这样可以把“解析正确”和“渲染接近 pdf.js”分开定位。
 

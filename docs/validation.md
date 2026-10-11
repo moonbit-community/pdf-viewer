@@ -6,10 +6,17 @@ CLI. That conversion baseline does not measure parity with pdf.js rendering.
 The automated selected-page visual baseline below now measures actual output
 against the same pinned PDF.js build.
 
-The suite currently contains **387 tests on each of wasm, wasm-gc, JavaScript,
-and native**; the browser host adds two lightweight page-layout regressions and
-three annotation interaction/print regressions, followed by eight semantic-source
-and accessibility regressions, to the final A1 results below. Earlier stages included
+The upstream browser-host baseline at `eb4e017` contained **376 tests on each
+of wasm, wasm-gc, JavaScript, and native**; that stage added two lightweight
+page-layout regressions to the final A1 results recorded below. The upstream
+annotation/print-intent baseline at `1f9db19` adds three tests, recording
+**379 on each backend** and **78 Chromium checks**. These are historical stage
+totals, not a rerun of the merged A2 graphics path.
+The upstream accessibility baseline at `60e4b69` added eight semantic-source
+regressions (**387 per backend**, **93 Chromium checks**). A1-integrated A2 totals are
+recorded in [A2 acceptance](a2-acceptance.md#a1-integrated-check-2026-10-11);
+the combined feature checklist is maintained in [TODO.md](TODO.md).
+Earlier stages included
 13 annotation tests, 17 CFF tests, 25 Type 1 tests, 5 CID
 layout tests, 9 variable-length CMap tests, 4 text-geometry tests, and 8
 text-clipping tests, one mixed-paint scaling regression, and one tiling-pattern
@@ -36,6 +43,17 @@ measured **57/57 combinations from 20 PDFs**, **0 failures**, and **55 with
 pixel or text differences**. Its calibrated-colour interior samples below
 are an additional diagnostic, not an exemption from full-page differences.
 
+## A2 Canvas integration with latest master
+
+The conflict-resolved `6b8072` + `60e4b69` integration passed **643 JS**,
+**644 Wasm**, **644 Wasm-GC**, **8 native accessibility tests** and **93/93
+Chromium checks**, all-target checking, the web build and actual Worker/Canvas
+controls. The browser report is `_build/browser-test-1791706542666/report.json`.
+The full native suite's optional-engine abort on macOS and five other review
+regressions remain open. Source baselines, reproduction boundaries and the six
+follow-ups are in [A2 acceptance](a2-acceptance.md#latest-master-integration-2026-10-11).
+The earlier stage counts below retain their historical source identity.
+
 ## Tagged page accessibility and source association
 
 Validated on 2026-10-11 with Chromium **145.0.7632.6** on macOS arm64.
@@ -45,7 +63,9 @@ and both all-target and browser bridge checks pass. The browser suite adds
 **13 accessibility checks** and **two selection-lifecycle regressions** to the
 previous 78 interactions/pressure checks. The eight new MoonBit tests cover semantic
 source association without changing paint, native text selection or A1 source
-indices. This accepts the **X-01 main path**; the readonly checklist is **30/50**.
+indices. This accepted the **X-01 main path** at `60e4b69`; that source baseline had a readonly
+checklist of **30/50**. Fresh Canvas integration results are recorded in
+[A2 acceptance](a2-acceptance.md); those earlier totals remain historical.
 
 `PdfViewerDocument::accessibility_page_json(n)` uses existing pdflite objects,
 content ops, the glyph collector and Form/string provenance. A bounded marked
@@ -123,12 +143,17 @@ moon check --target all
 
 ## Readonly annotation interaction and print intent
 
-Validated on 2026-10-11 with Chromium **145.0.7632.6** on macOS arm64.
-Report: `_build/browser-test-1791698888406/report.json`, **78/78 checks pass**.
+This is the upstream `1f9db19` baseline, validated on 2026-10-11 with Chromium
+**145.0.7632.6** on macOS arm64. Report:
+`_build/browser-test-1791698888406/report.json`, **78/78 checks pass**.
 The 25 additional checks preserve the previous 53 browser interactions and
-pressure checks. MoonBit passes **379/379** on each of wasm, wasm-gc, JavaScript
-and native. This accepts the **A-04 main path** and brings the readonly
-checklist to **29/50**; annotation appearance/form fidelity remains A-01–A-03.
+pressure checks. MoonBit passed **379/379** on each of wasm, wasm-gc, JavaScript
+and native. This accepted the **A-04 main path** and brought that branch's
+readonly checklist to **29/50**; annotation appearance/form fidelity remains
+A-01–A-03. These DOM, rotation and print results belong to that source baseline,
+not a fresh run after merging A2 Canvas rendering or npm asset delivery. The
+combined checklist is in [TODO.md](TODO.md); A2 evidence and validation limits
+remain in [A2 acceptance](a2-acceptance.md).
 
 `annotation_layer.mbt` adds `PdfViewerDocument::annotation_layer_json(n)`:
 PDF-space rectangles/quads, original `/Annots` indices, display/print flags,
@@ -190,12 +215,17 @@ moon test --target native
 
 ## Browser host lifecycle, scheduling and pressure
 
-Validated on 2026-10-11 using Chromium **145.0.7632.6** on macOS arm64.
-The browser report is `_build/browser-test-1791696549159/report.json`:
-**53/53 checks pass**, including the existing real-file interactions and 14
-additional scheduling/lifecycle/pressure checks. All four MoonBit backends pass
-**376/376**. This accepts the host main paths **P-02, U-05 and V-02** and brings
-the readonly checklist to **28/50**. Rendering/annotation parity is unchanged.
+This is the upstream `eb4e017` baseline, validated on 2026-10-11 using Chromium
+**145.0.7632.6** on macOS arm64. The browser report is
+`_build/browser-test-1791696549159/report.json`: **53/53 checks pass**, including
+the existing real-file interactions and 14 additional scheduling/lifecycle/
+pressure checks. All four MoonBit backends passed **376/376**. This accepted the
+host main paths **P-02, U-05 and V-02** and brought that branch's readonly
+checklist to **28/50**; rendering/annotation parity was unchanged. The timings,
+heap samples, print export and DOM checks below belong to that run, not a
+rerun after merging A2 graphics. Current checklist totals are in
+[TODO.md](TODO.md); A2's checks and retained browser-validation boundary are in
+[A2 acceptance](a2-acceptance.md).
 
 `web/pdf-client.js` owns a native module Worker, a priority queue, startup
 failure/timeout handling and AbortSignal cleanup. `web/pdf-worker.js` runs the
@@ -1037,15 +1067,19 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs vertical 1,2,3
 moon run tools/corpus.mbtx reference/pdf.js/test/pdfs 90ms_rksj
 ```
 
-For the independent browser, run `moon run tools/dev.mbtx 4312`, then in a
-second terminal:
+For the independent browser, first install the locked runtime-asset dependencies
+with `npm ci --prefix tools/web-assets --ignore-scripts --omit=optional`, then
+run `moon run tools/dev.mbtx 4312`. In a second terminal:
 
 ```bash
 moon run tools/browser_test.mbtx http://127.0.0.1:4312 /path/to/chromium
 ```
 
-`tools/build_web.mbtx` builds the MoonBit JS bridge and stages the static
-`web/` deployment. No PDF.js renderer is loaded by the viewer.
+`tools/build_web.mbtx` verifies and copies the pinned local npm assets, builds
+the MoonBit JS bridge and stages the static `web/` deployment. It does not
+install npm dependencies automatically. No PDF.js renderer is loaded by the
+viewer; `pdfjs-dist` supplies only the standalone JBIG2 Wasm asset. See
+[fresh-checkout setup](validation/native-canvas-setup.md).
 
 ## Page boundaries and UserUnit
 

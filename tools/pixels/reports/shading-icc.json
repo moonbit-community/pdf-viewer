@@ -1,0 +1,21 @@
+{
+  "sourceSpace": "ICCBased RGB with Function N2",
+  "sourceProfileSha256": "dc960d76171766a9cc6291b5f7c07fc3d5144c709aa6e4bdcc8e81cda33842fb",
+  "outputCmykProfileSha256": "8472fa1493a024b800b67dee9424835ec0c41ab79490200ae8ec4a689fd1b9a9",
+  "outputCmykSkipped": null,
+  "pdfSha256": "ffe0a6965a34d3b614497b3193a9bb94ffe3822bfbca101c103599623b636ee0",
+  "cases": [
+    {
+      "target": "target-rgb",
+      "components": 3,
+      "pixels": 10000,
+      "maximumByteError": 0.4993661940097809
+    },
+    {
+      "target": "target-cmyk",
+      "components": 4,
+      "pixels": 40000,
+      "maximumByteError": 0.4980561137199402
+    }
+  ]
+}

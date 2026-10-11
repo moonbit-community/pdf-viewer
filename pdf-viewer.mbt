@@ -43,6 +43,16 @@ pub(all) struct PdfTextItem {
   /// Affine transform from a one-em glyph coordinate system (baseline at
   /// y=0, y up) into PDF user space. None is allowed for host-built models.
   glyph_transform : Array[Double]?
+  /// Graphics-state pen retained independently of the text matrix.
+  stroke : PdfTextStroke?
+  /// Existing A1 outline in top-left page SVG coordinates for native fill replay.
+  fill_path : String?
+  pattern : PdfPatternResource?
+  stroke_pattern : PdfPatternResource?
+  /// Invocation-scoped BT/ET identity for implicit text knockout groups.
+  text_object_id : String?
+  /// PDF TK, initially true; applies to the whole text object.
+  text_knockout : Bool
   bounds : PdfBounds
   quad : PdfQuad
   font : String
@@ -52,13 +62,25 @@ pub(all) struct PdfTextItem {
   stroke_color : String
   fill_alpha : Double
   blend_mode : String
+  fill_source : PdfSourceColour
+  stroke_source : PdfSourceColour
+  fill_overprint : Bool
+  stroke_overprint : Bool
+  overprint_mode : Int
+  alpha_is_shape : Bool
   clip_path : String?
+  /// Explicit page-space clip intersections, including their winding rules.
+  clips : Array[PdfClipPath]
   soft_mask : PdfSoftMaskResource?
   group : PdfTransparencyGroup?
   group_path : Array[PdfTransparencyGroup]
   /// An SVG outline for a Type 3, CFF, Type 1 or embedded TrueType glyph when the browser
   /// cannot use the PDF font's original character mapping.
   type3_outline : String?
+  /// Type 3 CharProc paints retained in enclosing page coordinates. Ordinary
+  /// CFF/Type1/TrueType outlines do not have a scene.
+  type3_scene : PdfPageModel?
+  type3_scene_unresolved : String?
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -122,6 +144,7 @@ pub(all) struct PdfPatternResource {
   y_step : Double
   matrix : Array[Double]
   tile_svg : String
+  tile_page : PdfPageModel?
   /// Ordered cell paints. Retained images are sampled at the final paint-site
   /// transform and output scale; an empty array uses `tile_svg` verbatim.
   tile_parts : Array[PdfPatternTilePart]
@@ -149,6 +172,7 @@ pub(all) struct PdfPathItem {
   bounds : PdfBounds
   svg_path : String
   filled : Bool
+  fill_even_odd : Bool
   stroked : Bool
   fill_color : String
   stroke_color : String
@@ -159,6 +183,9 @@ pub(all) struct PdfPathItem {
   line_join : Int
   dash_array : Array[Double]
   dash_phase : Double
+  /// Affine stroke geometry and metrics. The fields above retain their legacy
+  /// page-space approximation for consumers that do not use affine strokes.
+  stroke : PdfPathStroke?
   /// Non-stroking tiling paint; independent of the stroking colour space.
   pattern : PdfPatternResource?
   /// Stroking tiling paint. Shading patterns are retained for future pixel
@@ -166,10 +193,31 @@ pub(all) struct PdfPathItem {
   stroke_pattern : PdfPatternResource?
   shading_pattern : PdfShadingResource?
   blend_mode : String
+  fill_source : PdfSourceColour
+  stroke_source : PdfSourceColour
+  fill_overprint : Bool
+  stroke_overprint : Bool
+  overprint_mode : Int
+  alpha_is_shape : Bool
   clip_path : String?
+  /// Explicit page-space clip intersections, including their winding rules.
+  clips : Array[PdfClipPath]
   soft_mask : PdfSoftMaskResource?
   group : PdfTransparencyGroup?
   group_path : Array[PdfTransparencyGroup]
+} derive(Eq, Debug, ToJson)
+
+///|
+/// A stroke in paint-time user space, with y reversed like an SVG path.
+/// `transform` maps it into the unscaled, top-left SVG page coordinate system.
+/// Width, dash lengths and phase are unscaled user-space values.
+pub(all) struct PdfPathStroke {
+  svg_path : String
+  transform : Array[Double]
+  line_width : Double
+  dash_array : Array[Double]
+  dash_phase : Double
+  miter_limit : Double
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -180,6 +228,10 @@ pub(all) struct PdfPathItem {
 /// do not need to know about PDF colour spaces or filters.
 pub(all) struct PdfImageResource {
   name : String
+  error : String?
+  ink_samples : PdfImageInkSamples?
+  has_local_mask : Bool
+  alpha_is_explicit_shape : Bool
   mime_type : String
   data_uri : String?
   mask_data_uri : String?
@@ -226,6 +278,9 @@ pub(all) struct PdfShadingResource {
   matrix : Array[Double]
   stops : Array[PdfGradientStop]
   mesh : Array[PdfMeshTriangle]
+  /// Source-domain samples and patch geometry for a per-pixel host renderer.
+  raster : PdfShadingRaster?
+  pattern_state : PdfShadingPatternState?
   extend_start : Bool
   extend_end : Bool
 } derive(Eq, Debug, ToJson)
@@ -239,11 +294,21 @@ pub(all) struct PdfVisualItem {
   name : String
   resource : PdfImageResource?
   shading : PdfShadingResource?
+  /// Nonstroking Pattern paint retained only for stencil ImageMask images.
+  pattern : PdfPatternResource?
   fill_color : String
   fill_alpha : Double
   stroke_alpha : Double
   blend_mode : String
+  fill_source : PdfSourceColour
+  stroke_source : PdfSourceColour
+  fill_overprint : Bool
+  stroke_overprint : Bool
+  overprint_mode : Int
+  alpha_is_shape : Bool
   clip_path : String?
+  /// Explicit page-space clip intersections, including their winding rules.
+  clips : Array[PdfClipPath]
   soft_mask : PdfSoftMaskResource?
   group : PdfTransparencyGroup?
   group_path : Array[PdfTransparencyGroup]
@@ -258,6 +323,11 @@ pub(all) struct PdfSoftMaskResource {
   bounds : PdfBounds
   luminosity : Bool
   background : String
+  page : PdfPageModel?
+  matrix : Array[Double]
+  backdrop : Array[Double]
+  backdrop_components : Array[Double]
+  transfer_map : Array[Int]?
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -282,6 +352,15 @@ pub(all) struct PdfTransparencyGroup {
   id : String
   isolated : Bool
   knockout : Bool
+  alpha : Double
+  blend_mode : String
+  alpha_is_shape : Bool
+  bounds : PdfBounds?
+  color_space : String
+  rendering_intent : String
+  icc_profile_id : String?
+  calibration : PdfColourCalibration?
+  soft_mask : PdfSoftMaskResource?
 } derive(Eq, Debug, ToJson)
 
 ///|
@@ -343,6 +422,10 @@ pub(all) enum PdfPageItem {
 /// OpenSeek in a later integration.
 pub(all) struct PdfPageModel {
   number : Int
+  blend_space : String
+  blend_profile_id : String?
+  blend_calibration : PdfColourCalibration?
+  icc_profiles : Array[PdfIccProfile]
   origin_x : Double
   origin_y : Double
   width : Double
@@ -529,7 +612,8 @@ fn pdf_viewer_document_of_parsed_document(
 ///|
 /// Return a copy of the document view using host-provided font family
 /// replacements. The original parsed document and page cache remain shared;
-/// only the generated page font metadata changes.
+/// explicit replacements also suppress bundled Standard 14 paint/clip contours.
+/// Embedded font programs retain precedence.
 pub fn PdfViewerDocument::with_font_fallbacks(
   self : PdfViewerDocument,
   fallbacks : Array[PdfFontFallback],
@@ -1006,6 +1090,10 @@ fn pdf_page_model(
 ) -> PdfPageModel raise @core.PdfError {
   let rectangle = pdf_page_view_box(document, page)
   let user_unit = pdf_page_user_unit(document, page)
+  let resource_context = pdf_resource_build_context(font_fallbacks~)
+  let (blend_space, blend_profile_id) = pdf_colour_page_profile(
+    document, page, resource_context,
+  )
   let page_fonts : PdfPageFontScope = {
     fonts: [],
     sources: [],
@@ -1020,6 +1108,7 @@ fn pdf_page_model(
     rectangle.min_y,
     rectangle.max_x - rectangle.min_x,
     rectangle.max_y - rectangle.min_y,
+    resource_context~,
     page_fonts~,
     optional_content_view=pdf_optional_content_view(
       document, optional_content_state,
@@ -1036,6 +1125,10 @@ fn pdf_page_model(
   )
   {
     number: page_number,
+    blend_space,
+    blend_profile_id,
+    blend_calibration: pdf_colour_page_calibration(document, page),
+    icc_profiles: resource_context.icc_profiles,
     origin_x: rectangle.min_x,
     origin_y: rectangle.min_y,
     width: rectangle.max_x - rectangle.min_x,
@@ -1141,7 +1234,9 @@ fn pdf_page_user_unit(
 priv struct PdfCollectedEntry {
   entry : @pdflite.PdfContentJsonEntry
   state : @pdflite.PdfContentOperatorState
+  pattern_initial : PdfPatternInitialState
   text_glyph : @pdflite.PdfContentTextGlyphPlacement?
+  text_object_id : String?
   text_source : PdfCollectedTextSource?
   font_object : @syntax.PdfObject?
   font_resource_missing : Bool
@@ -1152,21 +1247,24 @@ priv struct PdfCollectedEntry {
   soft_mask : PdfCollectedSoftMask?
   group : PdfTransparencyGroup?
   group_path : Array[PdfTransparencyGroup]
+  group_masks : Array[(String, PdfCollectedSoftMask)]
   fill_color_explicit : Bool
   stroke_color_explicit : Bool
 }
 
 ///|
 priv struct PdfCollectedSoftMask {
+  ctm : @geometry.TransformMatrix
   dictionary : @syntax.PdfObject
   resources : @syntax.PdfObject
-}
+} derive(Eq)
 
 ///|
 fn pdf_collected_entries_of_page(
   document : @pdflite.PdfDocument,
   page : @page.PdfPage,
   optional_content_view? : PdfOptionalContentView? = None,
+  resource_context? : PdfResourceBuildContext = pdf_resource_build_context(),
   collect_text_sources? : Bool = false,
   font_fallbacks? : ArrayView[PdfFontFallback] = [],
 ) -> Array[PdfCollectedEntry] raise @core.PdfError {
@@ -1176,6 +1274,11 @@ fn pdf_collected_entries_of_page(
     rectangle.min_y,
     rectangle.max_x,
     rectangle.max_y,
+  )
+  let initial = pdf_colour_initial_state_for_viewer(
+    document,
+    page.resources,
+    initial,
   )
   let ops = document.parse_content_ops_with_resources(
     page.resources,
@@ -1189,9 +1292,10 @@ fn pdf_collected_entries_of_page(
     initial.clipping_path,
     None,
     [],
-    false,
-    false,
+    !(initial.path_state.colourspace_non_stroke is @pdflite.PdfDeviceGray),
+    !(initial.path_state.colourspace_stroke is @pdflite.PdfDeviceGray),
     optional_content_view~,
+    resource_context~,
     text_source_scope=Some(
       pdf_text_scope_for_page(page, collect_text_sources, font_fallbacks~),
     ),
@@ -1236,7 +1340,9 @@ fn pdf_transparency_group_of_form(
   document : @pdflite.PdfDocument,
   resources : @syntax.PdfObject,
   name : @core.PdfName,
-  parent : PdfTransparencyGroup?,
+  id : String,
+  state : @pdflite.PdfContentOperatorState,
+  resource_context : PdfResourceBuildContext,
 ) -> PdfTransparencyGroup? {
   match pdf_form_xobject_of_resources(document, resources, name) {
     Some(xobject) =>
@@ -1245,13 +1351,28 @@ fn pdf_transparency_group_of_form(
           match document.lookup_direct(pdf_name_key("/S"), group_dictionary) {
             Some(@syntax.PdfNameObject(subtype)) if subtype ==
               pdf_name_key("/Transparency") => {
-              let name_text = pdf_annotation_name_text(name)
-              let id = match parent {
-                Some(value) => value.id + name_text
-                None => name_text
-              }
+              let paint = pdf_paint_attributes_of_state(state)
+              let form_resources = document
+                .content_form_xobject_resources(resources, name)
+                .unwrap_or(resources) catch {
+                  _ => resources
+                }
+              let (color_space, icc_profile_id) = pdf_colour_group_profile(
+                document, form_resources, group_dictionary, resource_context,
+              )
               Some({
                 id,
+                alpha: paint.fill_alpha,
+                blend_mode: paint.blend_mode,
+                alpha_is_shape: state.alpha_source,
+                bounds: pdf_group_bounds(document, xobject, state.ctm),
+                color_space,
+                rendering_intent: state.path_state.rendering_intent,
+                icc_profile_id,
+                calibration: pdf_colour_group_calibration(
+                  document, form_resources, group_dictionary,
+                ),
+                soft_mask: None,
                 isolated: pdf_bool_entry(
                   document,
                   pdf_name_key("/I"),
@@ -1316,8 +1437,11 @@ fn pdf_collected_entries_of_ops(
   initial_fill_color_explicit : Bool,
   initial_stroke_color_explicit : Bool,
   initial_text_clip_groups? : ArrayView[PdfCollectedTextClipGroup] = [],
+  invocation_scope? : String = "page",
+  initial_group_masks? : ArrayView[(String, PdfCollectedSoftMask)] = [],
   optional_content_view? : PdfOptionalContentView? = None,
   initial_optional_content_visible? : Bool = true,
+  resource_context? : PdfResourceBuildContext = pdf_resource_build_context(),
   text_source_scope? : PdfTextCollectScope? = None,
 ) -> Array[PdfCollectedEntry] raise @core.PdfError {
   let text_source_scope = Some(
@@ -1329,7 +1453,7 @@ fn pdf_collected_entries_of_ops(
       font_resource_missing: false,
       font_stack: [],
       collect_sources: false,
-      font_fallbacks: [],
+      font_fallbacks: resource_context.font_fallbacks,
     }),
   )
   let mut state = initial
@@ -1342,9 +1466,11 @@ fn pdf_collected_entries_of_ops(
     for path in initial_clip_paths => path
   ]
   let mut clip_stack : Array[Array[@shape.PdfPath]] = []
+  let mut pending_clip : @content.PdfContentOp? = None
   let mut text_clip_groups = [ for group in initial_text_clip_groups => group ]
   let text_clip_stack : Array[Array[PdfCollectedTextClipGroup]] = []
   let pending_text_clip : Array[PdfCollectedTextClipGlyph] = []
+  let mut text_object_id : String? = None
   let mut soft_mask_stack : Array[PdfCollectedSoftMask?] = []
   let mut fill_color_explicit = initial_fill_color_explicit
   let mut stroke_color_explicit = initial_stroke_color_explicit
@@ -1352,6 +1478,11 @@ fn pdf_collected_entries_of_ops(
   let mut stroke_color_stack : Array[Bool] = []
   let output : Array[PdfCollectedEntry] = []
   for operator_index, op in ops {
+    if op is @content.Op_BT {
+      text_object_id = Some(
+        invocation_scope + "/text/" + operator_index.to_string(),
+      )
+    }
     let text_sources = pdf_collect_text_string_sources(
       document,
       text_source_scope,
@@ -1366,8 +1497,11 @@ fn pdf_collected_entries_of_ops(
             let form_visible = pdf_optional_content_visible_form(
               document, resources, name, optional_content_view, initial_optional_content_visible,
             )
+            let invocation_id = invocation_scope +
+              "/" +
+              operator_index.to_string()
             let form_group = pdf_transparency_group_of_form(
-              document, resources, name, group,
+              document, resources, name, invocation_id, state, resource_context,
             )
             let child_group_path : Array[PdfTransparencyGroup] = [
               for value in group_path => value
@@ -1387,9 +1521,34 @@ fn pdf_collected_entries_of_ops(
                 // Resource names can resolve to different fonts inside a
                 // Form. Preserve the inherited active font, but rebuild the
                 // name-based cache on the next Tf in this resource scope.
+                let child_group_masks = [
+                  for entry in initial_group_masks => entry
+                ]
+                let child_soft_mask = match form_group {
+                  Some(value) => {
+                    match soft_mask {
+                      Some(mask) => child_group_masks.push((value.id, mask))
+                      None => ()
+                    }
+                    None
+                  }
+                  None => soft_mask
+                }
                 let form_state = {
                   ..form_state,
                   text_state: { ..form_state.text_state, font_cache: [], },
+                }
+                let form_state = if form_group is Some(_) {
+                  {
+                    ..form_state,
+                    alpha_constant_stroke: 1.0,
+                    alpha_constant_non_stroke: 1.0,
+                    alpha_source: false,
+                    blend_mode: @syntax.PdfNameObject(pdf_name_key("/Normal")),
+                    soft_mask: @syntax.PdfNull,
+                  }
+                } else {
+                  form_state
                 }
                 let form_clip_paths = if form_state.clipping_path.length() >
                   state.clipping_path.length() {
@@ -1409,11 +1568,14 @@ fn pdf_collected_entries_of_ops(
                     form_resources,
                     form_ops,
                     form_clip_paths,
-                    soft_mask,
+                    child_soft_mask,
                     child_group_path,
                     fill_color_explicit,
                     stroke_color_explicit,
                     initial_text_clip_groups=text_clip_groups[:],
+                    invocation_scope=invocation_id,
+                    resource_context~,
+                    initial_group_masks=child_group_masks[:],
                     optional_content_view~,
                     initial_optional_content_visible=form_visible,
                     text_source_scope=pdf_text_scope_for_form(
@@ -1449,7 +1611,13 @@ fn pdf_collected_entries_of_ops(
                 output.push({
                   entry: emitted_entry,
                   state: result.state,
+                  pattern_initial: {
+                    state: initial,
+                    fill_explicit: initial_fill_color_explicit,
+                    stroke_explicit: initial_stroke_color_explicit,
+                  },
                   text_glyph: glyphs.get(glyph_index),
+                  text_object_id,
                   text_source: None,
                   font_object: None,
                   font_resource_missing: false,
@@ -1465,6 +1633,9 @@ fn pdf_collected_entries_of_ops(
                   group,
                   group_path: [
                     for value in group_path => value
+                  ],
+                  group_masks: [
+                    for entry in initial_group_masks => entry
                   ],
                   fill_color_explicit,
                   stroke_color_explicit,
@@ -1488,7 +1659,13 @@ fn pdf_collected_entries_of_ops(
             output.push({
               entry,
               state: result.state,
+              pattern_initial: {
+                state: initial,
+                fill_explicit: initial_fill_color_explicit,
+                stroke_explicit: initial_stroke_color_explicit,
+              },
               text_glyph: None,
+              text_object_id: None,
               text_source: None,
               font_object: None,
               font_resource_missing: false,
@@ -1505,6 +1682,9 @@ fn pdf_collected_entries_of_ops(
               group_path: [
                 for value in group_path => value
               ],
+              group_masks: [
+                for entry in initial_group_masks => entry
+              ],
               fill_color_explicit,
               stroke_color_explicit,
             })
@@ -1515,7 +1695,11 @@ fn pdf_collected_entries_of_ops(
       @content.Op_gs(name) => {
         state = pdf_apply_extgstate_for_viewer(document, state, resources, name)
         soft_mask = pdf_update_soft_mask_for_viewer(
-          document, resources, name, soft_mask,
+          document,
+          resources,
+          name,
+          soft_mask,
+          state.ctm,
         )
       }
       @content.Op_q => {
@@ -1576,16 +1760,16 @@ fn pdf_collected_entries_of_ops(
           None => ()
         }
       }
-      @content.Op_W | @content.Op_Wstar => {
-        let previous_length = state.clipping_path.length()
-        let result = document.content_apply_resource_op(state, resources, op)
-        if result.state.clipping_path.length() > previous_length {
-          let clipped = result.state.clipping_path[0].transform(state.ctm)
-          clip_paths = [clipped, ..clip_paths]
-        }
-        state = result.state
-      }
+      @content.Op_W | @content.Op_Wstar =>
+        // W/W* changes the clipping path only after the following path paint.
+        // In particular, W S must not clip away the outside half of its stroke.
+        pending_clip = Some(op)
       _ => {
+        let clipped_state = match pending_clip {
+          Some(clip_op) if pdf_path_ends(op) =>
+            Some(state.content_apply_core_op(clip_op))
+          _ => None
+        }
         let (result, glyphs) = pdf_apply_op_for_viewer(
           document,
           state,
@@ -1643,7 +1827,13 @@ fn pdf_collected_entries_of_ops(
             output.push({
               entry: emitted_entry,
               state: result.state,
+              pattern_initial: {
+                state: initial,
+                fill_explicit: initial_fill_color_explicit,
+                stroke_explicit: initial_stroke_color_explicit,
+              },
               text_glyph: glyphs.get(glyph_index),
+              text_object_id,
               text_source: pdf_collected_text_source_for_glyph(
                 text_sources[:],
                 glyphs[:],
@@ -1666,6 +1856,9 @@ fn pdf_collected_entries_of_ops(
               group_path: [
                 for value in group_path => value
               ],
+              group_masks: [
+                for entry in initial_group_masks => entry
+              ],
               fill_color_explicit,
               stroke_color_explicit,
             })
@@ -1673,7 +1866,37 @@ fn pdf_collected_entries_of_ops(
           glyph_index += 1
         }
         state = result.state
+        match clipped_state {
+          Some(clipped) => {
+            if clipped.clipping_path.length() > state.clipping_path.length() {
+              clip_paths = [
+                clipped.clipping_path[0].transform(state.ctm),
+                ..clip_paths,
+              ]
+            }
+            if clipped.clipping_path.length() == state.clipping_path.length() {
+              // An empty current path establishes an empty clip, not no clip.
+              clip_paths = [
+                { winding_rule: @shape.PdfPathNonZero, subpaths: [], },
+                ..clip_paths,
+              ]
+            }
+            state = {
+              ..state,
+              clipping_path: clipped.clipping_path,
+              path_state: {
+                ..state.path_state,
+                clipping_path: clipped.clipping_path,
+              },
+            }
+            pending_clip = None
+          }
+          None => ()
+        }
       }
+    }
+    if op is @content.Op_ET {
+      text_object_id = None
     }
     pdf_text_scope_after_op(document, resources, text_source_scope, op)
     let (next_fill, next_stroke) = pdf_color_explicit_after_op(
@@ -1697,25 +1920,136 @@ fn pdf_items_of_page(
   appearance_fonts? : PdfAppearanceFontScope,
   page_fonts? : PdfPageFontScope,
   optional_content_view? : PdfOptionalContentView? = None,
+  resource_context? : PdfResourceBuildContext = pdf_resource_build_context(),
 ) -> Array[PdfPageItem] raise @core.PdfError {
   let collected_entries = pdf_collected_entries_of_page(
     document,
     page,
     optional_content_view~,
-    font_fallbacks=page_fonts.map(scope => scope.fallbacks[:]).unwrap_or([]),
+    resource_context~,
+    font_fallbacks=page_fonts
+      .map(scope => scope.fallbacks[:])
+      .unwrap_or(resource_context.font_fallbacks[:]),
   )
+  let (blend_space, blend_profile) = pdf_colour_page_profile(
+    document, page, resource_context,
+  )
+  pdf_items_of_collected(
+    document,
+    collected_entries[:],
+    origin_x,
+    origin_y,
+    width,
+    height,
+    index_offset~,
+    appearance_fonts?,
+    page_fonts?,
+    retain_ink_samples=blend_space == "DeviceCMYK" ||
+      blend_profile is Some(_) ||
+      pdf_colour_page_calibration(document, page) is Some(_),
+    convert_ink_to_device_cmyk=blend_profile is None &&
+      pdf_colour_page_calibration(document, page) is None,
+    resource_context~,
+  )
+}
+
+///|
+fn pdf_items_of_collected(
+  document : @pdflite.PdfDocument,
+  collected_entries : ArrayView[PdfCollectedEntry],
+  origin_x : Double,
+  origin_y : Double,
+  width : Double,
+  height : Double,
+  index_offset? : Int = 0,
+  retain_ink_samples? : Bool = false,
+  convert_ink_to_device_cmyk? : Bool = true,
+  appearance_fonts? : PdfAppearanceFontScope,
+  page_fonts? : PdfPageFontScope,
+  resource_context? : PdfResourceBuildContext = pdf_resource_build_context(),
+) -> Array[PdfPageItem] raise @core.PdfError {
+  let font_fallbacks = page_fonts
+    .map(scope => scope.fallbacks[:])
+    .unwrap_or(resource_context.font_fallbacks[:])
   let items : Array[PdfPageItem] = Array(capacity=collected_entries.length())
   let cff_fonts : Map[Int, PdfCffFont?] = Map([])
   let type1_fonts : Map[Int, PdfType1Font?] = Map([])
   let mut inline_index = 0
   for source_index, collected in collected_entries {
     let index = index_offset + source_index
+    let retain_ink_samples = retain_ink_samples ||
+      collected.group_path.any(group => {
+        group.color_space == "DeviceCMYK" ||
+        group.color_space == "/DeviceCMYK" ||
+        group.icc_profile_id is Some(_) ||
+        group.calibration is Some(_)
+      })
+    let mut convert_ink_to_device_cmyk = convert_ink_to_device_cmyk
+    for group in collected.group_path {
+      if group.isolated && group.color_space != "" {
+        convert_ink_to_device_cmyk = group.icc_profile_id is None &&
+          group.calibration is None
+      }
+    }
     let entry = collected.entry
     let bounds = pdf_bounds_of_quad(entry.bounding_box)
     let paint = pdf_paint_attributes_of_state(collected.state)
+    let fill_source = if collected.fill_color_explicit {
+      pdf_colour_source(
+        collected.state.path_state.colourspace_non_stroke,
+        collected.state.path_state.colour_non_stroke,
+        black_generation=collected.state.black_generation,
+        undercolour_removal=collected.state.undercolour_removal,
+        document=Some(document),
+        rendering_intent=collected.state.path_state.rendering_intent,
+        resource_context=Some(resource_context),
+      )
+    } else {
+      pdf_colour_source(
+        @pdflite.PdfDeviceGray,
+        @pdflite.PdfContentColourFloats([0]),
+      )
+    }
+    let stroke_source = if collected.stroke_color_explicit {
+      pdf_colour_source(
+        collected.state.path_state.colourspace_stroke,
+        collected.state.path_state.colour_stroke,
+        black_generation=collected.state.black_generation,
+        undercolour_removal=collected.state.undercolour_removal,
+        document=Some(document),
+        rendering_intent=collected.state.path_state.rendering_intent,
+        resource_context=Some(resource_context),
+      )
+    } else {
+      pdf_colour_source(
+        @pdflite.PdfDeviceGray,
+        @pdflite.PdfContentColourFloats([0]),
+      )
+    }
+    let paint = {
+      ..paint,
+      fill_alpha: if fill_source.paints {
+        paint.fill_alpha
+      } else {
+        0.0
+      },
+      stroke_alpha: if stroke_source.paints {
+        paint.stroke_alpha
+      } else {
+        0.0
+      },
+    }
     let clip_path = pdf_clip_path_of_collected(
       document, collected, cff_fonts, type1_fonts, origin_x, origin_y, height,
     )
+    let clips = pdf_clips_of_collected(
+      document, collected, cff_fonts, type1_fonts, origin_x, origin_y, height,
+    )
+    let clip_path = if clips.is_empty() {
+      clip_path
+    } else {
+      Some(clips.map(clip => clip.svg_path).join("||"))
+    }
     let soft_mask = pdf_soft_mask_resource_of_collected(
       document,
       origin_x,
@@ -1723,7 +2057,26 @@ fn pdf_items_of_page(
       width,
       height,
       collected.soft_mask,
+      context=resource_context,
     )
+    let group_path = collected.group_path.map(group => {
+      let mut resource = group.soft_mask
+      for (id, mask) in collected.group_masks {
+        if id == group.id {
+          resource = pdf_soft_mask_resource_of_collected(
+            document,
+            origin_x,
+            origin_y,
+            width,
+            height,
+            Some(mask),
+            context=resource_context,
+          )
+        }
+      }
+      { ..group, soft_mask: resource, }
+    })
+    let group = group_path.last()
     match entry.object {
       @pdflite.PdfContentGlyphObject(charcode, _, text) => {
         let state = match entry.state {
@@ -1742,12 +2095,14 @@ fn pdf_items_of_page(
           collected.state.path_state.colour_non_stroke,
           collected.fill_color_explicit,
           document=Some(document),
+          rendering_intent=collected.state.path_state.rendering_intent,
         )
         let stroke_color = pdf_colour_hex_for_paint_in_space(
           collected.state.path_state.colourspace_stroke,
           collected.state.path_state.colour_stroke,
           collected.stroke_color_explicit,
           document=Some(document),
+          rendering_intent=collected.state.path_state.rendering_intent,
         )
         let (advance_x, advance_y, vertical) = match collected.text_glyph {
           Some(glyph) => {
@@ -1756,52 +2111,62 @@ fn pdf_items_of_page(
           }
           None => (0.0, 0.0, false)
         }
-        let type3_outline = pdf_type3_outline_of_glyph(
+        // Invisible text still supplies the source, advances and selection
+        // geometry, but needs no painted outline. Type3 uses its retained
+        // scene, whose producer applies the Tr=3 invisibility rule.
+        let invisible = state.rendering_mode == 3 &&
+          !(collected.state.text_state.current_font
+          is @pdflite.PdfFontSimple(
+            { fonttype: @pdflite.PdfSimpleFontType::PdfType3(_), .. }
+          ))
+        let (type3_scene, type3_scene_unresolved) = pdf_type3_scene_of_glyph(
           document,
-          collected.state.text_state.current_font,
-          collected.font_object,
+          collected,
           charcode,
-          pdf_quad_of_box(entry.bounding_box),
-          state.rendering_mode,
-          fill_color,
-          stroke_color,
-          paint.fill_alpha,
-          paint.stroke_alpha,
           origin_x,
           origin_y,
+          width,
           height,
+          resource_context,
+          retain_ink_samples,
+          convert_ink_to_device_cmyk,
+          font_fallbacks~,
         ) catch {
-          _ => None
+          _ => (None, Some("Type3 CharProc could not be lowered"))
+        }
+        let type3_outline = if invisible {
+          None
+        } else {
+          pdf_type3_outline_of_glyph(
+            document,
+            collected.state.text_state.current_font,
+            collected.font_object,
+            charcode,
+            pdf_quad_of_box(entry.bounding_box),
+            state.rendering_mode,
+            fill_color,
+            stroke_color,
+            paint.fill_alpha,
+            paint.stroke_alpha,
+            origin_x,
+            origin_y,
+            height,
+          ) catch {
+            _ => None
+          }
         }
         let glyph_matrix = match collected.text_glyph {
           Some(glyph) => Some(pdf_glyph_transform(collected.state, glyph))
           None => None
         }
-        let cff_outline = match type3_outline {
-          Some(value) => Some(value)
-          None =>
-            pdf_cff_outline_of_pdf_glyph(
+        let (outline_path, glyph_outline) = match (invisible, type3_outline) {
+          (true, _) => (None, None)
+          (_, Some(value)) => (None, Some(value))
+          (_, None) =>
+            pdf_text_outline_and_path(
               document,
-              collected.state.text_state.current_font,
+              collected,
               cff_fonts,
-              charcode,
-              glyph_matrix,
-              state.rendering_mode,
-              fill_color,
-              stroke_color,
-              paint.fill_alpha,
-              paint.stroke_alpha,
-              origin_x,
-              origin_y,
-              height,
-            )
-        }
-        let type1_outline = match cff_outline {
-          Some(value) => Some(value)
-          None =>
-            pdf_type1_outline_of_pdf_glyph(
-              document,
-              collected.state.text_state.current_font,
               type1_fonts,
               charcode,
               glyph_matrix,
@@ -1813,52 +2178,68 @@ fn pdf_items_of_page(
               origin_x,
               origin_y,
               height,
+              font_fallbacks~,
             )
         }
-        let truetype_outline = match type1_outline {
-          Some(value) => Some(value)
-          None =>
-            pdf_truetype_outline_of_pdf_glyph(
-              document,
-              collected.state.text_state.current_font,
-              collected.font_object,
-              charcode,
-              glyph_matrix,
-              state.rendering_mode,
-              fill_color,
-              stroke_color,
-              paint.fill_alpha,
-              paint.stroke_alpha,
-              origin_x,
-              origin_y,
-              height,
-            ) catch {
-              _ => None
-            }
+        let ordinary = type3_scene is None && type3_scene_unresolved is None
+        let fill_path = if ordinary && pdf_text_mode_fills(state.rendering_mode) {
+          outline_path
+        } else {
+          None
         }
-        let glyph_outline = match truetype_outline {
-          Some(value) => Some(value)
-          None if !pdf_standard14_uses_host_fallback(
-              document,
-              collected.state.text_state.current_font,
-              collected.font_object,
-              state.font,
-              page_fonts.map(scope => scope.fallbacks[:]).unwrap_or([]),
-            ) =>
-            pdf_standard14_outline_of_pdf_glyph(
-              collected.state.text_state.current_font,
-              charcode,
-              glyph_matrix,
-              state.rendering_mode,
-              fill_color,
-              stroke_color,
-              paint.fill_alpha,
-              paint.stroke_alpha,
-              origin_x,
-              origin_y,
-              height,
-            )
-          None => None
+        let pattern = if ordinary && pdf_text_mode_fills(state.rendering_mode) {
+          pdf_pattern_resource_of_paint(
+            document,
+            collected.resources,
+            collected.state.path_state.colourspace_non_stroke,
+            collected.state.path_state.colour_non_stroke,
+            collected.pattern_initial.state.ctm,
+            initial_state=Some(collected.pattern_initial),
+            context=resource_context,
+            retain_ink_samples~,
+            convert_ink_to_device_cmyk~,
+          )
+        } else {
+          None
+        }
+        let stroke_pattern = if ordinary &&
+          pdf_text_mode_strokes(state.rendering_mode) {
+          pdf_pattern_resource_of_paint(
+            document,
+            collected.resources,
+            collected.state.path_state.colourspace_stroke,
+            collected.state.path_state.colour_stroke,
+            collected.pattern_initial.state.ctm,
+            initial_state=Some(collected.pattern_initial),
+            context=resource_context,
+            retain_ink_samples~,
+            convert_ink_to_device_cmyk~,
+          )
+        } else {
+          None
+        }
+        let stroke = pdf_text_stroke(
+          document,
+          collected,
+          cff_fonts,
+          type1_fonts,
+          charcode,
+          paint.stroke_alpha,
+          origin_x,
+          origin_y,
+          height,
+          font_fallbacks~,
+        )
+        let glyph_outline = match
+          pdf_text_stroke_outline(
+            stroke,
+            state.rendering_mode,
+            fill_color,
+            stroke_color,
+            paint.fill_alpha,
+          ) {
+          Some(outline) => Some(outline)
+          None => glyph_outline
         }
         items.push(
           PdfPageItem::Text({
@@ -1868,6 +2249,12 @@ fn pdf_items_of_page(
             advance_x,
             advance_y,
             vertical,
+            stroke,
+            fill_path,
+            pattern,
+            stroke_pattern,
+            text_object_id: collected.text_object_id,
+            text_knockout: collected.state.text_state.knockout,
             glyph_transform: match glyph_matrix {
               Some(m) => Some([m.a, m.b, m.c, m.d, m.e, m.f])
               None => None
@@ -1885,6 +2272,7 @@ fn pdf_items_of_page(
                     collected.state.text_state.current_font,
                     collected.font_object,
                   ),
+                  font_fallbacks~,
                 )
               None =>
                 match page_fonts {
@@ -1905,11 +2293,20 @@ fn pdf_items_of_page(
             stroke_color,
             fill_alpha: paint.fill_alpha,
             blend_mode: paint.blend_mode,
+            alpha_is_shape: collected.state.alpha_source,
+            fill_source,
+            stroke_source,
+            fill_overprint: collected.state.overprint_non_stroke,
+            stroke_overprint: collected.state.overprint_stroke,
+            overprint_mode: collected.state.overprint_mode,
             clip_path,
+            clips,
             soft_mask,
-            group: collected.group,
-            group_path: collected.group_path,
+            group,
+            group_path,
             type3_outline: glyph_outline,
+            type3_scene,
+            type3_scene_unresolved,
           }),
         )
       }
@@ -1935,7 +2332,11 @@ fn pdf_items_of_page(
                 collected.resources,
                 state.colourspace_non_stroke,
                 state.colour_non_stroke,
-                collected.state.ctm,
+                collected.pattern_initial.state.ctm,
+                initial_state=Some(collected.pattern_initial),
+                context=resource_context,
+                retain_ink_samples~,
+                convert_ink_to_device_cmyk~,
               )
             } else {
               None
@@ -1946,7 +2347,11 @@ fn pdf_items_of_page(
                 collected.resources,
                 state.colourspace_stroke,
                 state.colour_stroke,
-                collected.state.ctm,
+                collected.pattern_initial.state.ctm,
+                initial_state=Some(collected.pattern_initial),
+                context=resource_context,
+                retain_ink_samples~,
+                convert_ink_to_device_cmyk~,
               )
             } else {
               None
@@ -1965,12 +2370,14 @@ fn pdf_items_of_page(
                 state.colour_non_stroke,
                 collected.fill_color_explicit,
                 document=Some(document),
+                rendering_intent=collected.state.path_state.rendering_intent,
               ),
               pdf_colour_hex_for_paint_in_space(
                 state.colourspace_stroke,
                 state.colour_stroke,
                 collected.stroke_color_explicit,
                 document=Some(document),
+                rendering_intent=collected.state.path_state.rendering_intent,
               ),
               state.line_width * stroke_scale,
               state.line_cap,
@@ -1997,6 +2404,7 @@ fn pdf_items_of_page(
               height,
             ),
             filled: drawn.filled,
+            fill_even_odd: drawn.path.winding_rule == @shape.PdfPathEvenOdd,
             stroked: drawn.stroked,
             fill_color,
             stroke_color,
@@ -2007,14 +2415,34 @@ fn pdf_items_of_page(
             line_join,
             dash_array,
             dash_phase,
+            stroke: if drawn.stroked {
+              Some(
+                pdf_path_stroke(
+                  drawn.path,
+                  collected.state,
+                  origin_x,
+                  origin_y,
+                  height,
+                ),
+              )
+            } else {
+              None
+            },
             pattern,
             stroke_pattern,
             shading_pattern,
             blend_mode: paint.blend_mode,
+            alpha_is_shape: collected.state.alpha_source,
+            fill_source,
+            stroke_source,
+            fill_overprint: collected.state.overprint_non_stroke,
+            stroke_overprint: collected.state.overprint_stroke,
+            overprint_mode: collected.state.overprint_mode,
             clip_path,
+            clips,
             soft_mask,
-            group: collected.group,
-            group_path: collected.group_path,
+            group,
+            group_path,
           }),
         )
       }
@@ -2023,7 +2451,28 @@ fn pdf_items_of_page(
           document,
           collected.resources,
           name,
+          retain_ink_samples~,
+          convert_ink_to_device_cmyk~,
+          resource_context=Some(resource_context),
+          rendering_intent=collected.state.path_state.rendering_intent,
+          black_generation=collected.state.black_generation,
+          undercolour_removal=collected.state.undercolour_removal,
         )
+        let pattern = if resource is Some({ mask_data_uri: Some(_), .. }) {
+          pdf_pattern_resource_of_paint(
+            document,
+            collected.resources,
+            collected.state.path_state.colourspace_non_stroke,
+            collected.state.path_state.colour_non_stroke,
+            collected.pattern_initial.state.ctm,
+            initial_state=Some(collected.pattern_initial),
+            context=resource_context,
+            retain_ink_samples~,
+            convert_ink_to_device_cmyk~,
+          )
+        } else {
+          None
+        }
         items.push(
           PdfPageItem::Image({
             index,
@@ -2032,19 +2481,28 @@ fn pdf_items_of_page(
             name,
             resource,
             shading: None,
+            pattern,
             fill_color: pdf_colour_hex_for_paint_in_space(
               collected.state.path_state.colourspace_non_stroke,
               collected.state.path_state.colour_non_stroke,
               collected.fill_color_explicit,
               document=Some(document),
+              rendering_intent=collected.state.path_state.rendering_intent,
             ),
             fill_alpha: paint.fill_alpha,
             stroke_alpha: paint.stroke_alpha,
             blend_mode: paint.blend_mode,
+            alpha_is_shape: collected.state.alpha_source,
+            fill_source,
+            stroke_source,
+            fill_overprint: collected.state.overprint_non_stroke,
+            stroke_overprint: collected.state.overprint_stroke,
+            overprint_mode: collected.state.overprint_mode,
             clip_path,
+            clips,
             soft_mask,
-            group: collected.group,
-            group_path: collected.group_path,
+            group,
+            group_path,
           }),
         )
       }
@@ -2059,10 +2517,31 @@ fn pdf_items_of_page(
               dictionary,
               data,
               decode_parms~,
+              retain_ink_samples~,
+              convert_ink_to_device_cmyk~,
+              resource_context=Some(resource_context),
+              rendering_intent=collected.state.path_state.rendering_intent,
+              black_generation=collected.state.black_generation,
+              undercolour_removal=collected.state.undercolour_removal,
             )
           None => None
         }
         inline_index += 1
+        let pattern = if resource is Some({ mask_data_uri: Some(_), .. }) {
+          pdf_pattern_resource_of_paint(
+            document,
+            collected.resources,
+            collected.state.path_state.colourspace_non_stroke,
+            collected.state.path_state.colour_non_stroke,
+            collected.pattern_initial.state.ctm,
+            initial_state=Some(collected.pattern_initial),
+            context=resource_context,
+            retain_ink_samples~,
+            convert_ink_to_device_cmyk~,
+          )
+        } else {
+          None
+        }
         items.push(
           PdfPageItem::Image({
             index,
@@ -2071,25 +2550,48 @@ fn pdf_items_of_page(
             name,
             resource,
             shading: None,
+            pattern,
             fill_color: pdf_colour_hex_for_paint_in_space(
               collected.state.path_state.colourspace_non_stroke,
               collected.state.path_state.colour_non_stroke,
               collected.fill_color_explicit,
               document=Some(document),
+              rendering_intent=collected.state.path_state.rendering_intent,
             ),
             fill_alpha: paint.fill_alpha,
             stroke_alpha: paint.stroke_alpha,
             blend_mode: paint.blend_mode,
+            alpha_is_shape: collected.state.alpha_source,
+            fill_source,
+            stroke_source,
+            fill_overprint: collected.state.overprint_non_stroke,
+            stroke_overprint: collected.state.overprint_stroke,
+            overprint_mode: collected.state.overprint_mode,
             clip_path,
+            clips,
             soft_mask,
-            group: collected.group,
-            group_path: collected.group_path,
+            group,
+            group_path,
           }),
         )
       }
       @pdflite.PdfContentShadingObject(name) => {
         let shading = match
-          pdf_shading_resource_of_resources(document, collected.resources, name) {
+          pdf_shading_resource_of_resources(
+            document,
+            collected.resources,
+            name,
+            resource_context~,
+            rendering_intent=collected.state.path_state.rendering_intent,
+            black_generation=pdf_colour_device_function(
+              Some(document),
+              collected.state.black_generation,
+            ),
+            undercolour_removal=pdf_colour_device_function(
+              Some(document),
+              collected.state.undercolour_removal,
+            ),
+          ) {
           Some(value) =>
             Some(pdf_shading_resource_with_ctm(value, collected.state.ctm))
           None => None
@@ -2102,19 +2604,28 @@ fn pdf_items_of_page(
             name,
             resource: None,
             shading,
+            pattern: None,
             fill_color: pdf_colour_hex_for_paint_in_space(
               collected.state.path_state.colourspace_non_stroke,
               collected.state.path_state.colour_non_stroke,
               collected.fill_color_explicit,
               document=Some(document),
+              rendering_intent=collected.state.path_state.rendering_intent,
             ),
             fill_alpha: paint.fill_alpha,
             stroke_alpha: paint.stroke_alpha,
             blend_mode: paint.blend_mode,
+            alpha_is_shape: collected.state.alpha_source,
+            fill_source,
+            stroke_source,
+            fill_overprint: collected.state.overprint_non_stroke,
+            stroke_overprint: collected.state.overprint_stroke,
+            overprint_mode: collected.state.overprint_mode,
             clip_path,
+            clips,
             soft_mask,
-            group: collected.group,
-            group_path: collected.group_path,
+            group,
+            group_path,
           }),
         )
       }
@@ -2151,6 +2662,7 @@ priv struct PdfPaintAttributes {
   fill_alpha : Double
   stroke_alpha : Double
   blend_mode : String
+  alpha_is_shape : Bool
 }
 
 ///|
@@ -2178,6 +2690,14 @@ fn pdf_apply_extgstate_for_viewer(
           output = document.content_apply_extgstate_overprint_op(
             output, extgstate,
           )
+          // pdflite 0.2.2 mistakenly reads /op as the integer overprint mode.
+          // Resolve the distinct /OPM entry without disturbing inherited state.
+          output = { ..output, overprint_mode: state.overprint_mode, }
+          match document.lookup_direct(pdf_name_key("/OPM"), extgstate) {
+            Some(@syntax.PdfInteger(value)) if value == 0 || value == 1 =>
+              output = { ..output, overprint_mode: value, }
+            _ => ()
+          }
           output = document.content_apply_extgstate_transfer_op(
             output, extgstate,
           )
@@ -2208,6 +2728,7 @@ fn pdf_paint_attributes_of_state(
     fill_alpha: state.alpha_constant_non_stroke,
     stroke_alpha: state.alpha_constant_stroke,
     blend_mode: pdf_svg_blend_mode(state.blend_mode),
+    alpha_is_shape: state.alpha_source,
   }
 }
 
@@ -2230,309 +2751,42 @@ fn pdf_ctm_stroke_scale(ctm : @geometry.TransformMatrix) -> Double {
 ///|
 fn pdf_svg_blend_mode(value : @syntax.PdfObject) -> String {
   match value {
-    @syntax.PdfNameObject(name) => {
-      let text = pdf_annotation_name_text(name).to_lower()
-      let text = if text.has_prefix("/") { text[1:].to_owned() } else { text }
-      match text {
-        "normal" | "compatible" => "normal"
-        "colordodge" => "color-dodge"
-        "colorburn" => "color-burn"
-        "hardlight" => "hard-light"
-        "softlight" => "soft-light"
-        _ => text
-      }
-    }
-    _ => "normal"
-  }
-}
-
-///|
-/// Resolve a shading in the resource dictionary active at the paint site.
-fn pdf_shading_resource_of_resources(
-  document : @pdflite.PdfDocument,
-  resources : @syntax.PdfObject,
-  name : String,
-) -> PdfShadingResource? {
-  let shading_dictionary_name = pdf_image_name("/Shading")
-  let shading_name = pdf_image_name(name)
-  match document.lookup_direct(shading_dictionary_name, resources) {
-    Some(shadings) =>
-      match document.lookup_direct(shading_name, shadings) {
-        Some(shading) =>
-          try
-            Some(
-              pdf_shading_resource_of_object(
-                document,
-                name,
-                shading,
-                resources~,
-              ),
-            )
-          catch {
-            _ => None
-          } noraise {
-            value => value
-          }
-        None => None
-      }
-    None => None
-  }
-}
-
-///|
-fn pdf_shading_resource_of_object(
-  document : @pdflite.PdfDocument,
-  name : String,
-  object : @syntax.PdfObject,
-  resources? : @syntax.PdfObject = @syntax.PdfNull,
-) -> PdfShadingResource raise @core.PdfError {
-  pdf_shading_resource_of_object_with_matrix(
-    document,
-    name,
-    object,
-    @geometry.transform_identity_matrix,
-    resources~,
-  )
-}
-
-///|
-fn pdf_shading_resource_of_object_with_matrix(
-  document : @pdflite.PdfDocument,
-  name : String,
-  object : @syntax.PdfObject,
-  matrix : @geometry.TransformMatrix,
-  resources? : @syntax.PdfObject = @syntax.PdfNull,
-) -> PdfShadingResource raise @core.PdfError {
-  let shading = document.content_read_shading(matrix, @syntax.PdfNull, object)
-  let colour_object = document
-    .lookup_direct(pdf_name_key("/ColorSpace"), object)
-    .unwrap_or(shading.shading_colourspace)
-  let colourspace = pdf_read_colour_space_for_viewer(
-    document, resources, colour_object,
-  ).unwrap_or(@pdflite.PdfDeviceRGB)
-  let colour_transform = pdf_colour_transform(Some(document), colourspace)
-  let matrix = [
-    shading.shading_matrix.a,
-    shading.shading_matrix.b,
-    shading.shading_matrix.c,
-    shading.shading_matrix.d,
-    shading.shading_matrix.e,
-    shading.shading_matrix.f,
-  ]
-  match shading.shading {
-    @pdflite.PdfContentAxialShading(axial) => {
-      let (x0, y0, x1, y1) = axial.axialshading_coords
-      let (domain_min, domain_max) = axial.axialshading_domain
-      {
-        name,
-        kind: "axial",
-        coords: [x0, y0, x1, y1],
-        matrix,
-        stops: pdf_shading_stops(
-          axial.axialshading_function,
-          domain_min,
-          domain_max,
-          colour_transform,
-        ),
-        mesh: [],
-        extend_start: axial.axialshading_extend.0,
-        extend_end: axial.axialshading_extend.1,
-      }
-    }
-    @pdflite.PdfContentRadialShading(radial) => {
-      let (x0, y0, r0, x1, y1, r1) = radial.radialshading_coords
-      let (domain_min, domain_max) = radial.radialshading_domain
-      {
-        name,
-        kind: "radial",
-        coords: [x0, y0, r0, x1, y1, r1],
-        matrix,
-        stops: pdf_shading_stops(
-          radial.radialshading_function,
-          domain_min,
-          domain_max,
-          colour_transform,
-        ),
-        mesh: [],
-        extend_start: radial.radialshading_extend.0,
-        extend_end: radial.radialshading_extend.1,
-      }
-    }
-    @pdflite.PdfContentFunctionShading(function) => {
-      let (domain_min, domain_max) = pdf_shading_function_domain([
-        function.funshading_function,
-      ])
-      {
-        name,
-        kind: "function",
-        coords: [],
-        matrix,
-        stops: pdf_shading_stops(
-          [function.funshading_function],
-          domain_min,
-          domain_max,
-          colour_transform,
-        ),
-        mesh: [],
-        extend_start: true,
-        extend_end: true,
-      }
-    }
-    @pdflite.PdfContentFreeFormGouraudShading =>
-      {
-        name,
-        kind: "mesh",
-        coords: [],
-        matrix,
-        stops: [],
-        mesh: pdf_mesh_triangles_of_shading(
-          document,
-          object,
-          colour_object,
-          resources~,
-        ),
-        extend_start: true,
-        extend_end: true,
-      }
-    @pdflite.PdfContentLatticeFormGouraudShading =>
-      {
-        name,
-        kind: "mesh",
-        coords: [],
-        matrix,
-        stops: [],
-        mesh: pdf_mesh_triangles_of_shading(
-          document,
-          object,
-          colour_object,
-          resources~,
-        ),
-        extend_start: true,
-        extend_end: true,
-      }
-    @pdflite.PdfContentCoonsPatchMesh =>
-      {
-        name,
-        kind: "mesh",
-        coords: [],
-        matrix,
-        stops: [],
-        mesh: pdf_mesh_triangles_of_shading(
-          document,
-          object,
-          colour_object,
-          resources~,
-        ),
-        extend_start: true,
-        extend_end: true,
-      }
-    @pdflite.PdfContentTensorProductPatchMesh =>
-      {
-        name,
-        kind: "mesh",
-        coords: [],
-        matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-        stops: [],
-        mesh: pdf_mesh_triangles_of_shading(
-          document,
-          object,
-          colour_object,
-          resources~,
-        ),
-        extend_start: true,
-        extend_end: true,
-      }
-  }
-}
-
-///|
-/// Shading coordinates live in the current user space rather than image
-/// unit-square space. Retain the full CTM on the resource so SVG can apply it
-/// to both axial and radial gradients without approximating a sheared circle.
-fn pdf_shading_resource_with_ctm(
-  shading : PdfShadingResource,
-  ctm : @geometry.TransformMatrix,
-) -> PdfShadingResource {
-  let base = if shading.matrix.length() >= 6 {
-    shading.matrix
-  } else {
-    [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
-  }
-  let a = ctm.a * base[0] + ctm.c * base[1]
-  let b = ctm.b * base[0] + ctm.d * base[1]
-  let c = ctm.a * base[2] + ctm.c * base[3]
-  let d = ctm.b * base[2] + ctm.d * base[3]
-  let e = ctm.a * base[4] + ctm.c * base[5] + ctm.e
-  let f = ctm.b * base[4] + ctm.d * base[5] + ctm.f
-  { ..shading, matrix: [a, b, c, d, e, f], }
-}
-
-///|
-fn pdf_shading_function_domain(
-  functions : ArrayView[@pdflite.PdfFunction],
-) -> (Double, Double) {
-  match functions[0:] {
-    [function, ..] if function.domain.length() >= 2 =>
-      (function.domain[0], function.domain[1])
-    _ => (0.0, 1.0)
-  }
-}
-
-///|
-fn pdf_shading_stops(
-  functions : ArrayView[@pdflite.PdfFunction],
-  domain_min : Double,
-  domain_max : Double,
-  colourspace : PdfColourTransform,
-) -> Array[PdfGradientStop] {
-  let stops : Array[PdfGradientStop] = []
-  let sample_count = 16
-  for index in 0..<=sample_count {
-    let offset = index.to_double() / sample_count.to_double()
-    let input = domain_min + (domain_max - domain_min) * offset
-    match pdf_shading_sample(functions, input, colourspace) {
-      Some(color) => stops.push({ offset, color, })
-      None => ()
-    }
-  }
-  stops
-}
-
-///|
-fn pdf_shading_sample(
-  functions : ArrayView[@pdflite.PdfFunction],
-  input : Double,
-  colourspace : PdfColourTransform,
-) -> String? {
-  let values : Array[Double] = []
-  for function in functions {
-    let result = try Some(function.eval([input])) catch {
-      _ => None
-    } noraise {
-      value => value
-    }
-    match result {
-      Some(output) =>
-        for value in output {
-          values.push(value)
+    @syntax.PdfArray(values) => {
+      for value in values {
+        if pdf_supported_blend_mode(value) is Some(mode) {
+          return mode
         }
-      None => return None
+      }
+      "normal"
     }
-  }
-  if values.length() == 0 {
-    None
-  } else {
-    Some(pdf_shading_colour_hex(values, colourspace))
+    _ => pdf_supported_blend_mode(value).unwrap_or("normal")
   }
 }
 
 ///|
-fn pdf_shading_colour_hex(
-  values : ArrayView[Double],
-  colourspace : PdfColourTransform,
-) -> String {
-  let (r, g, b) = pdf_colour_rgb_of_transform(colourspace, values)
-  pdf_rgb_hex(r, g, b)
+fn pdf_supported_blend_mode(value : @syntax.PdfObject) -> String? {
+  guard value is @syntax.PdfNameObject(name) else { return None }
+  let text = pdf_annotation_name_text(name).to_lower()
+  let text = if text.has_prefix("/") { text[1:].to_owned() } else { text }
+  match text {
+    "normal" | "compatible" => Some("normal")
+    "colordodge" => Some("color-dodge")
+    "colorburn" => Some("color-burn")
+    "hardlight" => Some("hard-light")
+    "softlight" => Some("soft-light")
+    "multiply"
+    | "screen"
+    | "overlay"
+    | "darken"
+    | "lighten"
+    | "difference"
+    | "exclusion"
+    | "hue"
+    | "saturation"
+    | "color"
+    | "luminosity" => Some(text)
+    _ => None
+  }
 }
 
 ///|

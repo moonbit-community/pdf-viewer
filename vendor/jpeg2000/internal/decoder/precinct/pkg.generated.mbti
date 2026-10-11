@@ -1,0 +1,37 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/precinct"
+
+// Values
+pub fn build_packet_order(Int, Int, Int, Int, Array[Int], Array[Int], Array[Array[(Int, Int)]], Array[Array[(Int, Int, Int, Int)]], Array[Array[Int]], Int, Int, comp_xrsiz? : Array[Int], comp_yrsiz? : Array[Int]) -> Array[(Int, Int, Int, Int)]
+
+pub fn build_packet_order_with_poc(Int, Int, Int, Int, Array[Int], Array[Int], Array[Array[(Int, Int)]], Array[Array[(Int, Int, Int, Int)]], Array[Array[Int]], Int, Int, Array[(Int, Int, Int, Int, Int, Int)], comp_xrsiz? : Array[Int], comp_yrsiz? : Array[Int]) -> Array[(Int, Int, Int, Int)]
+
+pub fn compute_cb_count_from_bounds(Int, Int, Int, Int, Int, Int) -> (Int, Int)
+
+pub fn compute_cb_geometry_from_bounds(Int, Int, Int, Int, Int, Int, Int, Int) -> (Int, Int, Int, Int)
+
+pub fn compute_num_precincts(Int, Int, Int, Int) -> (Int, Int)
+
+pub fn compute_num_precincts_with_origin(Int, Int, Int, Int, Int, Int) -> (Int, Int)
+
+pub fn compute_precinct_bounds_abs(Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int) -> (Int, Int, Int, Int)
+
+pub fn compute_precinct_codeblock_range(Int, Int, Int, Int, Int, Int, Int, Int, Int) -> (Int, Int, Int, Int, Int, Int)
+
+pub fn compute_precinct_codeblock_range_abs(Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int) -> (Int, Int, Int, Int, Int, Int)
+
+pub fn compute_precinct_local_cb_geometry(Int, Int, Int, Int, Int, Int, Int, Int, Int, Int) -> (Int, Int, Int, Int)
+
+pub fn effective_cb_dim_for_res(Int, Int, Int) -> Int
+
+pub fn get_component_precinct_exponents(Array[Int], Array[Array[Int]], Int, Int) -> (Int, Int)
+
+pub fn get_precinct_exponents(Array[Int], Int) -> (Int, Int)
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

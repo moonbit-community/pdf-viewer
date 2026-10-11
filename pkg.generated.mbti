@@ -9,6 +9,10 @@ import {
 }
 
 // Values
+pub fn clear_icc_transforms() -> Unit
+
+pub fn icc_capability() -> String
+
 pub fn open_document(Bytes) -> PdfViewerDocument raise @core.PdfError
 
 pub fn open_document_with_passwords(Bytes, user_password? : Bytes?, owner_password? : Bytes?) -> PdfViewerDocument raise @core.PdfError
@@ -16,6 +20,8 @@ pub fn open_document_with_passwords(Bytes, user_password? : Bytes?, owner_passwo
 pub fn pdf_optional_content_state(config_index? : Int?, on? : Array[Int], off? : Array[Int]) -> PdfOptionalContentState
 
 pub fn pdf_search_options(case_sensitive? : Bool, whole_word? : Bool, diacritic_sensitive? : Bool) -> PdfSearchOptions
+
+pub fn process_cmyk_to_rgb(Double, Double, Double, Double) -> Array[Double]
 
 // Errors
 
@@ -99,6 +105,26 @@ pub fn PdfByteSpan::to_json(Self) -> Json
 #deprecated
 pub fn PdfByteSpan::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfClipPath {
+  svg_path : String
+  even_odd : Bool
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfClipPath::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfClipPath::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfClipPath::to_json(Self) -> Json
+#deprecated
+pub fn PdfClipPath::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfColourCalibration {
+  components : Int
+  gamma : Array[Double]
+  pcs_matrix : Array[Double]
+  pcs_offset : Array[Double]
+} derive(Eq, ToJson, @debug.Debug)
+
 pub(all) struct PdfDestination {
   kind : String
   name : String?
@@ -162,8 +188,44 @@ pub fn PdfGradientStop::to_json(Self) -> Json
 #deprecated
 pub fn PdfGradientStop::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfGraphicsDiagnostic {
+  code : String
+  item : Int
+  message : String
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfGraphicsDiagnostic::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfGraphicsDiagnostic::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfGraphicsDiagnostic::to_json(Self) -> Json
+#deprecated
+pub fn PdfGraphicsDiagnostic::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfIccProfile {
+  id : String
+  components : Int
+  data_base64 : String
+} derive(Eq, ToJson, @debug.Debug)
+
+pub(all) struct PdfImageInkSamples {
+  width : Int
+  height : Int
+  components : Int
+  bits : Int
+  row_bytes : Int
+  data_base64 : String
+  alpha_base64 : String
+  source_colour : PdfSourceColour
+  process_cmyk : Bool
+} derive(Eq, ToJson, @debug.Debug)
+
 pub(all) struct PdfImageResource {
   name : String
+  error : String?
+  ink_samples : PdfImageInkSamples?
+  has_local_mask : Bool
+  alpha_is_explicit_shape : Bool
   mime_type : String
   data_uri : String?
   mask_data_uri : String?
@@ -228,6 +290,10 @@ pub fn PdfPageItem::to_repr(Self) -> @debug.Repr
 
 pub(all) struct PdfPageModel {
   number : Int
+  blend_space : String
+  blend_profile_id : String?
+  blend_calibration : PdfColourCalibration?
+  icc_profiles : Array[PdfIccProfile]
   origin_x : Double
   origin_y : Double
   width : Double
@@ -239,8 +305,10 @@ pub(all) struct PdfPageModel {
   annotations : Array[PdfAnnotationItem]
   text : String
 } derive(Eq, ToJson, @debug.Debug)
+pub fn PdfPageModel::canvas_plan(Self, scale? : Double, rotation? : Int) -> Json raise @core.PdfError
 #deprecated
 pub fn PdfPageModel::equal(Self, Self) -> Bool
+pub fn PdfPageModel::graphics_diagnostics(Self, renderer? : String) -> Array[PdfGraphicsDiagnostic]
 #deprecated
 pub fn PdfPageModel::not_equal(Self, Self) -> Bool
 pub fn PdfPageModel::operator_list(Self) -> Array[PdfPageItem]
@@ -263,6 +331,7 @@ pub(all) struct PdfPathItem {
   bounds : PdfBounds
   svg_path : String
   filled : Bool
+  fill_even_odd : Bool
   stroked : Bool
   fill_color : String
   stroke_color : String
@@ -273,11 +342,19 @@ pub(all) struct PdfPathItem {
   line_join : Int
   dash_array : Array[Double]
   dash_phase : Double
+  stroke : PdfPathStroke?
   pattern : PdfPatternResource?
   stroke_pattern : PdfPatternResource?
   shading_pattern : PdfShadingResource?
   blend_mode : String
+  fill_source : PdfSourceColour
+  stroke_source : PdfSourceColour
+  fill_overprint : Bool
+  stroke_overprint : Bool
+  overprint_mode : Int
+  alpha_is_shape : Bool
   clip_path : String?
+  clips : Array[PdfClipPath]
   soft_mask : PdfSoftMaskResource?
   group : PdfTransparencyGroup?
   group_path : Array[PdfTransparencyGroup]
@@ -291,6 +368,23 @@ pub fn PdfPathItem::to_json(Self) -> Json
 #deprecated
 pub fn PdfPathItem::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfPathStroke {
+  svg_path : String
+  transform : Array[Double]
+  line_width : Double
+  dash_array : Array[Double]
+  dash_phase : Double
+  miter_limit : Double
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfPathStroke::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfPathStroke::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfPathStroke::to_json(Self) -> Json
+#deprecated
+pub fn PdfPathStroke::to_repr(Self) -> @debug.Repr
+
 pub(all) struct PdfPatternResource {
   name : String
   bbox : PdfBounds
@@ -298,6 +392,7 @@ pub(all) struct PdfPatternResource {
   y_step : Double
   matrix : Array[Double]
   tile_svg : String
+  tile_page : PdfPageModel?
   tile_parts : Array[PdfPatternTilePart]
   shading : PdfShadingResource?
 } derive(Eq, ToJson, @debug.Debug)
@@ -387,6 +482,46 @@ pub fn PdfSelection::to_json(Self) -> Json
 #deprecated
 pub fn PdfSelection::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfShadingPatch {
+  points : Array[PdfPoint]
+  components : Array[Array[Double]]
+} derive(Eq, ToJson, @debug.Debug)
+
+pub(all) struct PdfShadingPatternState {
+  fill_alpha : Double
+  blend_mode : String
+  alpha_is_shape : Bool
+  fill_overprint : Bool
+  overprint_mode : Int
+  soft_mask : PdfSoftMaskResource?
+  background_color : String?
+  background_source : PdfSourceColour?
+  background_overprint : Bool
+  background_overprint_mode : Int
+} derive(Eq, ToJson, @debug.Debug)
+
+pub(all) struct PdfShadingRaster {
+  domain : Array[Double]
+  size : Array[Int]
+  samples : String
+  triangles : Array[PdfShadingTriangle]
+  patches : Array[PdfShadingPatch]
+  bbox : Array[Double]
+  background : String?
+  function_matrix : Array[Double]
+  paints : Bool
+  tree : Array[Double]
+  error : String?
+  process_samples : String?
+  process_background : Array[Double]?
+  process_error : String?
+  source_colour : PdfSourceColour?
+  source_samples : String?
+  source_background : Array[Double]?
+  source_direct : Bool
+  source_error : String?
+} derive(Eq, ToJson, @debug.Debug)
+
 pub(all) struct PdfShadingResource {
   name : String
   kind : String
@@ -394,6 +529,8 @@ pub(all) struct PdfShadingResource {
   matrix : Array[Double]
   stops : Array[PdfGradientStop]
   mesh : Array[PdfMeshTriangle]
+  raster : PdfShadingRaster?
+  pattern_state : PdfShadingPatternState?
   extend_start : Bool
   extend_end : Bool
 } derive(Eq, ToJson, @debug.Debug)
@@ -406,11 +543,21 @@ pub fn PdfShadingResource::to_json(Self) -> Json
 #deprecated
 pub fn PdfShadingResource::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfShadingTriangle {
+  points : Array[PdfPoint]
+  components : Array[Array[Double]]
+} derive(Eq, ToJson, @debug.Debug)
+
 pub(all) struct PdfSoftMaskResource {
   data_uri : String
   bounds : PdfBounds
   luminosity : Bool
   background : String
+  page : PdfPageModel?
+  matrix : Array[Double]
+  backdrop : Array[Double]
+  backdrop_components : Array[Double]
+  transfer_map : Array[Int]?
 } derive(Eq, ToJson, @debug.Debug)
 #deprecated
 pub fn PdfSoftMaskResource::equal(Self, Self) -> Bool
@@ -420,6 +567,22 @@ pub fn PdfSoftMaskResource::not_equal(Self, Self) -> Bool
 pub fn PdfSoftMaskResource::to_json(Self) -> Json
 #deprecated
 pub fn PdfSoftMaskResource::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfSourceColour {
+  space : String
+  components : Array[Double]
+  colorants : Array[String]
+  paints : Bool
+  all : Bool
+  process_cmyk : Array[Double]?
+  alternate : PdfSourceColour?
+  rendering_intent : String
+  icc_profile_id : String?
+  whitepoint_xyy : Array[Double]?
+  component_ranges : Array[Double]?
+  pcs_xyz : Array[Double]?
+  calibration : PdfColourCalibration?
+} derive(Eq, ToJson, @debug.Debug)
 
 pub(all) struct PdfTextByteSpan {
   stream_index : Int
@@ -516,6 +679,12 @@ pub(all) struct PdfTextItem {
   advance_y : Double
   vertical : Bool
   glyph_transform : Array[Double]?
+  stroke : PdfTextStroke?
+  fill_path : String?
+  pattern : PdfPatternResource?
+  stroke_pattern : PdfPatternResource?
+  text_object_id : String?
+  text_knockout : Bool
   bounds : PdfBounds
   quad : PdfQuad
   font : String
@@ -525,11 +694,20 @@ pub(all) struct PdfTextItem {
   stroke_color : String
   fill_alpha : Double
   blend_mode : String
+  fill_source : PdfSourceColour
+  stroke_source : PdfSourceColour
+  fill_overprint : Bool
+  stroke_overprint : Bool
+  overprint_mode : Int
+  alpha_is_shape : Bool
   clip_path : String?
+  clips : Array[PdfClipPath]
   soft_mask : PdfSoftMaskResource?
   group : PdfTransparencyGroup?
   group_path : Array[PdfTransparencyGroup]
   type3_outline : String?
+  type3_scene : PdfPageModel?
+  type3_scene_unresolved : String?
 } derive(Eq, ToJson, @debug.Debug)
 #deprecated
 pub fn PdfTextItem::equal(Self, Self) -> Bool
@@ -713,6 +891,28 @@ pub fn PdfTextStringSource::to_json(Self) -> Json
 #deprecated
 pub fn PdfTextStringSource::to_repr(Self) -> @debug.Repr
 
+pub(all) struct PdfTextStroke {
+  svg_path : String?
+  transform : Array[Double]
+  line_width : Double
+  line_cap : Int
+  line_join : Int
+  dash_array : Array[Double]
+  dash_phase : Double
+  miter_limit : Double
+  stroke_alpha : Double
+  fallback_scale : Double?
+  unresolved : String?
+} derive(Eq, ToJson, @debug.Debug)
+#deprecated
+pub fn PdfTextStroke::equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextStroke::not_equal(Self, Self) -> Bool
+#deprecated
+pub fn PdfTextStroke::to_json(Self) -> Json
+#deprecated
+pub fn PdfTextStroke::to_repr(Self) -> @debug.Repr
+
 pub(all) struct PdfTextStructure {
   text : String
   paragraphs : Array[PdfTextParagraph]
@@ -730,6 +930,15 @@ pub(all) struct PdfTransparencyGroup {
   id : String
   isolated : Bool
   knockout : Bool
+  alpha : Double
+  blend_mode : String
+  alpha_is_shape : Bool
+  bounds : PdfBounds?
+  color_space : String
+  rendering_intent : String
+  icc_profile_id : String?
+  calibration : PdfColourCalibration?
+  soft_mask : PdfSoftMaskResource?
 } derive(Eq, ToJson, @debug.Debug)
 #deprecated
 pub fn PdfTransparencyGroup::equal(Self, Self) -> Bool
@@ -815,11 +1024,19 @@ pub(all) struct PdfVisualItem {
   name : String
   resource : PdfImageResource?
   shading : PdfShadingResource?
+  pattern : PdfPatternResource?
   fill_color : String
   fill_alpha : Double
   stroke_alpha : Double
   blend_mode : String
+  fill_source : PdfSourceColour
+  stroke_source : PdfSourceColour
+  fill_overprint : Bool
+  stroke_overprint : Bool
+  overprint_mode : Int
+  alpha_is_shape : Bool
   clip_path : String?
+  clips : Array[PdfClipPath]
   soft_mask : PdfSoftMaskResource?
   group : PdfTransparencyGroup?
   group_path : Array[PdfTransparencyGroup]

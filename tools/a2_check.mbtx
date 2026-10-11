@@ -1,0 +1,74 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+}
+
+///|
+/// A2's common checks plus authored pixel regressions. The Node host packages
+/// must already be installed; PDF_CANVAS_PACKAGE may select their package.json.
+async fn main {
+  @shell.Cmd("moon", ["info"]).run()
+  @shell.Cmd("moon", ["fmt"]).run()
+  for target in ["js", "native", "wasm", "wasm-gc"] {
+    @shell.Cmd("moon", ["test", "--target", target]).run()
+  }
+  @shell.Cmd("moon", ["check", "--target", "all"]).run()
+  // Compile the real DOM suite without claiming a browser run on this host.
+  @shell.Cmd("moon", ["check", "tools/browser_test.mbtx"]).run()
+  @shell.Cmd("git", ["diff", "--check"]).run()
+  @shell.Cmd("moon", ["build", "--release", "--target", "native", "cmd/main"]).run()
+  @shell.Cmd("moon", ["build", "--release", "--target", "js", "cmd/pixel_plan"]).run()
+  @fs.write_file(
+    "_build/pixel-plan.mjs",
+    @fs.read_file("_build/js/release/build/cmd/pixel_plan/pixel_plan.js").binary(),
+  )
+  @shell.Cmd("moon", ["run", "tools/build_web.mbtx"]).run()
+  @shell.Cmd("node", ["tools/prepare_web_assets_test.mjs"]).run()
+  @shell.Cmd("moon", ["run", "tools/text_host_pen.mbtx"]).run()
+  @shell.Cmd("node", ["tools/pixels/text_diagnostic_test.mjs"]).run()
+  @shell.Cmd("node", ["tools/pixels/worker_canvas_test.mjs"]).run()
+  @shell.Cmd("env", [
+    "PDF_NATIVE_PLAN=_build/native/release/build/cmd/main/main.exe", "node",
+    "tools/pixels/standard14_pen_test.mjs", "web/_generated/pdf.js",
+  ]).run()
+  @shell.Cmd("python3", [
+    "tools/fixtures/image_pattern.py", "_build/image-pattern.pdf",
+  ]).run()
+  @shell.Cmd("node", [
+    "tools/pixels/image_pattern_test.mjs", "web/_generated/pdf.js", "_build/image-pattern.pdf",
+    "_build/image-pattern-results",
+  ]).run()
+  for
+    script in [
+      "tools/icc_engine_test.mjs", "tools/icc_lifecycle_test.mjs", "tools/icc_calibration_test.mjs",
+      "tools/colour_planes_test.mjs", "tools/image_sampling_test.mjs", "tools/pixels/compositor_test.mjs",
+      "tools/pixels/ink_compositor_test.mjs", "tools/pixels/canvas_test.mjs", "tools/pixels/native_text_test.mjs",
+      "tools/pixels/hairline_test.mjs", "tools/pixels/pattern_cache_test.mjs", "tools/pixels/pattern_region_test.mjs",
+      "tools/pixels/dirty_region_test.mjs", "tools/pixels/test_shading.mjs", "tools/pixels/scene_region_test.mjs",
+      "tools/pixels/surface_reuse_test.mjs", "tools/pixels/shading_region_test.mjs",
+    ] {
+    @shell.Cmd("node", [script]).run()
+  }
+  for
+    script in [
+      "tools/pixels/shading_acceptance.mjs", "tools/pixels/shading_icc_acceptance.mjs",
+      "tools/pixels/shading_pattern_acceptance.mjs", "tools/pixels/icc_alternate_acceptance.mjs",
+    ] {
+    @shell.Cmd("node", [script, "_build/pixel-plan.mjs"]).run()
+  }
+  @shell.Cmd("node", [
+    "tools/pixels/group_colour_test.mjs", "_build/pixel-plan.mjs", "--ghostscript",
+  ]).run()
+  @shell.Cmd("node", [
+    "tools/pixels/shading_icc_acceptance.mjs", "_build/pixel-plan.mjs", "--cal-gray",
+  ]).run()
+  @shell.Cmd("env", [
+    "PDF_NATIVE_PLAN=_build/native/release/build/cmd/main/main.exe", "node", "tools/pixels/shading_calrgb_acceptance.mjs",
+    "_build/pixel-plan.mjs",
+  ]).run()
+  println(
+    "A2 source checks and authored pixel assertions passed. See docs/a2-acceptance.md for real corpus measurements and target limits.",
+  )
+}

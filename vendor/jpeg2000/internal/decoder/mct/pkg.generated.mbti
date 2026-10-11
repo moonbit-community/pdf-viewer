@@ -1,0 +1,21 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/mct"
+
+// Values
+pub fn tier1_annex_g_inverse_ict_components(Array[Int], Array[Int], Array[Int]) -> Result[(Array[Int], Array[Int], Array[Int]), String]
+
+pub fn tier1_annex_g_inverse_ict_components_float(Array[Double], Array[Double], Array[Double]) -> Result[(Array[Double], Array[Double], Array[Double]), String]
+
+pub fn tier1_annex_g_inverse_ict_triplet(Int, Int, Int) -> (Int, Int, Int)
+
+pub fn tier1_annex_g_inverse_rct_components(Array[Int], Array[Int], Array[Int]) -> Result[(Array[Int], Array[Int], Array[Int]), String]
+
+pub fn tier1_annex_g_inverse_rct_triplet(Int, Int, Int) -> (Int, Int, Int)
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

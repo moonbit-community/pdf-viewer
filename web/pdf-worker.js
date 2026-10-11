@@ -1,4 +1,5 @@
 import * as bridge from "./_generated/pdf.js";
+import { initializePdfGraphics } from "./pdf-runtime.mjs";
 
 const renders = new Map();
 const budget = 24 * 1024 * 1024;
@@ -38,7 +39,7 @@ function render(method, args) {
   return result;
 }
 
-self.addEventListener("message", event => {
+function handleMessage(event) {
   const { id, method, args } = event.data;
   try {
     if (!Object.hasOwn(bridge, method) || typeof bridge[method] !== "function") {
@@ -59,5 +60,20 @@ self.addEventListener("message", event => {
   } catch (error) {
     self.postMessage({ id, error: { message: error.message || String(error), code: error.code } });
   }
+}
+
+async function start() {
+  // These adapters install synchronous hooks consumed while the bridge parses
+  // images and colours. Never accept PDF work before both attempts finish.
+  const graphics = await initializePdfGraphics();
+  self.addEventListener("message", handleMessage);
+  self.postMessage({ type: "ready", graphics: {
+    icc: Boolean(graphics.icc), jbig2: Boolean(graphics.jbig2),
+    diagnostics: graphics.diagnostics,
+  } });
+}
+start().catch(error => {
+  self.postMessage({ type: "startup-error", error: {
+    message: error.message || String(error), code: error.code || "worker-error",
+  } });
 });
-self.postMessage({ type: "ready" });

@@ -1,0 +1,3467 @@
+{
+  "status": "colour stages and original flat-residual localization verified; whole-page pixel match is not claimed",
+  "system_lcms_version": 2160,
+  "ghostscript_version": "10.05.1",
+  "viewer_policy": "ordinary additive-display whole alternate, CMYK process overprint, actual PDF/X OutputIntent target",
+  "ghostscript_policy": {
+    "device": "tiff32nc",
+    "resolution": 72,
+    "input_device_cmyk_profile": "exact embedded output profile",
+    "output_profile": "same embedded output profile",
+    "render_intent": 1,
+    "black_point_compensation": 0,
+    "black_preservation": 0,
+    "device_gray_to_k": true,
+    "overprint": "enable",
+    "rgb_postconversion": "system LCMS same-profile CMYK DOUBLE to sRGB DOUBLE, RI=1 flags=0; no paper simulation",
+    "text_alpha_bits": 4,
+    "graphics_alpha_bits": 4
+  },
+  "stages": {
+    "pdf_sha256": "06b980fa09cd45f35a1fc9a2b907911201e91c0fcc2ee5a67820f6bb7818e630",
+    "plan_sha256": "86ab380791462a3e6ea4e7f9c18078db9a0fcb90bef6959d4f121a85a7a8132a",
+    "output_profile_sha256": "b58db54cc4df6ea2d4b8f9452cab4e881e8cc8e9f27b6c6bc026d7c400bbc571",
+    "system_lcms_version": 2160,
+    "source_intent": 1,
+    "output_intent": 1,
+    "flags": 0,
+    "black_point_compensation": false,
+    "paper_simulation": false,
+    "patches": [
+      {
+        "name": "ICC Gray",
+        "point": [
+          55,
+          993
+        ],
+        "source": {
+          "space": "ICCBased",
+          "components": [
+            0.8
+          ],
+          "colorants": [],
+          "paints": true,
+          "all": false,
+          "rendering_intent": "/RelativeColorimetric",
+          "icc_profile_id": "icc-3",
+          "component_ranges": [
+            0,
+            1
+          ]
+        },
+        "paint_index": 2099,
+        "source_profile_sha256": "160dbe13076914044222f038fcf13bb86f3bb66592cd43156c153448669b2103",
+        "independent_cmyk": [
+          0.32533761858940125,
+          0.2551155984401703,
+          0.24155031144618988,
+          0.07640191912651062
+        ],
+        "ghostscript_cmyk8": [
+          83,
+          65,
+          62,
+          20
+        ],
+        "cmyk8_max_error": 0.5175106227397919,
+        "independent_rgb8": [
+          175,
+          175,
+          175
+        ],
+        "actual_rgb8": [
+          175,
+          175,
+          175
+        ],
+        "visible_max_error": 0
+      },
+      {
+        "name": "ICC RGB",
+        "point": [
+          55,
+          1037
+        ],
+        "source": {
+          "space": "ICCBased",
+          "components": [
+            0.85,
+            0.85,
+            0.5
+          ],
+          "colorants": [],
+          "paints": true,
+          "all": false,
+          "rendering_intent": "/RelativeColorimetric",
+          "icc_profile_id": "icc-4",
+          "component_ranges": [
+            0,
+            1,
+            0,
+            1,
+            0,
+            1
+          ]
+        },
+        "paint_index": 2105,
+        "source_profile_sha256": "0fc06b7c2491277e26c64dbb95cc71fb72a57add33aa941544e2097b2a131c03",
+        "independent_cmyk": [
+          0.15005722641944885,
+          0.07379262894392014,
+          0.5513694882392883,
+          0.0
+        ],
+        "ghostscript_cmyk8": [
+          38,
+          19,
+          141,
+          0
+        ],
+        "cmyk8_max_error": 0.40078049898147583,
+        "independent_rgb8": [
+          228,
+          222,
+          140
+        ],
+        "actual_rgb8": [
+          228,
+          222,
+          140
+        ],
+        "visible_max_error": 0
+      },
+      {
+        "name": "Lab",
+        "point": [
+          55,
+          1080
+        ],
+        "source": {
+          "space": "Lab",
+          "components": [
+            85.098,
+            20,
+            21
+          ],
+          "colorants": [],
+          "paints": true,
+          "all": false,
+          "rendering_intent": "/RelativeColorimetric",
+          "whitepoint_xyy": [
+            0.34570167544485514,
+            0.3585373111852885,
+            1
+          ],
+          "component_ranges": [
+            0,
+            100,
+            -128,
+            127,
+            -128,
+            127
+          ]
+        },
+        "paint_index": 2111,
+        "independent_cmyk": [
+          0.0,
+          0.31163501739501953,
+          0.3191424310207367,
+          0.0
+        ],
+        "ghostscript_cmyk8": [
+          1,
+          79,
+          81,
+          0
+        ],
+        "cmyk8_max_error": 1.0,
+        "independent_rgb8": [
+          249,
+          195,
+          173
+        ],
+        "actual_rgb8": [
+          249,
+          195,
+          173
+        ],
+        "visible_max_error": 0
+      },
+      {
+        "name": "ICC CMYK",
+        "point": [
+          55,
+          1120
+        ],
+        "source": {
+          "space": "ICCBased",
+          "components": [
+            0,
+            0.2,
+            0.4,
+            0
+          ],
+          "colorants": [],
+          "paints": true,
+          "all": false,
+          "rendering_intent": "/RelativeColorimetric",
+          "icc_profile_id": "icc-5",
+          "component_ranges": [
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1
+          ]
+        },
+        "paint_index": 2117,
+        "source_profile_sha256": "ecf970b9dca37d4c79a71a4da7e69edf0161ef3a4d7d5e84ea69ca3067e64d4f",
+        "independent_cmyk": [
+          0.020004577934741974,
+          0.21133744716644287,
+          0.43361562490463257,
+          0.00021362630650401115
+        ],
+        "ghostscript_cmyk8": [
+          5,
+          54,
+          111,
+          0
+        ],
+        "cmyk8_max_error": 0.4280156493187093,
+        "independent_rgb8": [
+          249,
+          210,
+          159
+        ],
+        "actual_rgb8": [
+          249,
+          210,
+          159
+        ],
+        "visible_max_error": 0
+      },
+      {
+        "name": "CalRGB",
+        "point": [
+          182,
+          1037
+        ],
+        "source": {
+          "space": "CalRGB",
+          "components": [
+            0.85,
+            0.85,
+            0.5
+          ],
+          "colorants": [],
+          "paints": true,
+          "all": false,
+          "rendering_intent": "/RelativeColorimetric",
+          "pcs_xyz": [
+            0.6571373078381784,
+            0.7106671848946623,
+            0.267890807643795
+          ]
+        },
+        "paint_index": 2975,
+        "original_calibration": {
+          "/Matrix": [
+            0.6503,
+            0.3203,
+            0,
+            0.17799,
+            0.6021,
+            0.06779,
+            0.13589,
+            0.0777,
+            0.7571
+          ],
+          "/Gamma": [
+            1.80077,
+            1.80077,
+            1.80077
+          ],
+          "/WhitePoint": [
+            0.9642,
+            1,
+            0.82491
+          ]
+        },
+        "analytical_pcs": [
+          0.6571373316496947,
+          0.7106671488839952,
+          0.2678908484978695
+        ],
+        "independent_cmyk": [
+          0.15013352036476135,
+          0.07362478226423264,
+          0.5514610409736633,
+          0.0
+        ],
+        "ghostscript_cmyk8": [
+          38,
+          19,
+          140,
+          0
+        ],
+        "cmyk8_max_error": 0.6225654482841492,
+        "independent_rgb8": [
+          228,
+          222,
+          140
+        ],
+        "actual_rgb8": [
+          228,
+          222,
+          140
+        ],
+        "visible_max_error": 0
+      }
+    ],
+    "process_overprint_probes": [
+      {
+        "point": [
+          57,
+          620
+        ],
+        "paint_indices": [
+          2043,
+          2045
+        ],
+        "backdrop": [
+          0,
+          0,
+          0,
+          0.498
+        ],
+        "foreground": {
+          "space": "DeviceCMYK",
+          "components": [
+            0.302,
+            0,
+            0,
+            0
+          ],
+          "colorants": [
+            "Cyan",
+            "Magenta",
+            "Yellow",
+            "Black"
+          ],
+          "paints": true,
+          "all": false,
+          "process_cmyk": [
+            0.302,
+            0,
+            0,
+            0
+          ],
+          "rendering_intent": "/RelativeColorimetric"
+        },
+        "overprint": true,
+        "overprint_mode": 1,
+        "expected_ink": [
+          0.302,
+          0,
+          0,
+          0.498
+        ],
+        "independent_rgb8": [
+          119,
+          145,
+          156
+        ],
+        "actual_rgb8": [
+          119,
+          145,
+          156
+        ],
+        "visible_max_error": 0
+      },
+      {
+        "point": [
+          57,
+          705
+        ],
+        "paint_indices": [
+          2055,
+          2057
+        ],
+        "backdrop": [
+          0,
+          0,
+          0,
+          0.498
+        ],
+        "foreground": {
+          "space": "DeviceCMYK",
+          "components": [
+            0.302,
+            0,
+            0.498,
+            0
+          ],
+          "colorants": [
+            "Cyan",
+            "Magenta",
+            "Yellow",
+            "Black"
+          ],
+          "paints": true,
+          "all": false,
+          "process_cmyk": [
+            0.302,
+            0,
+            0.498,
+            0
+          ],
+          "rendering_intent": "/RelativeColorimetric"
+        },
+        "overprint": true,
+        "overprint_mode": 1,
+        "expected_ink": [
+          0.302,
+          0,
+          0.498,
+          0.498
+        ],
+        "independent_rgb8": [
+          122,
+          140,
+          102
+        ],
+        "actual_rgb8": [
+          122,
+          140,
+          102
+        ],
+        "visible_max_error": 0
+      },
+      {
+        "point": [
+          57,
+          748
+        ],
+        "paint_indices": [
+          2061,
+          2063
+        ],
+        "backdrop": [
+          0,
+          0,
+          0,
+          0.498
+        ],
+        "foreground": {
+          "space": "DeviceCMYK",
+          "components": [
+            0.302,
+            0.012,
+            0.498,
+            0.012
+          ],
+          "colorants": [
+            "Cyan",
+            "Magenta",
+            "Yellow",
+            "Black"
+          ],
+          "paints": true,
+          "all": false,
+          "process_cmyk": [
+            0.302,
+            0.012,
+            0.498,
+            0.012
+          ],
+          "rendering_intent": "/RelativeColorimetric"
+        },
+        "overprint": true,
+        "overprint_mode": 1,
+        "expected_ink": [
+          0.302,
+          0.012,
+          0.498,
+          0.012
+        ],
+        "independent_rgb8": [
+          194,
+          217,
+          153
+        ],
+        "actual_rgb8": [
+          194,
+          217,
+          153
+        ],
+        "visible_max_error": 0
+      },
+      {
+        "point": [
+          57,
+          150
+        ],
+        "paint_indices": [
+          1977,
+          1979
+        ],
+        "backdrop": [
+          0,
+          0,
+          0,
+          0.498
+        ],
+        "foreground": {
+          "space": "DeviceGray",
+          "components": [
+            0.702
+          ],
+          "colorants": [
+            "Gray"
+          ],
+          "paints": true,
+          "all": false,
+          "rendering_intent": "/RelativeColorimetric"
+        },
+        "overprint": true,
+        "overprint_mode": 1,
+        "expected_ink": [
+          0,
+          0,
+          0,
+          0.29800000000000004
+        ],
+        "independent_rgb8": [
+          198,
+          200,
+          201
+        ],
+        "actual_rgb8": [
+          198,
+          200,
+          201
+        ],
+        "visible_max_error": 0
+      },
+      {
+        "point": [
+          57,
+          320
+        ],
+        "paint_indices": [
+          2001,
+          2003
+        ],
+        "backdrop": [
+          0,
+          0,
+          0,
+          0.498
+        ],
+        "foreground": {
+          "space": "DeviceCMYK",
+          "components": [
+            0,
+            0,
+            0,
+            0.302
+          ],
+          "colorants": [
+            "Cyan",
+            "Magenta",
+            "Yellow",
+            "Black"
+          ],
+          "paints": true,
+          "all": false,
+          "process_cmyk": [
+            0,
+            0,
+            0,
+            0.302
+          ],
+          "rendering_intent": "/RelativeColorimetric"
+        },
+        "overprint": true,
+        "overprint_mode": 1,
+        "expected_ink": [
+          0,
+          0,
+          0,
+          0.302
+        ],
+        "independent_rgb8": [
+          197,
+          199,
+          200
+        ],
+        "actual_rgb8": [
+          197,
+          199,
+          200
+        ],
+        "visible_max_error": 0
+      },
+      {
+        "point": [
+          57,
+          447
+        ],
+        "paint_indices": [
+          2019,
+          2021
+        ],
+        "backdrop": [
+          0,
+          0,
+          0,
+          0.498
+        ],
+        "foreground": {
+          "space": "DeviceGray",
+          "components": [
+            1
+          ],
+          "colorants": [
+            "Gray"
+          ],
+          "paints": true,
+          "all": false,
+          "rendering_intent": "/RelativeColorimetric"
+        },
+        "overprint": true,
+        "overprint_mode": 1,
+        "expected_ink": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "independent_rgb8": [
+          255,
+          255,
+          255
+        ],
+        "actual_rgb8": [
+          255,
+          255,
+          255
+        ],
+        "visible_max_error": 0
+      }
+    ],
+    "all_visible_within_one_byte": true
+  },
+  "original_page_comparisons": {
+    "Poppler normal PDFX output policy": {
+      "actual": "altona_technical_1v2_x3.canvas.png",
+      "reference": "altona.no-overprint.png",
+      "wholePage": {
+        "box": [
+          0,
+          0,
+          844,
+          1190
+        ],
+        "all": {
+          "pixels": 1004360,
+          "above8": 443871,
+          "maximum": 255,
+          "meanAbsoluteError": 18.57692095795664
+        },
+        "flatReference": {
+          "pixels": 353592,
+          "above8": 46421,
+          "maximum": 151,
+          "meanAbsoluteError": 3.3892942525094836
+        }
+      },
+      "rows": {
+        "A": {
+          "source": "DeviceGray .7",
+          "box": [
+            43,
+            128,
+            834,
+            168
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 21658,
+            "maximum": 255,
+            "meanAbsoluteError": 26.90651074589128
+          },
+          "flatReference": {
+            "pixels": 7176,
+            "above8": 4003,
+            "maximum": 45,
+            "meanAbsoluteError": 13.658584169453734
+          }
+        },
+        "B": {
+          "source": "DeviceGray 0",
+          "box": [
+            43,
+            171,
+            834,
+            211
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 22348,
+            "maximum": 255,
+            "meanAbsoluteError": 38.683881163084706
+          },
+          "flatReference": {
+            "pixels": 7446,
+            "above8": 3886,
+            "maximum": 62,
+            "meanAbsoluteError": 22.630047452771063
+          }
+        },
+        "C": {
+          "source": "Separation Black .3",
+          "box": [
+            43,
+            213,
+            834,
+            253
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 14864,
+            "maximum": 232,
+            "meanAbsoluteError": 20.9350400337126
+          },
+          "flatReference": {
+            "pixels": 6936,
+            "above8": 790,
+            "maximum": 33,
+            "meanAbsoluteError": 3.638744713571703
+          }
+        },
+        "D": {
+          "source": "Separation Black 1",
+          "box": [
+            43,
+            256,
+            834,
+            296
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 20903,
+            "maximum": 232,
+            "meanAbsoluteError": 28.42569532237674
+          },
+          "flatReference": {
+            "pixels": 7338,
+            "above8": 3906,
+            "maximum": 39,
+            "meanAbsoluteError": 11.464068320159898
+          }
+        },
+        "E": {
+          "source": "DeviceCMYK K .3",
+          "box": [
+            43,
+            299,
+            834,
+            339
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 15775,
+            "maximum": 232,
+            "meanAbsoluteError": 22.48351243152128
+          },
+          "flatReference": {
+            "pixels": 7178,
+            "above8": 1562,
+            "maximum": 111,
+            "meanAbsoluteError": 8.770084517507199
+          }
+        },
+        "F": {
+          "source": "DeviceCMYK K 1",
+          "box": [
+            43,
+            342,
+            834,
+            382
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 21935,
+            "maximum": 232,
+            "meanAbsoluteError": 29.531637168141593
+          },
+          "flatReference": {
+            "pixels": 7452,
+            "above8": 3889,
+            "maximum": 40,
+            "meanAbsoluteError": 11.018160672750044
+          }
+        },
+        "G": {
+          "source": "Separation All .05",
+          "box": [
+            43,
+            384,
+            834,
+            424
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 14829,
+            "maximum": 255,
+            "meanAbsoluteError": 22.535335018963337
+          },
+          "flatReference": {
+            "pixels": 7468,
+            "above8": 790,
+            "maximum": 34,
+            "meanAbsoluteError": 3.997902160328513
+          }
+        },
+        "H": {
+          "source": "DeviceGray 1",
+          "box": [
+            43,
+            427,
+            834,
+            467
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 10320,
+            "maximum": 210,
+            "meanAbsoluteError": 12.001148335440371
+          },
+          "flatReference": {
+            "pixels": 14186,
+            "above8": 374,
+            "maximum": 33,
+            "meanAbsoluteError": 0.9330325673198928
+          }
+        },
+        "I": {
+          "source": "Separation Black 0",
+          "box": [
+            43,
+            470,
+            834,
+            510
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 9816,
+            "maximum": 210,
+            "meanAbsoluteError": 11.666824694479562
+          },
+          "flatReference": {
+            "pixels": 14153,
+            "above8": 404,
+            "maximum": 33,
+            "meanAbsoluteError": 1.020113521279352
+          }
+        },
+        "J": {
+          "source": "DeviceCMYK 0000",
+          "box": [
+            43,
+            513,
+            834,
+            553
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 12397,
+            "maximum": 210,
+            "meanAbsoluteError": 16.706921618204802
+          },
+          "flatReference": {
+            "pixels": 14486,
+            "above8": 1323,
+            "maximum": 151,
+            "meanAbsoluteError": 5.38671821068618
+          }
+        },
+        "K": {
+          "source": "Separation All 0",
+          "box": [
+            43,
+            555,
+            834,
+            595
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 10339,
+            "maximum": 210,
+            "meanAbsoluteError": 12.751548672566372
+          },
+          "flatReference": {
+            "pixels": 13483,
+            "above8": 408,
+            "maximum": 33,
+            "meanAbsoluteError": 1.0829439541150585
+          }
+        },
+        "L": {
+          "source": "DeviceCMYK C .3",
+          "box": [
+            43,
+            598,
+            834,
+            638
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 13669,
+            "maximum": 255,
+            "meanAbsoluteError": 19.375674252001687
+          },
+          "flatReference": {
+            "pixels": 7374,
+            "above8": 1263,
+            "maximum": 139,
+            "meanAbsoluteError": 9.003706717295
+          }
+        },
+        "M": {
+          "source": "Separation Cyan .3",
+          "box": [
+            43,
+            641,
+            834,
+            681
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 13338,
+            "maximum": 255,
+            "meanAbsoluteError": 16.54760851243152
+          },
+          "flatReference": {
+            "pixels": 7070,
+            "above8": 402,
+            "maximum": 33,
+            "meanAbsoluteError": 2.382838283828383
+          }
+        },
+        "N": {
+          "source": "DeviceCMYK C .3 Y .5",
+          "box": [
+            43,
+            684,
+            834,
+            724
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 16941,
+            "maximum": 255,
+            "meanAbsoluteError": 20.869753476611884
+          },
+          "flatReference": {
+            "pixels": 7462,
+            "above8": 1602,
+            "maximum": 80,
+            "meanAbsoluteError": 6.2748146162780305
+          }
+        },
+        "O": {
+          "source": "DeviceCMYK CMYK .3 .01 .5 .01",
+          "box": [
+            43,
+            726,
+            834,
+            766
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 15546,
+            "maximum": 255,
+            "meanAbsoluteError": 19.443520859671303
+          },
+          "flatReference": {
+            "pixels": 6902,
+            "above8": 804,
+            "maximum": 33,
+            "meanAbsoluteError": 3.280450111078914
+          }
+        },
+        "P": {
+          "source": "DeviceN Cyan Yellow",
+          "box": [
+            43,
+            769,
+            834,
+            809
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 15384,
+            "maximum": 255,
+            "meanAbsoluteError": 19.059060261272652
+          },
+          "flatReference": {
+            "pixels": 7195,
+            "above8": 779,
+            "maximum": 33,
+            "meanAbsoluteError": 2.646606439657169
+          }
+        },
+        "Q": {
+          "source": "Separation MyRed",
+          "box": [
+            43,
+            812,
+            834,
+            852
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 14087,
+            "maximum": 255,
+            "meanAbsoluteError": 17.246871049304676
+          },
+          "flatReference": {
+            "pixels": 7090,
+            "above8": 802,
+            "maximum": 33,
+            "meanAbsoluteError": 3.2937000470145743
+          }
+        },
+        "R": {
+          "source": "DeviceN MyRed None None None None",
+          "box": [
+            43,
+            855,
+            834,
+            895
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 14796,
+            "maximum": 255,
+            "meanAbsoluteError": 17.875611040876528
+          },
+          "flatReference": {
+            "pixels": 7465,
+            "above8": 808,
+            "maximum": 33,
+            "meanAbsoluteError": 2.7454789015405225
+          }
+        },
+        "S": {
+          "source": "DeviceN Cyan MyRed",
+          "box": [
+            43,
+            897,
+            834,
+            937
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 14922,
+            "maximum": 226,
+            "meanAbsoluteError": 20.511462284028656
+          },
+          "flatReference": {
+            "pixels": 6921,
+            "above8": 792,
+            "maximum": 33,
+            "meanAbsoluteError": 3.702258825795887
+          }
+        },
+        "T": {
+          "source": "DeviceN MyRed MyBlue",
+          "box": [
+            43,
+            940,
+            834,
+            980
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 14993,
+            "maximum": 226,
+            "meanAbsoluteError": 19.897513695743783
+          },
+          "flatReference": {
+            "pixels": 7201,
+            "above8": 774,
+            "maximum": 33,
+            "meanAbsoluteError": 3.470906818497431
+          }
+        },
+        "U": {
+          "source": "ICCBased Gray",
+          "box": [
+            43,
+            983,
+            834,
+            1023
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 21389,
+            "maximum": 252,
+            "meanAbsoluteError": 23.49519595448799
+          },
+          "flatReference": {
+            "pixels": 7070,
+            "above8": 3921,
+            "maximum": 33,
+            "meanAbsoluteError": 8.615228665723714
+          }
+        },
+        "V": {
+          "source": "ICCBased RGB",
+          "box": [
+            43,
+            1026,
+            834,
+            1066
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 17039,
+            "maximum": 255,
+            "meanAbsoluteError": 23.00670037926675
+          },
+          "flatReference": {
+            "pixels": 7132,
+            "above8": 1196,
+            "maximum": 122,
+            "meanAbsoluteError": 4.982192933258553
+          }
+        },
+        "W": {
+          "source": "Lab D50",
+          "box": [
+            43,
+            1068,
+            834,
+            1108
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 23644,
+            "maximum": 255,
+            "meanAbsoluteError": 18.25819637589549
+          },
+          "flatReference": {
+            "pixels": 9234,
+            "above8": 6532,
+            "maximum": 48,
+            "meanAbsoluteError": 8.82337015377951
+          }
+        },
+        "X": {
+          "source": "ICCBased CMYK",
+          "box": [
+            43,
+            1111,
+            834,
+            1151
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 22543,
+            "maximum": 242,
+            "meanAbsoluteError": 18.82730720606827
+          },
+          "flatReference": {
+            "pixels": 7513,
+            "above8": 3933,
+            "maximum": 33,
+            "meanAbsoluteError": 6.996583699365544
+          }
+        }
+      }
+    },
+    "Poppler overprint PDFX output policy": {
+      "actual": "altona_technical_1v2_x3.canvas.png",
+      "reference": "altona.proof-early.png",
+      "wholePage": {
+        "box": [
+          0,
+          0,
+          844,
+          1190
+        ],
+        "all": {
+          "pixels": 1004360,
+          "above8": 632594,
+          "maximum": 255,
+          "meanAbsoluteError": 26.312942902279396
+        },
+        "flatReference": {
+          "pixels": 323052,
+          "above8": 83802,
+          "maximum": 236,
+          "meanAbsoluteError": 5.8003303905666375
+        }
+      },
+      "rows": {
+        "A": {
+          "source": "DeviceGray .7",
+          "box": [
+            43,
+            128,
+            834,
+            168
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 24693,
+            "maximum": 248,
+            "meanAbsoluteError": 30.177054361567635
+          },
+          "flatReference": {
+            "pixels": 6215,
+            "above8": 3617,
+            "maximum": 42,
+            "meanAbsoluteError": 7.745347278090641
+          }
+        },
+        "B": {
+          "source": "DeviceGray 0",
+          "box": [
+            43,
+            171,
+            834,
+            211
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 24978,
+            "maximum": 248,
+            "meanAbsoluteError": 31.522840286557102
+          },
+          "flatReference": {
+            "pixels": 6536,
+            "above8": 3558,
+            "maximum": 42,
+            "meanAbsoluteError": 7.381782945736434
+          }
+        },
+        "C": {
+          "source": "Separation Black .3",
+          "box": [
+            43,
+            213,
+            834,
+            253
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 25766,
+            "maximum": 248,
+            "meanAbsoluteError": 35.1005583649389
+          },
+          "flatReference": {
+            "pixels": 5624,
+            "above8": 3302,
+            "maximum": 178,
+            "meanAbsoluteError": 11.365813181602656
+          }
+        },
+        "D": {
+          "source": "Separation Black 1",
+          "box": [
+            43,
+            256,
+            834,
+            296
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 25719,
+            "maximum": 248,
+            "meanAbsoluteError": 32.374241466498106
+          },
+          "flatReference": {
+            "pixels": 5909,
+            "above8": 3225,
+            "maximum": 178,
+            "meanAbsoluteError": 8.738195972245727
+          }
+        },
+        "E": {
+          "source": "DeviceCMYK K .3",
+          "box": [
+            43,
+            299,
+            834,
+            339
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 24947,
+            "maximum": 248,
+            "meanAbsoluteError": 29.753350189633377
+          },
+          "flatReference": {
+            "pixels": 6198,
+            "above8": 3619,
+            "maximum": 178,
+            "meanAbsoluteError": 9.277347531461762
+          }
+        },
+        "F": {
+          "source": "DeviceCMYK K 1",
+          "box": [
+            43,
+            342,
+            834,
+            382
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 25225,
+            "maximum": 248,
+            "meanAbsoluteError": 32.08906447534766
+          },
+          "flatReference": {
+            "pixels": 6524,
+            "above8": 3567,
+            "maximum": 178,
+            "meanAbsoluteError": 7.802115266707541
+          }
+        },
+        "G": {
+          "source": "Separation All .05",
+          "box": [
+            43,
+            384,
+            834,
+            424
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 23038,
+            "maximum": 255,
+            "meanAbsoluteError": 40.1177201854193
+          },
+          "flatReference": {
+            "pixels": 6371,
+            "above8": 2243,
+            "maximum": 178,
+            "meanAbsoluteError": 15.471877779521792
+          }
+        },
+        "H": {
+          "source": "DeviceGray 1",
+          "box": [
+            43,
+            427,
+            834,
+            467
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 16853,
+            "maximum": 202,
+            "meanAbsoluteError": 24.3570796460177
+          },
+          "flatReference": {
+            "pixels": 11591,
+            "above8": 913,
+            "maximum": 42,
+            "meanAbsoluteError": 1.449285365082104
+          }
+        },
+        "I": {
+          "source": "Separation Black 0",
+          "box": [
+            43,
+            470,
+            834,
+            510
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 18700,
+            "maximum": 202,
+            "meanAbsoluteError": 28.973693636746734
+          },
+          "flatReference": {
+            "pixels": 11757,
+            "above8": 2872,
+            "maximum": 178,
+            "meanAbsoluteError": 9.818774630716453
+          }
+        },
+        "J": {
+          "source": "DeviceCMYK 0000",
+          "box": [
+            43,
+            513,
+            834,
+            553
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 18792,
+            "maximum": 202,
+            "meanAbsoluteError": 26.61271597134429
+          },
+          "flatReference": {
+            "pixels": 11532,
+            "above8": 2247,
+            "maximum": 178,
+            "meanAbsoluteError": 7.764134582032605
+          }
+        },
+        "K": {
+          "source": "Separation All 0",
+          "box": [
+            43,
+            555,
+            834,
+            595
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 20635,
+            "maximum": 202,
+            "meanAbsoluteError": 35.11101980615255
+          },
+          "flatReference": {
+            "pixels": 12056,
+            "above8": 4763,
+            "maximum": 178,
+            "meanAbsoluteError": 21.723540145985403
+          }
+        },
+        "L": {
+          "source": "DeviceCMYK C .3",
+          "box": [
+            43,
+            598,
+            834,
+            638
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 24838,
+            "maximum": 255,
+            "meanAbsoluteError": 27.089780868099453
+          },
+          "flatReference": {
+            "pixels": 6324,
+            "above8": 3461,
+            "maximum": 142,
+            "meanAbsoluteError": 8.720482816782628
+          }
+        },
+        "M": {
+          "source": "Separation Cyan .3",
+          "box": [
+            43,
+            641,
+            834,
+            681
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 24935,
+            "maximum": 255,
+            "meanAbsoluteError": 34.06371681415929
+          },
+          "flatReference": {
+            "pixels": 5786,
+            "above8": 3283,
+            "maximum": 178,
+            "meanAbsoluteError": 13.2949648577025
+          }
+        },
+        "N": {
+          "source": "DeviceCMYK C .3 Y .5",
+          "box": [
+            43,
+            684,
+            834,
+            724
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 25277,
+            "maximum": 255,
+            "meanAbsoluteError": 29.363853771597135
+          },
+          "flatReference": {
+            "pixels": 6544,
+            "above8": 3568,
+            "maximum": 84,
+            "meanAbsoluteError": 9.09759576202119
+          }
+        },
+        "O": {
+          "source": "DeviceCMYK CMYK .3 .01 .5 .01",
+          "box": [
+            43,
+            726,
+            834,
+            766
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 25713,
+            "maximum": 255,
+            "meanAbsoluteError": 30.66472819216182
+          },
+          "flatReference": {
+            "pixels": 5939,
+            "above8": 3596,
+            "maximum": 42,
+            "meanAbsoluteError": 8.606780041533368
+          }
+        },
+        "P": {
+          "source": "DeviceN Cyan Yellow",
+          "box": [
+            43,
+            769,
+            834,
+            809
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 26047,
+            "maximum": 255,
+            "meanAbsoluteError": 34.227686472819215
+          },
+          "flatReference": {
+            "pixels": 5896,
+            "above8": 3280,
+            "maximum": 127,
+            "meanAbsoluteError": 12.638568521031207
+          }
+        },
+        "Q": {
+          "source": "Separation MyRed",
+          "box": [
+            43,
+            812,
+            834,
+            852
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 25052,
+            "maximum": 241,
+            "meanAbsoluteError": 31.275990307627477
+          },
+          "flatReference": {
+            "pixels": 5847,
+            "above8": 3317,
+            "maximum": 178,
+            "meanAbsoluteError": 15.44341827717918
+          }
+        },
+        "R": {
+          "source": "DeviceN MyRed None None None None",
+          "box": [
+            43,
+            855,
+            834,
+            895
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 25321,
+            "maximum": 255,
+            "meanAbsoluteError": 36.17509481668774
+          },
+          "flatReference": {
+            "pixels": 6250,
+            "above8": 3337,
+            "maximum": 236,
+            "meanAbsoluteError": 18.91776
+          }
+        },
+        "S": {
+          "source": "DeviceN Cyan MyRed",
+          "box": [
+            43,
+            897,
+            834,
+            937
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 24613,
+            "maximum": 228,
+            "meanAbsoluteError": 32.877728613569325
+          },
+          "flatReference": {
+            "pixels": 5746,
+            "above8": 3168,
+            "maximum": 178,
+            "meanAbsoluteError": 15.237092470124145
+          }
+        },
+        "T": {
+          "source": "DeviceN MyRed MyBlue",
+          "box": [
+            43,
+            940,
+            834,
+            980
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 24438,
+            "maximum": 234,
+            "meanAbsoluteError": 29.417846607669617
+          },
+          "flatReference": {
+            "pixels": 7278,
+            "above8": 4145,
+            "maximum": 178,
+            "meanAbsoluteError": 14.544975725932032
+          }
+        },
+        "U": {
+          "source": "ICCBased Gray",
+          "box": [
+            43,
+            983,
+            834,
+            1023
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 24668,
+            "maximum": 254,
+            "meanAbsoluteError": 31.1312789717657
+          },
+          "flatReference": {
+            "pixels": 6117,
+            "above8": 3542,
+            "maximum": 42,
+            "meanAbsoluteError": 8.743556209470874
+          }
+        },
+        "V": {
+          "source": "ICCBased RGB",
+          "box": [
+            43,
+            1026,
+            834,
+            1066
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 26067,
+            "maximum": 254,
+            "meanAbsoluteError": 28.44053940160135
+          },
+          "flatReference": {
+            "pixels": 6318,
+            "above8": 3568,
+            "maximum": 46,
+            "meanAbsoluteError": 7.3584995251661915
+          }
+        },
+        "W": {
+          "source": "Lab D50",
+          "box": [
+            43,
+            1068,
+            834,
+            1108
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 26511,
+            "maximum": 254,
+            "meanAbsoluteError": 28.58894858828487
+          },
+          "flatReference": {
+            "pixels": 7392,
+            "above8": 5288,
+            "maximum": 45,
+            "meanAbsoluteError": 9.327245670995671
+          }
+        },
+        "X": {
+          "source": "ICCBased CMYK",
+          "box": [
+            43,
+            1111,
+            834,
+            1151
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 25762,
+            "maximum": 243,
+            "meanAbsoluteError": 28.57609565950274
+          },
+          "flatReference": {
+            "pixels": 6587,
+            "above8": 3572,
+            "maximum": 42,
+            "meanAbsoluteError": 7.232376904002834
+          }
+        }
+      }
+    },
+    "Ghostscript matched process output AA1": {
+      "actual": "altona_technical_1v2_x3.canvas.png",
+      "reference": "altona.gs-matched-enable.png",
+      "wholePage": {
+        "box": [
+          0,
+          0,
+          844,
+          1190
+        ],
+        "all": {
+          "pixels": 1004360,
+          "above8": 279247,
+          "maximum": 255,
+          "meanAbsoluteError": 12.536167642412416
+        },
+        "flatReference": {
+          "pixels": 422344,
+          "above8": 35795,
+          "maximum": 255,
+          "meanAbsoluteError": 3.484106163064548
+        }
+      },
+      "rows": {
+        "A": {
+          "source": "DeviceGray .7",
+          "box": [
+            43,
+            128,
+            834,
+            168
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8808,
+            "maximum": 212,
+            "meanAbsoluteError": 10.433449220396122
+          },
+          "flatReference": {
+            "pixels": 10135,
+            "above8": 1251,
+            "maximum": 96,
+            "meanAbsoluteError": 3.1510606808090773
+          }
+        },
+        "B": {
+          "source": "DeviceGray 0",
+          "box": [
+            43,
+            171,
+            834,
+            211
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 9365,
+            "maximum": 212,
+            "meanAbsoluteError": 15.243647281921618
+          },
+          "flatReference": {
+            "pixels": 10623,
+            "above8": 1683,
+            "maximum": 211,
+            "meanAbsoluteError": 12.787254071354608
+          }
+        },
+        "C": {
+          "source": "Separation Black .3",
+          "box": [
+            43,
+            213,
+            834,
+            253
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 14485,
+            "maximum": 220,
+            "meanAbsoluteError": 19.995838600927097
+          },
+          "flatReference": {
+            "pixels": 7736,
+            "above8": 1243,
+            "maximum": 151,
+            "meanAbsoluteError": 5.5838073078248875
+          }
+        },
+        "D": {
+          "source": "Separation Black 1",
+          "box": [
+            43,
+            256,
+            834,
+            296
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 12913,
+            "maximum": 220,
+            "meanAbsoluteError": 20.197060682680153
+          },
+          "flatReference": {
+            "pixels": 7692,
+            "above8": 1076,
+            "maximum": 211,
+            "meanAbsoluteError": 10.960261743803086
+          }
+        },
+        "E": {
+          "source": "DeviceCMYK K .3",
+          "box": [
+            43,
+            299,
+            834,
+            339
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 9740,
+            "maximum": 212,
+            "meanAbsoluteError": 11.465571007163927
+          },
+          "flatReference": {
+            "pixels": 8648,
+            "above8": 977,
+            "maximum": 95,
+            "meanAbsoluteError": 2.8992445266728337
+          }
+        },
+        "F": {
+          "source": "DeviceCMYK K 1",
+          "box": [
+            43,
+            342,
+            834,
+            382
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 9656,
+            "maximum": 212,
+            "meanAbsoluteError": 15.025726927939317
+          },
+          "flatReference": {
+            "pixels": 9132,
+            "above8": 1310,
+            "maximum": 211,
+            "meanAbsoluteError": 11.31646955759965
+          }
+        },
+        "G": {
+          "source": "Separation All .05",
+          "box": [
+            43,
+            384,
+            834,
+            424
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8639,
+            "maximum": 226,
+            "meanAbsoluteError": 9.540655288664139
+          },
+          "flatReference": {
+            "pixels": 11007,
+            "above8": 1372,
+            "maximum": 127,
+            "meanAbsoluteError": 4.018563944156749
+          }
+        },
+        "H": {
+          "source": "DeviceGray 1",
+          "box": [
+            43,
+            427,
+            834,
+            467
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8496,
+            "maximum": 164,
+            "meanAbsoluteError": 10.161715128529288
+          },
+          "flatReference": {
+            "pixels": 16702,
+            "above8": 1297,
+            "maximum": 150,
+            "meanAbsoluteError": 2.9053406777631423
+          }
+        },
+        "I": {
+          "source": "Separation Black 0",
+          "box": [
+            43,
+            470,
+            834,
+            510
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 15330,
+            "maximum": 179,
+            "meanAbsoluteError": 26.327033291192585
+          },
+          "flatReference": {
+            "pixels": 11616,
+            "above8": 1956,
+            "maximum": 151,
+            "meanAbsoluteError": 7.814623507805326
+          }
+        },
+        "J": {
+          "source": "DeviceCMYK 0000",
+          "box": [
+            43,
+            513,
+            834,
+            553
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 9051,
+            "maximum": 153,
+            "meanAbsoluteError": 10.114833544037085
+          },
+          "flatReference": {
+            "pixels": 15797,
+            "above8": 1009,
+            "maximum": 150,
+            "meanAbsoluteError": 2.218395897955308
+          }
+        },
+        "K": {
+          "source": "Separation All 0",
+          "box": [
+            43,
+            555,
+            834,
+            595
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8520,
+            "maximum": 163,
+            "meanAbsoluteError": 9.901970080067425
+          },
+          "flatReference": {
+            "pixels": 16525,
+            "above8": 1320,
+            "maximum": 150,
+            "meanAbsoluteError": 2.981865859808371
+          }
+        },
+        "L": {
+          "source": "DeviceCMYK C .3",
+          "box": [
+            43,
+            598,
+            834,
+            638
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 9603,
+            "maximum": 255,
+            "meanAbsoluteError": 10.14749262536873
+          },
+          "flatReference": {
+            "pixels": 9211,
+            "above8": 1152,
+            "maximum": 142,
+            "meanAbsoluteError": 3.736004053124887
+          }
+        },
+        "M": {
+          "source": "Separation Cyan .3",
+          "box": [
+            43,
+            641,
+            834,
+            681
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 16749,
+            "maximum": 255,
+            "meanAbsoluteError": 24.690381373788455
+          },
+          "flatReference": {
+            "pixels": 7012,
+            "above8": 1814,
+            "maximum": 151,
+            "meanAbsoluteError": 13.288695569499906
+          }
+        },
+        "N": {
+          "source": "DeviceCMYK C .3 Y .5",
+          "box": [
+            43,
+            684,
+            834,
+            724
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 9598,
+            "maximum": 255,
+            "meanAbsoluteError": 9.185377159713443
+          },
+          "flatReference": {
+            "pixels": 9455,
+            "above8": 1146,
+            "maximum": 101,
+            "meanAbsoluteError": 2.9484223514895116
+          }
+        },
+        "O": {
+          "source": "DeviceCMYK CMYK .3 .01 .5 .01",
+          "box": [
+            43,
+            726,
+            834,
+            766
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8731,
+            "maximum": 255,
+            "meanAbsoluteError": 8.967024863042562
+          },
+          "flatReference": {
+            "pixels": 10784,
+            "above8": 1398,
+            "maximum": 102,
+            "meanAbsoluteError": 3.1765578635014835
+          }
+        },
+        "P": {
+          "source": "DeviceN Cyan Yellow",
+          "box": [
+            43,
+            769,
+            834,
+            809
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 15196,
+            "maximum": 255,
+            "meanAbsoluteError": 17.594490096923725
+          },
+          "flatReference": {
+            "pixels": 7784,
+            "above8": 1658,
+            "maximum": 101,
+            "meanAbsoluteError": 9.67060637204522
+          }
+        },
+        "Q": {
+          "source": "Separation MyRed",
+          "box": [
+            43,
+            812,
+            834,
+            852
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8956,
+            "maximum": 225,
+            "meanAbsoluteError": 10.103402865571008
+          },
+          "flatReference": {
+            "pixels": 10135,
+            "above8": 1319,
+            "maximum": 91,
+            "meanAbsoluteError": 2.8706462752836703
+          }
+        },
+        "R": {
+          "source": "DeviceN MyRed None None None None",
+          "box": [
+            43,
+            855,
+            834,
+            895
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8554,
+            "maximum": 255,
+            "meanAbsoluteError": 8.477286135693216
+          },
+          "flatReference": {
+            "pixels": 10835,
+            "above8": 1314,
+            "maximum": 91,
+            "meanAbsoluteError": 2.620735271496693
+          }
+        },
+        "S": {
+          "source": "DeviceN Cyan MyRed",
+          "box": [
+            43,
+            897,
+            834,
+            937
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8258,
+            "maximum": 208,
+            "meanAbsoluteError": 8.63685208596713
+          },
+          "flatReference": {
+            "pixels": 10784,
+            "above8": 1153,
+            "maximum": 82,
+            "meanAbsoluteError": 2.7153499010880315
+          }
+        },
+        "T": {
+          "source": "DeviceN MyRed MyBlue",
+          "box": [
+            43,
+            940,
+            834,
+            980
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8347,
+            "maximum": 208,
+            "meanAbsoluteError": 8.849957859249894
+          },
+          "flatReference": {
+            "pixels": 10672,
+            "above8": 1258,
+            "maximum": 106,
+            "meanAbsoluteError": 2.7123625687156423
+          }
+        },
+        "U": {
+          "source": "ICCBased Gray",
+          "box": [
+            43,
+            983,
+            834,
+            1023
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8672,
+            "maximum": 224,
+            "meanAbsoluteError": 10.130910240202276
+          },
+          "flatReference": {
+            "pixels": 10109,
+            "above8": 1213,
+            "maximum": 80,
+            "meanAbsoluteError": 3.099779074751871
+          }
+        },
+        "V": {
+          "source": "ICCBased RGB",
+          "box": [
+            43,
+            1026,
+            834,
+            1066
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8723,
+            "maximum": 255,
+            "meanAbsoluteError": 8.858923303834809
+          },
+          "flatReference": {
+            "pixels": 10391,
+            "above8": 1365,
+            "maximum": 115,
+            "meanAbsoluteError": 3.260898854778173
+          }
+        },
+        "W": {
+          "source": "Lab D50",
+          "box": [
+            43,
+            1068,
+            834,
+            1108
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8039,
+            "maximum": 255,
+            "meanAbsoluteError": 8.08193215339233
+          },
+          "flatReference": {
+            "pixels": 12739,
+            "above8": 1344,
+            "maximum": 90,
+            "meanAbsoluteError": 2.3350603134730616
+          }
+        },
+        "X": {
+          "source": "ICCBased CMYK",
+          "box": [
+            43,
+            1111,
+            834,
+            1151
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8630,
+            "maximum": 239,
+            "meanAbsoluteError": 9.12842393594606
+          },
+          "flatReference": {
+            "pixels": 10773,
+            "above8": 1376,
+            "maximum": 93,
+            "meanAbsoluteError": 2.9632414369256472
+          }
+        }
+      }
+    },
+    "Ghostscript matched process output AA4": {
+      "actual": "altona_technical_1v2_x3.canvas.png",
+      "reference": "altona.gs-aa4.png",
+      "wholePage": {
+        "box": [
+          0,
+          0,
+          844,
+          1190
+        ],
+        "all": {
+          "pixels": 1004360,
+          "above8": 259173,
+          "maximum": 255,
+          "meanAbsoluteError": 7.063562865904656
+        },
+        "flatReference": {
+          "pixels": 328868,
+          "above8": 4707,
+          "maximum": 212,
+          "meanAbsoluteError": 0.8307649269615773
+        }
+      },
+      "rows": {
+        "A": {
+          "source": "DeviceGray .7",
+          "box": [
+            43,
+            128,
+            834,
+            168
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7855,
+            "maximum": 212,
+            "meanAbsoluteError": 4.17905604719764
+          },
+          "flatReference": {
+            "pixels": 6164,
+            "above8": 31,
+            "maximum": 17,
+            "meanAbsoluteError": 0.12600043261951113
+          }
+        },
+        "B": {
+          "source": "DeviceGray 0",
+          "box": [
+            43,
+            171,
+            834,
+            211
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 9268,
+            "maximum": 212,
+            "meanAbsoluteError": 6.591013485040034
+          },
+          "flatReference": {
+            "pixels": 6762,
+            "above8": 100,
+            "maximum": 19,
+            "meanAbsoluteError": 0.25352459824509516
+          }
+        },
+        "C": {
+          "source": "Separation Black .3",
+          "box": [
+            43,
+            213,
+            834,
+            253
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 13528,
+            "maximum": 220,
+            "meanAbsoluteError": 13.996713021491782
+          },
+          "flatReference": {
+            "pixels": 4978,
+            "above8": 274,
+            "maximum": 151,
+            "meanAbsoluteError": 2.3631311102182937
+          }
+        },
+        "D": {
+          "source": "Separation Black 1",
+          "box": [
+            43,
+            256,
+            834,
+            296
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 11505,
+            "maximum": 220,
+            "meanAbsoluteError": 10.33814791403287
+          },
+          "flatReference": {
+            "pixels": 4977,
+            "above8": 114,
+            "maximum": 151,
+            "meanAbsoluteError": 1.0539816489183578
+          }
+        },
+        "E": {
+          "source": "DeviceCMYK K .3",
+          "box": [
+            43,
+            299,
+            834,
+            339
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8692,
+            "maximum": 212,
+            "meanAbsoluteError": 4.527433628318584
+          },
+          "flatReference": {
+            "pixels": 5418,
+            "above8": 31,
+            "maximum": 17,
+            "meanAbsoluteError": 0.13510520487264674
+          }
+        },
+        "F": {
+          "source": "DeviceCMYK K 1",
+          "box": [
+            43,
+            342,
+            834,
+            382
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 9222,
+            "maximum": 212,
+            "meanAbsoluteError": 6.545353982300885
+          },
+          "flatReference": {
+            "pixels": 6040,
+            "above8": 78,
+            "maximum": 19,
+            "meanAbsoluteError": 0.225
+          }
+        },
+        "G": {
+          "source": "Separation All .05",
+          "box": [
+            43,
+            384,
+            834,
+            424
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7828,
+            "maximum": 226,
+            "meanAbsoluteError": 3.9943742098609354
+          },
+          "flatReference": {
+            "pixels": 6906,
+            "above8": 29,
+            "maximum": 17,
+            "meanAbsoluteError": 0.5460469157254562
+          }
+        },
+        "H": {
+          "source": "DeviceGray 1",
+          "box": [
+            43,
+            427,
+            834,
+            467
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8039,
+            "maximum": 153,
+            "meanAbsoluteError": 3.930583649388959
+          },
+          "flatReference": {
+            "pixels": 12993,
+            "above8": 38,
+            "maximum": 17,
+            "meanAbsoluteError": 0.06267477359603889
+          }
+        },
+        "I": {
+          "source": "Separation Black 0",
+          "box": [
+            43,
+            470,
+            834,
+            510
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 15007,
+            "maximum": 153,
+            "meanAbsoluteError": 18.871828908554573
+          },
+          "flatReference": {
+            "pixels": 9090,
+            "above8": 1020,
+            "maximum": 151,
+            "meanAbsoluteError": 5.528602860286028
+          }
+        },
+        "J": {
+          "source": "DeviceCMYK 0000",
+          "box": [
+            43,
+            513,
+            834,
+            553
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8549,
+            "maximum": 131,
+            "meanAbsoluteError": 4.358575642646439
+          },
+          "flatReference": {
+            "pixels": 13088,
+            "above8": 93,
+            "maximum": 19,
+            "meanAbsoluteError": 0.13032294213528933
+          }
+        },
+        "K": {
+          "source": "Separation All 0",
+          "box": [
+            43,
+            555,
+            834,
+            595
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8073,
+            "maximum": 130,
+            "meanAbsoluteError": 3.871502317741256
+          },
+          "flatReference": {
+            "pixels": 12755,
+            "above8": 36,
+            "maximum": 17,
+            "meanAbsoluteError": 0.06151835881353718
+          }
+        },
+        "L": {
+          "source": "DeviceCMYK C .3",
+          "box": [
+            43,
+            598,
+            834,
+            638
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8639,
+            "maximum": 255,
+            "meanAbsoluteError": 4.106120943952802
+          },
+          "flatReference": {
+            "pixels": 6012,
+            "above8": 57,
+            "maximum": 17,
+            "meanAbsoluteError": 0.1769239299179419
+          }
+        },
+        "M": {
+          "source": "Separation Cyan .3",
+          "box": [
+            43,
+            641,
+            834,
+            681
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 16187,
+            "maximum": 255,
+            "meanAbsoluteError": 18.195290771175728
+          },
+          "flatReference": {
+            "pixels": 4357,
+            "above8": 566,
+            "maximum": 151,
+            "meanAbsoluteError": 7.938030755106725
+          }
+        },
+        "N": {
+          "source": "DeviceCMYK C .3 Y .5",
+          "box": [
+            43,
+            684,
+            834,
+            724
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8303,
+            "maximum": 255,
+            "meanAbsoluteError": 3.9104509060261274
+          },
+          "flatReference": {
+            "pixels": 6239,
+            "above8": 60,
+            "maximum": 17,
+            "meanAbsoluteError": 0.16439600363306087
+          }
+        },
+        "O": {
+          "source": "DeviceCMYK CMYK .3 .01 .5 .01",
+          "box": [
+            43,
+            726,
+            834,
+            766
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7773,
+            "maximum": 255,
+            "meanAbsoluteError": 3.6933206911083016
+          },
+          "flatReference": {
+            "pixels": 6687,
+            "above8": 29,
+            "maximum": 17,
+            "meanAbsoluteError": 0.10941628034494791
+          }
+        },
+        "P": {
+          "source": "DeviceN Cyan Yellow",
+          "box": [
+            43,
+            769,
+            834,
+            809
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 14692,
+            "maximum": 255,
+            "meanAbsoluteError": 12.153666245259165
+          },
+          "flatReference": {
+            "pixels": 5018,
+            "above8": 448,
+            "maximum": 97,
+            "meanAbsoluteError": 4.9404145077720205
+          }
+        },
+        "Q": {
+          "source": "Separation MyRed",
+          "box": [
+            43,
+            812,
+            834,
+            852
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7998,
+            "maximum": 225,
+            "meanAbsoluteError": 4.060008428150021
+          },
+          "flatReference": {
+            "pixels": 6075,
+            "above8": 31,
+            "maximum": 17,
+            "meanAbsoluteError": 0.2905898491083676
+          }
+        },
+        "R": {
+          "source": "DeviceN MyRed None None None None",
+          "box": [
+            43,
+            855,
+            834,
+            895
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7494,
+            "maximum": 255,
+            "meanAbsoluteError": 3.6629266750948166
+          },
+          "flatReference": {
+            "pixels": 6941,
+            "above8": 35,
+            "maximum": 17,
+            "meanAbsoluteError": 0.25630312635066993
+          }
+        },
+        "S": {
+          "source": "DeviceN Cyan MyRed",
+          "box": [
+            43,
+            897,
+            834,
+            937
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7334,
+            "maximum": 208,
+            "meanAbsoluteError": 3.6500105351875263
+          },
+          "flatReference": {
+            "pixels": 6690,
+            "above8": 29,
+            "maximum": 17,
+            "meanAbsoluteError": 0.10602889885401096
+          }
+        },
+        "T": {
+          "source": "DeviceN MyRed MyBlue",
+          "box": [
+            43,
+            940,
+            834,
+            980
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7283,
+            "maximum": 208,
+            "meanAbsoluteError": 3.742024863042562
+          },
+          "flatReference": {
+            "pixels": 6738,
+            "above8": 31,
+            "maximum": 17,
+            "meanAbsoluteError": 0.2663995250816266
+          }
+        },
+        "U": {
+          "source": "ICCBased Gray",
+          "box": [
+            43,
+            983,
+            834,
+            1023
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7962,
+            "maximum": 224,
+            "meanAbsoluteError": 4.139233038348083
+          },
+          "flatReference": {
+            "pixels": 6147,
+            "above8": 31,
+            "maximum": 17,
+            "meanAbsoluteError": 0.13198850387723007
+          }
+        },
+        "V": {
+          "source": "ICCBased RGB",
+          "box": [
+            43,
+            1026,
+            834,
+            1066
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7736,
+            "maximum": 255,
+            "meanAbsoluteError": 3.8381373788453432
+          },
+          "flatReference": {
+            "pixels": 6511,
+            "above8": 36,
+            "maximum": 17,
+            "meanAbsoluteError": 0.2979573030256489
+          }
+        },
+        "W": {
+          "source": "Lab D50",
+          "box": [
+            43,
+            1068,
+            834,
+            1108
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7010,
+            "maximum": 255,
+            "meanAbsoluteError": 3.407016434892541
+          },
+          "flatReference": {
+            "pixels": 8676,
+            "above8": 29,
+            "maximum": 17,
+            "meanAbsoluteError": 0.29595051483018286
+          }
+        },
+        "X": {
+          "source": "ICCBased CMYK",
+          "box": [
+            43,
+            1111,
+            834,
+            1151
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7797,
+            "maximum": 239,
+            "meanAbsoluteError": 3.8153603034134007
+          },
+          "flatReference": {
+            "pixels": 6675,
+            "above8": 31,
+            "maximum": 17,
+            "meanAbsoluteError": 0.2798501872659176
+          }
+        }
+      }
+    }
+  },
+  "derived_control": {
+    "label": "derived colourant-availability control, not original-page acceptance",
+    "original_sha256": "06b980fa09cd45f35a1fc9a2b907911201e91c0fcc2ee5a67820f6bb7818e630",
+    "control_sha256": "f28b5275b1b322c2db2b6b411b36a09b096ae1eafd6adcb276ec75a031251434",
+    "changes": [
+      {
+        "path": "/Root/Pages/Kids/0/Resources/ColorSpace/Cs10/1",
+        "before": "/Cyan",
+        "after": "/DisplayAlternateCyan"
+      },
+      {
+        "path": "/Root/Pages/Kids/0/Resources/ColorSpace/Cs11/1",
+        "before": "/Black",
+        "after": "/DisplayAlternateBlack"
+      },
+      {
+        "path": "/Root/Pages/Kids/0/Resources/ColorSpace/Cs12/1",
+        "before": "/Black",
+        "after": "/DisplayAlternateBlack"
+      },
+      {
+        "path": "/Root/Pages/Kids/0/Resources/ColorSpace/Cs14/1/0",
+        "before": "/Cyan",
+        "after": "/DisplayAlternateCyan"
+      },
+      {
+        "path": "/Root/Pages/Kids/0/Resources/ColorSpace/Cs14/1/1",
+        "before": "/Yellow",
+        "after": "/DisplayAlternateYellow"
+      },
+      {
+        "path": "/Root/Pages/Kids/0/Resources/ColorSpace/Cs17/1/0",
+        "before": "/Cyan",
+        "after": "/DisplayAlternateCyan"
+      },
+      {
+        "path": "/Root/Pages/Kids/0/Resources/XObject/Fm1/Resources/ColorSpace/CS0/1",
+        "before": "/Black",
+        "after": "/DisplayAlternateBlack"
+      }
+    ],
+    "other_semantic_changes": 0,
+    "unchanged_stream_count": 59,
+    "unchanged_stream_hash_manifest_sha256": "180ccd520b102011cc0134e82fd98a7a5b789ab783a212fe36dcd471a236f8c7",
+    "comparison": {
+      "box": [
+        0,
+        0,
+        844,
+        1190
+      ],
+      "all": {
+        "pixels": 1004360,
+        "above8": 269040,
+        "maximum": 255,
+        "meanAbsoluteError": 11.563525694638045
+      },
+      "flatReference": {
+        "pixels": 439123,
+        "above8": 40633,
+        "maximum": 255,
+        "meanAbsoluteError": 3.498450320297502
+      }
+    },
+    "comparison_aa4": {
+      "actual": "altona_technical_1v2_x3.canvas.png",
+      "reference": "altona.gs-alternate-aa4.png",
+      "wholePage": {
+        "box": [
+          0,
+          0,
+          844,
+          1190
+        ],
+        "all": {
+          "pixels": 1004360,
+          "above8": 229528,
+          "maximum": 255,
+          "meanAbsoluteError": 5.436671113943207
+        },
+        "flatReference": {
+          "pixels": 339131,
+          "above8": 2501,
+          "maximum": 212,
+          "meanAbsoluteError": 0.45187749473408995
+        }
+      },
+      "rows": {
+        "A": {
+          "source": "DeviceGray .7",
+          "box": [
+            43,
+            128,
+            834,
+            168
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7855,
+            "maximum": 212,
+            "meanAbsoluteError": 4.17905604719764
+          },
+          "flatReference": {
+            "pixels": 6164,
+            "above8": 31,
+            "maximum": 17,
+            "meanAbsoluteError": 0.12600043261951113
+          }
+        },
+        "B": {
+          "source": "DeviceGray 0",
+          "box": [
+            43,
+            171,
+            834,
+            211
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 9268,
+            "maximum": 212,
+            "meanAbsoluteError": 6.591013485040034
+          },
+          "flatReference": {
+            "pixels": 6762,
+            "above8": 100,
+            "maximum": 19,
+            "meanAbsoluteError": 0.25352459824509516
+          }
+        },
+        "C": {
+          "source": "Separation Black .3",
+          "box": [
+            43,
+            213,
+            834,
+            253
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7449,
+            "maximum": 212,
+            "meanAbsoluteError": 3.72543194268858
+          },
+          "flatReference": {
+            "pixels": 6701,
+            "above8": 29,
+            "maximum": 17,
+            "meanAbsoluteError": 0.1059045913545242
+          }
+        },
+        "D": {
+          "source": "Separation Black 1",
+          "box": [
+            43,
+            256,
+            834,
+            296
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 9010,
+            "maximum": 212,
+            "meanAbsoluteError": 5.710493046776232
+          },
+          "flatReference": {
+            "pixels": 6684,
+            "above8": 81,
+            "maximum": 18,
+            "meanAbsoluteError": 0.2170357071613804
+          }
+        },
+        "E": {
+          "source": "DeviceCMYK K .3",
+          "box": [
+            43,
+            299,
+            834,
+            339
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8692,
+            "maximum": 212,
+            "meanAbsoluteError": 4.527433628318584
+          },
+          "flatReference": {
+            "pixels": 5418,
+            "above8": 31,
+            "maximum": 17,
+            "meanAbsoluteError": 0.13510520487264674
+          }
+        },
+        "F": {
+          "source": "DeviceCMYK K 1",
+          "box": [
+            43,
+            342,
+            834,
+            382
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 9222,
+            "maximum": 212,
+            "meanAbsoluteError": 6.545353982300885
+          },
+          "flatReference": {
+            "pixels": 6040,
+            "above8": 78,
+            "maximum": 19,
+            "meanAbsoluteError": 0.225
+          }
+        },
+        "G": {
+          "source": "Separation All .05",
+          "box": [
+            43,
+            384,
+            834,
+            424
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7828,
+            "maximum": 226,
+            "meanAbsoluteError": 3.9943742098609354
+          },
+          "flatReference": {
+            "pixels": 6906,
+            "above8": 29,
+            "maximum": 17,
+            "meanAbsoluteError": 0.5460469157254562
+          }
+        },
+        "H": {
+          "source": "DeviceGray 1",
+          "box": [
+            43,
+            427,
+            834,
+            467
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8039,
+            "maximum": 153,
+            "meanAbsoluteError": 3.930583649388959
+          },
+          "flatReference": {
+            "pixels": 12993,
+            "above8": 38,
+            "maximum": 17,
+            "meanAbsoluteError": 0.06267477359603889
+          }
+        },
+        "I": {
+          "source": "Separation Black 0",
+          "box": [
+            43,
+            470,
+            834,
+            510
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8557,
+            "maximum": 130,
+            "meanAbsoluteError": 4.269700800674252
+          },
+          "flatReference": {
+            "pixels": 12521,
+            "above8": 41,
+            "maximum": 17,
+            "meanAbsoluteError": 0.06956313393498922
+          }
+        },
+        "J": {
+          "source": "DeviceCMYK 0000",
+          "box": [
+            43,
+            513,
+            834,
+            553
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8549,
+            "maximum": 131,
+            "meanAbsoluteError": 4.358575642646439
+          },
+          "flatReference": {
+            "pixels": 13088,
+            "above8": 93,
+            "maximum": 19,
+            "meanAbsoluteError": 0.13032294213528933
+          }
+        },
+        "K": {
+          "source": "Separation All 0",
+          "box": [
+            43,
+            555,
+            834,
+            595
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8073,
+            "maximum": 130,
+            "meanAbsoluteError": 3.871502317741256
+          },
+          "flatReference": {
+            "pixels": 12755,
+            "above8": 36,
+            "maximum": 17,
+            "meanAbsoluteError": 0.06151835881353718
+          }
+        },
+        "L": {
+          "source": "DeviceCMYK C .3",
+          "box": [
+            43,
+            598,
+            834,
+            638
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8639,
+            "maximum": 255,
+            "meanAbsoluteError": 4.106120943952802
+          },
+          "flatReference": {
+            "pixels": 6012,
+            "above8": 57,
+            "maximum": 17,
+            "meanAbsoluteError": 0.1769239299179419
+          }
+        },
+        "M": {
+          "source": "Separation Cyan .3",
+          "box": [
+            43,
+            641,
+            834,
+            681
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8529,
+            "maximum": 255,
+            "meanAbsoluteError": 4.371070375052676
+          },
+          "flatReference": {
+            "pixels": 6063,
+            "above8": 34,
+            "maximum": 17,
+            "meanAbsoluteError": 0.3084831491560833
+          }
+        },
+        "N": {
+          "source": "DeviceCMYK C .3 Y .5",
+          "box": [
+            43,
+            684,
+            834,
+            724
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 8303,
+            "maximum": 255,
+            "meanAbsoluteError": 3.9104509060261274
+          },
+          "flatReference": {
+            "pixels": 6239,
+            "above8": 60,
+            "maximum": 17,
+            "meanAbsoluteError": 0.16439600363306087
+          }
+        },
+        "O": {
+          "source": "DeviceCMYK CMYK .3 .01 .5 .01",
+          "box": [
+            43,
+            726,
+            834,
+            766
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7773,
+            "maximum": 255,
+            "meanAbsoluteError": 3.6933206911083016
+          },
+          "flatReference": {
+            "pixels": 6687,
+            "above8": 29,
+            "maximum": 17,
+            "meanAbsoluteError": 0.10941628034494791
+          }
+        },
+        "P": {
+          "source": "DeviceN Cyan Yellow",
+          "box": [
+            43,
+            769,
+            834,
+            809
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7725,
+            "maximum": 255,
+            "meanAbsoluteError": 3.8387378845343445
+          },
+          "flatReference": {
+            "pixels": 6714,
+            "above8": 31,
+            "maximum": 17,
+            "meanAbsoluteError": 0.26814616224803894
+          }
+        },
+        "Q": {
+          "source": "Separation MyRed",
+          "box": [
+            43,
+            812,
+            834,
+            852
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7998,
+            "maximum": 225,
+            "meanAbsoluteError": 4.060008428150021
+          },
+          "flatReference": {
+            "pixels": 6075,
+            "above8": 31,
+            "maximum": 17,
+            "meanAbsoluteError": 0.2905898491083676
+          }
+        },
+        "R": {
+          "source": "DeviceN MyRed None None None None",
+          "box": [
+            43,
+            855,
+            834,
+            895
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7494,
+            "maximum": 255,
+            "meanAbsoluteError": 3.6629266750948166
+          },
+          "flatReference": {
+            "pixels": 6941,
+            "above8": 35,
+            "maximum": 17,
+            "meanAbsoluteError": 0.25630312635066993
+          }
+        },
+        "S": {
+          "source": "DeviceN Cyan MyRed",
+          "box": [
+            43,
+            897,
+            834,
+            937
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7334,
+            "maximum": 208,
+            "meanAbsoluteError": 3.6500105351875263
+          },
+          "flatReference": {
+            "pixels": 6690,
+            "above8": 29,
+            "maximum": 17,
+            "meanAbsoluteError": 0.10602889885401096
+          }
+        },
+        "T": {
+          "source": "DeviceN MyRed MyBlue",
+          "box": [
+            43,
+            940,
+            834,
+            980
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7283,
+            "maximum": 208,
+            "meanAbsoluteError": 3.742024863042562
+          },
+          "flatReference": {
+            "pixels": 6738,
+            "above8": 31,
+            "maximum": 17,
+            "meanAbsoluteError": 0.2663995250816266
+          }
+        },
+        "U": {
+          "source": "ICCBased Gray",
+          "box": [
+            43,
+            983,
+            834,
+            1023
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7962,
+            "maximum": 224,
+            "meanAbsoluteError": 4.139233038348083
+          },
+          "flatReference": {
+            "pixels": 6147,
+            "above8": 31,
+            "maximum": 17,
+            "meanAbsoluteError": 0.13198850387723007
+          }
+        },
+        "V": {
+          "source": "ICCBased RGB",
+          "box": [
+            43,
+            1026,
+            834,
+            1066
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7736,
+            "maximum": 255,
+            "meanAbsoluteError": 3.8381373788453432
+          },
+          "flatReference": {
+            "pixels": 6511,
+            "above8": 36,
+            "maximum": 17,
+            "meanAbsoluteError": 0.2979573030256489
+          }
+        },
+        "W": {
+          "source": "Lab D50",
+          "box": [
+            43,
+            1068,
+            834,
+            1108
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7010,
+            "maximum": 255,
+            "meanAbsoluteError": 3.407016434892541
+          },
+          "flatReference": {
+            "pixels": 8676,
+            "above8": 29,
+            "maximum": 17,
+            "meanAbsoluteError": 0.29595051483018286
+          }
+        },
+        "X": {
+          "source": "ICCBased CMYK",
+          "box": [
+            43,
+            1111,
+            834,
+            1151
+          ],
+          "all": {
+            "pixels": 31640,
+            "above8": 7797,
+            "maximum": 239,
+            "meanAbsoluteError": 3.8153603034134007
+          },
+          "flatReference": {
+            "pixels": 6675,
+            "above8": 31,
+            "maximum": 17,
+            "meanAbsoluteError": 0.2798501872659176
+          }
+        }
+      }
+    }
+  },
+  "performance": {
+    "old_parse_and_replay_seconds": 283.97747226,
+    "same_plan_dirty_replay_seconds": 32.369809321,
+    "dirty_replay_rss_delta": 1132335104,
+    "replay_diagnostics": 0,
+    "icc_failures": 0,
+    "padding_changed_between_versions": true,
+    "old_new_padding_changed_pixels": 85957,
+    "old_new_padding_mean_rgb_error": 0.8231975254556799,
+    "same_plan_full_surface_replay_seconds": 173.597484394,
+    "dirty_full_rgba_changed_pixels": 0,
+    "native_fill_parse_and_replay_seconds": 87.469209131,
+    "native_fill_catalog_duplication_rss_delta": 3638792192,
+    "native_fill_catalog_duplication_unaccepted": true
+  },
+  "isolation_controls": [
+    {
+      "file": "patch-icc-3-pdfx.pdf",
+      "sha256": "b4d27d1be840919e5990b6d8749b170f2f054a999018615e84af94aa8a3de274",
+      "poppler_rgb": [
+        162,
+        163,
+        166
+      ]
+    },
+    {
+      "file": "patch-icc-3.pdf",
+      "sha256": "d66fb97f14b45087a287d85382cf9479e17a4ae979539532aa6c608e41d63bed",
+      "poppler_rgb": [
+        175,
+        175,
+        175
+      ]
+    },
+    {
+      "file": "patch-icc-4-pdfx.pdf",
+      "sha256": "d847991270e946fd5050a15f3996d91e06ba40d6de34fbf32f09659752a52790",
+      "poppler_rgb": [
+        217,
+        221,
+        121
+      ]
+    },
+    {
+      "file": "patch-icc-4.pdf",
+      "sha256": "8a1844b6fb3bb3aaf7ec1eb3ad5a618163b2baa1c80ed2dc862f6275e1f5951b",
+      "poppler_rgb": [
+        229,
+        222,
+        140
+      ]
+    },
+    {
+      "file": "patch-icc-5-pdfx.pdf",
+      "sha256": "e077b1cd9e67e8767a79f67293d35bd0327c11815033cf19d56b3840471d3760",
+      "poppler_rgb": [
+        246,
+        198,
+        134
+      ]
+    },
+    {
+      "file": "patch-icc-5.pdf",
+      "sha256": "1e1a4af4d0055098d4f5414328a02a353782f424f211a1ff752761a249845e29",
+      "poppler_rgb": [
+        251,
+        211,
+        157
+      ]
+    }
+  ],
+  "actual_rgba_png_sha256": "70f35b190105c02ee4377a8f6d1a2f7efd0e61bdca9bed0606a305aa31c01cb3",
+  "notes": [
+    "The original page counts above are not replaced by the derived colourant-availability control.",
+    "Reference-interior masks use only a3x3 reference neighborhood, never viewer error. Both all-pixel and interior counts are retained.",
+    "Poppler PDFX-only solid controls prove that its output policy differs from the matched source-to-output-CMYK-to-display protocol.",
+    "Remaining whole-page pixels include glyph/image rasterization and device-dependent overprint semantics; no claim of pixel-perfect complex-page completion is made."
+  ],
+  "residual_localization_report": "colour-print-residuals.json",
+  "source_intent_control_report": "colour-print-intent-controls.json",
+  "last_resource_measurement": {
+    "plan_bytes": 21272647,
+    "same_pixels_as_native_fill_before_catalog_dedup": true,
+    "parse_and_replay_ms": 88222.829301,
+    "parse_and_replay_rss_delta": 3307982848,
+    "saved_plan_replay_ms": 47521.891751,
+    "saved_plan_replay_rss_delta": 3203760128,
+    "resource_acceptance": false,
+    "reason": "Deduplicated catalog verified; compositor allocation churn remains tracked separately.",
+    "backend_baseline": "root d1820f7, before compositor scratch-buffer reuse"
+  }
+}

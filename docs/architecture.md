@@ -16,7 +16,7 @@ PdfViewerDocument ── page(n) ── PdfPageModel
                                   └─ selection mapping
   │
   ▼
-SVG renderer / browser DOM text layer / future Canvas renderer / host adapter
+Canvas plan → shared Canvas2D runtime / SVG compatibility / DOM text layer
 ```
 
 `pdflite` owns PDF syntax, xref recovery, resources, font decoding, content
@@ -24,12 +24,13 @@ operators, and image decoding primitives. The viewer package owns the stable
 host-facing model and coordinate conversion. This keeps an OpenSeek adapter (or
 a future Rabbita browser shell) from depending on `pdflite` internals.
 
-The first renderer deliberately serializes a display list instead of drawing
-directly while parsing. That gives us three independently testable results:
-
-1. page geometry and rotation;
-2. positioned text and selection order;
-3. SVG paint output.
+The collector retains a display list instead of drawing directly while parsing.
+That gives us independently testable page geometry, positioned text/source
+selection, a structured `PdfPageModel.canvas_plan()` and SVG compatibility output.
+The shipped page/thumbnail pixel path is the Canvas plan replayed by
+`web/pdf-runtime.mjs` / `web/pdf-canvas.mjs`; it does not rasterize a completed
+page SVG. Public entry points, capability limits and focused evidence are in
+[the A2 acceptance record](a2-acceptance.md).
 
 Text items retain the original `pdflite` quadrilateral in addition to their
 axis-aligned bounds. This lets SVG preserve a glyph run's direction while the
@@ -37,9 +38,13 @@ bounds remain convenient for cursor selection. Path items likewise carry the
 PDF line cap, line join, and dash state needed by an SVG host.
 
 Text paint mode and source fill/stroke colours are retained as part of each
-text item. Path line widths and dash spacing are scaled by the affine paint
-CTM before serialization; this is exact for uniform transforms and uses the
-mean basis-vector scale for shears and non-uniform transforms.
+text item. Canvas plans preserve full paint CTMs and independent affine pens,
+including width, dash, caps, joins and miter, instead of collapsing a shear or
+non-uniform transform to a scalar line width. Embedded and bundled Standard 14
+contours share A1 glyph placement. Legacy SVG text may approximate an unresolved
+host pen; that capability loss remains explicit in graphics diagnostics. See
+[Standard 14 pens](validation/standard14-pen.md) and
+[the host-outline boundary](validation/host-text-pen.md).
 
 Embedded TrueType fonts have a second rendering path. The viewer reads the
 `head`, `maxp`, `loca`, and `glyf` tables, resolves a CID through
@@ -129,6 +134,20 @@ Explicit PDF Encoding names select the CFF charset or `.notdef`, avoiding an
 unrelated built-in encoding glyph. Damaged charstrings/programs retain copy
 text, PDF advances and the remaining page, with located fallback observations.
 
+A1's `standard14.mbt` and `standard14_assets.mbt` reuse the existing CFF and
+TrueType readers for fixed Standard 14 replacement programs, with AFM/PDF widths
+preserving positioning. Embedded PDF programs remain preferred. A matching
+`PdfFontFallback` / `set_font_fallbacks` override deliberately suppresses bundled
+Standard 14 programs and contours, selecting host text instead. Its family,
+weight and style affect SVG host text and the text layer, not only CSS metadata.
+Clearing the override invalidates the page cache and restores bundled contours.
+Independent non-similarity strokes of host text without contours still require
+a capable optional `resolveTextOutline` callback; strict replay rejects the
+unresolved case and warned preview retains its diagnostic. The default bundled
+path needs no native callback or host font registration. See
+[the asset provenance](../assets/standard14/README.md) and
+[the public-path regression](validation/standard14-pen.md).
+
 `cid_mapping.mbt` resolves Identity, Adobe predefined and explicit external
 CMap entries without using ToUnicode values as glyph CIDs. Explicit entries
 and inherited mappings take precedence over notdef fallback. An unmapped code
@@ -188,51 +207,77 @@ the public viewport matrix and rendered page stay in the same coordinate
 convention. Invalid or disjoint CropBox values fall back to the effective
 MediaBox, and malformed MediaBox values use the PDF.js letter-size fallback.
 
-The current renderer has several concrete compatibility improvements: it emits the pdf.js-style
-full viewport matrix, lowers path-only coloured tiling patterns to SVG `pattern` definitions,
-and applies a retained `/Matrix` at the paint site. ShadingType 4/5/6/7 streams are decoded into
-`PdfMeshTriangle` records; PatternType 2 resources are clipped to their source path, while the
-SVG fallback uses barycentric microtriangles and leaves per-vertex colours available for a future
-Canvas/WebGL Gouraud renderer. Explicit clipping paths are serialized as
-nested clip paths so each additional path narrows the previous clip instead of becoming a union.
-Their definitions carry the output scale, just like the paints they wrap;
-leaving them unscaled cuts off zoomed glyphs and images. All clip intersections
-use the same page-relative coordinate convention before the outer rotation.
-PDF ImageMask, colour-key `/Mask`, image `/SMask`, and common Form soft-mask resources are lowered
-to browser-ready mask images. A nested SVG applies image masks before the outer affine transform,
-while page-space soft-mask definitions retain their `/BBox`, backdrop sample, and transfer-map
-output. Adjacent items with the same soft mask are now emitted inside one SVG compositor group,
-so the mask is applied to the accumulated source paint. Form XObject transparency dictionaries
-are also read into each flattened item, preserving the source group id and its isolated/knockout
-flags, including a `group_path` for nested Forms. SVG maps isolated groups to
-`isolation:isolate`; a future canvas/WebGL compositor can use the data attributes for
-non-isolated backdrops and knockout. Exact backdrop and knockout pixel compositing remains
-outside the current SVG lowering.
+`canvas_plan.mbt` retains winding-rule clip stacks, delayed W/W*, empty clips,
+Form intersections, images, original colour components, glyph outlines, affine
+pens and nested scene resources. `graphics_diagnostics()` exposes capability
+issues. The Canvas backend returns straight RGBA8 surfaces; PDF group work uses
+premultiplied surfaces with independent shape and alpha. It implements isolated
+and nonisolated backdrops, knockout, nested groups, process/ICC blend spaces,
+text TK and all 16 PDF blend modes. Alpha/Luminosity soft masks retain their
+installation CTM, BBox, BC in group space, TR and image-local precedence.
+The [compositing report](a2-compositing-validation.md) records pixel evidence,
+resource limits and reference disagreements. SVG retains explicit compatibility
+approximations; its isolation/data attributes do not implement the Canvas model.
 
-Colour conversion lives in `colour.mbt`. Paints carry the declared
-`PdfColourSpace`; component count never selects a conversion implicitly.
-The content adapter resolves `CS/cs` in the active resource scope, initializes
-that space's default samples and keeps `SCN/scn` fill/stroke pattern slots
-independent. Pattern cells and Form soft masks use the same viewer content
-collector as pages, including nested Form scopes. Paths expose separate
-`pattern` and `stroke_pattern` resources. SVG lowers tiling strokes, while
-shading-pattern strokes and complex pattern text/compositing remain pending.
+Pattern cells reuse the page content collector and active resource scopes.
+Independent `pattern` and `stroke_pattern` paints retain coloured/uncoloured
+base paint, base matrix and signed lattice. Complete cell plans include text,
+images, Forms, groups and clips; each tile receives the actual parent backdrop.
+Type 3 scenes reuse the same structured replay. PatternType 2 fill and stroke
+also replay their own ExtGState/Background/mask through the shared compositor.
+See [pattern stencils](validation/image-patterns.md),
+[Type 3 scenes](validation/type3-scenes.md) and
+[shading patterns](a2-shading-pattern-validation.md).
 
-CalGray, CalRGB and Lab use the pinned PDF.js curves, primary-matrix column
-order and output transforms. CalRGB includes white-point normalization and
-black-point compensation. CMYK uses PDF.js' fitted SWOP fallback; ICCBased
-uses its declared alternate, not an ICC profile engine. Indexed lookup values
-are expanded into their base space's component ranges. Separation/DeviceN
-tint functions are prepared before repeated image/mesh sample conversion.
-Rendering intent is not applied, matching the pinned PDF.js canvas behavior.
+ShadingType 1–7 keeps functions and original sample-space components. The pixel
+painter interpolates those components before Function/colour conversion,
+including Gouraud, Coons/tensor, axial/radial Extend, two-dimensional functions,
+adaptive checked lookup and device-space tessellation. Unsupported or excessive
+sampling fails explicitly. Legacy SVG gradients/microtriangles remain an
+approximation, not a deferred Canvas implementation. See
+[the shading record](a2-shading-validation.md).
 
-For raw images, `image_colour.mbt` asks pdflite to decode filters/predictors,
-then reads byte-aligned rows of 1/2/4/8/16-bit original samples. Colour-key
-mask comparisons happen before `/Decode` and conversion; the output is an
-RGB/RGBA PNG. Encoded JPEG/JPX/JBIG2 and ImageMask retain their separate paths.
-Matte, exact resampling, encoded-image colour management and large-image
-allocation policies are still open. Viewer reader recovery also tolerates
-legal comments between `endstream` and `endobj` when page content was dropped,
+The shared colour modules retain the declared `PdfColourSpace`, source samples
+and active resource scope; component count never selects a conversion implicitly.
+`CS/cs`, Default colour resources and independent fill/stroke slots propagate
+through pages, pattern cells and masks. CalGray/CalRGB/Lab and the device-CMYK
+SWOP display fallback remain available. Actual LittleCMS ICC transforms add
+source/target profiles, Range, rendering intent and PDF/X OutputIntent handling.
+JS uses the locally staged extraWasm engine; native Linux loads LittleCMS2
+dynamically.
+Standalone Moon Wasm/Wasm-GC has no ICC host imports and uses the declared legal
+Alternate with explicit capability. `icc_capability()` reports support and
+`clear_icc_transforms()` releases active cached transforms. Indexed, complete
+Separation/DeviceN tint/domain, None/All and process OP/OPM share these paths;
+physical spot proofing requires a matching profile. See
+[the colour record](a2-colour-validation.md) and
+[LittleCMS assets](../web/vendor/lcms-wasm/README.md).
+
+The image pipeline retains original samples for `/Decode`, colour-key `/Mask`,
+SMask/explicit-mask precedence, embedded alpha and Matte before final colour
+conversion. Raw 1/2/4/8/16-bit samples, row padding and encoded JPEG/JPX/JBIG2
+join the same bounded PNG/RGBA path, including affine sampling and downsampling.
+[JPEG](jpeg-decoder.md) and [JPX](../codecs/jpx/README.md) use MoonBit decoders;
+[JBIG2](../codecs/jbig2/README.md) uses JS-hosted PDFium Wasm or isolated native
+Linux decoding. Unsupported hosts fail explicitly rather than forwarding
+unrenderable compressed media to the browser. Allocations, resource recursion
+and caches are bounded, but these limits are not a whole-document RSS guarantee
+or a synchronous-JS hard-cancellation promise. Real samples and retained edge
+residuals are in [image sampling](validation/image-sampling.md).
+
+Browser codec/CMM assets come from exact npm dependencies `lcms-wasm@1.0.5`
+and `pdfjs-dist@6.4.299` in `tools/web-assets/`, with archive integrity and the
+dependency tree fixed by the lockfile. After explicit `npm ci` setup,
+`tools/prepare_web_assets.mjs` verifies versions and asset hashes and copies
+LittleCMS JS/Wasm plus standalone JBIG2 Wasm to ignored local paths. The web
+build invokes preparation and stages the same-origin assets and license notices
+for the Worker and Canvas host; it does not install npm packages automatically.
+No PDF.js renderer or npm/CDN fetch is needed when opening a PDF. Native JBIG2
+C++ sources and text licenses stay tracked. This establishes repeatable asset
+acquisition, not a verified bit-identical source rebuild; see
+[development setup](development.md#本地运行) and the adapter provenance records.
+
+Viewer reader recovery also tolerates legal comments between `endstream` and `endobj` when page content was dropped,
 using declared stream lengths and the active xref chain rather than scanning
 old revisions for deleted content. The raw-byte recovery is skipped for
 authenticated encrypted documents with unresolved page contents.
@@ -249,21 +294,47 @@ if no page survives, the located original error propagates. This eager recovery
 reports the surviving page count, unlike PDF.js's lazy failure for a bad page.
 
 The standalone browser shell lives in `web/`, with a MoonBit JS bridge in
-`cmd/browser/`. PDF bytes are decoded entirely by the MoonBit/pdflite module;
-the JavaScript shell handles file input, DOM mounting and native browser
-selection. `web/pdf-client.js` sends asynchronous operations to the native
+`cmd/browser/`. `web/pdf-client.js` sends asynchronous operations to the native
 module Worker in `web/pdf-worker.js`; the generated MoonBit bridge runs there.
-The bridge includes `open_pdf`, `render_page`, `render_print_page`, `select_text`, `select_page_text`,
-`search_pdf`, `document_info`, `page_layouts`, `cache_info`, downloads and close.
+`initializePdfGraphics()` installs the image/colour host adapters before
+MoonBit/pdflite parses PDF bytes in that Worker. The JavaScript shell handles
+file input, DOM mounting, Canvas replay and native browser selection; its
+separate JS realm also initializes the graphics host needed for replay.
+The bridge includes `open_pdf`, `open_pdf_with_password`, `render_page`,
+`render_print_page`, `select_text`, `select_page_text`, `search_pdf`,
+`document_info`, `page_layouts`,
+`cache_info`, `download_attachment`, `download_metadata`, `set_font_fallbacks`
+and `close_pdf`.
+
 Page models use an LRU budget of eight pages/estimated 32 MiB; serialized render
-responses use twelve entries/24 MiB. These bounds exclude parsed input and
-temporary decoding. Closing/replacing a document terminates its Worker and
-rejects outstanding work. AbortSignal removes queued tasks and discards active
-results; a synchronous active operation can finish before the next RPC. The
-host contract does not reproduce PDF.js loading/render task objects. Embedded
+responses use twelve entries/24 MiB, including the Canvas plan, compatibility
+SVG and text layer. These bounds exclude parsed input, temporary decoding and
+main-thread Canvas working surfaces. Closing/replacing a document terminates
+its Worker and rejects outstanding work. AbortSignal removes queued tasks and
+discards active results; a synchronous active operation can finish before the
+next RPC. The host contract does not reproduce PDF.js loading/render task
+objects or promise hard cancellation of synchronous Canvas replay. Embedded
 font families receive page prefixes so multiple SVGs do not replace
-each other's @font-face rules. Rendering an already decoded page uses
-`PdfPageModel::render_svg`.
+each other's @font-face rules. `render_page` retains the existing SVG and text
+layer fields and additionally returns the Canvas plan. `renderPdfPage()` installs
+pattern/shading painters and delegates to `renderPdfCanvas()` on the main thread;
+main pages and thumbnails use that result and surface graphics diagnostics.
+`render_svg()` remains the compatibility API.
+
+The native public route writes `.canvas.json` through `cmd/main`, then replays
+it with `tools/render_canvas.mjs` in a Canvas host. `.svg` selects compatibility
+output. It uses the same plan/runtime, not a separate MoonBit software rasterizer;
+setup and generated-bridge prerequisites are in
+[native Canvas setup](validation/native-canvas-setup.md).
+
+The shipped web bridge/runtime has been tested with a native Canvas API host.
+Chromium was blocked by socket EPERM in the recorded A2 environment, so those
+runs do not establish a new DOM/interaction or browser screenshot pass.
+The upstream Worker's separate browser/pressure evidence is retained in
+[validation.md](validation.md#browser-host-lifecycle-scheduling-and-pressure),
+with `1f9db19` annotation/print-intent evidence in
+[its own section](validation.md#readonly-annotation-interaction-and-print-intent).
+Neither is a fresh run of the merged A2 graphics path.
 
 The browser document panel consumes one `document_info` response containing
 flattened outline destinations, display page labels, Info fields, attachment
@@ -407,14 +478,20 @@ to verify that the harness cannot pass an empty or failed operation.
 
 The A1 font/text main paths are complete; measured differences and retained
 fallback branches are recorded in [validation.md](validation.md#a1-completion-validation).
-The remaining implementation stages are ordered by the visible compatibility gap:
+A2's Canvas, image/colour adapters and group/mask/pattern/shading main paths are
+implemented with target-specific capabilities and measured residuals documented
+in [a2-acceptance.md](a2-acceptance.md). Remaining implementation work includes:
 
-1. Larger visual/large-document baselines and CI, retaining measured
-   font rasterization differences and fallback observations;
-2. CTM-preserving path/image geometry, complete group-level mask compositing, and pixel-level
-   Gouraud interpolation for mesh triangles;
-3. complete annotation appearance and form/widget layers;
-4. Canvas/WebGL output and incremental page loading for large documents.
+1. Complete annotation appearance, read-only form/widget and link/interaction layers;
+2. Accessible tagged DOM, larger real-document visual/pressure baselines and CI;
+3. Range/incremental page loading and the separately tracked XFA scope.
+
+Worker lifecycle/cancellation, page virtualization and bounded page/render
+caches have their own upstream acceptance. Revalidate their integration with
+A2's Canvas path; cache/working-resource budgets are not whole-document RSS
+limits. Expanded tests must preserve known font/rasterization differences and
+explicit host fallbacks instead of turning conversion or test counts into
+visual pass rates.
 
 The complete feature backlog and acceptance rules live in
 [`TODO.md`](TODO.md). The two current core workstreams, text/fonts and
@@ -425,9 +502,9 @@ Type 3 glyphs, SVG text output and text selection have been moved unchanged to
 Type 1 is an extension rather than a parity requirement: the pinned PDF.js
 Type 1 parser also supports only one FD.
 
-Annotation parsing and SVG lowering live in `annotations.mbt` and
-`annotations_svg.mbt`. The viewer reads the original `/Annots` array: popup
-children and malformed annotations are skipped without renumbering valid source
+Annotation parsing and compatibility SVG lowering live in `annotations.mbt`
+and `annotations_svg.mbt`; appearance scenes also enter the shared Canvas plan.
+The viewer reads the original `/Annots` array: popup children and malformed annotations are skipped without renumbering valid source
 indices. PDFDocEncoding/UTF-16 strings, normalized `/C` components, quads, lines,
 vertices, ink paths, and display/print flags are retained independently of the
 fallback drawing.
@@ -448,9 +525,10 @@ through `/Matrix` into `/Rect`; a zero-area transformed BBox uses the PDF
 translation fallback. Item IDs are allocated after page content and preceding
 appearances, avoiding SVG reference collisions. Appearance fonts are resolved
 at each text paint site, including nested Form scopes, and embedded programs
-receive appearance-specific CSS family names. The outer transparency group
-preserves isolation/knockout metadata with the same compositing limits as page
-Forms. A valid empty stream suppresses geometry fallback.
+receive appearance-specific CSS family names. Outer transparency groups reuse
+the same Canvas isolation/knockout replay and resource limits as page Forms;
+SVG retains the declared compatibility limits. A valid empty stream suppresses
+geometry fallback.
 
 Widget metadata distinguishes inherited field values from each radio/checkbox
 on-state and checked state. The current fallback is a simple read-only display;
@@ -472,12 +550,12 @@ common OCMD policies and Form `/OC` entries are resolved against the selected
 selection. Usage-category controls and a browser layer panel remain host
 features.
 
-The current SVG path already handles image XObjects and inline images. Inline payloads
-are collected with `parse_content_ops_with_resources`, including images nested in Form
-XObjects, then passed through pdflite's colour-space/filter decoder. Axial, radial, and
-function shading resources are sampled into SVG gradients. Basic alpha and blend mode
-state is tracked in a parallel content walk because the compact pdflite JSON entry does
-not expose those fields.
+Image XObjects and inline payloads, including nested Form images, are collected
+with `parse_content_ops_with_resources` and passed through pdflite filters plus
+the viewer's original-sample/codec adapters. The content walk additionally retains
+alpha, blend, group, mask and paint state that compact pdflite JSON entries do
+not expose. Both Canvas plans and compatibility SVG consume this shared model;
+SVG's sampled gradients and mask images do not replace structured pixel replay.
 
 Each stage should add a narrow fixture from the pinned pdf.js corpus under
 `reference/pdf.js/test/pdfs` and a MoonBit test that checks the structural

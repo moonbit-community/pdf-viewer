@@ -1,0 +1,118 @@
+{
+  "date": "2026-10-11",
+  "sourceTree": "62924a53e2ba45a04ffee0ea78c2978e898fdeee",
+  "cleanCommitParents": [
+    "21764c08d7fa0d913281e43ba87469854c178502",
+    "1f9db19599e21ab6d8ae713e475c20bdbbba5717"
+  ],
+  "cleanSourceContainsWasm": false,
+  "newCommitHistoryContainsWasm": false,
+  "initialGeneratedAssetsAbsent": true,
+  "initialNodeModulesAbsent": true,
+  "missingDependencyFailsWithExplicitInstallCommand": true,
+  "installCommand": "npm ci --prefix tools/web-assets --ignore-scripts --omit=optional",
+  "lockSha256": "b1759779104f4afbcff1bb9152608b72dbc18b2c919a0f2f38147fc428a1a965",
+  "node": "24.19.0",
+  "npm": "11.9.0",
+  "installedPackages": 128,
+  "nativeNodeAddonsInstalled": false,
+  "buildCommand": "moon run tools/build_web.mbtx",
+  "cleanBuildPassed": true,
+  "runtimeAssetHashes": {
+    "web/vendor/lcms-wasm/lcms.mjs": "1a5c8f81186211856ba7c5d6841e35fe3fa901b857a247f72318e1652c5e1cec",
+    "web/vendor/lcms-wasm/lcms.wasm": "dbcbee3fb3a49459a60bb6b29d6ab25fe7c219b0cc0c2b9579c0cc78f7390ddd",
+    "web/vendor/jbig2/jbig2.wasm": "466f45c2a61a698152fb5400c27e56ff2ceb73dcb71fde3fc366a502308eaab0"
+  },
+  "assetRegressions": [
+    "missing dependency",
+    "wrong package version",
+    "corrupt hash",
+    "validation before output writes",
+    "independent cwd",
+    "repeatable copy"
+  ],
+  "worker": {
+    "scope": "Actual web/pdf-worker.js and web/pdf-client.js over Node worker_threads; shipped Canvas runtime with native Canvas API host; scheduler element doubles, not browser DOM",
+    "fixtureSha256": "90180777a3def794dae5953cb591f73e169cffef65306021ba07cb0c2c4bd752",
+    "pages": 14,
+    "tests": [
+      "ready gates ICC/JBIG2 hooks, transferable input, metadata-only layout",
+      "Worker-decoded JBIG2 black/white pixels and ICC profile pixels through shipped Canvas",
+      "off-screen text selection and bounded decoded/serialized LRU caches",
+      "priority ordering, pre-ready/queued/active cancellation, bad-operation recovery and cache invalidation",
+      "actual Worker separates display/print caches; Canvas preserves print-only, display-only and Hidden appearance pixels at all rotations; overlay geometry and safe URLs retained",
+      "unchanged 621-byte text-pen fixture through actual Worker and default Canvas is nonblank, diagnostic-free and exact to direct bridge RGBA",
+      "reset terminates stale work, fresh engines/document reopen, and close releases queued work",
+      "real transport forwards module and explicit graphics startup failures without a timeout",
+      "actual async PageScheduler discards old epoch/navigation Canvas mounts and mounts a fresh result; unloading/clearing invokes annotation cleanup",
+      "exact shipped thumbnail/print functions suppress stale Canvas results, warnings and late errors; fresh results publish"
+    ],
+    "graphics": {
+      "icc": true,
+      "jbig2": true,
+      "diagnostics": []
+    },
+    "iccPixel": [
+      61,
+      128,
+      193,
+      255
+    ],
+    "cache": {
+      "ok": true,
+      "pages": 8,
+      "estimated_bytes": 3987820,
+      "budget_bytes": 33554432,
+      "max_pages": 8,
+      "hits": 1,
+      "misses": 14,
+      "evictions": 6,
+      "render": {
+        "entries": 12,
+        "bytes": 6055338,
+        "budget_bytes": 25165824,
+        "max_entries": 12,
+        "hits": 2,
+        "misses": 14,
+        "evictions": 2
+      }
+    },
+    "annotationIntent": {
+      "fixtureSha256": "41da0cca6f34f69c4f79e096f5d8b7cec5404b24440fd7ff3ba737c3b1d2664e",
+      "rotations": [
+        0,
+        90,
+        180,
+        270
+      ],
+      "scale": 1.25,
+      "userUnit": 1.5,
+      "cache": {
+        "entries": 8,
+        "bytes": 67268,
+        "budget_bytes": 25165824,
+        "max_entries": 12,
+        "hits": 4,
+        "misses": 8,
+        "evictions": 0
+      }
+    },
+    "originalTextFixture": {
+      "bytes": 621,
+      "sha256": "faf86fff67b17f2d78afcf5353341c85b5949e560a11c5271166432e5193a538",
+      "width": 240,
+      "height": 160,
+      "rgbaSha256": "aa9b2891b476eeb4b9bc648aa2879f5bc65a1e757e68b5295206ecd45ffd5a2b",
+      "diagnostics": [],
+      "exactDirectBridgePixels": true,
+      "nativeOutlineCallback": false
+    }
+  },
+  "browserDOMExecuted": false,
+  "notes": [
+    "Only verified JS/Wasm assets and retained notices ship; npm transitive packages are build inputs, not website runtime files.",
+    "lcms-wasm includes Tape and deprecated glob/inflight build-time dependencies; install scripts are disabled and those dependencies are never loaded by the asset copier.",
+    "Release assets are acquired reproducibly; no bit-identical C/C++ compiler rebuild claim."
+  ],
+  "newReachableBlobsScannedForWasmMagic": 505
+}

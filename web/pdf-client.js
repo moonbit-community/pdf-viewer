@@ -11,6 +11,7 @@ export class PdfWorkerClient {
     this.queue = [];
     this.active = null;
     this.ready = false;
+    this.graphics = null;
     this.nextId = 0;
     this.stats = { completed: 0, cancelled: 0, workerStarts: 0, workerErrors: 0 };
   }
@@ -35,7 +36,12 @@ export class PdfWorkerClient {
     worker.addEventListener("message", event => {
       if (this.worker !== worker) return;
       const message = event.data;
+      if (message.type === "startup-error") {
+        fail(message.error?.message || "PDF Worker 图形引擎无法初始化");
+        return;
+      }
       if (message.type === "ready") {
+        this.graphics = message.graphics || null;
         clearTimeout(this.startupTimer);
         this.ready = true;
         this.drain();
@@ -104,6 +110,7 @@ export class PdfWorkerClient {
     this.worker?.terminate();
     this.worker = null;
     this.ready = false;
+    this.graphics = null;
     for (const task of [...this.queue, ...(this.active ? [this.active] : [])]) {
       if (!task.settled) this.stats.cancelled++;
       this.settle(task, error);
@@ -114,6 +121,7 @@ export class PdfWorkerClient {
 
   diagnostics() {
     return { ...this.stats, worker: Boolean(this.worker), ready: this.ready,
+      graphics: this.graphics,
       queued: this.queue.length, active: this.active?.method || null };
   }
 }

@@ -1,0 +1,135 @@
+{
+  "pillow": "12.3.0",
+  "libjpeg_turbo": "3.1.4.1",
+  "formula": [
+    "(11*x+3*y)%256",
+    "(2*x+19*y)%256",
+    "(17*x+5*y)%256"
+  ],
+  "fixtures": [
+    {
+      "name": "rgb444",
+      "mode": "RGB",
+      "options": {
+        "quality": 87,
+        "subsampling": 0
+      },
+      "bytes": 864,
+      "sha256": "09d4175c27716d3365b45cf26b0c7db0f82a6d9fbcbde99bee33f7b20e3e92bb"
+    },
+    {
+      "name": "rgb422",
+      "mode": "RGB",
+      "options": {
+        "quality": 87,
+        "subsampling": 1
+      },
+      "bytes": 832,
+      "sha256": "a2326c1737daf0273d696ace7fa4d08d7b888b6d5589d95b0c623e7ae355fdb5"
+    },
+    {
+      "name": "rgb420",
+      "mode": "RGB",
+      "options": {
+        "quality": 87,
+        "subsampling": 2
+      },
+      "bytes": 791,
+      "sha256": "1aa47d8c5e731f075566c6555eeee1555e973a49c644df5ff8fb52e8c52c47eb"
+    },
+    {
+      "name": "rgb_progressive",
+      "mode": "RGB",
+      "options": {
+        "quality": 87,
+        "subsampling": 2,
+        "progressive": true
+      },
+      "bytes": 708,
+      "sha256": "bdddc6de87925afe9aad6603d7fd15857f1d25d13de1e53b33b03541251f555a"
+    },
+    {
+      "name": "rgb_progressive444",
+      "mode": "RGB",
+      "options": {
+        "quality": 87,
+        "subsampling": 0,
+        "progressive": true
+      },
+      "bytes": 785,
+      "sha256": "f73438f511ceda212bbd5d650edd1fc6ac1fbc3bd696187e0d368d00fafa4054"
+    },
+    {
+      "name": "rgb_restart",
+      "mode": "RGB",
+      "options": {
+        "quality": 87,
+        "subsampling": 0,
+        "restart_marker_blocks": 1
+      },
+      "bytes": 882,
+      "sha256": "0237b46082b533c954ff7575068a47313f2d79f6b1dbcc06f5a184469ae252c6"
+    },
+    {
+      "name": "rgb_progressive_restart",
+      "mode": "RGB",
+      "options": {
+        "quality": 87,
+        "subsampling": 0,
+        "progressive": true,
+        "restart_marker_blocks": 1
+      },
+      "bytes": 911,
+      "sha256": "5a1f227a8c314e339e028abe3e91871db995669b8105627454d0f39fca908107"
+    },
+    {
+      "name": "rgb_direct",
+      "mode": "RGB",
+      "options": {
+        "quality": 87,
+        "subsampling": 0,
+        "keep_rgb": true
+      },
+      "bytes": 607,
+      "sha256": "120d04fa1bb1ac0be6a405535478bf0ebd93e4b8b3c4eb1b0515f5044b5e96c7"
+    },
+    {
+      "name": "gray",
+      "mode": "L",
+      "options": {
+        "quality": 87
+      },
+      "bytes": 423,
+      "sha256": "5d18dc4dffabde7098d7c3923121cba877fc7816c2c6fb68a8ccb4097889acd7"
+    },
+    {
+      "name": "gray_progressive",
+      "mode": "L",
+      "options": {
+        "quality": 87,
+        "progressive": true
+      },
+      "bytes": 389,
+      "sha256": "eb79e95ee296453ca56b3a049869e16f0ac2c62c659bed911b59f2423423ed71"
+    },
+    {
+      "name": "cmyk",
+      "mode": "CMYK",
+      "options": {
+        "quality": 87
+      },
+      "bytes": 623,
+      "sha256": "410c079f8561b6a3171a42567c9d9853881f3c3e5c2093c79561a1972a43bc18"
+    },
+    {
+      "name": "cmyk_progressive",
+      "mode": "CMYK",
+      "options": {
+        "quality": 87,
+        "progressive": true
+      },
+      "bytes": 978,
+      "sha256": "52428291b40011f7348b72ca9c7ffe4262f66e48b39824ad341bec773c9c72b2"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "moonbit-community/pdf-viewer/codecs/jpx",
+}
+
+supported_targets = "native"
+
+pkgtype(kind: "executable")

@@ -1,0 +1,24 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/vendor/jpeg2000"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn decode_components(Bytes) -> Result[Array[Component], String]
+
+// Errors
+
+// Types and methods
+pub(all) struct Component {
+  width : Int
+  height : Int
+  bits : Int
+  signed : Bool
+  bytes : Bytes
+} derive(@debug.Debug)
+
+// Type aliases
+
+// Traits

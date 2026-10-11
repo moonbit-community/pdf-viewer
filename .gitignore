@@ -10,3 +10,12 @@ target
 # documented in reference/README.md instead of vendoring its large test tree.
 reference/pdf.js/
 web/_generated/
+
+# Generated standalone codec assets copied by tools/build_web.mbtx
+/web/vendor/jbig2/
+
+# Verified npm assets are build output, not source-controlled binaries.
+/tools/web-assets/node_modules/
+/vendor/jbig2/jbig2.wasm
+/web/vendor/lcms-wasm/lcms.mjs
+/web/vendor/lcms-wasm/lcms.wasm

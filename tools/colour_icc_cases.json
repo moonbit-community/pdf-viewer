@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-10",
+  "reference_revision": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+  "engine": "LittleCMS",
+  "wasm_package": "lcms-wasm@1.0.5",
+  "wasm_engine_version": "2.16",
+  "assets": [
+    {
+      "file": "assets/icc/CGATS001Compat-v2-micro.icc",
+      "bytes": 8464,
+      "sha256": "73e1ba37d2bad5bab2a964f40a9eed96209666efc067c3322626214bbef234a0"
+    },
+    {
+      "file": "assets/icc/gray-gamma22.icc",
+      "bytes": 348,
+      "sha256": "c8c65b351036cb6aef81417e880675f934083639baabf748431560d354524b50"
+    },
+    {
+      "file": "assets/icc/rgb-gamma22.icc",
+      "bytes": 568,
+      "sha256": "dc960d76171766a9cc6291b5f7c07fc3d5144c709aa6e4bdcc8e81cda33842fb"
+    },
+    {
+      "file": "assets/icc/srgb-matrix.icc",
+      "bytes": 588,
+      "sha256": "d68baed8428c7b500c33a60da52a08a845b4bf4ae4745cbda046811e2b0eb3c9"
+    },
+    {
+      "file": "web/vendor/lcms-wasm/lcms.mjs",
+      "bytes": 67586,
+      "sha256": "1a5c8f81186211856ba7c5d6841e35fe3fa901b857a247f72318e1652c5e1cec"
+    },
+    {
+      "file": "web/vendor/lcms-wasm/lcms.wasm",
+      "bytes": 315910,
+      "sha256": "dbcbee3fb3a49459a60bb6b29d6ab25fe7c219b0cc0c2b9579c0cc78f7390ddd"
+    }
+  ],
+  "real_fixtures": [
+    {
+      "name": "version4pdf.pdf",
+      "url": "https://www.color.org/version4pdf.pdf",
+      "redistributed": false,
+      "sha256": "8f9b2f4dd7acd3803ff5c89b33e51e5267053ac6543a47a9a156ddc1b3f817f8"
+    },
+    {
+      "name": "altona_technical_1v2_x3.pdf",
+      "url": "https://eci.org/lib/exe/altona_technical_1v2_x3.pdf",
+      "redistributed": false,
+      "sha256": "06b980fa09cd45f35a1fc9a2b907911201e91c0fcc2ee5a67820f6bb7818e630"
+    }
+  ]
+}

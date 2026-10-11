@@ -1,10 +1,21 @@
 ///|
+priv struct PdfPatternInitialState {
+  state : @pdflite.PdfContentOperatorState
+  fill_explicit : Bool
+  stroke_explicit : Bool
+}
+
+///|
 fn pdf_pattern_resource_of_paint(
   document : @pdflite.PdfDocument,
   resources : @syntax.PdfObject,
   space : @pdflite.PdfColourSpace,
   colour : @pdflite.PdfContentColourValues,
   ctm : @geometry.TransformMatrix,
+  context? : PdfResourceBuildContext = pdf_resource_build_context(),
+  initial_state? : PdfPatternInitialState? = None,
+  retain_ink_samples? : Bool = false,
+  convert_ink_to_device_cmyk? : Bool = true,
 ) -> PdfPatternResource? {
   guard space
     is (@pdflite.PdfPattern | @pdflite.PdfPatternWithBaseColourSpace(_)) &&
@@ -12,7 +23,17 @@ fn pdf_pattern_resource_of_paint(
     return None
   }
   match
-    pdf_pattern_resource_of(document, resources, name, Some(values), space) {
+    pdf_pattern_resource_of(
+      document,
+      resources,
+      name,
+      Some(values),
+      space,
+      context~,
+      initial_state~,
+      retain_ink_samples~,
+      convert_ink_to_device_cmyk~,
+    ) {
     Some(resource) => Some(pdf_pattern_resource_with_ctm(resource, ctm))
     None => None
   }
@@ -30,6 +51,10 @@ fn pdf_pattern_resource_of(
   name : String,
   base_colour : Array[Double]?,
   base_colour_space : @pdflite.PdfColourSpace,
+  context? : PdfResourceBuildContext = pdf_resource_build_context(),
+  initial_state? : PdfPatternInitialState? = None,
+  retain_ink_samples? : Bool = false,
+  convert_ink_to_device_cmyk? : Bool = true,
 ) -> PdfPatternResource? {
   let patterns_name = pdf_image_name("/Pattern")
   let pattern_name = pdf_image_name(name)
@@ -38,7 +63,16 @@ fn pdf_pattern_resource_of(
       match document.lookup_direct(pattern_name, patterns) {
         Some(pattern) =>
           pdf_pattern_resource_of_object(
-            document, resources, name, pattern, base_colour, base_colour_space,
+            document,
+            resources,
+            name,
+            pattern,
+            base_colour,
+            base_colour_space,
+            context~,
+            initial_state~,
+            retain_ink_samples~,
+            convert_ink_to_device_cmyk~,
           )
         None => None
       }
@@ -54,6 +88,10 @@ fn pdf_pattern_resource_of_object(
   pattern : @syntax.PdfObject,
   base_colour : Array[Double]?,
   base_colour_space : @pdflite.PdfColourSpace,
+  context? : PdfResourceBuildContext = pdf_resource_build_context(),
+  initial_state? : PdfPatternInitialState? = None,
+  retain_ink_samples? : Bool = false,
+  convert_ink_to_device_cmyk? : Bool = true,
 ) -> PdfPatternResource? {
   match document.lookup_direct(pdf_image_name("/PatternType"), pattern) {
     Some(@syntax.PdfInteger(1)) => {
@@ -83,7 +121,12 @@ fn pdf_pattern_resource_of_object(
         "/YStep",
         bbox.max_y - bbox.min_y,
       )
-      if x_step <= 0.0 || y_step <= 0.0 {
+      if x_step == 0.0 ||
+        y_step == 0.0 ||
+        bbox.max_x <= bbox.min_x ||
+        bbox.max_y <= bbox.min_y ||
+        context.pattern_depth >= 16 ||
+        context.pattern_count >= 256 {
         return None
       }
       let matrix = pdf_pattern_matrix_or_identity(document, pattern)
@@ -123,6 +166,49 @@ fn pdf_pattern_resource_of_object(
         rectangle.max_x,
         rectangle.max_y,
       )
+      let initial = match initial_state {
+        Some(base) =>
+          {
+            ..base.state,
+            ctm: initial.ctm,
+            clipping_path: initial.clipping_path,
+            partial_path: initial.partial_path,
+            path: initial.path,
+            text_state: { ..base.state.text_state, font_cache: [], },
+            state_stack: [],
+            alpha_constant_stroke: 1.0,
+            alpha_constant_non_stroke: 1.0,
+            alpha_source: false,
+            blend_mode: @syntax.PdfNameObject(pdf_name_key("/Normal")),
+            soft_mask: @syntax.PdfNull,
+          }
+        None => initial
+      }
+      let uncolored_source = pdf_colour_source(
+        base_colour_space,
+        @pdflite.PdfContentColourFloats(base_colour.unwrap_or([])),
+        document=Some(document),
+        resource_context=Some(context),
+      )
+      let initial = if paint_type == 2.0 {
+        let base_space = match base_colour_space {
+          @pdflite.PdfPatternWithBaseColourSpace(space) => space
+          _ => base_colour_space
+        }
+        let values = @pdflite.PdfContentColourFloats(base_colour.unwrap_or([]))
+        {
+          ..initial,
+          path_state: {
+            ..initial.path_state,
+            colourspace_non_stroke: base_space,
+            colourspace_stroke: base_space,
+            colour_non_stroke: values,
+            colour_stroke: values,
+          },
+        }
+      } else {
+        initial
+      }
       let entries = pdf_collected_entries_of_ops(
         document,
         initial,
@@ -131,19 +217,115 @@ fn pdf_pattern_resource_of_object(
         initial.clipping_path,
         None,
         [],
-        false,
-        false,
+        paint_type == 2.0 || initial_state is Some({ fill_explicit: true, .. }),
+        paint_type == 2.0 ||
+        initial_state is Some({ stroke_explicit: true, .. }),
+        resource_context=context,
       ) catch {
         _ => return None
       }
-      let (tile_svg, tile_parts) = pdf_pattern_tile_svg(
-        document,
-        entries,
-        bbox.min_x,
-        bbox.min_y,
-        bbox.max_y - bbox.min_y,
-        uncolored_colour,
-      )
+      context.pattern_depth += 1
+      context.pattern_count += 1
+      let scope : PdfAppearanceFontScope = {
+        id: "pattern-" + context.pattern_count.to_string(),
+        fonts: [],
+        sources: [],
+      }
+      let lowered = Some(
+        pdf_items_of_collected(
+          document,
+          entries[:],
+          bbox.min_x,
+          bbox.min_y,
+          bbox.max_x - bbox.min_x,
+          bbox.max_y - bbox.min_y,
+          appearance_fonts=scope,
+          resource_context=context,
+          retain_ink_samples~,
+          convert_ink_to_device_cmyk~,
+        ),
+      ) catch {
+        _ => None
+      }
+      context.pattern_depth -= 1
+      let items = match lowered {
+        Some(value) => value
+        None => return None
+      }
+      let items = match uncolored_colour {
+        Some(color) =>
+          items.map(item => {
+            match item {
+              Path(value) =>
+                Path({
+                  ..value,
+                  fill_color: color,
+                  stroke_color: color,
+                  fill_source: uncolored_source,
+                  stroke_source: uncolored_source,
+                })
+              Text(value) =>
+                Text({
+                  ..value,
+                  fill_color: color,
+                  stroke_color: color,
+                  fill_source: uncolored_source,
+                  stroke_source: uncolored_source,
+                })
+              _ => item
+            }
+          })
+        None => items
+      }
+      let tile_page : PdfPageModel = {
+        number: 1,
+        blend_space: "DeviceRGB",
+        blend_profile_id: None,
+        blend_calibration: None,
+        icc_profiles: [],
+        origin_x: bbox.min_x,
+        origin_y: bbox.min_y,
+        width: bbox.max_x - bbox.min_x,
+        height: bbox.max_y - bbox.min_y,
+        user_unit: 1.0,
+        rotation: 0,
+        fonts: scope.fonts,
+        items,
+        annotations: [],
+        text: "",
+      }
+      let output = StringBuilder()
+      pdf_svg_fonts(output, tile_page)
+      pdf_svg_render_items(output, tile_page, tile_page.items[:], 1.0, 0)
+      let tile_svg = output.to_string()
+      // Keep the image sampling compatibility stream for simple cells. Rich
+      // cells use the complete page model, including text and group boundaries.
+      let simple = tile_page.items.all(item => {
+        match item {
+          Path(value) =>
+            value.group_path.is_empty() &&
+            value.soft_mask is None &&
+            value.clips.is_empty()
+          Image(value) =>
+            value.group_path.is_empty() &&
+            value.soft_mask is None &&
+            value.clips.is_empty()
+          _ => false
+        }
+      })
+      let tile_parts = if simple {
+        let (_, parts) = pdf_pattern_tile_svg(
+          document,
+          entries,
+          bbox.min_x,
+          bbox.min_y,
+          bbox.max_y - bbox.min_y,
+          uncolored_colour,
+        )
+        parts
+      } else {
+        []
+      }
       Some({
         name,
         bbox: {
@@ -156,6 +338,7 @@ fn pdf_pattern_resource_of_object(
         y_step,
         matrix,
         tile_svg,
+        tile_page: Some(tile_page),
         tile_parts,
         shading: None,
       })
@@ -166,6 +349,25 @@ fn pdf_pattern_resource_of_object(
         Some(value) => value
         None => return None
       }
+      let initial = match initial_state {
+        Some(base) => base.state
+        None => @pdflite.pdf_content_initial_operator_state(0.0, 0.0, 1.0, 1.0)
+      }
+      let initial = {
+        ..initial,
+        ctm: @geometry.transform_identity_matrix,
+        alpha_constant_stroke: 1.0,
+        alpha_constant_non_stroke: 1.0,
+        alpha_source: false,
+        blend_mode: @syntax.PdfNameObject(pdf_name_key("/Normal")),
+        soft_mask: @syntax.PdfNull,
+      }
+      let shading_state = match
+        document.lookup_direct(pdf_name_key("/ExtGState"), pattern) {
+        Some(dictionary) =>
+          pdf_shading_pattern_apply_state(document, initial, dictionary)
+        None => initial
+      }
       let shading = try
         Some(
           pdf_shading_resource_of_object(
@@ -173,6 +375,16 @@ fn pdf_pattern_resource_of_object(
             name,
             shading_object,
             resources=page_resources,
+            resource_context=context,
+            rendering_intent=shading_state.path_state.rendering_intent,
+            black_generation=pdf_colour_device_function(
+              Some(document),
+              shading_state.black_generation,
+            ),
+            undercolour_removal=pdf_colour_device_function(
+              Some(document),
+              shading_state.undercolour_removal,
+            ),
           ),
         )
       catch {
@@ -182,6 +394,15 @@ fn pdf_pattern_resource_of_object(
       }
       match shading {
         Some(value) => {
+          let value = try {
+            let state = pdf_shading_pattern_state(
+              document, page_resources, pattern, shading_object, initial, shading_state,
+              context,
+            )
+            { ..value, pattern_state: Some(state), }
+          } catch {
+            error => pdf_shading_error_resource(name, @debug.to_string(error))
+          }
           let matrix = pdf_pattern_matrix_or_identity(document, pattern)
           Some({
             name,
@@ -193,6 +414,7 @@ fn pdf_pattern_resource_of_object(
             // lowered as a clipped mesh.
             matrix,
             tile_svg: "",
+            tile_page: None,
             tile_parts: [],
             shading: Some(value),
           })
@@ -274,8 +496,19 @@ fn pdf_pattern_resource_with_ctm(
   // shading IR, while the path geometry carries the paint-site CTM.
   match pattern.shading {
     Some(value) => {
-      let shading = { ..value, matrix: pattern_matrix, }
-      { ..pattern, matrix: pattern_matrix, shading: Some(shading), }
+      let m = pdf_pattern_compose_matrix(ctm, pattern_matrix)
+      let pattern_state = value.pattern_state.map(state => {
+        ..state,
+        soft_mask: state.soft_mask.map(mask => {
+          ..mask,
+          matrix: pdf_pattern_compose_matrix(
+            { a: m[0], b: m[1], c: m[2], d: m[3], e: m[4], f: m[5], },
+            mask.matrix,
+          ),
+        }),
+      })
+      let shading = { ..value, matrix: m, pattern_state, }
+      { ..pattern, matrix: m, shading: Some(shading), }
     }
     None => {
       let a = ctm.a * pattern_matrix[0] + ctm.c * pattern_matrix[1]
@@ -516,4 +749,19 @@ fn pdf_svg_pattern_image_transform(
   " " +
   top_left.y.to_string() +
   ")"
+}
+
+///|
+fn pdf_pattern_compose_matrix(
+  ctm : @geometry.TransformMatrix,
+  matrix : Array[Double],
+) -> Array[Double] {
+  [
+    ctm.a * matrix[0] + ctm.c * matrix[1],
+    ctm.b * matrix[0] + ctm.d * matrix[1],
+    ctm.a * matrix[2] + ctm.c * matrix[3],
+    ctm.b * matrix[2] + ctm.d * matrix[3],
+    ctm.a * matrix[4] + ctm.c * matrix[5] + ctm.e,
+    ctm.b * matrix[4] + ctm.d * matrix[5] + ctm.f,
+  ]
 }

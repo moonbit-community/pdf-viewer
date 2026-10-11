@@ -1,0 +1,58 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/env",
+}
+
+///|
+/// Test-only inclusive image/page stage timing. No product logging is added.
+/// Usage: moon run tools/image_stages.mbtx input.pdf output-directory
+async fn main {
+  let args = @env.args()
+  guard args.length() == 3 else {
+    fail("usage: image_stages.mbtx input.pdf output-directory")
+  }
+  let directory = args[2]
+  if !@fs.exists(directory) {
+    @fs.mkdir(directory, recursive=true)
+  }
+  @fs.write_file(directory + "/fixture.pdf", @fs.read_file(args[1]).binary())
+  @shell.Cmd("moon", ["build", "--target", "js", "--release", "cmd/browser"]).run()
+  @fs.write_file(
+    directory + "/viewer.mjs",
+    @fs.read_file("_build/js/release/build/cmd/browser/browser.js").binary(),
+  )
+  @fs.write_file(directory + "/measure.mjs", script())
+  @shell.Cmd("node", [directory + "/measure.mjs"]).run()
+}
+
+///|
+fn script() -> String {
+  let source =
+    #|import {readFileSync,writeFileSync} from 'node:fs';
+    #|import {pathToFileURL} from 'node:url';
+    #|import {resolve} from 'node:path';
+    #|import {createHash} from 'node:crypto';
+    #|const root=new URL('.',import.meta.url);
+    #|let module=readFileSync(new URL('viewer.mjs',root),'utf8');
+    #|const patterns=['pdf__image__colour__png_2einner','pdf__image__resource__of__object','pdf__jbig2__samples','pdf__png__of__scanline__bytes','pdf__image__decode__stream_2einner','pdf__items__of__page_2einner','pdf__collected__entries__of__ops_2einner','pdf__font__resources__of__items','pdf__font__resource__of','pdf__page__model','pdf__flate__encode','encoding6base6414encode_2einner','PdfPageModel19render__svg_2einner'];
+    #|const names=[...module.matchAll(/^function (\w+)\(/gm)].map(m=>m[1]).filter(n=>patterns.some(p=>n.includes(p)));
+    #|if(names.length<10)throw Error('Expected stage functions absent from this release build');
+    #|module+='\nglobalThis.__imageTiming=Object.create(null);\n';
+    #|for(const [i,name]of names.entries()){const label=name.replace(/^.*pdf_2dviewer\d+/,'');module+=`const stageOriginal${i}=${name};\n${name}=function(...args){const start=performance.now(),rss=process.memoryUsage().rss;try{return stageOriginal${i}.apply(this,args);}finally{const s=globalThis.__imageTiming[${JSON.stringify(label)}]??={calls:0,ms:0,maxRssBytes:0};s.calls++;s.ms+=performance.now()-start;s.maxRssBytes=Math.max(s.maxRssBytes,rss,process.memoryUsage().rss);globalThis.__imageTiming[${JSON.stringify(label)}]=s;}};\n`;}
+    #|writeFileSync(new URL('viewer-timing.mjs',root),module);
+    #|const viewer=await import(new URL('viewer-timing.mjs',root));
+    #|const {installJbig2Decoder}=await import(pathToFileURL(resolve('codecs/jbig2/decoder.mjs')));
+    #|const decoder=await installJbig2Decoder({wasmBytes:readFileSync(resolve('vendor/jbig2/jbig2.wasm'))});
+    #|const {installPdfIccEngine}=await import(pathToFileURL(resolve('web/pdf-icc.mjs')));const icc=await installPdfIccEngine();
+    #|const decode=globalThis.__pdf_viewer_jbig2_decode,codecs=[];
+    #|globalThis.__pdf_viewer_jbig2_decode=function(...args){const t=performance.now();try{return decode(...args);}finally{codecs.push({ms:performance.now()-t,stats:decoder.lastStats});}};
+    #|const bytes=readFileSync(new URL('fixture.pdf',root));let start=performance.now();
+    #|const opened=JSON.parse(viewer.open_pdf(new Uint8Array(bytes)));if(!opened.ok)throw Error(JSON.stringify(opened));const openMs=performance.now()-start;
+    #|start=performance.now();const rendered=JSON.parse(viewer.render_page(1,1,0));if(!rendered.ok)throw Error(JSON.stringify(rendered));const renderMs=performance.now()-start;
+    #|const report={fixtureSha256:createHash('sha256').update(bytes).digest('hex'),openMs,renderMs,codecs,stages:globalThis.__imageTiming,memory:process.memoryUsage(),icc:icc.statistics,notes:['Stages are inclusive: nested times must not be summed.','RSS is sampled at stage boundaries, not a continuous high-water mark.','Synchronous JS rendering is not interruptible by an AbortSignal; production cancellation needs a worker boundary.']};
+    #|writeFileSync(new URL('viewer.svg',root),rendered.svg);writeFileSync(new URL('report.json',root),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));viewer.close_pdf();
+  source
+}

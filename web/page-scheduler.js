@@ -116,13 +116,17 @@ export class PageScheduler {
       if (controller.signal.aborted || epoch !== this.epoch) {
         throw new DOMException("Page render cancelled", "AbortError");
       }
-      const content = this.mount(result);
+      const current = () => !controller.signal.aborted && epoch === this.epoch;
+      const content = await this.mount(result, current);
+      if (!current()) {
+        throw new DOMException("Page render cancelled", "AbortError");
+      }
       page.replaceChildren(...content.childNodes);
       page.style.width = content.style.width;
       page.style.height = content.style.height;
       page.dataset.rendered = "true";
       page.setAttribute("aria-busy", "false");
-      await this.onMount(page, () => !controller.signal.aborted && epoch === this.epoch);
+      await this.onMount(page, current);
       if (controller.signal.aborted || epoch !== this.epoch) {
         throw new DOMException("Page render cancelled", "AbortError");
       }

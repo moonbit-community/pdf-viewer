@@ -1,0 +1,211 @@
+{
+  "original_pdf_sha256": "06b980fa09cd45f35a1fc9a2b907911201e91c0fcc2ee5a67820f6bb7818e630",
+  "source_profile_sha256": "b6ba507ff298d952606dcf2ee3ef3c93590ea57e7ed4886d19063feaba1b4556",
+  "output_profile_sha256": "b58db54cc4df6ea2d4b8f9452cab4e881e8cc8e9f27b6c6bc026d7c400bbc571",
+  "source_intent": "/Perceptual",
+  "display_intent": 1,
+  "flags": 0,
+  "black_point_compensation": false,
+  "paper_simulation": false,
+  "ghostscript_version": "10.05.1",
+  "patches": [
+    {
+      "name": "red",
+      "original_paint": 189,
+      "source_components": [
+        0,
+        0.949,
+        0.949,
+        0
+      ],
+      "point": [
+        186,
+        58
+      ],
+      "actual_rgb8": [
+        231,
+        75,
+        56
+      ],
+      "original_reference_rgb8": [
+        231,
+        72,
+        41
+      ],
+      "independent_perceptual_rgb8": [
+        231,
+        75,
+        56
+      ],
+      "actual_max_error": 0,
+      "control_pdf_sha256": "09885cec2c6f47896010533d2919a15eb8c9baa57de274e03675fe19947bc645",
+      "ghostscript": [
+        {
+          "forced_output_intent": 0,
+          "cmyk8": [
+            1,
+            216,
+            220,
+            0
+          ],
+          "rgb8": [
+            231,
+            74,
+            56
+          ],
+          "arguments": [
+            "-q",
+            "-dSAFER",
+            "-dBATCH",
+            "-dNOPAUSE",
+            "-sDEVICE=tiff32nc",
+            "-r72",
+            "-dTextAlphaBits=4",
+            "-dGraphicsAlphaBits=4",
+            "-dBlackPtComp=0",
+            "-dRenderIntent=0",
+            "-dOverrideRI=false",
+            "-dKPreserve=0",
+            "-dDeviceGrayToK=true",
+            "-dOverprint=/enable",
+            "-sDefaultCMYKProfile=_build/colour-intent-controls/output.icc",
+            "-sOutputICCProfile=_build/colour-intent-controls/output.icc",
+            "-sOutputFile=_build/colour-intent-controls/red-ri0.tif"
+          ]
+        },
+        {
+          "forced_output_intent": 1,
+          "cmyk8": [
+            0,
+            218,
+            254,
+            0
+          ],
+          "rgb8": [
+            231,
+            72,
+            41
+          ],
+          "arguments": [
+            "-q",
+            "-dSAFER",
+            "-dBATCH",
+            "-dNOPAUSE",
+            "-sDEVICE=tiff32nc",
+            "-r72",
+            "-dTextAlphaBits=4",
+            "-dGraphicsAlphaBits=4",
+            "-dBlackPtComp=0",
+            "-dRenderIntent=1",
+            "-dOverrideRI=false",
+            "-dKPreserve=0",
+            "-dDeviceGrayToK=true",
+            "-dOverprint=/enable",
+            "-sDefaultCMYKProfile=_build/colour-intent-controls/output.icc",
+            "-sOutputICCProfile=_build/colour-intent-controls/output.icc",
+            "-sOutputFile=_build/colour-intent-controls/red-ri1.tif"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "turquoise",
+      "original_paint": 222,
+      "source_components": [
+        0.8,
+        0,
+        0.361,
+        0
+      ],
+      "point": [
+        186,
+        17
+      ],
+      "actual_rgb8": [
+        0,
+        162,
+        170
+      ],
+      "original_reference_rgb8": [
+        39,
+        167,
+        172
+      ],
+      "independent_perceptual_rgb8": [
+        0,
+        162,
+        170
+      ],
+      "actual_max_error": 0,
+      "control_pdf_sha256": "7371648272900e4005212295221a345ab79551fb297ae5eafb5affe881101761",
+      "ghostscript": [
+        {
+          "forced_output_intent": 0,
+          "cmyk8": [
+            202,
+            35,
+            82,
+            1
+          ],
+          "rgb8": [
+            0,
+            162,
+            171
+          ],
+          "arguments": [
+            "-q",
+            "-dSAFER",
+            "-dBATCH",
+            "-dNOPAUSE",
+            "-sDEVICE=tiff32nc",
+            "-r72",
+            "-dTextAlphaBits=4",
+            "-dGraphicsAlphaBits=4",
+            "-dBlackPtComp=0",
+            "-dRenderIntent=0",
+            "-dOverrideRI=false",
+            "-dKPreserve=0",
+            "-dDeviceGrayToK=true",
+            "-dOverprint=/enable",
+            "-sDefaultCMYKProfile=_build/colour-intent-controls/output.icc",
+            "-sOutputICCProfile=_build/colour-intent-controls/output.icc",
+            "-sOutputFile=_build/colour-intent-controls/turquoise-ri0.tif"
+          ]
+        },
+        {
+          "forced_output_intent": 1,
+          "cmyk8": [
+            190,
+            32,
+            83,
+            2
+          ],
+          "rgb8": [
+            39,
+            167,
+            172
+          ],
+          "arguments": [
+            "-q",
+            "-dSAFER",
+            "-dBATCH",
+            "-dNOPAUSE",
+            "-sDEVICE=tiff32nc",
+            "-r72",
+            "-dTextAlphaBits=4",
+            "-dGraphicsAlphaBits=4",
+            "-dBlackPtComp=0",
+            "-dRenderIntent=1",
+            "-dOverrideRI=false",
+            "-dKPreserve=0",
+            "-dDeviceGrayToK=true",
+            "-dOverprint=/enable",
+            "-sDefaultCMYKProfile=_build/colour-intent-controls/output.icc",
+            "-sOutputICCProfile=_build/colour-intent-controls/output.icc",
+            "-sOutputFile=_build/colour-intent-controls/turquoise-ri1.tif"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -28,6 +28,10 @@ pub(all) struct PdfTextLayer {
 /// test {
 ///   let page : @pdf-viewer.PdfPageModel = {
 ///     number: 1,
+///     blend_space: "DeviceRGB",
+///     blend_profile_id: None,
+///     blend_calibration: None,
+///     icc_profiles: [],
 ///     origin_x: 0.0,
 ///     origin_y: 0.0,
 ///     width: 200.0,
@@ -102,6 +106,10 @@ pub(all) struct PdfTextRangeSelection {
 /// test {
 ///   let page : @pdf-viewer.PdfPageModel = {
 ///     number: 1,
+///     blend_space: "DeviceRGB",
+///     blend_profile_id: None,
+///     blend_calibration: None,
+///     icc_profiles: [],
 ///     origin_x: 0.0,
 ///     origin_y: 0.0,
 ///     width: 200.0,

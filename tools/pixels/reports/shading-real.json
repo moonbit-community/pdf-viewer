@@ -1,0 +1,227 @@
+{
+  "fixtureRevision": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+  "cases": [
+    {
+      "file": "axial_shading_many_inputs.pdf",
+      "error": "Error: PDF shading: unsupported resource /S0: BadFunctionEvaluation(\"shading function requires 18 inputs but shading supplies 1\")"
+    },
+    {
+      "file": "coons-allflags-withfunction.pdf",
+      "page": 1,
+      "width": 612,
+      "height": 792,
+      "pdfjs": "6.4.299",
+      "sha256": "8651b10026886ec8e4dd8cad4b13b966aed6fe27bbcc34f8fe4931f0b0efe1ff",
+      "canvas": {
+        "changedAbove8": 2104,
+        "meanAbsoluteError": 0.40210589005523645,
+        "maximum": 244
+      },
+      "svg": {
+        "changedAbove8": 57152,
+        "meanAbsoluteError": 3.099539100151845,
+        "maximum": 224
+      },
+      "milliseconds": 500.40429299999994,
+      "rssDelta": 245919744
+    },
+    {
+      "file": "function_based_shading.pdf",
+      "page": 1,
+      "width": 612,
+      "height": 792,
+      "pdfjs": "6.4.299",
+      "sha256": "21a0d4951f2d45f86d90dd9bac824805b54b2bd2fefe6efad763d227d484ed64",
+      "canvas": {
+        "changedAbove8": 13549,
+        "meanAbsoluteError": 1.3582949593979006,
+        "maximum": 228
+      },
+      "svg": {
+        "changedAbove8": 260100,
+        "meanAbsoluteError": 42.768508202944474,
+        "maximum": 178
+      },
+      "milliseconds": 12277.122446000001,
+      "rssDelta": 103813120
+    },
+    {
+      "file": "function_based_shading_cmyk.pdf",
+      "page": 1,
+      "width": 290,
+      "height": 290,
+      "pdfjs": "6.4.299",
+      "sha256": "c624d33b595af80746dd96f6440d335a30b1bee3e484d9b0b2cfb0cd54c62be3",
+      "canvas": {
+        "changedAbove8": 4014,
+        "meanAbsoluteError": 2.273040031708284,
+        "maximum": 204
+      },
+      "svg": {
+        "changedAbove8": 37395,
+        "meanAbsoluteError": 22.647665477606026,
+        "maximum": 166
+      },
+      "milliseconds": 129.982344,
+      "rssDelta": 6561792
+    },
+    {
+      "file": "function_based_shading_cmyk.pdf",
+      "page": 2,
+      "width": 1880,
+      "height": 1260,
+      "pdfjs": "6.4.299",
+      "sha256": "c624d33b595af80746dd96f6440d335a30b1bee3e484d9b0b2cfb0cd54c62be3",
+      "canvas": {
+        "changedAbove8": 23340,
+        "meanAbsoluteError": 0.5222218000675447,
+        "maximum": 205
+      },
+      "svg": {
+        "changedAbove8": 2159940,
+        "meanAbsoluteError": 37.08533139142182,
+        "maximum": 154
+      },
+      "milliseconds": 1621.1399450000008,
+      "rssDelta": 517451776
+    },
+    {
+      "file": "radial_gradients.pdf",
+      "page": 1,
+      "width": 595,
+      "height": 842,
+      "pdfjs": "6.4.299",
+      "sha256": "4ff43a6591900d190a5c48dace581028a47f4d9bc8a2ae151e8d5805ead7ddc0",
+      "canvas": {
+        "changedAbove8": 16088,
+        "meanAbsoluteError": 2.019531327970618,
+        "maximum": 196
+      },
+      "svg": {
+        "changedAbove8": 156528,
+        "meanAbsoluteError": 33.267296087080915,
+        "maximum": 255
+      },
+      "milliseconds": 2322.504818999998,
+      "rssDelta": -24412160
+    },
+    {
+      "file": "radial_gradients.pdf",
+      "page": 2,
+      "width": 595,
+      "height": 842,
+      "pdfjs": "6.4.299",
+      "sha256": "4ff43a6591900d190a5c48dace581028a47f4d9bc8a2ae151e8d5805ead7ddc0",
+      "canvas": {
+        "changedAbove8": 15480,
+        "meanAbsoluteError": 2.042722076954297,
+        "maximum": 250
+      },
+      "svg": {
+        "changedAbove8": 14338,
+        "meanAbsoluteError": 2.1786389615228514,
+        "maximum": 255
+      },
+      "milliseconds": 2131.940337,
+      "rssDelta": 14372864
+    },
+    {
+      "file": "radial_gradients.pdf",
+      "page": 3,
+      "width": 595,
+      "height": 842,
+      "pdfjs": "6.4.299",
+      "sha256": "4ff43a6591900d190a5c48dace581028a47f4d9bc8a2ae151e8d5805ead7ddc0",
+      "canvas": {
+        "changedAbove8": 16686,
+        "meanAbsoluteError": 2.1102224262626668,
+        "maximum": 227
+      },
+      "svg": {
+        "changedAbove8": 217159,
+        "meanAbsoluteError": 44.7555945893797,
+        "maximum": 255
+      },
+      "milliseconds": 2623.5661499999987,
+      "rssDelta": 53637120
+    },
+    {
+      "file": "radial_gradients.pdf",
+      "page": 4,
+      "width": 595,
+      "height": 842,
+      "pdfjs": "6.4.299",
+      "sha256": "4ff43a6591900d190a5c48dace581028a47f4d9bc8a2ae151e8d5805ead7ddc0",
+      "canvas": {
+        "changedAbove8": 25304,
+        "meanAbsoluteError": 3.1532964729834925,
+        "maximum": 195
+      },
+      "svg": {
+        "changedAbove8": 186736,
+        "meanAbsoluteError": 39.88718603831081,
+        "maximum": 255
+      },
+      "milliseconds": 3923.124594000001,
+      "rssDelta": 89104384
+    },
+    {
+      "file": "radial_gradients.pdf",
+      "page": 5,
+      "width": 595,
+      "height": 842,
+      "pdfjs": "6.4.299",
+      "sha256": "4ff43a6591900d190a5c48dace581028a47f4d9bc8a2ae151e8d5805ead7ddc0",
+      "canvas": {
+        "changedAbove8": 25547,
+        "meanAbsoluteError": 3.1789330459024465,
+        "maximum": 187
+      },
+      "svg": {
+        "changedAbove8": 201908,
+        "meanAbsoluteError": 44.92741638222985,
+        "maximum": 255
+      },
+      "milliseconds": 3762.956235999998,
+      "rssDelta": 88346624
+    },
+    {
+      "file": "shading_extend.pdf",
+      "page": 1,
+      "width": 596,
+      "height": 842,
+      "pdfjs": "6.4.299",
+      "sha256": "f71e22d120201b289e5fad9609060bb06611db387921e946878aef35db079774",
+      "canvas": {
+        "changedAbove8": 8262,
+        "meanAbsoluteError": 0.9361778443781983,
+        "maximum": 254
+      },
+      "svg": {
+        "error": "SVG raster dimensions differ from the reference; pixel metric is invalid."
+      },
+      "milliseconds": 4650.806284999999,
+      "rssDelta": -148983808
+    },
+    {
+      "file": "tensor-allflags-withfunction.pdf",
+      "page": 1,
+      "width": 612,
+      "height": 792,
+      "pdfjs": "6.4.299",
+      "sha256": "d0167f51046dc315aeb6be6c48ae874c776f532cbc1b8f4d64efd6ad1215f480",
+      "canvas": {
+        "changedAbove8": 2290,
+        "meanAbsoluteError": 0.40308586958913756,
+        "maximum": 244
+      },
+      "svg": {
+        "changedAbove8": 55884,
+        "meanAbsoluteError": 3.0454449175854403,
+        "maximum": 224
+      },
+      "milliseconds": 478.6164589999971,
+      "rssDelta": 26378240
+    }
+  ]
+}

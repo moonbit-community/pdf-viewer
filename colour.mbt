@@ -10,10 +10,11 @@ fn pdf_colour_hex_in_space(
   space : @pdflite.PdfColourSpace,
   values : @pdflite.PdfContentColourValues,
   document? : @pdflite.PdfDocument? = None,
+  rendering_intent? : String = "/RelativeColorimetric",
 ) -> String {
   match values {
     @pdflite.PdfContentColourFloats(values) => {
-      let transform = pdf_colour_transform(document, space)
+      let transform = pdf_colour_transform(document, space, rendering_intent~)
       let (red, green, blue) = pdf_colour_rgb_of_transform(transform, values[:])
       pdf_rgb_hex(red, green, blue)
     }
@@ -30,9 +31,12 @@ fn pdf_colour_hex_for_paint_in_space(
   values : @pdflite.PdfContentColourValues,
   explicit : Bool,
   document? : @pdflite.PdfDocument? = None,
+  rendering_intent? : String = "/RelativeColorimetric",
 ) -> String {
-  if explicit {
-    pdf_colour_hex_in_space(space, values, document~)
+  if !pdf_colour_space_paints(space) {
+    "none"
+  } else if explicit {
+    pdf_colour_hex_in_space(space, values, document~, rendering_intent~)
   } else {
     "#000000"
   }
@@ -40,9 +44,10 @@ fn pdf_colour_hex_for_paint_in_space(
 
 ///|
 /// Compile tint functions once, including for an image with many pixels.
-/// ICC profiles still use their declared alternate; this is not an ICC engine.
+/// ICC transforms use the configured mature engine and retain a checked alternate.
 priv enum PdfColourTransform {
   Samples(@pdflite.PdfColourSpace)
+  Icc(PdfIccTransform?, PdfColourTransform, Array[(Double, Double)])
   Indexed(PdfColourTransform, Array[(Int, Array[Int])], Array[(Double, Double)])
   Tint(PdfColourTransform, @pdflite.PdfFunction?)
 }
@@ -51,14 +56,36 @@ priv enum PdfColourTransform {
 fn pdf_colour_transform(
   document : @pdflite.PdfDocument?,
   space : @pdflite.PdfColourSpace,
+  rendering_intent? : String = "/RelativeColorimetric",
 ) -> PdfColourTransform {
   match space {
-    @pdflite.PdfPatternWithBaseColourSpace(base)
-    | @pdflite.PdfICCBased(_, base, _, _, _) =>
-      pdf_colour_transform(document, base)
+    @pdflite.PdfPatternWithBaseColourSpace(base) =>
+      pdf_colour_transform(document, base, rendering_intent~)
+    @pdflite.PdfICCBased(n, alternate, range, _, stream) => {
+      let transform = match document {
+        Some(document) => {
+          let bytes = pdf_image_decode_stream(
+            document,
+            @syntax.pdf_dictionary([]),
+            stream,
+            max_output=16777216,
+          ).stream_bytes() catch {
+            _ => b""
+          }
+          pdf_icc_transform(bytes, n, intent=pdf_icc_intent(rendering_intent))
+        }
+        None => None
+      }
+      let alternate = pdf_colour_icc_alternate(n, alternate)
+      Icc(
+        transform,
+        pdf_colour_transform(document, alternate, rendering_intent~),
+        pdf_icc_ranges(n, range),
+      )
+    }
     @pdflite.PdfIndexed(base, table) =>
       Indexed(
-        pdf_colour_transform(document, base),
+        pdf_colour_transform(document, base, rendering_intent~),
         table,
         pdf_colour_component_ranges(base),
       )
@@ -71,9 +98,36 @@ fn pdf_colour_transform(
           }
         None => None
       }
-      Tint(pdf_colour_transform(document, alternate), function)
+      Tint(
+        pdf_colour_transform(document, alternate, rendering_intent~),
+        function,
+      )
     }
     _ => Samples(space)
+  }
+}
+
+///|
+/// Same-component legal recovery for unavailable ICC sources; never a group
+/// profile substitute. Shared by display and retained-source colour paths.
+fn pdf_colour_icc_alternate(
+  n : Int,
+  alternate : @pdflite.PdfColourSpace,
+) -> @pdflite.PdfColourSpace {
+  match alternate {
+    @pdflite.PdfDeviceGray | @pdflite.PdfCalGray(_, _, _) if n == 1 => alternate
+    @pdflite.PdfDeviceRGB
+    | @pdflite.PdfCalRGB(_, _, _, _)
+    | @pdflite.PdfLab(_, _, _) if n == 3 => alternate
+    @pdflite.PdfDeviceCMYK if n == 4 => alternate
+    _ =>
+      if n == 1 {
+        @pdflite.PdfDeviceGray
+      } else if n == 4 {
+        @pdflite.PdfDeviceCMYK
+      } else {
+        @pdflite.PdfDeviceRGB
+      }
   }
 }
 
@@ -84,33 +138,62 @@ fn pdf_colour_rgb_of_transform(
 ) -> (Double, Double, Double) {
   match transform {
     Samples(space) => pdf_colour_rgb_of_space(space, values)
-    Indexed(base, table, ranges) => {
-      let index = (pdf_colour_value_or(values, 0, 0.0) + 0.5)
-        .to_int()
-        .max(0)
-        .min(table.length() - 1)
-      let sample = for (key, sample) in table {
-        if key == index {
-          break sample
+    Icc(transform, alternate, ranges) => {
+      let values = pdf_icc_clip(values, ranges)
+      match transform {
+        Some(transform) => {
+          let (r, g, b) = (transform.convert)(values[:])
+          if r.is_nan() ||
+            g.is_nan() ||
+            b.is_nan() ||
+            r.is_inf() ||
+            g.is_inf() ||
+            b.is_inf() {
+            pdf_colour_rgb_of_transform(alternate, values[:])
+          } else {
+            (r, g, b)
+          }
         }
-      } nobreak {
-        []
+        None => pdf_colour_rgb_of_transform(alternate, values[:])
       }
-      let components : Array[Double] = []
-      for i, sample in sample {
-        let (lower, upper) = ranges.get(i).unwrap_or((0.0, 1.0))
-        components.push(lower + sample.to_double() / 255.0 * (upper - lower))
-      }
+    }
+    Indexed(base, table, ranges) => {
+      let components = pdf_colour_indexed_components(table, ranges, values)
       pdf_colour_rgb_of_transform(base, components[:])
     }
     Tint(base, Some(function)) => {
-      let samples = function.eval(values.to_owned()) catch {
+      let samples = pdf_colour_eval_function(function, values) catch {
         _ => return (0.0, 0.0, 0.0)
       }
       pdf_colour_rgb_of_transform(base, samples[:])
     }
     Tint(_, None) => (0.0, 0.0, 0.0)
   }
+}
+
+///|
+fn pdf_colour_indexed_components(
+  table : Array[(Int, Array[Int])],
+  ranges : Array[(Double, Double)],
+  values : ArrayView[Double],
+) -> Array[Double] {
+  let index = (pdf_colour_value_or(values, 0, 0.0) + 0.5)
+    .to_int()
+    .max(0)
+    .min(table.length() - 1)
+  let sample = for (key, sample) in table {
+    if key == index {
+      break sample
+    }
+  } nobreak {
+    []
+  }
+  [
+    for i, sample in sample => {
+      let (lower, upper) = ranges.get(i).unwrap_or((0.0, 1.0))
+      lower + sample.to_double() / 255.0 * (upper - lower)
+    }
+  ]
 }
 
 ///|
@@ -126,12 +209,7 @@ fn pdf_colour_component_ranges(
       let (amin, amax, bmin, bmax) = pdf_colour_lab_range(range)
       [(0.0, 100.0), (amin, amax), (bmin, bmax)]
     }
-    @pdflite.PdfICCBased(n, _, range, _, _) =>
-      [
-        for i in 0..<n => {
-          (range.get(i * 2).unwrap_or(0.0), range.get(i * 2 + 1).unwrap_or(1.0))
-        }
-      ]
+    @pdflite.PdfICCBased(n, _, range, _, _) => pdf_icc_ranges(n, range)
     @pdflite.PdfDeviceN(names, _, _, _) =>
       Array::make(names.length(), (0.0, 1.0))
     @pdflite.PdfIndexed(_, table) => [(0.0, (table.length() - 1).to_double())]
@@ -335,6 +413,25 @@ fn pdf_colour_rgb_of_cal_xyz(
   y : Double,
   z : Double,
 ) -> (Double, Double, Double) {
+  let (x, y, z) = pdf_colour_cal_xyz_d65(white, black, x, y, z)
+  let red = 3.2404542 * x - 1.5371385 * y - 0.4985314 * z
+  let green = -0.9692660 * x + 1.8760108 * y + 0.0415560 * z
+  let blue = 0.0556434 * x - 0.2040259 * y + 1.0572252 * z
+  (
+    pdf_colour_linear_to_srgb(red),
+    pdf_colour_linear_to_srgb(green),
+    pdf_colour_linear_to_srgb(blue),
+  )
+}
+
+///|
+fn pdf_colour_cal_xyz_d65(
+  white : @pdflite.PdfTristimulusPoint,
+  black : @pdflite.PdfTristimulusPoint,
+  x : Double,
+  y : Double,
+  z : Double,
+) -> (Double, Double, Double) {
   let (x, y, z) = if white.x == 1.0 && white.z == 1.0 {
     (x, y, z)
   } else {
@@ -356,14 +453,7 @@ fn pdf_colour_rgb_of_cal_xyz(
     y,
     z,
   )
-  let red = 3.2404542 * x - 1.5371385 * y - 0.4985314 * z
-  let green = -0.9692660 * x + 1.8760108 * y + 0.0415560 * z
-  let blue = 0.0556434 * x - 0.2040259 * y + 1.0572252 * z
-  (
-    pdf_colour_linear_to_srgb(red),
-    pdf_colour_linear_to_srgb(green),
-    pdf_colour_linear_to_srgb(blue),
-  )
+  (x, y, z)
 }
 
 ///|
@@ -473,45 +563,73 @@ fn pdf_colour_clamp_unit(value : Double) -> Double {
 }
 
 ///|
-/// Honour pdflite's parsed spaces first. Its 0.2.2 Indexed reader omits gray
-/// bases, so recover only that missing representation from the same objects.
-fn pdf_read_colour_space_for_viewer(
+/// Indexed lookup arity is the original base space's arity, not that of its
+/// alternate. Parse it before pdflite, whose table reader unwraps DeviceN.
+fn pdf_read_colour_space_for_viewer_raw(
   document : @pdflite.PdfDocument,
   resources : @syntax.PdfObject,
   object : @syntax.PdfObject,
 ) -> @pdflite.PdfColourSpace? {
-  let parsed = document.read_colour_space(resources, object) catch { _ => None }
-  match parsed {
-    Some(space) => return Some(space)
-    None => ()
-  }
   match document.direct(object) {
     @syntax.PdfArray(
       [@syntax.PdfNameObject(kind), base, @syntax.PdfInteger(high), lookup]
-    ) if (kind == pdf_name_key("/Indexed") || kind == pdf_name_key("/I")) &&
-      high >= 0 &&
-      high <= 255 => {
-      let base = document.read_colour_space(resources, base) catch { _ => None }
+    ) if kind == pdf_name_key("/Indexed") || kind == pdf_name_key("/I") => {
+      if high < 0 || high > 255 {
+        return None
+      }
+      let base = pdf_read_colour_space_for_viewer_raw(document, resources, base)
       guard base is Some(base) else { return None }
+      if base is @pdflite.PdfIndexed(_, _) ||
+        base is @pdflite.PdfPattern ||
+        base is @pdflite.PdfPatternWithBaseColourSpace(_) {
+        return None
+      }
       let components = pdf_colour_component_ranges(base).length()
-      if components != 1 {
+      if components < 1 || components > 32 {
         return None
       }
       let bytes = match document.direct(lookup) {
         @syntax.PdfString(bytes) => bytes
         @syntax.PdfStreamObject(_) =>
-          document.pdf_decode_stream(lookup).stream_bytes() catch {
+          pdf_image_decode_stream(
+            document,
+            resources,
+            lookup,
+            max_output=16777216,
+          ).stream_bytes() catch {
             _ => return None
           }
         _ => return None
       }
       let table : Array[(Int, Array[Int])] = []
       for index in 0..<=high {
-        table.push((index, [bytes.get(index).unwrap_or(b'\x00').to_int()]))
+        table.push(
+          (
+            index,
+            [
+              for component in 0..<components => {
+                bytes
+                .get(index * components + component)
+                .unwrap_or(b'\x00')
+                .to_int()
+              }
+            ],
+          ),
+        )
       }
       Some(@pdflite.PdfIndexed(base, table))
     }
+    @syntax.PdfArray([@syntax.PdfNameObject(kind), base]) if kind ==
+      pdf_name_key("/Pattern") =>
+      pdf_read_colour_space_for_viewer_raw(document, resources, base).map(base => {
+        @pdflite.PdfPatternWithBaseColourSpace(base)
+      })
+    @syntax.PdfArray([single]) =>
+      pdf_read_colour_space_for_viewer_raw(document, resources, single)
     @syntax.PdfNameObject(name) => {
+      if @pdflite.pdf_colour_space_of_device_name(name) is Some(space) {
+        return Some(space)
+      }
       let spaces = document.lookup_direct(
         pdf_name_key("/ColorSpace"),
         resources,
@@ -521,9 +639,9 @@ fn pdf_read_colour_space_for_viewer(
       guard resolved is Some(resolved) && resolved != object else {
         return None
       }
-      pdf_read_colour_space_for_viewer(document, resources, resolved)
+      pdf_read_colour_space_for_viewer_raw(document, resources, resolved)
     }
-    _ => None
+    _ => document.read_colour_space(resources, object) catch { _ => None }
   }
 }
 
@@ -537,6 +655,29 @@ fn pdf_apply_colour_op_for_viewer(
   op : @content.PdfContentOp,
 ) -> @pdflite.PdfContentOperatorState? {
   let path = state.path_state
+  let device = match op {
+    @content.Op_g(value) => Some((false, @pdflite.PdfDeviceGray, [value]))
+    @content.Op_G(value) => Some((true, @pdflite.PdfDeviceGray, [value]))
+    @content.Op_rg(r, g, b) => Some((false, @pdflite.PdfDeviceRGB, [r, g, b]))
+    @content.Op_RG(r, g, b) => Some((true, @pdflite.PdfDeviceRGB, [r, g, b]))
+    @content.Op_k(c, m, y, k) =>
+      Some((false, @pdflite.PdfDeviceCMYK, [c, m, y, k]))
+    @content.Op_K(c, m, y, k) =>
+      Some((true, @pdflite.PdfDeviceCMYK, [c, m, y, k]))
+    _ => None
+  }
+  if device is Some((stroke, space, values)) {
+    let space = pdf_colour_remap_device(document, resources, space)
+    let colour = @pdflite.PdfContentColourFloats(values)
+    return Some({
+      ..state,
+      path_state: if stroke {
+        { ..path, colourspace_stroke: space, colour_stroke: colour, }
+      } else {
+        { ..path, colourspace_non_stroke: space, colour_non_stroke: colour, }
+      },
+    })
+  }
   match op {
     @content.Op_cs(name) | @content.Op_CS(name) => {
       let space = pdf_read_colour_space_for_viewer(
@@ -545,7 +686,12 @@ fn pdf_apply_colour_op_for_viewer(
         @syntax.PdfNameObject(name),
       )
       guard space is Some(space) else { return Some(state) }
-      let values = pdf_colour_default_values(space)
+      let original = pdf_read_colour_space_for_viewer_raw(
+        document,
+        resources,
+        @syntax.PdfNameObject(name),
+      ).unwrap_or(space)
+      let values = pdf_colour_default_values(original)
       let path = if op is @content.Op_cs(_) {
         { ..path, colourspace_non_stroke: space, colour_non_stroke: values, }
       } else {

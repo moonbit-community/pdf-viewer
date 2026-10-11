@@ -493,6 +493,32 @@ async fn Browser::click_annotation(self : Browser, index : Int) -> Unit {
 }
 
 ///|
+/// Keep the independent serialized SVG geometry oracle without putting SVG
+/// into the viewer's paint layer. The real host surface must remain Canvas.
+async fn Browser::check_annotation_geometry(self : Browser, name : String) -> Unit {
+  self.check(name, (
+    #| (async () => {
+    #|   const page = document.querySelector('#pages .page[data-page="1"]');
+    #|   const viewport = JSON.parse(page.querySelector('.annotation-layer').dataset.viewport);
+    #|   const bridge = await import('./pdf-client.js');
+    #|   const result = JSON.parse(await bridge.render_page(1, viewport.scale, viewport.rotation - 90));
+    #|   const canvas = page.querySelector('.paint-layer canvas');
+    #|   if (!result.ok || !canvas || canvas.width !== Math.ceil(viewport.width) || canvas.height !== Math.ceil(viewport.height)) return false;
+    #|   const reference = document.createElement('div');
+    #|   reference.style.cssText = 'position:absolute;inset:0;visibility:hidden;pointer-events:none';
+    #|   reference.inert = true;
+    #|   reference.innerHTML = result.svg;
+    #|   page.append(reference);
+    #|   try {
+    #|     const control = page.querySelector('.annotation-target[data-annotation-index="0"]').getBoundingClientRect();
+    #|     const paint = reference.querySelector('[data-pdf-annotation-index="0"]').getBoundingClientRect();
+    #|     return ['left','top','width','height'].every(key => Math.abs(control[key] - paint[key]) < 1);
+    #|   } finally { reference.remove(); }
+    #| })()
+  ))
+}
+
+///|
 async fn main {
   let args = @env.args()
   let base = if args.length() > 1 { args[1] } else { "http://127.0.0.1:4312" }
@@ -578,7 +604,7 @@ async fn main {
     )
     browser.navigate(base + "/?file=/fixtures/90ms_rksj_h_sample.pdf", 1)
     browser.check(
-      "predefined CMap paints and exposes native DOM text", "document.querySelector('.text-layer').textContent.includes('日本語テスト') && document.querySelector('.paint-layer').querySelector('svg') !== null && document.getElementById('error').hidden",
+      "predefined CMap paints and exposes native DOM text", "document.querySelector('.text-layer').textContent.includes('日本語テスト') && [...document.querySelectorAll('.paint-layer canvas')].some(c => c.width > 0 && c.getContext('2d').getImageData(0, 0, c.width, c.height).data.some((v, i) => i % 4 !== 3 && v < 240)) && document.getElementById('error').hidden",
     )
     browser.check(
       "font fallback bridge accepts host family mappings",
@@ -647,10 +673,10 @@ async fn main {
       (
         #| (async () => {
         #|   for (let i = 0; i < 400; i++) {
-        #|     if (document.querySelector('.thumbnail-preview svg')) break;
+        #|     if (document.querySelector('.thumbnail-preview canvas')) break;
         #|     await new Promise(r => setTimeout(r, 25));
         #|   }
-        #|   const count = document.querySelectorAll('.thumbnail-preview svg').length;
+        #|   const count = document.querySelectorAll('.thumbnail-preview canvas').length;
         #|   return document.getElementById('sidebar-title').textContent === '缩略图' && document.querySelectorAll('.thumbnail-item').length === 9 && count > 0 && count < 9;
         #| })()
       ),
@@ -661,8 +687,8 @@ async fn main {
         #| (async () => {
         #|   const last = document.querySelector('.thumbnail-item[data-page="9"]');
         #|   last.scrollIntoView({block: 'end'});
-        #|   for (let i = 0; i < 400 && !last.querySelector('svg'); i++) await new Promise(r => setTimeout(r, 25));
-        #|   return Boolean(last.querySelector('svg')) && document.querySelectorAll('.thumbnail-preview svg').length < 9;
+        #|   for (let i = 0; i < 400 && !last.querySelector('canvas'); i++) await new Promise(r => setTimeout(r, 25));
+        #|   return Boolean(last.querySelector('canvas')) && document.querySelectorAll('.thumbnail-preview canvas').length < 9;
         #| })()
       ),
     )
@@ -981,10 +1007,10 @@ async fn main {
       browser.navigate(base + "/?file=/fixtures/" + file, -1)
       browser.check(
         "font loading retains painted and selectable glyphs: " + file,
-        "document.getElementById('error').hidden && document.querySelectorAll('.glyph-text').length > 0 && document.querySelectorAll('.paint-layer path').length > 0 && [...document.querySelectorAll('.glyph')].every(g => Number.isFinite(parseFloat(g.style.width)) && parseFloat(g.style.width) > 0)",
+        "document.getElementById('error').hidden && document.querySelectorAll('.glyph-text').length > 0 && [...document.querySelectorAll('.paint-layer canvas')].some(c => c.width > 0 && c.getContext('2d').getImageData(0, 0, c.width, c.height).data.some((v, i) => i % 4 !== 3 && v < 240)) && [...document.querySelectorAll('.glyph')].every(g => Number.isFinite(parseFloat(g.style.width)) && parseFloat(g.style.width) > 0)",
       )
       let faces = browser.evaluate(
-        "(async () => { await Promise.allSettled([...document.fonts].map(f => f.load())); return {faces: [...document.fonts].map(f => ({family: f.family, status: f.status})), glyphs: document.querySelectorAll('.glyph-text').length, outlined: document.querySelectorAll('.paint-layer path').length}; })()",
+        "(async () => { await Promise.allSettled([...document.fonts].map(f => f.load())); return {faces: [...document.fonts].map(f => ({family: f.family, status: f.status})), glyphs: document.querySelectorAll('.glyph-text').length, painted_canvases: [...document.querySelectorAll('.paint-layer canvas')].filter(c => c.width > 0 && c.getContext('2d').getImageData(0, 0, c.width, c.height).data.some((v, i) => i % 4 !== 3 && v < 240)).length}; })()",
       )
       println("FONT LOADING " + file + " " + faces.stringify())
       font_loading.push({ "file": file, "observations": faces })
@@ -1024,7 +1050,8 @@ async fn main {
       #|   const print = JSON.parse(await bridge.render_print_page(1, 1, 0));
       #|   const hidden = screen.annotations.filter(a => (a.flags & 6) === 6);
       #|   return screen.ok && print.ok && hidden.length > 0 && hidden.every(a => !a.visible && !a.print &&
-      #|     !screen.svg.includes(`data-pdf-annotation-index="${a.index}"`) && !print.svg.includes(`data-pdf-annotation-index="${a.index}"`));
+      #|     !screen.svg.includes(`data-pdf-annotation-index="${a.index}"`) && !print.svg.includes(`data-pdf-annotation-index="${a.index}"`) &&
+      #|     !(screen.canvas.annotation_svg || '').includes(`data-pdf-annotation-index="${a.index}"`) && !(print.canvas.annotation_svg || '').includes(`data-pdf-annotation-index="${a.index}"`));
       #| })()
     ))
     let annotations_path = output + "/annotation-interactions.pdf"
@@ -1065,14 +1092,7 @@ async fn main {
     ))
     for rotation in [0, 90, 180, 270] {
       browser.ready(2)
-      browser.check("annotation hit boxes follow painted CropBox UserUnit and rotation " + rotation.to_string(), (
-        #| (() => {
-        #|   const page = document.querySelector('#pages .page[data-page="1"]');
-        #|   const control = page.querySelector('.annotation-target[data-annotation-index="0"]').getBoundingClientRect();
-        #|   const paint = page.querySelector('.paint-layer [data-pdf-annotation-index="0"]').getBoundingClientRect();
-        #|   return ['left','top','width','height'].every(key => Math.abs(control[key] - paint[key]) < 1);
-        #| })()
-      ))
+      browser.check_annotation_geometry("annotation hit boxes follow Canvas CropBox UserUnit and rotation " + rotation.to_string())
       browser.click_annotation(2)
       browser.check("rotated annotation pointer hit still opens its source popup " + rotation.to_string(), "!document.querySelector('.annotation-popup').hidden && document.querySelector('.annotation-popup').dataset.annotationIndex === '2'")
       browser.screenshot(output + "/annotation-rotation-" + rotation.to_string() + ".png")
@@ -1089,24 +1109,18 @@ async fn main {
     ignore(browser.evaluate("delete window.oldAnnotation; true"))
     ignore(browser.evaluate("getSelection().removeAllRanges(); document.querySelector('.annotation-link[data-annotation-index=\"0\"]').click(); true"))
     browser.wait("location.hash === '#page=2' && document.getElementById('zoom').value === '1.25' && document.getElementById('viewer').getAttribute('aria-busy') === 'false'")
-    browser.check("named annotation destination navigates and applies XYZ zoom", "document.getElementById('page-number').value === '2' && document.querySelector('#pages .page[data-page=\"2\"] .paint-layer svg') !== null && document.getElementById('error').hidden")
+    browser.check("named annotation destination navigates and applies XYZ zoom", "document.getElementById('page-number').value === '2' && document.querySelector('#pages .page[data-page=\"2\"] .paint-layer canvas') !== null && document.getElementById('error').hidden")
     browser.wait("document.querySelector('#pages .page[data-page=\"1\"] .annotation-link[data-annotation-index=\"0\"]') !== null")
-    browser.check("annotation overlay rescales with the painted page", (
-      #| (() => {
-      #|   const page = document.querySelector('#pages .page[data-page="1"]');
-      #|   const control = page.querySelector('.annotation-target[data-annotation-index="0"]').getBoundingClientRect();
-      #|   const paint = page.querySelector('.paint-layer [data-pdf-annotation-index="0"]').getBoundingClientRect();
-      #|   return ['left','top','width','height'].every(key => Math.abs(control[key] - paint[key]) < 1);
-      #| })()
-    ))
+    browser.check_annotation_geometry("annotation overlay rescales with the Canvas page")
     browser.check("display and print caches retain independent annotation appearances", (
       #| (async () => {
       #|   const bridge = await import('./pdf-client.js');
       #|   const print = JSON.parse(await bridge.render_print_page(1, 1, 0));
       #|   const screen = JSON.parse(await bridge.render_page(1, 1, 0));
       #|   const marker = index => `data-pdf-annotation-index="${index}"`;
-      #|   return print.intent === 'print' && screen.intent === 'display' && print.svg.includes(marker(4)) && print.svg.includes(marker(5)) &&
-      #|     !print.svg.includes(marker(13)) && !print.svg.includes(marker(6)) && screen.svg.includes(marker(13)) && !screen.svg.includes(marker(5));
+      #|   return print.intent === 'print' && screen.intent === 'display' && print.annotations.length === 0 &&
+      #|     [print.svg, print.canvas.annotation_svg].every(svg => svg.includes(marker(4)) && svg.includes(marker(5)) && !svg.includes(marker(13)) && !svg.includes(marker(6))) &&
+      #|     [screen.svg, screen.canvas.annotation_svg].every(svg => svg.includes(marker(13)) && !svg.includes(marker(5)));
       #| })()
     ))
     browser.check("whole-document printing uses Print appearances without interaction DOM", (
@@ -1114,8 +1128,18 @@ async fn main {
       #|   const host = await import('./viewer.js'); const original = window.print;
       #|   window.print = () => {}; try { await host.printDocument(); } finally { window.print = original; }
       #|   const page = document.querySelector('#print-pages .page[data-page="1"]');
-      #|   const valid = document.querySelectorAll('#print-pages .page').length === 2 && page.querySelector('[data-pdf-annotation-index="5"]') &&
-      #|     !page.querySelector('[data-pdf-annotation-index="13"]') && !page.querySelector('.annotation-layer');
+      #|   const canvas = page.querySelector('canvas');
+      #|   const bridge = await import('./pdf-client.js');
+      #|   const { renderPdfPage } = await import('./pdf-runtime.mjs');
+      #|   const expected = JSON.parse(await bridge.render_print_page(1, 1, 0));
+      #|   const reference = document.createElement('canvas');
+      #|   await renderPdfPage(reference, expected.canvas, { unsupported: 'warn' });
+      #|   const pixels = canvas?.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      #|   const referencePixels = reference.getContext('2d').getImageData(0, 0, reference.width, reference.height).data;
+      #|   const valid = document.querySelectorAll('#print-pages .page').length === 2 &&
+      #|     expected.canvas.annotation_svg.includes('data-pdf-annotation-index="5"') && !expected.canvas.annotation_svg.includes('data-pdf-annotation-index="13"') &&
+      #|     canvas?.width === reference.width && canvas?.height === reference.height && pixels.every((value, index) => value === referencePixels[index]) &&
+      #|     !page.querySelector('.annotation-layer') && !page.querySelector('svg') && document.getElementById('print-pages').inert;
       #|   window.dispatchEvent(new Event('afterprint')); return Boolean(valid) && document.getElementById('print-pages').children.length === 0;
       #| })()
     ))
@@ -1358,7 +1382,7 @@ async fn main {
         #|   window.print = () => {
         #|     calls++;
         #|     const pages = [...document.querySelectorAll('#print-pages .page')];
-        #|     printed = document.body.classList.contains('pdf-print-ready') && pages.length === 200 && pages.every(page => page.querySelector('svg') && page.style.width.endsWith('pt'));
+        #|     printed = document.body.classList.contains('pdf-print-ready') && pages.length === 200 && pages.every(page => page.querySelector('canvas')?.width > 0 && page.style.width.endsWith('pt'));
         #|   };
         #|   try { await Promise.all([host.printDocument(), host.printDocument()]); } finally { window.print = original; }
         #|   return printed && calls === 1 && !document.getElementById('print').disabled;
@@ -1457,7 +1481,7 @@ async fn main {
     let image_open = browser.evaluate("performance.now() - hostStart")
     for number in 1..<=16 {
       let rendered = browser.evaluate(
-        "(async () => { const bridge = await import('./pdf-client.js'); const page = JSON.parse(await bridge.render_page(\{number}, 1, 0)); return page.ok && page.svg.includes('<image'); })()",
+        "(async () => { const bridge = await import('./pdf-client.js'); const page = JSON.parse(await bridge.render_page(\{number}, 1, 0)); return page.ok && page.canvas.items.some(item => item.kind === 'image'); })()",
       )
       guard rendered == Json::boolean(true) else {
         fail("Pressure image page \{number} was not rendered")
@@ -1469,7 +1493,7 @@ async fn main {
       (
         #| (async () => {
         #|   const data = await (await import('./viewer.js')).runtimeDiagnostics();
-        #|   return data.source_bytes > 12 * 1024 * 1024 && data.cache.estimated_bytes <= data.cache.budget_bytes && data.cache.pages <= 8 && data.cache.evictions > 0 && data.cache.render.bytes <= data.cache.render.budget_bytes && data.cache.render.entries <= 12 && data.cache.render.evictions > 0 && document.querySelector('.paint-layer image') !== null && document.getElementById('error').hidden;
+        #|   return data.source_bytes > 12 * 1024 * 1024 && data.cache.estimated_bytes <= data.cache.budget_bytes && data.cache.pages <= 8 && data.cache.evictions > 0 && data.cache.render.bytes <= data.cache.render.budget_bytes && data.cache.render.entries <= 12 && data.cache.render.evictions > 0 && [...document.querySelectorAll('.paint-layer canvas')].some(c => c.width > 0 && c.getContext('2d').getImageData(0, 0, c.width, c.height).data.some((v, i) => i % 4 !== 3 && v < 240)) && document.getElementById('error').hidden;
         #| })()
       ),
     )
@@ -1491,7 +1515,7 @@ async fn main {
         "authored_fixture": annotations_path,
         "sha256": annotations_hash.stdout().split(" ").next().unwrap().to_owned(),
         "real_fixtures": ["annotation-link-text-popup.pdf", "annotation-text-without-popup.pdf", "widget_hidden_print.pdf"],
-        "scope": "Read-only popup/link DOM, shared viewport geometry, native pointer/keyboard/selection, print intent and document cleanup; not appearance pixel parity",
+        "scope": "Read-only popup/link DOM over Canvas, independent SVG viewport geometry oracle, native pointer/keyboard/selection, print intent Canvas equivalence and document cleanup; not reference-renderer appearance pixel parity",
       },
       "accessibility": {
         "authored_fixture": accessibility_path,

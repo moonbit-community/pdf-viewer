@@ -8,12 +8,14 @@
 priv struct PdfMeshVertex {
   point : PdfPoint
   color : String
+  components : Array[Double]
 }
 
 ///|
 priv struct PdfMeshPatch {
   points : Array[PdfPoint]
   colors : Array[String]
+  components : Array[Array[Double]]
 }
 
 ///|
@@ -27,6 +29,8 @@ priv struct PdfMeshDecodeContext {
   functions : Array[@pdflite.PdfFunction]
   colourspace : PdfColourTransform
   component_count : Int
+  triangles : Array[PdfShadingTriangle]
+  patches : Array[PdfShadingPatch]
 }
 
 ///|
@@ -40,33 +44,28 @@ fn pdf_mesh_triangles_of_shading(
   resources? : @syntax.PdfObject = @syntax.PdfNull,
 ) -> Array[PdfMeshTriangle] {
   try
-    pdf_mesh_triangles_of_shading_raise(
-      document,
-      shading_object,
-      colourspace,
-      resources~,
-    )
+    pdf_mesh_data_of_shading(document, shading_object, colourspace, resources~)
   catch {
     _ => []
   } noraise {
-    triangles => triangles
+    data => data.0
   }
 }
 
 ///|
-fn pdf_mesh_triangles_of_shading_raise(
+fn pdf_mesh_data_of_shading(
   document : @pdflite.PdfDocument,
   shading_object : @syntax.PdfObject,
   colourspace : @syntax.PdfObject,
   resources? : @syntax.PdfObject = @syntax.PdfNull,
-) -> Array[PdfMeshTriangle] raise @core.PdfError {
+) -> (Array[PdfMeshTriangle], Array[PdfShadingTriangle], Array[PdfShadingPatch]) raise @core.PdfError {
   let shading_type = match
     document.lookup_direct(pdf_mesh_name("/ShadingType"), shading_object) {
     Some(@syntax.PdfInteger(value)) => value
-    _ => return []
+    _ => return ([], [], [])
   }
   if shading_type < 4 || shading_type > 7 {
-    return []
+    return ([], [], [])
   }
   let bits_per_coordinate = pdf_mesh_integer_or(
     document, shading_object, "/BitsPerCoordinate", 0,
@@ -81,11 +80,11 @@ fn pdf_mesh_triangles_of_shading_raise(
     bits_per_coordinate > 32 ||
     bits_per_component <= 0 ||
     bits_per_component > 32 {
-    return []
+    return ([], [], [])
   }
   let decode = pdf_mesh_decode_array(document, shading_object)
   if decode.length() < 4 {
-    return []
+    return ([], [], [])
   }
   let functions = pdf_mesh_functions(document, shading_object)
   let parsed_space = pdf_read_colour_space_for_viewer(
@@ -97,7 +96,7 @@ fn pdf_mesh_triangles_of_shading_raise(
     pdf_colour_component_ranges(parsed_space).length()
   }
   if decode.length() < 4 + component_count * 2 {
-    return []
+    return ([], [], [])
   }
   let decoded = document.pdf_decode_stream(shading_object)
   let bytes = decoded.stream_bytes()
@@ -111,8 +110,10 @@ fn pdf_mesh_triangles_of_shading_raise(
     functions,
     colourspace: pdf_colour_transform(Some(document), parsed_space),
     component_count,
+    triangles: [],
+    patches: [],
   }
-  match shading_type {
+  let triangles = match shading_type {
     4 => pdf_mesh_type4(context)
     5 =>
       pdf_mesh_type5(
@@ -123,6 +124,7 @@ fn pdf_mesh_triangles_of_shading_raise(
     7 => pdf_mesh_type7(context)
     _ => []
   }
+  (triangles, context.triangles, context.patches)
 }
 
 ///|
@@ -238,7 +240,9 @@ fn pdf_mesh_read_point(context : PdfMeshDecodeContext) -> PdfPoint? {
 }
 
 ///|
-fn pdf_mesh_read_color(context : PdfMeshDecodeContext) -> String? {
+fn pdf_mesh_read_color(
+  context : PdfMeshDecodeContext,
+) -> (String, Array[Double])? {
   let values : Array[Double] = Array(capacity=context.component_count)
   for index in 0..<context.component_count {
     match pdf_mesh_read_sample(context, 2 + index, context.bits_per_component) {
@@ -250,30 +254,36 @@ fn pdf_mesh_read_color(context : PdfMeshDecodeContext) -> String? {
     let input = values[0]
     let output : Array[Double] = []
     for function in context.functions {
-      let result = function.eval([input]) catch { _ => [] }
+      let result = pdf_colour_eval_function(function, [input]) catch { _ => [] }
       output.append(result)
     }
     output
   } else {
     values
   }
-  Some(pdf_shading_colour_hex(mapped, context.colourspace))
+  Some((pdf_shading_colour_hex(mapped, context.colourspace), values))
 }
 
 ///|
 fn pdf_mesh_read_vertex(context : PdfMeshDecodeContext) -> PdfMeshVertex? {
   match (pdf_mesh_read_point(context), pdf_mesh_read_color(context)) {
-    (Some(point), Some(color)) => Some({ point, color, })
+    (Some(point), Some((color, components))) =>
+      Some({ point, color, components, })
     _ => None
   }
 }
 
 ///|
 fn pdf_mesh_triangle(
+  context : PdfMeshDecodeContext,
   a : PdfMeshVertex,
   b : PdfMeshVertex,
   c : PdfMeshVertex,
 ) -> PdfMeshTriangle {
+  context.triangles.push({
+    points: [a.point, b.point, c.point],
+    components: [a.components, b.components, c.components],
+  })
   {
     p0: a.point,
     p1: b.point,
@@ -286,13 +296,14 @@ fn pdf_mesh_triangle(
 
 ///|
 fn pdf_mesh_triangle_indices(
+  context : PdfMeshDecodeContext,
   vertices : Array[PdfMeshVertex],
   a : Int,
   b : Int,
   c : Int,
 ) -> PdfMeshTriangle? {
   match (vertices.get(a), vertices.get(b), vertices.get(c)) {
-    (Some(a), Some(b), Some(c)) => Some(pdf_mesh_triangle(a, b, c))
+    (Some(a), Some(b), Some(c)) => Some(pdf_mesh_triangle(context, a, b, c))
     _ => None
   }
 }
@@ -338,7 +349,14 @@ fn pdf_mesh_type4(context : PdfMeshDecodeContext) -> Array[PdfMeshTriangle] {
         face.push(index)
         vertices_left -= 1
         if vertices_left == 0 {
-          match pdf_mesh_triangle_indices(vertices, face[0], face[1], face[2]) {
+          match
+            pdf_mesh_triangle_indices(
+              context,
+              vertices,
+              face[0],
+              face[1],
+              face[2],
+            ) {
             Some(triangle) => output.push(triangle)
             None => ()
           }
@@ -376,13 +394,15 @@ fn pdf_mesh_type5(
       let bottom_left = top_left + vertices_per_row
       let bottom_right = bottom_left + 1
       match
-        pdf_mesh_triangle_indices(vertices, top_left, top_right, bottom_left) {
+        pdf_mesh_triangle_indices(
+          context, vertices, top_left, top_right, bottom_left,
+        ) {
         Some(triangle) => output.push(triangle)
         None => ()
       }
       match
         pdf_mesh_triangle_indices(
-          vertices, bottom_right, top_right, bottom_left,
+          context, vertices, bottom_right, top_right, bottom_left,
         ) {
         Some(triangle) => output.push(triangle)
         None => ()
@@ -436,6 +456,7 @@ fn pdf_mesh_patch_type(
     let color_count = if flag == 0 { 4 } else { 2 }
     let points : Array[PdfPoint] = Array(capacity=point_count)
     let colors : Array[String] = Array(capacity=color_count)
+    let components : Array[Array[Double]] = Array(capacity=color_count)
     for _ in 0..<point_count {
       match pdf_mesh_read_point(context) {
         Some(point) => points.push(point)
@@ -450,7 +471,10 @@ fn pdf_mesh_patch_type(
     }
     for _ in 0..<color_count {
       match pdf_mesh_read_color(context) {
-        Some(color) => colors.push(color)
+        Some((color, values)) => {
+          colors.push(color)
+          components.push(values)
+        }
         None => {
           done = true
           break
@@ -461,11 +485,15 @@ fn pdf_mesh_patch_type(
       continue
     }
     let patch = pdf_mesh_patch_from_record(
-      flag, points, colors, previous, tensor,
+      flag, points, colors, components, previous, tensor,
     )
     match patch {
       Some(value) => {
         patches.push(value)
+        context.patches.push({
+          points: value.points,
+          components: value.components,
+        })
         previous = Some(value)
       }
       None => done = true
@@ -504,6 +532,7 @@ fn pdf_mesh_patch_from_record(
   flag : Int,
   record_points : Array[PdfPoint],
   record_colors : Array[String],
+  record_components : Array[Array[Double]],
   previous : PdfMeshPatch?,
   tensor : Bool,
 ) -> PdfMeshPatch? {
@@ -511,6 +540,7 @@ fn pdf_mesh_patch_from_record(
     0 => {
       let points : Array[PdfPoint] = Array::make(16, { x: 0.0, y: 0.0, })
       let colors : Array[String] = Array::make(4, "#000000")
+      let components : Array[Array[Double]] = Array::make(4, [])
       if tensor {
         // PDF.js stores the 4x4 tensor control grid in row-major order with
         // the boundary curves reversed into the patch convention.
@@ -545,21 +575,27 @@ fn pdf_mesh_patch_from_record(
         points[3] = record_points[9]
       }
       colors[0] = record_colors[0]
+      components[0] = record_components[0]
       colors[1] = record_colors[3]
+      components[1] = record_components[3]
       colors[2] = record_colors[1]
+      components[2] = record_components[1]
       colors[3] = record_colors[2]
+      components[3] = record_components[2]
       if !tensor {
         pdf_mesh_fill_coons_inner_points(points)
       }
-      Some({ points, colors, })
+      Some({ points, colors, components, })
     }
     1 | 2 | 3 =>
       match previous {
         Some(previous) => {
           let points : Array[PdfPoint] = Array::make(16, { x: 0.0, y: 0.0, })
           let colors : Array[String] = Array::make(4, "#000000")
+          let components : Array[Array[Double]] = Array::make(4, [])
           let pi = record_points
           let ci = record_colors
+          let si = record_components
           match flag {
             1 => {
               points[12] = previous.points[15]
@@ -575,9 +611,13 @@ fn pdf_mesh_patch_from_record(
               points[2] = pi[6]
               points[3] = pi[5]
               colors[2] = previous.colors[3]
+              components[2] = previous.components[3]
               colors[3] = ci[0]
+              components[3] = si[0]
               colors[0] = previous.colors[2]
+              components[0] = previous.components[2]
               colors[1] = ci[1]
+              components[1] = si[1]
             }
             2 => {
               points[12] = previous.points[3]
@@ -593,9 +633,13 @@ fn pdf_mesh_patch_from_record(
               points[2] = pi[6]
               points[3] = pi[5]
               colors[2] = previous.colors[1]
+              components[2] = previous.components[1]
               colors[3] = ci[0]
+              components[3] = si[0]
               colors[0] = previous.colors[3]
+              components[0] = previous.components[3]
               colors[1] = ci[1]
+              components[1] = si[1]
             }
             _ => {
               points[12] = previous.points[0]
@@ -611,9 +655,13 @@ fn pdf_mesh_patch_from_record(
               points[2] = pi[6]
               points[3] = pi[5]
               colors[2] = previous.colors[0]
+              components[2] = previous.components[0]
               colors[3] = ci[0]
+              components[3] = si[0]
               colors[0] = previous.colors[1]
+              components[0] = previous.components[1]
               colors[1] = ci[1]
+              components[1] = si[1]
             }
           }
           if tensor {
@@ -624,7 +672,7 @@ fn pdf_mesh_patch_from_record(
           } else {
             pdf_mesh_fill_coons_inner_points(points)
           }
-          Some({ points, colors, })
+          Some({ points, colors, components, })
         }
         None => None
       }

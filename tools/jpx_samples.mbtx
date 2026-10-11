@@ -1,0 +1,18 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/env",
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  guard args.length() >= 3 else {
+    fail("usage: jpx_samples.mbtx input.jp2 output.raw [SMaskInData]")
+  }
+  @shell.Cmd(
+    "moon",
+    ["run", "cmd/jpx-samples", "--target", "native", "--", ..args[1:]],
+  ).run()
+}

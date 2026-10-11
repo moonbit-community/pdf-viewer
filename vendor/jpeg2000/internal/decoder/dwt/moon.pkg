@@ -1,0 +1,7 @@
+// T.800-2015 Annex F: Discrete Wavelet Transform
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/core",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/quant",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/subband",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/math",
+}

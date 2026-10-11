@@ -1,0 +1,100 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/mq"
+
+// Values
+pub const TIER1_ANNEX_C_DEFAULT_CONTEXT_COUNT : Int = 19
+
+pub fn tier1_annex_c_bootstrap_debug(Tier1AnnexCBootstrap) -> String
+
+pub fn tier1_annex_c_bootstrap_from_codewords(Array[Bytes]) -> Result[Tier1AnnexCBootstrap, String]
+
+pub fn tier1_annex_c_context_trace_debug(Array[Int], Array[Int], Array[String]) -> String
+
+pub fn tier1_annex_c_decode_mini_block_pass_segments(Array[Bytes], Array[Tier1AnnexCContextState], Int, Int, Int, Bool, code_block_style? : Int, subband_type? : Int, initial_bpno_plus_one? : Int, roishift? : Int) -> Result[(Array[Int], Array[Int], Array[String]), String]
+
+pub fn tier1_annex_c_decode_mini_block_passes(Tier1AnnexCBootstrap, Array[Bytes], Array[Tier1AnnexCContextState], Int, Int, Int, Bool, code_block_style? : Int, pass_segments? : Array[Bytes], pass_segment_starts? : Array[Bool], subband_type? : Int, initial_bpno_plus_one? : Int, roishift? : Int, trace_target_pass? : Int, trace_max_events? : Int) -> Result[(Array[Int], Array[Int], Array[String]), String]
+
+pub fn tier1_annex_c_decode_single_coeff_pass_segments(Array[Bytes], Array[Tier1AnnexCContextState], Int, Bool) -> Result[(Array[Int], Array[Int], Array[String]), String]
+
+pub fn tier1_annex_c_decode_single_coeff_passes(Tier1AnnexCBootstrap, Array[Bytes], Array[Tier1AnnexCContextState], Int, Bool) -> Result[(Array[Int], Array[Int], Array[String]), String]
+
+pub fn tier1_annex_c_probe_debug(Tier1AnnexCDecisionProbe) -> String
+
+pub fn tier1_annex_c_probe_one_decision(Tier1AnnexCBootstrap, Array[Bytes], Array[Tier1AnnexCContextState]) -> Result[Tier1AnnexCDecisionProbe, String]
+
+pub fn tier1_annex_c_reset_contexts(Int) -> Result[Array[Tier1AnnexCContextState], String]
+
+pub fn tier1_annex_c_restore_contexts(Array[Int]) -> Result[Array[Tier1AnnexCContextState], String]
+
+pub fn tier1_annex_c_save_contexts(Array[Tier1AnnexCContextState]) -> Result[Array[Int], String]
+
+pub fn tier1_mq_mini_block_bias_bucket(Int) -> Int
+
+pub fn tier1_mq_mini_block_cleanup_sig_context(Int, Int) -> Int
+
+pub fn tier1_mq_mini_block_cleanup_sign_context(Int, Int) -> Int
+
+pub fn tier1_mq_mini_block_cleanup_sign_score(Int, Int, Array[Int], Int, Int) -> Int
+
+pub fn tier1_mq_mini_block_neighbor_bucket(Int) -> Int
+
+pub fn tier1_mq_mini_block_sig_neighbor_count(Int, Int, Array[Bool], Int, Int) -> Int
+
+pub fn tier1_mq_mini_block_sigprop_sig_context(Int, Int) -> Int
+
+pub fn tier1_mq_mini_block_sigprop_sign_context(Int, Int) -> Int
+
+pub fn tier1_mq_mini_block_sigprop_sign_score(Int, Int, Array[Int], Int, Int) -> Int
+
+pub fn tier1_mq_mini_block_weighted_sign_score(Int, Int, Array[Int], Int, Int, Int, Int) -> Int
+
+pub fn tier1_mq_sig_context_table_cleanup(Int, Int) -> Int
+
+pub fn tier1_mq_sig_context_table_sigprop(Int, Int) -> Int
+
+pub fn tier1_mq_sign_mode_table_cleanup(Int, Int) -> Int
+
+pub fn tier1_mq_sign_mode_table_sigprop(Int, Int) -> Int
+
+pub fn tier1_preview_hex(Array[Bytes], Int) -> String
+
+// Errors
+
+// Types and methods
+pub struct Tier1AnnexCBootstrap {
+  non_empty_segments : Int
+  preview_hex : String
+  a_init : Int
+  c_init : Int
+}
+
+pub struct Tier1AnnexCContextState {
+  state_index : Int
+  mps : Int
+}
+
+pub struct Tier1AnnexCDecisionProbe {
+  context_index : Int
+  decision : Int
+  kind : String
+}
+
+pub struct Tier1AnnexCDecoderState {
+  a : Int
+  c : Int
+  ct : Int
+  byte_pos : Int
+  prev_byte : Int
+  source : Bytes
+}
+
+pub struct Tier1RawBitReader {
+  source : Bytes
+  mut byte_pos : Int
+  mut c : Int
+  mut ct : Int
+}
+
+// Type aliases
+
+// Traits

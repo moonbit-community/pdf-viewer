@@ -1,0 +1,9 @@
+import {
+  "moonbit-community/pdf-viewer/codecs/jbig2",
+}
+
+supported_targets = "js"
+
+options(
+  link: { "js": { "exports": [ "decode_image" ], "format": "esm" } },
+)

@@ -1,0 +1,155 @@
+{
+  "page": {
+    "crop": [
+      0,
+      0,
+      612,
+      792
+    ],
+    "pdfjs": {
+      "mae": 2.1763502398714816,
+      "above8": 26245,
+      "maximum": 166.0
+    },
+    "poppler": {
+      "mae": 5.853644010915253,
+      "above8": 80603,
+      "maximum": 210.0
+    }
+  },
+  "main image": {
+    "crop": [
+      108,
+      144,
+      491,
+      433
+    ],
+    "pdfjs": {
+      "mae": 0.0010449887219516896,
+      "above8": 0,
+      "maximum": 1.0
+    },
+    "poppler": {
+      "mae": 6.387787183680107,
+      "above8": 33653,
+      "maximum": 126.0
+    }
+  },
+  "top left": {
+    "crop": [
+      110,
+      145,
+      302,
+      282
+    ],
+    "pdfjs": {
+      "mae": 0.0,
+      "above8": 0,
+      "maximum": 0.0
+    },
+    "poppler": {
+      "mae": 0.9267665247364153,
+      "above8": 962,
+      "maximum": 90.0
+    }
+  },
+  "top right": {
+    "crop": [
+      306,
+      145,
+      489,
+      282
+    ],
+    "pdfjs": {
+      "mae": 0.0,
+      "above8": 0,
+      "maximum": 0.0
+    },
+    "poppler": {
+      "mae": 2.6422825841277437,
+      "above8": 3234,
+      "maximum": 126.0
+    }
+  },
+  "bottom left": {
+    "crop": [
+      110,
+      287,
+      302,
+      431
+    ],
+    "pdfjs": {
+      "mae": 0.000277295524691358,
+      "above8": 0,
+      "maximum": 1.0
+    },
+    "poppler": {
+      "mae": 10.80689380787037,
+      "above8": 13779,
+      "maximum": 124.0
+    }
+  },
+  "bottom right": {
+    "crop": [
+      306,
+      287,
+      489,
+      431
+    ],
+    "pdfjs": {
+      "mae": 0.00020238818053025704,
+      "above8": 0,
+      "maximum": 1.0
+    },
+    "poppler": {
+      "mae": 10.209560311677798,
+      "above8": 13539,
+      "maximum": 122.0
+    }
+  },
+  "small example": {
+    "crop": [
+      40,
+      510,
+      203,
+      631
+    ],
+    "pdfjs": {
+      "mae": 0.00010140445165542768,
+      "above8": 0,
+      "maximum": 1.0
+    },
+    "poppler": {
+      "mae": 6.949145667494803,
+      "above8": 6686,
+      "maximum": 107.0
+    }
+  },
+  "JBIG2Globals": {
+    "fixtureSha256": "19c9ab320b3effffd9d6761bd5eb377ea240346fc01f61474d89021953df28eb",
+    "source": [
+      5188,
+      6930
+    ],
+    "boundedResource": [
+      2594,
+      3465
+    ],
+    "page": [
+      623,
+      832
+    ],
+    "pdfjs": {
+      "mae": 0.0021974163476972466,
+      "above8": 0,
+      "maximum": 1
+    },
+    "conversionMilliseconds": 2218.0243530000002,
+    "endRssBytes": 290254848,
+    "notes": [
+      "Source PNG produced by actual bounded image conversion on the exact original-page no-text derivative.",
+      "Final Canvas replay uses the original page plan with this actual resource.",
+      "Invisible OCR does not paint; its separate source items remain in the original plan."
+    ]
+  }
+}

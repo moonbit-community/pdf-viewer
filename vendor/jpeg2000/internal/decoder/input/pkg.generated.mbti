@@ -1,0 +1,49 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/input"
+
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/core",
+}
+
+// Values
+pub fn codestream_payload_is_empty(@core.Codestream) -> Bool
+
+pub fn collect_ppm_payload_bytes(@core.Codestream) -> Bytes?
+
+pub fn collect_ppm_payloads_by_tile(@core.Codestream) -> Array[(Int, Bytes)]?
+
+pub fn collect_ppt_payloads_by_tile(@core.Codestream) -> Array[(Int, Bytes)]?
+
+pub fn collect_sod_payloads(@core.Codestream) -> Array[Bytes]
+
+pub fn collect_sod_payloads_by_tile(@core.Codestream) -> Array[(Int, Bytes)]?
+
+pub fn component_dimensions_from_siz(@core.SizMetadata, Int) -> Result[(Int, Int), String]
+
+pub fn component_sample_count_from_siz(@core.SizMetadata, Int) -> Result[Int, String]
+
+pub fn extract_decode_input_codestream(Bytes) -> Result[Bytes, String]
+
+pub fn make_sample_array_bytes_le(Array[Int], Int) -> Result[Bytes, String]
+
+pub fn make_single_sample_bytes_le(Int, Int) -> Result[Bytes, String]
+
+pub fn make_zero_sample_bytes(Int, Int) -> Result[Bytes, String]
+
+pub fn parse_decode_input_codestream(Bytes) -> Result[@core.Codestream, String]
+
+pub fn parse_decode_input_codestream_strict(Bytes) -> Result[@core.Codestream, String]
+
+pub fn roundtrip_decode_input_bytes(Bytes) -> Result[Bytes, String]
+
+pub fn tile_component0_dims_and_origin_from_siz(@core.SizMetadata, Int, Int) -> (Int, Int, Int, Int, Int, Int)
+
+pub fn tile_component0_dims_from_siz(@core.SizMetadata, Int, Int) -> (Int, Int, Int, Int)
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

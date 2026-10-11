@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/packet"
+
+// Values
+pub fn pkt_body_start_offset(Bytes, Int) -> Int
+
+pub fn pkt_decode_num_coding_passes(Bytes, Int) -> Result[(Int, Int), String]
+
+pub fn pkt_read_bit(Bytes, Int) -> Result[Int, String]
+
+pub fn pkt_read_bits(Bytes, Int, Int) -> Result[(Int, Int), String]
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

@@ -1,0 +1,21 @@
+{
+  "sourceSpace": "CalGray Gamma2 with Function N2",
+  "sourceProfileSha256": null,
+  "outputCmykProfileSha256": "8472fa1493a024b800b67dee9424835ec0c41ab79490200ae8ec4a689fd1b9a9",
+  "outputCmykSkipped": null,
+  "pdfSha256": "a828f3083c5643378958fb8e8adff79bc8487814fb168f4cb898618778d63ce8",
+  "cases": [
+    {
+      "target": "target-rgb",
+      "components": 3,
+      "pixels": 10000,
+      "maximumByteError": 0.49634572863578796
+    },
+    {
+      "target": "target-cmyk",
+      "components": 4,
+      "pixels": 40000,
+      "maximumByteError": 0.5019455244764686
+    }
+  ]
+}

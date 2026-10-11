@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-11",
+  "a1Base": "a22a19078e4e654ffa6bb88fcb13e8b4c4a6951c",
+  "sourceLocalCommit": "1b594a4714faa3dd81eb0d7a0df9109538aa72ef",
+  "scope": "Fresh final aggregate after A1, Worker, annotation/print-intent and npm asset delivery integration. Earlier real-corpus and Chromium records retain their own baseline identities.",
+  "command": "PDF_CANVAS_PACKAGE=/absolute/path/to/host/package.json moon run tools/a2_check.mbtx",
+  "toolchain": "moon 0.1.20260920 (914d7da 2026-09-20); moonc 0.10.14+7d59c7ec9",
+  "node": "24.19.0",
+  "nativeCompiler": "g++ 14.2.0, Linux C++20",
+  "testTargets": {
+    "js": 635,
+    "native": 643,
+    "wasm": 636,
+    "wasm-gc": 636
+  },
+  "allTargetCheck": true,
+  "releaseNativeBuild": true,
+  "releaseWebBuild": true,
+  "authoredPixelAssertions": true,
+  "canvasReplayTests": 37,
+  "bitIdenticalDirtyRegionCombinations": 64,
+  "exactPatternRegionComparisons": 8,
+  "exactNestedSceneCropComparisons": 8,
+  "standard14StrictCases": 24,
+  "standard14NativePublicEntry": {
+    "entry": "cmd/main + tools/render_canvas.mjs",
+    "width": 240,
+    "height": 160,
+    "exactRgbaEquality": true,
+    "geometryResolvedBeforeHostReplay": true,
+    "diagnostics": []
+  },
+  "browserBridgeSha256": "09a64b9bc4c0575b1cab462b6dabb4cc9d0a780fc99d6bd61e36faf4f765e215",
+  "pixelPlanSha256": "407cac4f18a97af2b779faa2fb96a88afa00a48d7863f134cb632855cd426cd9",
+  "browserDOMExecuted": false,
+  "browserBlocker": "Chromium socket creation EPERM",
+  "sourceWhitespaceCheck": "Own-source diff clean; unmodified upstream licenses/headers retain original whitespace.",
+  "sourceLocalTree": "62924a53e2ba45a04ffee0ea78c2978e898fdeee",
+  "shadingCacheMoonRegressions": 9,
+  "shadingClipFocusedHostTests": 7,
+  "optionalSavedRealShadingTest": {
+    "separateRunPassed": 8,
+    "skipped": 0,
+    "report": "shading-reuse.json"
+  },
+  "upstreamBaseCommit": "1f9db19599e21ab6d8ae713e475c20bdbbba5717",
+  "browserSuiteCompileCheck": true,
+  "workerTest": "worker-canvas.json",
+  "realPageMeasurements": "a2-a1-real.json",
+  "workerRegressionChecks": 10,
+  "npmAssetDelivery": "npm-assets.json"
+}

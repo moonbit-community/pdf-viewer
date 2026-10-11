@@ -1,0 +1,194 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+struct StrokeCase {
+  name : String
+  content : String
+} derive(ToJson)
+
+///|
+/// Original, text-free fixtures. All coordinates are PDF page-space points.
+/// Pages 5-7 place graphics-state operators inside a path object, outside the
+/// PDF graphics-object grammar. Retain them as compatibility diagnostics,
+/// not valid-path conformance claims.
+fn stroke_cases() -> Array[StrokeCase] {
+  [
+    {
+      name: "nonuniform-width",
+      content: "q 2 0 0 .5 20 20 cm 8 w 0 J 10 40 m 90 40 l S 50 120 m 50 260 l S Q",
+    },
+    {
+      name: "dashphase-round-cap-join",
+      content: "q 1.6 .2 .1 .7 20 30 cm 6 w 1 J 1 j [14 8] 5 d 10 20 m 110 20 l 110 130 l 10 130 l S Q",
+    },
+    {
+      name: "shear-curves",
+      content: "q 1 .3 .6 1 15 10 cm 9 w 1 J 1 j 10 20 m 15 130 75 -15 110 85 c S Q",
+    },
+    {
+      name: "page-space-clip",
+      content: "35 35 160 105 re W n q 1.7 .2 .5 .65 10 20 cm 16 w 1 J 10 20 m 100 140 l S 0 100 m 130 100 l S Q",
+    },
+    {
+      name: "mixed-cm-in-path",
+      content: "q 10 w 1 J 1 j 25 25 m 2 0 0 .5 0 0 cm 80 80 l .5 .2 .4 2 0 0 cm 60 80 l S Q",
+    },
+    {
+      name: "q-restore-current-path",
+      content: "6 w 1 J 1 j 20 20 m q 2 0 0 .5 0 0 cm 90 100 l Q 180 130 l S",
+    },
+    {
+      name: "cm-immediately-before-stroke",
+      content: "12 w 0 J 0 j 35 35 m 190 35 l 190 130 l 2 0 0 .5 0 0 cm S",
+    },
+    {
+      name: "miter-limit",
+      content: "q 1.25 0 .3 .85 10 10 cm 10 w 0 j 2 M 10 20 m 30 100 l 50 20 l S 10 M 110 20 m 130 100 l 150 20 l S Q",
+    },
+    {
+      name: "fill-and-stroke",
+      content: "q 1.5 .2 .4 .6 15 25 cm .75 g 0 G 8 w 2 J 2 j 10 20 m 90 20 l 50 120 l h B Q",
+    },
+    {
+      name: "reflected-nonzero-page-origin",
+      content: "q -1.5 .2 .3 .75 180 15 cm 10 w 1 J 1 j 10 30 m 100 30 l 100 140 l S Q",
+    },
+    {
+      name: "tiling-pattern-stroke",
+      content: "q 1.6 0 .2 .7 20 20 cm /Pattern CS /P1 SCN 12 w 1 J 1 j 10 30 m 100 30 l 100 130 l 20 130 l S Q",
+    },
+  ]
+}
+
+///|
+fn pdf_stream(dictionary : String, contents : String) -> String {
+  "<< /Length \{contents.length()} \{dictionary} >>\nstream\n\{contents}\nendstream"
+}
+
+///|
+fn fixture_pdf(cases : Array[StrokeCase]) -> Bytes {
+  let kids = [ for i in 0..<cases.length() => "\{3 + i * 2} 0 R" ].join(" ")
+  let pattern_id = 3 + cases.length() * 2
+  let objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Count \{cases.length()} /Kids [\{kids}] >>",
+  ]
+  for i, fixture in cases {
+    let media_box = if fixture.name == "reflected-nonzero-page-origin" {
+      "-20 -15 220 165"
+    } else {
+      "0 0 240 180"
+    }
+    objects.push(
+      "<< /Type /Page /Parent 2 0 R /MediaBox [\{media_box}] /Contents \{4 + i * 2} 0 R /Resources << /Pattern << /P1 \{pattern_id} 0 R >> >> >>",
+    )
+    objects.push(pdf_stream("", fixture.content))
+  }
+  objects.push(
+    pdf_stream(
+      "/Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 8 8] /XStep 8 /YStep 8 /Resources << >>",
+      "0 g 0 0 4 8 re f .65 g 4 0 4 8 re f",
+    ),
+  )
+  let output = StringBuilder()
+  output.write_string("%PDF-1.7\n")
+  let offsets : Array[Int] = []
+  for i, object in objects {
+    offsets.push(output.to_string().length())
+    output.write_string("\{i + 1} 0 obj\n\{object}\nendobj\n")
+  }
+  let xref = output.to_string().length()
+  output.write_string("xref\n0 \{objects.length() + 1}\n0000000000 65535 f \n")
+  for offset in offsets {
+    output.write_string(offset.to_string().pad_start(10, '0') + " 00000 n \n")
+  }
+  output.write_string(
+    "trailer\n<< /Size \{objects.length() + 1} /Root 1 0 R >>\nstartxref\n\{xref}\n%%EOF\n",
+  )
+  @utf8.encode(output.to_string())
+}
+
+///|
+/// Run from the repository root: moon run tools/affine_strokes.mbtx [directory]
+/// This only exports PDF/SVG fixtures. Successful export is not a pixel test.
+async fn main {
+  let args = @env.args()
+  guard args.length() <= 2 else {
+    fail("usage: affine_strokes.mbtx [output-directory]")
+  }
+  let directory = if args.length() == 2 {
+    args[1]
+  } else {
+    "_build/affine-strokes-\{@env.now()}"
+  }
+  @fs.mkdir(directory, recursive=true)
+  let cases = stroke_cases()
+  let bytes = fixture_pdf(cases)
+  @fs.write_file(directory + "/affine-strokes.pdf", bytes)
+  let scales = [0.5, 1.0, 2.0]
+  let rotations = [0, 90, 180, 270]
+  let variants : Array[Json] = []
+  for i, fixture in cases {
+    for scale in scales {
+      for rotation in rotations {
+        let filename = "page-\{i + 1}.scale-\{scale}.rotation-\{rotation}.svg"
+        variants.push({
+          "page": i + 1,
+          "name": fixture.name,
+          "scale": scale,
+          "rotation": rotation,
+          "svg": filename,
+        })
+      }
+    }
+  }
+  let report : Json = {
+    "scope": "Original affine-stroke PDF and viewer SVG exports; no raster fidelity claim",
+    "license": "Apache-2.0, same as this repository",
+    "pdf": "affine-strokes.pdf",
+    "width": 240,
+    "height": 180,
+    "compatibility_pages": [5, 6, 7],
+    "compatibility_note": "Pages 5-7 contain graphics-state operators inside path objects; compare renderer recovery without claiming valid-PDF conformance",
+    "cases": cases,
+    "variants": variants,
+  }
+  @fs.write_file(directory + "/manifest.json", report.stringify(indent=2))
+  // Standalone scripts resolve imports from the registry, so reuse the
+  // repository's existing JS API build to guarantee this checkout is tested.
+  @shell.Cmd("moon", ["build", "--target", "js", "--release", "cmd/browser"]).run()
+  @fs.write_file(
+    directory + "/viewer.mjs",
+    @fs.read_file("_build/js/release/build/cmd/browser/browser.js").binary(),
+  )
+  @fs.write_file(directory + "/export.mjs", exporter_script())
+  @shell.Cmd("node", [directory + "/export.mjs"]).run()
+  println(
+    "Exported \{cases.length()} PDF pages and \{variants.length()} SVGs: \{directory}",
+  )
+}
+
+///|
+fn exporter_script() -> String {
+  let script =
+    #|import { readFileSync, writeFileSync } from 'node:fs';
+    #|import * as viewer from './viewer.mjs';
+    #|const root = new URL('.', import.meta.url);
+    #|const manifest = JSON.parse(readFileSync(new URL('manifest.json', root), 'utf8'));
+    #|const opened = JSON.parse(viewer.open_pdf(new Uint8Array(readFileSync(new URL(manifest.pdf, root)))));
+    #|if (!opened.ok) throw new Error(JSON.stringify(opened));
+    #|for (const entry of manifest.variants) {
+    #|  const result = JSON.parse(viewer.render_page(entry.page, entry.scale, entry.rotation));
+    #|  if (!result.ok || !result.svg.startsWith('<svg ')) throw new Error(JSON.stringify(result));
+    #|  writeFileSync(new URL(entry.svg, root), result.svg);
+    #|}
+    #|viewer.close_pdf();
+  script
+}

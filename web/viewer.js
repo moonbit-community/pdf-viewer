@@ -16,6 +16,30 @@ import { PageScheduler } from "./page-scheduler.js";
 import { AnnotationLayer } from "./annotation-layer.js";
 import { makeAccessibilityLayer } from "./accessibility-layer.js";
 
+// This pure synchronous colour helper is shared with Canvas replay. Document
+// parsing, decoded page ownership and navigation operations stay in the Worker.
+import { process_cmyk_to_rgb } from "./_generated/pdf.js";
+import { installPdfIccEngine } from "./pdf-icc.mjs";
+import { renderPdfPage } from "./pdf-runtime.mjs";
+
+const graphicsOptions = {
+  unsupported: "warn",
+  convertProcess: values => process_cmyk_to_rgb(...values),
+};
+let graphicsInitialization;
+function initializeCanvasGraphics() {
+  return graphicsInitialization ||= installPdfIccEngine().then(
+    () => [],
+    error => [{ code: "icc-engine-unavailable",
+      message: `ICC profiles use their PDF Alternate colour space: ${error.message}` }],
+  );
+}
+function showGraphicsDiagnostics(diagnostics = []) {
+  if (!diagnostics.length) return;
+  $("error").textContent = diagnostics.map(value => value.message || value.reason || value.code).join("; ");
+  $("error").hidden = false;
+}
+
 const $ = (id) => document.getElementById(id);
 const viewer = $("viewer");
 const pages = $("pages");
@@ -278,9 +302,14 @@ function renderThumbnails() {
           const result = checked(await render_page(number, 0.12, 0, {
             signal: task.signal, priority: -5,
           }));
-          if (!task.signal.aborted && !controller.signal.aborted) preview.innerHTML = result.svg;
+          if (task.signal.aborted || controller.signal.aborted) return;
+          const canvas = document.createElement("canvas");
+          const rendered = await renderPdfPage(canvas, result.canvas, graphicsOptions);
+          if (task.signal.aborted || controller.signal.aborted) return;
+          preview.replaceChildren(canvas);
+          showGraphicsDiagnostics(rendered.diagnostics);
         } catch (error) {
-          if (!controller.signal.aborted) showError(error);
+          if (!task.signal.aborted && !controller.signal.aborted) showError(error);
         } finally {
           if (tasks.get(number) === task) tasks.delete(number);
         }
@@ -622,7 +651,7 @@ function makeTextLayer(layer) {
   return element;
 }
 
-function mountPage(result) {
+async function mountPage(result, current = () => true) {
   const page = document.createElement("section");
   page.className = "page";
   page.dataset.page = result.page;
@@ -633,9 +662,12 @@ function mountPage(result) {
   paint.className = "paint-layer";
   paint.setAttribute("aria-hidden", "true");
   paint.inert = true;
-  // SVG strings come from the MoonBit serializer, whose text and attributes
-  // are escaped; user input is never interpolated into this HTML boundary.
-  paint.innerHTML = result.svg;
+  // Paint off-DOM: an obsolete zoom/navigation/document cannot publish a
+  // partially replayed Canvas while image or glyph resources are still loading.
+  const canvas = document.createElement("canvas");
+  const rendered = await renderPdfPage(canvas, result.canvas, graphicsOptions);
+  if (current()) showGraphicsDiagnostics(rendered.diagnostics);
+  paint.append(canvas);
   const text = makeTextLayer(result.layer);
   const annotations = annotationUI.create(result.annotations || [], result.layer.viewport);
   const accessibility = makeAccessibilityLayer(result.accessibility, annotations);
@@ -745,6 +777,8 @@ async function loadFile(file, path = "") {
   $("status").textContent = "正在读取文档";
   try {
     pdf.reset();
+    const canvasDiagnostics = await initializeCanvasGraphics();
+    if (generation !== state.documentGeneration) return;
     let info;
     let passwordAttempt = null;
     while (true) {
@@ -770,6 +804,9 @@ async function loadFile(file, path = "") {
         passwordAttempt = password;
       }
     }
+    showGraphicsDiagnostics([
+      ...canvasDiagnostics, ...(pdf.diagnostics().graphics?.diagnostics || []),
+    ]);
     state.file = file;
     state.fileName = file.name || "document.pdf";
     state.filePath = path || file.name || "document.pdf";
@@ -1019,16 +1056,15 @@ export async function printDocument() {
       page.style.height = `${height}pt`;
       page.style.page = name;
       rules.push(`@page ${name} { size: ${width}pt ${height}pt; margin: 0; }`);
-      page.innerHTML = result.svg;
+      const canvas = document.createElement("canvas");
+      const rendered = await renderPdfPage(canvas, result.canvas, graphicsOptions);
+      if (controller.signal.aborted || generation !== state.documentGeneration) return;
+      page.append(canvas);
       root.append(page);
+      showGraphicsDiagnostics(rendered.diagnostics);
     }
     style.textContent = `@media print { ${rules.join("\n")} }`;
     await document.fonts.ready;
-    await Promise.all([...root.querySelectorAll("image")].map(async element => {
-      const image = new Image();
-      image.src = element.getAttribute("href") || element.getAttribute("xlink:href");
-      await image.decode();
-    }));
     if (controller.signal.aborted || generation !== state.documentGeneration) return;
     document.body.classList.add("pdf-print-ready");
     window.print();

@@ -1,0 +1,366 @@
+{
+  "referenceRevision": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+  "method": "RGB byte differences; interior is three iterations of binary erosion of the union of nonwhite foreground masks (minimum RGB < 250). Both mesh fixtures contain no text.",
+  "fixtures": [
+    {
+      "fixture": "coons-allflags-withfunction.pdf",
+      "changedAbove8": 2104,
+      "boundary3ChangedAbove8": 2042,
+      "interiorChangedAbove8": 62,
+      "interiorMeanAbsoluteError": 0.9570902302838075,
+      "interiorChangedAbove32": 0
+    },
+    {
+      "fixture": "tensor-allflags-withfunction.pdf",
+      "changedAbove8": 2290,
+      "boundary3ChangedAbove8": 2042,
+      "interiorChangedAbove8": 248,
+      "interiorMeanAbsoluteError": 0.9622113192585985,
+      "interiorChangedAbove32": 22
+    }
+  ],
+  "flatteningConvergence": [
+    {
+      "name": "coons-allflags-withfunction",
+      "changedAbove1": 0,
+      "changedAbove8": 0,
+      "max": 1,
+      "wholePageMean": 0.00027783279417266344
+    },
+    {
+      "name": "tensor-allflags-withfunction",
+      "changedAbove1": 0,
+      "changedAbove8": 0,
+      "max": 1,
+      "wholePageMean": 0.00022006557954270373
+    }
+  ],
+  "analyticPixelEvidence": [
+    {
+      "pixel": [
+        329,
+        295
+      ],
+      "actual": [
+        0,
+        103,
+        152
+      ],
+      "pdfjs": [
+        0,
+        136,
+        118
+      ],
+      "analyticSolutions": [
+        {
+          "patch": 2,
+          "uv": [
+            0.24501531719878172,
+            0.4094998215247812
+          ],
+          "rgb": [
+            0,
+            103,
+            152
+          ]
+        }
+      ]
+    },
+    {
+      "pixel": [
+        332,
+        303
+      ],
+      "actual": [
+        0,
+        115,
+        140
+      ],
+      "pdfjs": [
+        0,
+        150,
+        104
+      ],
+      "analyticSolutions": [
+        {
+          "patch": 2,
+          "uv": [
+            0.2713176958887889,
+            0.47261566005204836
+          ],
+          "rgb": [
+            0,
+            115,
+            140
+          ]
+        }
+      ]
+    },
+    {
+      "pixel": [
+        184,
+        305
+      ],
+      "actual": [
+        0,
+        65,
+        190
+      ],
+      "pdfjs": [
+        0,
+        108,
+        144
+      ],
+      "analyticSolutions": [
+        {
+          "patch": 0,
+          "uv": [
+            0.9999186266074891,
+            0.2505357450266929
+          ],
+          "rgb": [
+            0,
+            64,
+            191
+          ]
+        },
+        {
+          "patch": 1,
+          "uv": [
+            0.4289193462442144,
+            0.6780121120629264
+          ],
+          "rgb": [
+            0,
+            121,
+            134
+          ]
+        },
+        {
+          "patch": 1,
+          "uv": [
+            0.0035455462364547097,
+            0.747910946424442
+          ],
+          "rgb": [
+            0,
+            65,
+            190
+          ]
+        }
+      ]
+    },
+    {
+      "pixel": [
+        181,
+        306
+      ],
+      "actual": [
+        0,
+        59,
+        196
+      ],
+      "pdfjs": [
+        0,
+        110,
+        142
+      ],
+      "analyticSolutions": [
+        {
+          "patch": 1,
+          "uv": [
+            0.3851325789477425,
+            0.7078231113792851
+          ],
+          "rgb": [
+            0,
+            115,
+            140
+          ]
+        },
+        {
+          "patch": 1,
+          "uv": [
+            0.039580881410081606,
+            0.7635181352529071
+          ],
+          "rgb": [
+            0,
+            66,
+            189
+          ]
+        },
+        {
+          "patch": 1,
+          "uv": [
+            0.008547808554607185,
+            0.7754469743005974
+          ],
+          "rgb": [
+            0,
+            58,
+            197
+          ]
+        }
+      ]
+    },
+    {
+      "pixel": [
+        290,
+        457
+      ],
+      "actual": [
+        0,
+        105,
+        150
+      ],
+      "pdfjs": [
+        0,
+        103,
+        150
+      ],
+      "analyticSolutions": [
+        {
+          "patch": 3,
+          "uv": [
+            0.739038288137202,
+            0.01832451720657419
+          ],
+          "rgb": [
+            0,
+            105,
+            150
+          ]
+        }
+      ]
+    },
+    {
+      "pixel": [
+        275,
+        415
+      ],
+      "actual": [
+        0,
+        191,
+        64
+      ],
+      "pdfjs": [
+        0,
+        182,
+        71
+      ],
+      "analyticSolutions": [
+        {
+          "patch": 0,
+          "uv": [
+            0.698735476008376,
+            0.9770334986951328
+          ],
+          "rgb": [
+            0,
+            176,
+            79
+          ]
+        },
+        {
+          "patch": 3,
+          "uv": [
+            0.31255328898679274,
+            0.003404249757488515
+          ],
+          "rgb": [
+            0,
+            191,
+            64
+          ]
+        }
+      ]
+    },
+    {
+      "pixel": [
+        250,
+        250
+      ],
+      "actual": [
+        0,
+        75,
+        180
+      ],
+      "pdfjs": [
+        0,
+        75,
+        178
+      ],
+      "analyticSolutions": [
+        {
+          "patch": 1,
+          "uv": [
+            0.8308459938038726,
+            0.1866398804684305
+          ],
+          "rgb": [
+            0,
+            75,
+            180
+          ]
+        }
+      ]
+    },
+    {
+      "pixel": [
+        200,
+        400
+      ],
+      "actual": [
+        0,
+        125,
+        130
+      ],
+      "pdfjs": [
+        0,
+        123,
+        130
+      ],
+      "analyticSolutions": [
+        {
+          "patch": 0,
+          "uv": [
+            0.7556823221103968,
+            0.48047649885709215
+          ],
+          "rgb": [
+            0,
+            125,
+            130
+          ]
+        }
+      ]
+    }
+  ],
+  "interpretation": [
+    "Most >8 differences are raster footprint/filtering at the mesh outer boundary.",
+    "Independent bicubic inversion matches the implemented colours exactly at examined nonfolded large-difference pixels.",
+    "Some tensor regions genuinely fold and have multiple inverse parameter solutions; the adapter chooses the last rasterized parameter branch, unlike the coarse PDF.js tessellation/filtering.",
+    "Tightening flattening by 4x changes no output channel by more than one byte in either fixture. No algorithm change was justified by the PDF.js residual."
+  ],
+  "serialization": {
+    "fixture": "function_based_shading.pdf",
+    "tables": 9,
+    "uniqueSampleTables": 8,
+    "currentSampleJSONBytes": 5543434,
+    "proposedRGB8Base64Bytes": 599076,
+    "proposedFloat32Base64Bytes": 2396304,
+    "rgb8QuantizationBoundBytes": 0.5,
+    "rgb16LEBase64Bytes": 1198152,
+    "adapterRGB16LEImplemented": true,
+    "adapterCommit": "23e81c7",
+    "rgb16QuantizationBoundBytes": 0.0019455252918287938,
+    "numericArrayInputRetained": true
+  },
+  "limitations": [
+    "Fixed 129x129 type-1 tables and 1025-sample one-input tables approximate arbitrary PDF functions; highly oscillatory or discontinuous functions can exceed a byte-level error tolerance.",
+    "Four-input colour conversion LUTs use multilinear approximation, not exact arbitrary colour-function execution.",
+    "Triangle outer edges use pixel-center coverage; Canvas clipping and final composition provide clipping coverage but no internal supersampling.",
+    "The fixture comparisons are not evidence of universal pixel equivalence to PDF.js or exhaustive PDF support."
+  ]
+}

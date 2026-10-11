@@ -1,0 +1,57 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/orchestrate"
+
+// Values
+pub fn decode_samples_all_components(Bytes) -> Result[DecodeAllComponentsResult, String]
+
+pub fn decode_samples_all_components_impl(Bytes, packet_audit? : Bool, packet_audit_limit? : Int) -> Result[DecodeAllComponentsResult, String]
+
+pub fn decode_samples_from_internal(DecodeSamplesInternalResult) -> DecodeSamplesResult
+
+pub fn decode_samples_impl(Bytes, packet_audit? : Bool, packet_audit_limit? : Int, force_relocated_ppt? : Bool) -> Result[DecodeSamplesInternalResult, String]
+
+// Errors
+
+// Types and methods
+pub(all) struct DecodeAllComponentsResult {
+  num_components : Int
+  sample_layout : String
+  components : Array[DecodeSamplesComponentResult]
+}
+
+pub(all) struct DecodeSamplesComponentResult {
+  component_index : Int
+  width : Int
+  height : Int
+  bits_per_component : Int
+  is_signed : Bool
+  sample_layout : String
+  samples : Bytes
+}
+
+pub(all) struct DecodeSamplesInternalResult {
+  samples : Bytes
+  bits_per_sample : Int
+  signed_samples : Bool
+  num_points : Int
+  width : Int
+  height : Int
+  components : Int
+  layout : String
+}
+
+pub(all) struct DecodeSamplesResult {
+  width : Int
+  height : Int
+  num_components : Int
+  bits_per_component : Int
+  is_signed : Bool
+  sample_layout : String
+  samples : Bytes
+}
+
+type TileRelocatedHeaders
+
+// Type aliases
+
+// Traits

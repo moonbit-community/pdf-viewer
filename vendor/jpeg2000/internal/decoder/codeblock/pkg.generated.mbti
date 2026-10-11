@@ -1,0 +1,42 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/codeblock"
+
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/core",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/a8",
+}
+
+// Values
+pub fn accumulate_multi_codeblock_packet_parts(Array[@a8.MultiCodeblockPacketParts]) -> Result[@a8.MultiCodeblockPacketParts, String]
+
+pub fn code_block_style_is_ht(Int) -> Bool
+
+pub fn decode_multi_codeblock_coefficients(Array[@a8.MultiCodeblockPacketParts], Int, Int, Int, Int, Int, Int, Int, Int, subband_max_bit_planes? : Int, quantization_style? : Int, roishift? : Int) -> Result[Array[Int], String]
+
+pub fn decode_nodwt_ht_multi_codeblock_tile_bridge(@core.Codestream, Bytes, Int, Int, Int, Bool, Int, Int, @core.CodMetadata, fallback_qcd? : @core.QcdMetadata?) -> Result[Array[Int], String]
+
+pub fn decode_single_codeblock_coefficients(Bytes, Int, Int, Int, Int, Int, Int, segment_lengths? : Array[Int], per_segment_passes? : Array[Int], subband_max_bit_planes? : Int, subband_type? : Int, quantization_style? : Int, roishift? : Int, packet_audit? : Bool, audit_label? : String, audit_comp? : Int, audit_res? : Int, audit_sb? : Int, audit_cbx? : Int, audit_cby? : Int) -> Result[Array[Int], String]
+
+pub fn htj2k_accumulate_single_codeblock_packet_parts(Array[@a8.SingleCodeblockPacketParts]) -> Result[(Bytes, Int, Int, Array[Int], Array[Int]), String]
+
+pub fn htj2k_decode_not_supported_error(@core.Codestream) -> String
+
+pub fn htj2k_multi_codeblock_uses_staged_segments(Array[@a8.MultiCodeblockPacketParts]) -> Bool
+
+pub fn htj2k_roi_descaled_fixedpoint(Int, Int) -> Int
+
+pub fn htj2k_single_codeblock_uses_staged_segments(Array[@a8.SingleCodeblockPacketParts]) -> Bool
+
+pub fn tier1_codeword_pass_segments(@a8.SingleCodeblockPacketParts) -> Result[Array[Bytes], String]
+
+pub fn tier1_lossy_positioned_bitplane_count(Int, Int, Int, Int, Int) -> Int
+
+pub fn tier1_merge_packet_contributions_into_final_segments(Array[Int], Array[Int], Int) -> (Array[Int], Array[Int])
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

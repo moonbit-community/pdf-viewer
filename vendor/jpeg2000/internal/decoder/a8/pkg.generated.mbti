@@ -1,0 +1,108 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/a8"
+
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/core",
+}
+
+// Values
+pub fn codeblock_segment_maxpasses(Int, Bool, Int) -> Int
+
+pub fn extract_all_single_codeblock_first_packet_parts(@core.Codestream, Array[Bytes]) -> Result[Array[SingleCodeblockPacketParts], String]
+
+pub fn extract_multi_codeblock_first_packet_parts(@core.Codestream, Array[Bytes]) -> Result[(Array[MultiCodeblockPacketParts], Int, Int), String]
+
+pub fn extract_multi_codeblock_packet_parts_series(Bytes, Int, Int) -> Result[Array[MultiCodeblockPacketParts], String]
+
+pub fn extract_multi_codeblock_packet_parts_series_if_plausible(@core.Codestream, Array[Bytes]) -> Result[(Array[MultiCodeblockPacketParts], Int, Int), String]
+
+pub fn extract_simple_profile_packet_parts(@core.Codestream, Array[Bytes]) -> Result[Array[SingleCodeblockPacketParts], String]
+
+pub fn first_packet_parts_debug(Array[SingleCodeblockPacketParts]) -> String
+
+pub fn is_single_packet_simple_profile(@core.Codestream, @core.SizMetadata) -> Bool
+
+pub fn parse_multi_codeblock_first_packet_parts_with_candidates(Bytes, Int, Array[PacketHeaderShapeCandidate]) -> Result[MultiCodeblockPacketParts, String]
+
+pub fn parse_per_subband_packet_header(Bytes, Array[(Int, Int, Int)], Int, cb_width? : Int, cb_height? : Int) -> Result[(Array[SubbandCodeBlockInfo], Int), String]
+
+pub fn parse_single_codeblock_first_packet_parts(Bytes) -> Result[SingleCodeblockPacketParts, String]
+
+pub fn parse_single_codeblock_first_packet_parts_with_candidates(Bytes, Int, Array[PacketHeaderShapeCandidate]) -> Result[SingleCodeblockPacketParts, String]
+
+pub fn parts_are_minimal_zero_tier1_subset(Array[SingleCodeblockPacketParts]) -> Bool
+
+pub fn pkt_build_tag_tree_levels(Int, Int) -> Array[PktTagTreeLevel]
+
+pub fn pkt_tag_tree_decode_member(Array[PktTagTreeLevel], Array[Int], Array[Int?], Int, Int, Int, Bytes, Int) -> Result[(Bool, Int), String]
+
+pub fn pkt_tag_tree_decode_value(Array[PktTagTreeLevel], Array[Int], Array[Int?], Int, Int, Bytes, Int) -> Result[(Int, Int), String]
+
+pub fn prepare_sod_payloads_for_simple_profile(Array[Bytes]) -> Result[Array[Bytes], String]
+
+pub fn simple_profile_component0_decode_context(@core.Codestream) -> (Int, Int, Int, Int)
+
+pub fn simple_profile_packet_header_shape_candidates(@core.Codestream) -> Array[PacketHeaderShapeCandidate]
+
+pub fn split_packet_passes_and_advance_segment_state(Int, Int, Array[Int], Array[Int], Array[Int], Int) -> Array[Int]
+
+pub fn split_sod_payload_by_sop(Bytes) -> Result[Array[(Int, Bytes)], String]
+
+pub fn split_sod_payload_single_codeblock_series(Bytes, Int) -> Result[Array[Bytes], String]
+
+pub fn strip_in_bitstream_markers_for_simple_profile(Bytes) -> Result[Bytes, String]
+
+pub fn sum_segment_totals(Array[SingleCodeblockPacketParts]) -> Int
+
+// Errors
+
+// Types and methods
+pub(all) struct MultiCodeblockPacketParts {
+  non_zero_packet : Bool
+  code_block_count : Int
+  parts : Array[SingleCodeblockPacketParts]
+}
+
+pub(all) struct PacketHeaderShapeCandidate {
+  code_block_count : Int
+  width : Int
+  height : Int
+}
+
+pub(all) struct PktTagTreeLevel {
+  width : Int
+  height : Int
+  offset : Int
+}
+
+pub(all) struct SingleCodeblockPacketParts {
+  segment_total : Int
+  segment_lengths : Array[Int]
+  segment_passes : Array[Int]
+  non_zero_packet : Bool
+  included : Bool
+  zero_bit_planes : Int?
+  coding_passes : Int?
+  codeword : Bytes
+}
+
+pub(all) struct SubbandCodeBlockInfo {
+  subband_index : Int
+  sb_width : Int
+  sb_height : Int
+  cb_x_index : Int
+  cb_y_index : Int
+  cb_x_offset : Int
+  cb_y_offset : Int
+  cb_width : Int
+  cb_height : Int
+  included : Bool
+  zero_bit_planes : Int?
+  coding_passes : Int?
+  segment_lengths : Array[Int]
+  segment_passes : Array[Int]
+}
+
+// Type aliases
+
+// Traits

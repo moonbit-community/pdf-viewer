@@ -6,6 +6,10 @@
 /// test {
 ///   let page : @pdf-viewer.PdfPageModel = {
 ///     number: 1,
+///     blend_space: "DeviceRGB",
+///     blend_profile_id: None,
+///     blend_calibration: None,
+///     icc_profiles: [],
 ///     origin_x: 0.0,
 ///     origin_y: 0.0,
 ///     width: 200.0,
@@ -55,6 +59,14 @@ fn pdf_render_page_svg(
     height.to_string() +
     "\">",
   )
+  let diagnostics = page.graphics_diagnostics(renderer="svg")
+  if !diagnostics.is_empty() {
+    output.write_string(
+      "<metadata id=\"pdf-renderer-diagnostics\">" +
+      pdf_escape_xml(diagnostics.to_json().stringify()) +
+      "</metadata>",
+    )
+  }
   pdf_svg_fonts(output, page)
   output.write_string("<rect width=\"100%\" height=\"100%\" fill=\"white\"/>")
   output.write_string(
@@ -98,7 +110,7 @@ fn pdf_svg_render_items(
           while item_index < items.length() {
             let same_group = match
               pdf_transparency_group_at_depth(items[item_index], group_depth) {
-              Some(candidate) => candidate == group
+              Some(candidate) => candidate.id == group.id
               None => false
             }
             if same_group {
@@ -219,11 +231,13 @@ fn pdf_svg_transparency_group(
   scale : Double,
   group_depth : Int,
 ) -> Unit {
-  let isolation = if group.isolated {
-    " style=\"isolation:isolate\""
-  } else {
-    ""
-  }
+  let style = (if group.isolated { "isolation:isolate" } else { "" }) +
+    (if group.blend_mode == "normal" || group.blend_mode == "Normal" {
+      ""
+    } else {
+      ";mix-blend-mode:" + pdf_escape_xml(group.blend_mode) + ";"
+    })
+  let isolation = if style == "" { "" } else { " style=\"" + style + "\"" }
   output.write_string(
     "<g data-pdf-group-id=\"" +
     pdf_escape_xml(group.id) +
@@ -233,7 +247,9 @@ fn pdf_svg_transparency_group(
     pdf_svg_bool(group.knockout) +
     "\"" +
     isolation +
-    ">",
+    " opacity=\"" +
+    group.alpha.to_string() +
+    "\">",
   )
   pdf_svg_render_items(output, page, items, scale, group_depth + 1)
   output.write_string("</g>")
@@ -333,12 +349,12 @@ fn pdf_svg_path(
     ""
   } else {
     " stroke-dasharray=\"" +
-    pdf_svg_dash_array(path.dash_array, scale) +
+    pdf_svg_dash_array(path.dash_array, 1.0) +
     "\" stroke-dashoffset=\"" +
-    (path.dash_phase * scale).to_string() +
+    path.dash_phase.to_string() +
     "\""
   }
-  pdf_svg_clip_defs(output, path.index, path.clip_path, scale)
+  pdf_svg_clip_defs(output, path.index, path.clip_path, scale, clips=path.clips)
   pdf_svg_pattern_defs(output, page, path, scale)
   pdf_svg_soft_mask_defs(output, path.index, page, path.soft_mask, scale)
   pdf_svg_soft_mask_open(output, path.index, path.soft_mask)
@@ -359,14 +375,16 @@ fn pdf_svg_path(
     path.bounds.max_y.to_string() +
     "\" fill=\"" +
     fill +
+    "\" fill-rule=\"" +
+    (if path.fill_even_odd { "evenodd" } else { "nonzero" }) +
     "\" stroke=\"" +
-    stroke +
+    (if path.stroke is Some(_) { "none" } else { stroke }) +
     "\" fill-opacity=\"" +
     path.fill_alpha.to_string() +
     "\" stroke-opacity=\"" +
     path.stroke_alpha.to_string() +
     "\" stroke-width=\"" +
-    (path.line_width * scale).to_string() +
+    path.line_width.to_string() +
     "\" stroke-linecap=\"" +
     pdf_svg_line_cap(path.line_cap) +
     "\" stroke-linejoin=\"" +
@@ -381,6 +399,11 @@ fn pdf_svg_path(
     Some(shading) =>
       pdf_svg_shading_pattern_path(output, page, path, shading, scale)
     None => ()
+  }
+  if path.stroked && path.stroke is Some(geometry) {
+    pdf_svg_clip_open(output, path.index, path.clip_path)
+    pdf_svg_affine_stroke(output, path, geometry, scale, stroke)
+    pdf_svg_clip_close(output, path.index, path.clip_path)
   }
   pdf_svg_soft_mask_close(output, path.index, path.soft_mask)
 }
@@ -403,21 +426,27 @@ fn pdf_svg_shading_pattern_path(
   }
   let clip_id = "pdf-shading-path-" + path.index.to_string()
   let transformed = pdf_transform_svg_path(path.svg_path, page.height, scale)
+  pdf_svg_clip_open(output, path.index, path.clip_path)
   output.write_string(
     "<defs><clipPath id=\"" +
     clip_id +
-    "\"><path d=\"" +
+    "\" clipPathUnits=\"userSpaceOnUse\"><path d=\"" +
     transformed +
-    "\"/></clipPath></defs><g clip-path=\"url(#" +
+    "\" clip-rule=\"" +
+    (if path.fill_even_odd { "evenodd" } else { "nonzero" }) +
+    "\" transform=\"scale(" +
+    scale.to_string() +
+    ")\"/></clipPath></defs><g clip-path=\"url(#" +
     clip_id +
     ")\" opacity=\"" +
     path.fill_alpha.to_string() +
-    "\" transform=\"" +
+    "\"><g transform=\"" +
     pdf_svg_shading_transform(page, shading.matrix, scale) +
     "\">",
   )
   pdf_svg_mesh_triangles(output, shading.mesh)
-  output.write_string("</g>")
+  output.write_string("</g></g>")
+  pdf_svg_clip_close(output, path.index, path.clip_path)
 }
 
 ///|
@@ -545,7 +574,14 @@ fn pdf_svg_pattern_defs(
         "\" height=\"" +
         pattern.y_step.to_string() +
         "\" patternTransform=\"" +
-        pdf_svg_shading_transform(page, pattern.matrix, 1.0) +
+        (if prefix == "pdf-stroke-pattern-" {
+          pdf_svg_stroke_pattern_transform(
+            path.stroke,
+            pdf_svg_shading_transform(page, pattern.matrix, 1.0),
+          )
+        } else {
+          pdf_svg_shading_transform(page, pattern.matrix, 1.0)
+        }) +
         "\">" +
         tile_svg +
         "</pattern></defs>",
@@ -606,7 +642,13 @@ fn pdf_svg_image(
               let masked_data_uri = pdf_svg_alpha_mask_data_uri(
                 item, data_uri, alpha_mask_data_uri,
               )
-              pdf_svg_clip_defs(output, item.index, item.clip_path, scale)
+              pdf_svg_clip_defs(
+                output,
+                item.index,
+                item.clip_path,
+                scale,
+                clips=item.clips,
+              )
               pdf_svg_clip_open(output, item.index, item.clip_path)
               output.write_string(
                 "<image data-pdf-name=\"" +
@@ -625,7 +667,13 @@ fn pdf_svg_image(
               pdf_svg_clip_close(output, item.index, item.clip_path)
             }
             (Some(data_uri), None) => {
-              pdf_svg_clip_defs(output, item.index, item.clip_path, scale)
+              pdf_svg_clip_defs(
+                output,
+                item.index,
+                item.clip_path,
+                scale,
+                clips=item.clips,
+              )
               pdf_svg_clip_open(output, item.index, item.clip_path)
               output.write_string(
                 "<image data-pdf-name=\"" +
@@ -663,7 +711,7 @@ fn pdf_svg_masked_image(
   mask_data_uri : String,
 ) -> Unit {
   let mask_data_uri = pdf_svg_colored_mask_data_uri(item, mask_data_uri)
-  pdf_svg_clip_defs(output, item.index, item.clip_path, scale)
+  pdf_svg_clip_defs(output, item.index, item.clip_path, scale, clips=item.clips)
   pdf_svg_clip_open(output, item.index, item.clip_path)
   output.write_string(
     "<image data-pdf-name=\"" +
@@ -801,7 +849,13 @@ fn pdf_svg_shading(
   pdf_svg_soft_mask_open(output, item.index, item.soft_mask)
   match item.shading {
     Some(shading) if shading.mesh.length() > 0 => {
-      pdf_svg_clip_defs(output, item.index, item.clip_path, scale)
+      pdf_svg_clip_defs(
+        output,
+        item.index,
+        item.clip_path,
+        scale,
+        clips=item.clips,
+      )
       pdf_svg_clip_open(output, item.index, item.clip_path)
       output.write_string(
         "<g data-pdf-kind=\"mesh-shading\" data-pdf-name=\"" +
@@ -821,7 +875,13 @@ fn pdf_svg_shading(
         item.index.to_string() +
         "-" +
         item.name.replace(old="/", new="-")
-      pdf_svg_clip_defs(output, item.index, item.clip_path, scale)
+      pdf_svg_clip_defs(
+        output,
+        item.index,
+        item.clip_path,
+        scale,
+        clips=item.clips,
+      )
       pdf_svg_clip_open(output, item.index, item.clip_path)
       output.write_string("<defs>")
       if shading.kind == "axial" && shading.coords.length() >= 4 {
@@ -998,7 +1058,7 @@ fn pdf_svg_placeholder(
   scale : Double,
   kind : String,
 ) -> Unit {
-  pdf_svg_clip_defs(output, item.index, item.clip_path, scale)
+  pdf_svg_clip_defs(output, item.index, item.clip_path, scale, clips=item.clips)
   pdf_svg_clip_open(output, item.index, item.clip_path)
   output.write_string(
     "<g data-pdf-placeholder=\"true\" data-pdf-kind=\"" +
@@ -1018,11 +1078,11 @@ fn pdf_svg_placeholder(
 ///|
 fn pdf_escape_xml(text : String) -> String {
   text
-  .replace(old="&", new="&amp;")
-  .replace(old="<", new="&lt;")
-  .replace(old=">", new="&gt;")
-  .replace(old="\"", new="&quot;")
-  .replace(old="'", new="&apos;")
+  .replace_all(old="&", new="&amp;")
+  .replace_all(old="<", new="&lt;")
+  .replace_all(old=">", new="&gt;")
+  .replace_all(old="\"", new="&quot;")
+  .replace_all(old="'", new="&apos;")
 }
 
 ///|
@@ -1078,6 +1138,7 @@ fn pdf_svg_clip_defs(
   index : Int,
   clip_path : String?,
   scale : Double,
+  clips? : ArrayView[PdfClipPath] = [],
 ) -> Unit {
   match clip_path {
     Some(path) => {
@@ -1103,6 +1164,10 @@ fn pdf_svg_clip_defs(
           "\" clipPathUnits=\"userSpaceOnUse\"><path d=\"" +
           part +
           "\"" +
+          (match clips.get(part_index) {
+            Some(clip) if clip.even_odd => " clip-rule=\"evenodd\""
+            _ => ""
+          }) +
           transform +
           "/></clipPath>",
         )

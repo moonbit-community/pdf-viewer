@@ -1,0 +1,23 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/ht"
+
+// Values
+pub fn htj2k_apply_refinement_segment(Array[Int], Array[Bool], Bytes, Int, Int, Int, Int, Int) -> Result[Array[Int], String]
+
+pub fn htj2k_decode_single_set_fixedpoint(Bytes, Int, Array[Int], Array[Int], Int, Int, Int, Int, Int) -> Result[Array[Int], String]
+
+pub fn htj2k_select_active_set(Bytes, Array[Int], Array[Int], Int) -> Result[HtSelectedSet, String]
+
+// Errors
+
+// Types and methods
+pub struct HtSelectedSet {
+  cleanup_segment : Bytes
+  refinement_segment : Bytes
+  z_blk : Int
+  skipped_ht_sets : Int
+}
+
+// Type aliases
+
+// Traits

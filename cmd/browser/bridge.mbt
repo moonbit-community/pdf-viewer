@@ -250,6 +250,7 @@ fn browser_render_page(
       "ok": true,
       "page": number,
       "svg": svg,
+      "canvas": page.canvas_plan(scale~, rotation~),
       "layer": page.text_layer(scale~, rotation~),
       "annotations": if printing {
         Json::array([])
@@ -338,4 +339,14 @@ pub fn search_pdf(
   } catch {
     error => browser_error(@debug.to_string(error))
   }
+}
+
+///|
+pub fn process_cmyk_to_rgb(
+  cyan : Double,
+  magenta : Double,
+  yellow : Double,
+  black : Double,
+) -> Array[Double] {
+  @pdf.process_cmyk_to_rgb(cyan, magenta, yellow, black)
 }

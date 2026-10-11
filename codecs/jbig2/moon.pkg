@@ -1,0 +1,11 @@
+options(
+  "native-stub": [ "pdfium_native.cpp", "native_bridge.cpp" ],
+  link: {
+    "native": {
+      "stub-cc": "g++",
+      "stub-cc-flags": "-std=c++20 -O2 -DNDEBUG",
+      "stub-cc-link-flags": "-lstdc++",
+      "cc-link-flags": "-lstdc++",
+    },
+  },
+)

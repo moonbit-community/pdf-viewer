@@ -1,0 +1,15 @@
+import {
+  "moonbit-community/pdf-viewer" @pdf,
+  "moonbitlang/core/debug",
+}
+
+supported_targets = "js"
+
+options(
+  link: {
+    "js": {
+      "exports": [ "render_plan", "process_cmyk_to_rgb" ],
+      "format": "esm",
+    },
+  },
+)

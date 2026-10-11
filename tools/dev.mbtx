@@ -39,6 +39,18 @@ async fn main {
         (Some("web/accessibility-layer.js"), "text/javascript; charset=utf-8")
       "/_generated/pdf.js" =>
         (Some("web/_generated/pdf.js"), "text/javascript; charset=utf-8")
+      [.. "/", .. filename] if !filename.contains("..") &&
+        !filename.contains("\\") &&
+        (filename.has_suffix(".mjs") || filename.has_suffix(".wasm")) &&
+        (filename.has_prefix("pdf-") || filename.has_prefix("vendor/")) =>
+        (
+          Some("web/" + filename.to_owned()),
+          if filename.has_suffix(".wasm") {
+            "application/wasm"
+          } else {
+            "text/javascript; charset=utf-8"
+          },
+        )
       [.. "/fixtures/", .. filename] if filename.has_suffix(".pdf") &&
         !filename.contains("/") &&
         !filename.contains("..") =>

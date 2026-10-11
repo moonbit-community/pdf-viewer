@@ -1,0 +1,4 @@
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/bytes",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/math",
+}

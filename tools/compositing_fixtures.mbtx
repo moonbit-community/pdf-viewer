@@ -1,0 +1,142 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+fn fixture(objects : Array[String]) -> Bytes {
+  let output = StringBuilder()
+  output.write_string("%PDF-1.7\n")
+  let offsets : Array[Int] = []
+  for i, object in objects {
+    offsets.push(output.to_string().length())
+    output.write_string("\{i + 1} 0 obj\n\{object}\nendobj\n")
+  }
+  let xref = output.to_string().length()
+  output.write_string("xref\n0 \{objects.length() + 1}\n0000000000 65535 f \n")
+  for offset in offsets {
+    output.write_string(offset.to_string().pad_start(10, '0') + " 00000 n \n")
+  }
+  output.write_string(
+    "trailer\n<< /Size \{objects.length() + 1} /Root 1 0 R >>\nstartxref\n\{xref}\n%%EOF\n",
+  )
+  @utf8.encode(output.to_string())
+}
+
+///|
+fn stream(content : String) -> String {
+  "<< /Length \{content.length()} >>\nstream\n\{content}\nendstream"
+}
+
+///|
+fn blend_fixture(cmyk? : Bool = false) -> Bytes {
+  let background = if cmyk { "0.2 0.4 0.6 0.1 k" } else { "0.2 0.6 0.8 rg" }
+  let foreground = if cmyk { "0.5 0.3 0.2 0.4 k" } else { "0.8 0.3 0.4 rg" }
+  let group = if cmyk {
+    "/Group << /S /Transparency /CS /DeviceCMYK >>"
+  } else {
+    ""
+  }
+  let modes = [
+    "Normal", "Multiply", "Screen", "Overlay", "Darken", "Lighten", "ColorDodge",
+    "ColorBurn", "HardLight", "SoftLight", "Difference", "Exclusion", "Hue", "Saturation",
+    "Color", "Luminosity",
+  ]
+  let resources = StringBuilder()
+  let content = StringBuilder()
+  resources.write_string("<< /ExtGState << /Bg << /ca 0.75 >> ")
+  for i, mode in modes {
+    resources.write_string("/M\{i} << /BM /\{mode} /ca 0.65 >> ")
+    let x = i % 8 * 50
+    let y = i / 8 * 50
+    content.write_string(
+      "q /Bg gs \{background} \{x} \{y} 50 50 re f Q q /M\{i} gs \{foreground} \{x + 5} \{y + 5} 40 40 re f Q\n",
+    )
+  }
+  resources.write_string(
+    "/Preferred << /BM [/Unsupported /Multiply /Screen] /ca 0.65 >> /Compatible << /BM /Compatible /ca 0.65 >> >> >>",
+  )
+  content.write_string(
+    "q /Bg gs \{background} 0 100 50 50 re f Q q /Preferred gs \{foreground} 5 105 40 40 re f Q\n",
+  )
+  content.write_string(
+    "q /Bg gs \{background} 50 100 50 50 re f Q q /Compatible gs \{foreground} 55 105 40 40 re f Q\n",
+  )
+  fixture([
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 150] \{group} /Resources \{resources.to_string()} /Contents 4 0 R >>",
+    stream(content.to_string()),
+  ])
+}
+
+///|
+fn stroke_fixture() -> Bytes {
+  let content = "q 0.25 w 10 10 m 190 10 l S Q q 0.5 w 10 25 m 190 25 l S Q q 1 w 10 40 m 190 40 l S Q q 2 0.25 0.5 1 0 50 cm 0 w [8 5] 3 d 0 J 10 10 m 80 10 l 80 35 l S Q q 12 w 1 J 30 135 m 30 135 l S 2 J 65 135 m 65 135 l S 0 J 100 135 m 100 135 l S Q q 8 w 0 j 2 M 115 110 m 135 155 l 140 110 l S 10 M 155 110 m 175 155 l 180 110 l S Q"
+  fixture([
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 220 180] /Resources << >> /Contents 4 0 R >>",
+    stream(content),
+  ])
+}
+
+///|
+fn ink_fixture() -> Bytes {
+  let cases = [
+    (
+      "true", "false", "", "q /Half gs 1 0 0 0 k 20 20 100 100 re f /OP gs 0 1 0 0 k 60 20 100 100 re f Q",
+    ),
+    (
+      "false", "false", "1 0 0 0 k 0 0 200 140 re f", "/Half gs /OP gs 0 1 0 0 k 20 20 100 100 re f",
+    ),
+    (
+      "true", "true", "", "1 0 0 0 k 20 20 100 100 re f /Half gs /OP gs 0 1 0 0 k 60 20 100 100 re f",
+    ),
+    (
+      "false", "true", "1 0 0 0 k 0 0 200 140 re f", "0 0 1 0 k 20 20 100 100 re f /Half gs /OP gs 0 1 0 0 k 60 20 100 100 re f",
+    ),
+    (
+      "false", "false", "1 0 0 0 k 0 0 200 140 re f", "/Half gs /OP gs /Blend gs 0 1 0 0 k 20 20 100 100 re f",
+    ),
+  ]
+  let kids = [ for i in 0..<cases.length() => "\{3 + i * 3} 0 R" ].join(" ")
+  let objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Count \{cases.length()} /Kids [\{kids}] >>",
+  ]
+  for i, (isolated, knockout, background, content) in cases {
+    let id = 3 + i * 3
+    objects.push(
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 140] /Group << /S /Transparency /CS /DeviceCMYK >> /Resources << /XObject << /G \{id + 2} 0 R >> >> /Contents \{id + 1} 0 R >>",
+    )
+    objects.push(stream(background + " /G Do"))
+    objects.push(
+      "<< /Type /XObject /Subtype /Form /BBox [0 0 200 140] /Group << /S /Transparency /CS /DeviceCMYK /I \{isolated} /K \{knockout} >> /Resources << /ExtGState << /Half << /ca 0.5 /CA 0.5 >> /OP << /op true /OP true /OPM 1 >> /Blend << /BM /Multiply >> >> >> /Length \{content.length()} >>\nstream\n" +
+      content +
+      "\nendstream",
+    )
+  }
+  fixture(objects)
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  let directory = if args.length() > 2 {
+    args[2]
+  } else {
+    "_build/compositing-fixtures"
+  }
+  if !@fs.exists(directory) {
+    @fs.mkdir(directory, recursive=true)
+  }
+  @fs.write_file(directory + "/blend-modes.pdf", blend_fixture())
+  @fs.write_file(directory + "/cmyk-blend-modes.pdf", blend_fixture(cmyk=true))
+  @fs.write_file(directory + "/pixel-strokes.pdf", stroke_fixture())
+  @fs.write_file(directory + "/ink-groups.pdf", ink_fixture())
+  println("Original fixture PDFs: " + directory)
+}

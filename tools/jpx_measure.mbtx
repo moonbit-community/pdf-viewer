@@ -1,0 +1,17 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/shell",
+}
+
+///|
+async fn main {
+  @shell.Cmd("python3", ["tools/jpx/generate.py", "_build/jpx-measure"]).run()
+  @shell.Cmd("moon", [
+    "build", "--target", "native", "--release", "cmd/jpx-samples",
+  ]).run()
+  @shell.Cmd("python3", [
+    "tools/jpx/measure.py", "_build/native/release/build/cmd/jpx-samples/jpx-samples.exe",
+    "_build/jpx-measure", "_build/jpx-measure/report.json",
+  ]).run()
+}

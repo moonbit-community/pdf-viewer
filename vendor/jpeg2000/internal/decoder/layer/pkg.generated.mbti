@@ -1,0 +1,58 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/layer"
+
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/core",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/a8",
+}
+
+// Values
+pub fn decode_component_dwt_from_accumulated(Array[Array[AccumulatedCB]], Int, Int, Int, Int, Int, @core.QcdMetadata, transformation? : Int, tcx0? : Int, tcy0? : Int, roishift? : Int, packet_audit? : Bool, audit_label? : String, audit_comp? : Int) -> Result[Array[Int], String]
+
+pub fn decode_component_dwt_from_accumulated_float(Array[Array[AccumulatedCB]], Int, Int, Int, Int, Int, @core.QcdMetadata, transformation? : Int, tcx0? : Int, tcy0? : Int, roishift? : Int, packet_audit? : Bool, audit_label? : String, audit_comp? : Int) -> Result[Array[Double], String]
+
+pub fn init_subband_layer_state(Int, Int, Int, Int, ncbx_override? : Int, ncby_override? : Int) -> SubbandLayerStateEntry
+
+pub fn init_zero_extent_layer_state() -> SubbandLayerStateEntry
+
+pub fn parse_layer_packet_header(Bytes, Int, Int, Array[(Int, Int, Int)], Array[SubbandLayerStateEntry], Int, Int, sb_bounds? : Array[(Int, Int, Int, Int)]) -> Result[(Array[@a8.SubbandCodeBlockInfo], Int), String]
+
+pub fn split_sod_accumulate_multi_layer(Bytes, Int, Int, Int, Int, Int, Int, Int, cb_width? : Int, cb_height? : Int, comp_widths? : Array[Int], comp_heights? : Array[Int], comp_decomp_levels? : Array[Int], comp_cb_widths? : Array[Int], comp_cb_heights? : Array[Int], comp_xrsizs? : Array[Int], comp_yrsizs? : Array[Int], comp_tcx0s? : Array[Int], comp_tcy0s? : Array[Int], comp_code_block_styles? : Array[Int], comp_precinct_size_bytes? : Array[Array[Int]], precinct_size_bytes? : Array[Int], tcx0? : Int, tcy0? : Int, uses_sop? : Bool, uses_eph? : Bool, poc_entries? : Array[@core.PocMetadata], relocated_packet_headers? : Bytes, packet_audit? : Bool, audit_label? : String, packet_audit_limit? : Int) -> Result[(Array[Array[Array[AccumulatedCB]]], Int), String]
+
+// Errors
+
+// Types and methods
+pub(all) struct AccumulatedCB {
+  subband_index : Int
+  sb_width : Int
+  sb_height : Int
+  cb_x_offset : Int
+  cb_y_offset : Int
+  cb_width : Int
+  cb_height : Int
+  zero_bit_planes : Int
+  total_coding_passes : Int
+  all_segment_lengths : Array[Int]
+  per_segment_passes : Array[Int]
+  codeword : Array[Byte]
+}
+
+pub(all) struct SubbandLayerStateEntry {
+  ncbx : Int
+  ncby : Int
+  incl_levels : Array[@a8.PktTagTreeLevel]
+  incl_low : Array[Int]
+  incl_known : Array[Int?]
+  zbp_levels : Array[@a8.PktTagTreeLevel]
+  zbp_low : Array[Int]
+  zbp_known : Array[Int?]
+  lblock_by_cb : Array[Int]
+  cb_included : Array[Bool]
+  seg_numpasses_by_cb : Array[Int]
+  seg_maxpasses_by_cb : Array[Int]
+  seg_count_by_cb : Array[Int]
+}
+
+// Type aliases
+
+// Traits

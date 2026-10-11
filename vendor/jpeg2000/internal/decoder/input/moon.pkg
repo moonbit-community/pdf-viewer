@@ -1,0 +1,6 @@
+// T.800-2015 Annex I: Input handling
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/bytes",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/core",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/math",
+}
