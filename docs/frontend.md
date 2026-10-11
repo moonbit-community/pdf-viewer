@@ -31,9 +31,10 @@ modules remain adapters rather than application views or navigation controllers.
 must include both generated modules and the existing codec/XFA assets. Develop
 with `moon run tools/dev.mbtx 4312` after installing MoonBit and web dependencies.
 
-`tools/browser_test.mbtx` passes 109 checks against the compiled application in Chromium. It
+`tools/browser_test.mbtx` passes 110 checks against the compiled application in Chromium. It
 checks all existing reader behavior plus view updates preserving Canvas/native
 selection, stale thumbnail/print draws suppressing publication and warnings,
-repeated page clicks and files captured during native drop events.
+repeated page clicks, files captured during native drop events, and real warnings
+published by page/thumbnail/print rendering.
 These checks replace the former test that extracted JavaScript controller
 functions into a VM; Worker/Canvas and scheduler tests remain separately runnable.

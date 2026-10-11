@@ -686,6 +686,24 @@ async fn main {
       #|   finally{viewerHost.paintCanvas=paint;window.print=print;}
       #| })()
     ))
+    let text_pen = @base64.encode(@fs.read_file("_build/text-host-pen/text-host-pen.pdf").binary())
+    browser.check("Rabbita publishes real host-override warnings for page thumbnail and print", (
+      #| (async()=>{
+      #|   const host=await import('./viewer.js'),{pdf}=await import('./pdf-client.js');
+      #|   const file=new File([Uint8Array.from(atob(
+    ) + Json::string(text_pen).stringify() + (
+      #| ),c=>c.charCodeAt(0))],'host-override.pdf',{type:'application/pdf'});
+      #|   const setup=async()=>{await host.loadFile(file);if(!document.getElementById('error').hidden)throw Error('Fresh session retained an alert');return JSON.parse(await pdf.call('set_font_fallbacks',[JSON.stringify([{pdf_name:'/F1',family:'Liberation Sans'}])])).ok;};
+      #|   const wait=async condition=>{for(let n=0;n<400&&!condition();n++)await new Promise(r=>setTimeout(r,25));if(!condition())throw Error('Host warning did not publish');};
+      #|   const ink=canvas=>canvas&&canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data.some((value,index)=>index%4!==3&&value<240);
+      #|   if(!await setup())return false;const result=JSON.parse(await pdf.call('render_page',[1,1,0])),diagnostic=result.canvas.diagnostics.find(value=>value.code==='PDF_TEXT_STROKE_GEOMETRY');if(!diagnostic)return false;
+      #|   const alert=()=>{const node=document.getElementById('error');return node.getAttribute('role')==='alert'&&!node.hidden&&node.textContent===diagnostic.message;};
+      #|   document.getElementById('zoom').value='1';document.getElementById('zoom').dispatchEvent(new Event('change'));await wait(alert);if(!ink(document.querySelector('.paint-layer canvas')))return false;
+      #|   if(!await setup())return false;document.getElementById('thumbnail-toggle').click();await wait(()=>alert()&&document.querySelector('.thumbnail-preview canvas'));if(!ink(document.querySelector('.thumbnail-preview canvas')))return false;
+      #|   if(!await setup())return false;const print=window.print;let printed=0;window.print=()=>printed++;try{await host.printDocument();}finally{window.print=print;}
+      #|   const valid=printed===1&&alert()&&ink(document.querySelector('#print-pages canvas'));window.dispatchEvent(new Event('afterprint'));return valid;
+      #| })()
+    ))
     browser.navigate(base + "/?file=/fixtures/nested_outline.pdf", 9)
     browser.check(
       "document bridge exposes outline and info",

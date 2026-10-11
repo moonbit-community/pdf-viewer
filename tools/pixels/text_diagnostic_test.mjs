@@ -1,14 +1,13 @@
 // Exercise a deliberate host override through the shipped public bridge/runtime,
 // without the optional native outline hook. Default Standard14 now has contours.
-// The last check executes the exact viewer warning function with a minimal
-// element double; it is a UI-binding regression, not a browser/DOM pixel test.
+// Alert publication is exercised against the compiled Rabbita application
+// and real browser DOM in tools/browser_test.mbtx.
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
-import {runInNewContext} from 'node:vm';
 import {renderPdfPage} from '../../web/pdf-runtime.mjs';
 const require=createRequire(process.env.PDF_CANVAS_PACKAGE||import.meta.url);
 const {createCanvas,Path2D,loadImage}=require('@napi-rs/canvas');
@@ -35,14 +34,4 @@ const preview=await renderPdfPage(createCanvas(1,1),plan,{...options,unsupported
 assert.deepEqual(preview.diagnostics,plan.diagnostics);
 assert(preview.data.some((value,index)=>index%4!==3&&value<240),'Warning preview must paint the unresolved glyph rather than silently blank it');
 assert.equal(JSON.stringify(plan),before,'Approximate replay cannot mutate or remove source diagnostics');
-const viewer=readFileSync(new URL('../../web/viewer.js',import.meta.url),'utf8');
-assert.match(viewer,/const graphicsOptions = \{\s*unsupported: "warn"/);
-assert.match(viewer,/renderPdfPage\(canvas, result\.canvas, graphicsOptions\);\s*if \(current\(\)\) showGraphicsDiagnostics\(rendered\.diagnostics\)/);
-assert.match(viewer,/renderPdfPage\(canvas, result\.canvas, graphicsOptions\);\s*if \(task\.signal\.aborted \|\| controller\.signal\.aborted\) return;\s*preview\.replaceChildren\(canvas\);\s*(?:if \(result\.xfa\) [^\n]+\s*)?showGraphicsDiagnostics\(rendered\.diagnostics\)/);
-assert.match(viewer,/renderPdfPage\(canvas, result\.canvas, \{\s*\.\.\.graphicsOptions, outputScale: 150 \/ 72,\s*\}\);\s*if \(controller\.signal\.aborted \|\| generation !== state\.documentGeneration\) return;\s*page\.append\(canvas\);\s*root\.append\(page\);\s*showGraphicsDiagnostics\(rendered\.diagnostics\)/);
-const warning=viewer.match(/function showGraphicsDiagnostics\(diagnostics = \[\]\) \{[\s\S]*?\n\}/)?.[0];assert(warning);
-const element={textContent:'',hidden:true};
-runInNewContext(`${warning}; showGraphicsDiagnostics(diagnostics);`,{$:id=>{assert.equal(id,'error');return element;},diagnostics:preview.diagnostics});
-assert.equal(element.hidden,false);assert.equal(element.textContent,diagnostic.message);
-assert.match(readFileSync(new URL('../../web/index.html',import.meta.url),'utf8'),/<div id="error" role="alert" hidden>/);
-console.log(JSON.stringify({fixtureBytes:pdf.length,explicitHostFamily:family,strictRejects:true,warningPreviewNonblank:true,structuredDiagnostic:diagnostic,viewerAlertBinding:true,browserDOMExecuted:false}));
+console.log(JSON.stringify({fixtureBytes:pdf.length,explicitHostFamily:family,strictRejects:true,warningPreviewNonblank:true,structuredDiagnostic:diagnostic,browserAlertSuite:'tools/browser_test.mbtx',browserDOMExecuted:false}));

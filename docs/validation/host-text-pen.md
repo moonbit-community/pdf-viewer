@@ -212,11 +212,14 @@ approximate”. The source pen retains its machine-readable
 `affine-text-pen-requires-glyph-outline` reason, and replay leaves the source
 plan unchanged.
 
-The test asserts that both full pages and thumbnails call the viewer's warning
-function. It executes that exact function with a minimal element double and
-checks that it unhides the `role="alert"` element and sets the warning text.
-This verifies the runtime and visible-alert binding; it does **not** claim a
-real DOM/browser session. The [Standard 14 regression](standard14-pen.md) also
+The Node test checks strict rejection, nonblank warning replay and structured
+diagnostics. The browser suite opens the same fixture in the compiled Rabbita
+application, applies the override through its Worker, and checks that full-page,
+thumbnail and print rendering publish the exact warning into the visible
+`role="alert"` element. Each stage starts with a fresh, alert-free session and
+checks actual Canvas pixels. The former JavaScript source assertions and warning
+function extraction are replaced by this real DOM acceptance.
+The [Standard 14 regression](standard14-pen.md) also
 checks that clearing the override invalidates the page cache and restores
 strict, diagnostic-free bundled rendering.
 
