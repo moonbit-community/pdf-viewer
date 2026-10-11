@@ -3,6 +3,7 @@
 // Saved bytes are reopened by this viewer and the pinned PDF.js reader.
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
+import {execFileSync} from 'node:child_process';
 import {mkdirSync,writeFileSync,readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -13,7 +14,8 @@ const {createCanvas,DOMMatrix,ImageData,Path2D}=require('@napi-rs/canvas');
 Object.assign(globalThis,{DOMMatrix,ImageData,Path2D,OffscreenCanvas:function(width,height){return createCanvas(width,height);}});
 const pdfjs=await import(pathToFileURL(require.resolve('pdfjs-dist/legacy/build/pdf.mjs')));
 const base=process.argv[2]||'http://127.0.0.1:4315';
-const output=resolve('_build/editor-test-'+Date.now());
+const filter=process.env.PDF_EDITOR_CHECK_FILTER||'';
+const output=resolve('_build/editor-'+(filter?'focused-':'test-')+Date.now());
 mkdirSync(output,{recursive:true});
 function fixture(){
   const stream=text=>'<< /Length '+Buffer.byteLength(text)+' >>\nstream\n'+text+'\nendstream';
@@ -48,6 +50,9 @@ function fixture(){
 }
 const source=resolve(output,'editor-fixture.pdf');
 writeFileSync(source,fixture());
+execFileSync('moon',['run','tools/editor_encrypted_fixtures.mbtx',source,output],{
+  stdio:['ignore','pipe','pipe'],timeout:120000,maxBuffer:8*1024*1024,
+});
 const image=createCanvas(240,80),imageCtx=image.getContext('2d');
 imageCtx.strokeStyle='#123f92';imageCtx.lineWidth=5;
 imageCtx.beginPath();imageCtx.moveTo(15,65);imageCtx.lineTo(60,15);imageCtx.lineTo(90,60);imageCtx.lineTo(140,25);imageCtx.lineTo(225,45);imageCtx.stroke();
@@ -58,7 +63,7 @@ const page=await browser.newPage({viewport:{width:1280,height:900},acceptDownloa
 const checks=[],errors=[];
 page.on('pageerror',error=>errors.push(String(error)));
 let current='initialization',completed=false;
-async function check(name,work){current=name;await work();checks.push(name);console.log('PASS '+name);}
+async function check(name,work){if(filter&&!name.includes(filter)) return;current=name;await work();checks.push(name);console.log('PASS '+name);}
 const frame=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
 async function idle(){
   await page.waitForFunction(async()=>{
@@ -130,6 +135,35 @@ async function captureDownload(){
   await page.locator('#download').click();
   const download=await promise,dest=resolve(output,download.suggestedFilename());
   await download.saveAs(dest);await idle();return dest;
+}
+async function openEncrypted(name,password){
+  assert.equal(await page.locator('#editor-dirty').innerText(),'','Previous encrypted session must be saved');
+  const prompt=password===undefined?null:page.waitForEvent('dialog');
+  const upload=page.locator('#file-input').setInputFiles(resolve(output,name));
+  if(prompt){
+    const dialog=await prompt;
+    console.log('Password prompt:',name,dialog.type(),dialog.message());
+    if(dialog.type()!=='prompt'){
+      await dialog.dismiss();await upload;
+      assert.fail('Expected password prompt, got '+dialog.type()+': '+dialog.message());
+    }
+    await dialog.accept(password);
+  }
+  await upload;
+  await page.waitForFunction(name=>document.querySelector('#file-name').textContent===name &&
+    document.querySelector('#editor-toolbar').hidden,name);
+  await idle();
+  await page.locator('#zoom').selectOption('1');
+  await page.waitForFunction(()=>{
+    const layer=document.querySelector('.page[data-page="1"] .editor-layer');
+    return layer && JSON.parse(layer.dataset.viewport).scale===1;
+  });await idle();
+}
+async function enterEditor(){
+  await page.locator('#edit-toggle').click();
+  await page.waitForFunction(()=>!document.querySelector('#editor-toolbar').hidden &&
+    !document.querySelector('#edit-toggle').disabled);
+  await idle();
 }
 try {
   await page.goto(base);
@@ -465,6 +499,102 @@ try {
     const annotations=await (await (await task.promise).getPage(1)).getAnnotations();
     assert.deepEqual(annotations.find(annotation=>annotation.fieldName===entry.field_name).fieldValue,[option.export_value]);
     await task.destroy();
+  });
+  await check('Encrypted RC4 and AES PDFs retain passwords permissions and edited appearances',async()=>{
+    for(let method=0;method<6;method++){
+      const name='encrypted-'+method+'.pdf';
+      const sourceTask=pdfjs.getDocument({data:new Uint8Array(readFileSync(resolve(output,name))),password:'reader',verbosity:0});
+      const before=await sourceTask.promise,permissions=await before.getPermissions(),fingerprint=before.fingerprints[0];
+      await sourceTask.destroy();
+      await openEncrypted(name,'reader');
+      await enterEditor();
+      await page.locator('.page[data-page="1"] [data-field-name="person"]').fill('你好 AES '+method);
+      await page.locator('.page[data-page="1"] [data-field-name="person"]').press('Tab');await waitField('person',['你好 AES '+method]);
+      await page.locator('#editor-text').fill('Encrypted annotation '+method);await frame();
+      await draw('text',[[50,110],[205,145]]);
+      const dest=await captureDownload(),first=readFileSync(dest);
+      if(method>=3){await captureDownload();assert.notDeepEqual(readFileSync(dest),first,'AES saves must use fresh IVs');}
+      const locked=pdfjs.getDocument({data:new Uint8Array(readFileSync(dest)),verbosity:0});
+      await assert.rejects(locked.promise,{name:'PasswordException'});await locked.destroy();
+      for(const password of ['reader','owner']){
+        const task=pdfjs.getDocument({data:new Uint8Array(readFileSync(dest)),password,verbosity:0});
+        const document=await task.promise;
+        assert.deepEqual(await document.getPermissions(),permissions);
+        assert.equal(document.fingerprints[0],fingerprint);
+        const firstPage=await document.getPage(1),annotations=await firstPage.getAnnotations();
+        assert.equal(annotations.find(annotation=>annotation.fieldName==='person').fieldValue,'你好 AES '+method);
+        assert.ok(annotations.some(annotation=>annotation.contentsObj?.str==='Encrypted annotation '+method));
+        const viewport=firstPage.getViewport({scale:1}),canvas=createCanvas(Math.ceil(viewport.width),Math.ceil(viewport.height));
+        await firstPage.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
+        assert.equal((await (await document.getPage(2)).getAnnotations()).find(annotation=>annotation.fieldName==='person').fieldValue,'你好 AES '+method);
+        await task.destroy();
+      }
+      await openEncrypted(dest.split('/').at(-1),'reader');
+      await enterEditor();await waitField('person',['你好 AES '+method]);
+      assert.ok((await entries()).some(entry=>entry.contents==='Encrypted annotation '+method));
+      console.log('Verified encrypted fixture:',method);
+    }
+  });
+  await check('Encrypted user permissions restrict editing and owner credentials unlock supported changes',async()=>{
+    await openEncrypted('encrypted-6.pdf','reader');await enterEditor();
+    for(const tool of ['text','highlight','ink','signature','image']) assert.equal(await page.locator('#edit-'+tool).isDisabled(),true);
+    assert.equal(await page.locator('#signature-image').isDisabled(),true);
+    const forbidden=await page.evaluate(async()=>JSON.parse(await globalThis.pdfViewerHost.pdf.call('apply_edits',[
+      JSON.stringify([{kind:'delete',id:'object:15',page:1}]),
+    ])));
+    assert.equal(forbidden.ok,false);assert.match(forbidden.error,/permissions/);
+    const person=page.locator('.page[data-page="1"] [data-field-name="person"]');
+    await person.fill('Permitted form');await person.press('Tab');await waitField('person',['Permitted form']);
+    const saved=await captureDownload();
+    const task=pdfjs.getDocument({data:new Uint8Array(readFileSync(saved)),password:'reader',verbosity:0});
+    const document=await task.promise;
+    assert.ok(!(await document.getPermissions()).has(pdfjs.PermissionFlag.MODIFY_ANNOTATIONS));
+    assert.equal((await (await document.getPage(1)).getAnnotations()).find(annotation=>annotation.fieldName==='person').fieldValue,'Permitted form');
+    await task.destroy();
+    await openEncrypted('encrypted-7.pdf','reader');await page.locator('#edit-toggle').click();
+    await page.waitForFunction(()=>document.querySelector('#error').textContent.includes('权限禁止'));
+    assert.equal(await page.locator('#editor-toolbar').isVisible(),false);
+    await openEncrypted('encrypted-7.pdf','owner');await enterEditor();
+    assert.equal(await page.locator('#edit-text').isDisabled(),false);
+    await page.locator('#editor-text').fill('Owner annotation');await frame();await draw('text',[[50,110],[205,145]]);
+    const ownerSaved=await captureDownload();
+    const ownerTask=pdfjs.getDocument({data:new Uint8Array(readFileSync(ownerSaved)),password:'reader',verbosity:0});
+    const reopened=await ownerTask.promise;
+    assert.ok(!(await reopened.getPermissions()).has(pdfjs.PermissionFlag.MODIFY_ANNOTATIONS));
+    assert.ok((await (await reopened.getPage(1)).getAnnotations()).some(annotation=>annotation.contentsObj?.str==='Owner annotation'));
+    await ownerTask.destroy();
+    await openEncrypted('encrypted-8.pdf');await enterEditor();
+    assert.equal(await page.locator('#edit-text').isDisabled(),true);
+    const blank=page.locator('.page[data-page="1"] [data-field-name="person"]');
+    await blank.fill('Empty user password');await blank.press('Tab');await waitField('person',['Empty user password']);
+    const blankSaved=await captureDownload();
+    const blankTask=pdfjs.getDocument({data:new Uint8Array(readFileSync(blankSaved)),verbosity:0});
+    assert.equal((await (await (await blankTask.promise).getPage(1)).getAnnotations()).find(annotation=>annotation.fieldName==='person').fieldValue,'Empty user password');
+    await blankTask.destroy();
+  });
+  await check('Real encrypted PDF.js fixtures preserve edits with ASCII and Unicode passwords',async()=>{
+    for(const [name,password] of [['issue6010_1.pdf','abc'],['issue6010_2.pdf','æøå']]){
+      writeFileSync(resolve(output,name),readFileSync(resolve('reference/pdf.js/test/pdfs',name)));
+      const originalTask=pdfjs.getDocument({data:new Uint8Array(readFileSync(resolve(output,name))),password,verbosity:0});
+      const original=await originalTask.promise,permissions=await original.getPermissions();
+      const viewport=(await original.getPage(1)).getViewport({scale:1});
+      const start=viewport.convertToPdfPoint(viewport.width*.1,viewport.height*.55);
+      const end=viewport.convertToPdfPoint(viewport.width*.95,viewport.height*.95);
+      await originalTask.destroy();
+      await openEncrypted(name,password);await enterEditor();
+      await page.locator('#editor-text').fill('Real encrypted note');await frame();
+      await draw('text',[start,end]);
+      const saved=await captureDownload();
+      const task=pdfjs.getDocument({data:new Uint8Array(readFileSync(saved)),password,verbosity:0});
+      const document=await task.promise,first=await document.getPage(1);
+      assert.deepEqual(await document.getPermissions(),permissions);
+      assert.ok((await first.getAnnotations()).some(annotation=>annotation.contentsObj?.str==='Real encrypted note'));
+      const view=first.getViewport({scale:1}),canvas=createCanvas(Math.ceil(view.width),Math.ceil(view.height));
+      await first.render({canvasContext:canvas.getContext('2d'),viewport:view}).promise;
+      await task.destroy();
+      await openEncrypted(saved.split('/').at(-1),password);await enterEditor();
+      assert.ok((await entries()).some(entry=>entry.contents==='Real encrypted note'));
+    }
   });
   assert.deepEqual(errors,[]);
   completed=true;

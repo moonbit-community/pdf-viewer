@@ -1,6 +1,9 @@
 ///|
 fn editor_pointer_down(event : @dom.PointerEvent) -> Unit {
-  if !editor.enabled || editor.applying || event.get_button() != 0 {
+  if !editor.enabled ||
+    !editor.annotations ||
+    editor.applying ||
+    event.get_button() != 0 {
     return
   }
   guard native_edit_target(event).to_option() is Some(target) else { return }

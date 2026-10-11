@@ -1,6 +1,7 @@
 ///|
 struct EditorModel {
   enabled : Bool
+  annotations : Bool
   tool : String
   color : String
   text : String
@@ -49,6 +50,7 @@ struct EditGesture {
 ///|
 struct EditorRuntime {
   mut enabled : Bool
+  mut annotations : Bool
   mut tool : String
   mut color : String
   mut text : String
@@ -70,6 +72,7 @@ struct EditorRuntime {
 ///|
 let editor : EditorRuntime = {
   enabled: false,
+  annotations: true,
   tool: "select",
   color: "#254fa4",
   text: "",
@@ -103,6 +106,7 @@ fn editor_dirty() -> Bool {
 fn editor_snapshot() -> EditorModel {
   {
     enabled: editor.enabled,
+    annotations: editor.annotations,
     tool: editor.tool,
     color: editor.color,
     text: editor.text,
@@ -123,6 +127,7 @@ fn reset_editor() -> Unit {
   editor.selected = Json::null()
   editor.history = [[]]
   editor.cursor = 0
+  editor.annotations = true
   editor.saved = "[]"
   editor.applying = false
   editor.pending_input = false

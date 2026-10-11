@@ -18,6 +18,7 @@ import {
   "moonbitlang/pdflite/annotation",
   "moonbitlang/pdflite/bookmark",
   "moonbitlang/pdflite/core",
+  "moonbitlang/pdflite/crypt_core",
   "moonbitlang/pdflite/destination",
   "moonbitlang/pdflite/flate",
   "moonbitlang/pdflite/geometry",

@@ -47,6 +47,11 @@ the browser also uses its native unsaved-change prompt. A host calling
 - Image signatures embed RGB pixels and a soft alpha mask. Handwritten signatures
   are Ink annotations. Both remain visible when another reader opens the PDF.
   They do not create or validate a cryptographic signature.
+- Password-authenticated PDFs support annotation editing and form filling. Saved
+  files retain the original RC4/AES encryption settings, file ID, both passwords,
+  metadata-encryption flag and permission mask. User credentials enforce
+  annotation/form permissions; an authenticated owner can edit supported content.
+  Files with an empty user password open without a password prompt.
 
 Saving writes a complete PDF through `pdflite.pdf_write_document`, retaining the
 document's objects and explicit appearances. It does not use incremental updates
@@ -91,7 +96,12 @@ coordinates, independently of CropBox, UserUnit and viewer rotation:
 `indices` is optional for Ch fields and resolves duplicate export values.
 Ink additions require `paths` containing arrays of `[x, y]` points. Stamp
 additions require `image: {width, height, rgba}` with base64 RGBA bytes.
-`save_bytes()` returns the serialized PDF. Image input is limited to four
+`editor_permissions()` reports whether annotations and forms can be edited.
+`save_bytes()` returns the serialized PDF. For an authenticated AES document,
+pass `aes_iv_provider`, which must supply fresh, cryptographically secure 16-byte
+IVs. The browser uses `crypto.getRandomValues`; deterministic pdflite providers
+are used only in test fixtures. Credentials remain private to the parsed document
+and are omitted from JSON/status/diagnostics. Image input is limited to four
 million pixels; snapshots are limited to 10,000 entries.
 
 The browser bridge exports `editor_info`, `prepare_editor`, `apply_edits` and
@@ -102,15 +112,22 @@ including preparation and image-decoder failures from a replaced document.
 
 ## Validation and remaining work
 
-Ten core tests cover save/reopen, immutable sources, explicit APs, popup removal,
-stable direct IDs, locks, encryption rejection, inherited fields, choice/radio
-state, duplicate exports and transparent image signatures.
+Fourteen core tests cover save/reopen, immutable sources, explicit APs, popup
+removal, stable direct IDs, locks, inherited fields, choice/radio state, duplicate
+exports and transparent image signatures. Encryption cases cover six security
+settings, user/owner authentication, permission enforcement, empty user passwords,
+AES IV validation and failure atomicity.
 
-The 22 Chromium editor checks use actual native inputs and pointer gestures.
+The 25 Chromium editor checks use actual native inputs and pointer gestures.
 They reopen downloaded bytes with the pinned PDF.js reader, render saved Chinese
 text and signature APs, verify two physical printed pages, and exercise a real
-PDF.js choice fixture. Reports, downloaded PDFs, printed output and appearance
+PDF.js choice fixture. Six encrypted variants are saved, reopened with both
+passwords and rendered by PDF.js; AES saves must differ, and permissions/file IDs
+must remain unchanged. Restricted and owner-protected documents also exercise
+native controls and the Worker boundary. Reports, downloaded PDFs, printed output and appearance
 screenshots are retained under `_build/editor-test-*/`.
+The pinned `issue6010_1.pdf` and `issue6010_2.pdf` fixtures also cover saved
+annotations, actual PDF.js rendering and ASCII/non-ASCII password reopening.
 
 ```sh
 moon test --target js --warn-list '-a' -f '*editor*'
@@ -121,8 +138,9 @@ moon run tools/dev.mbtx 4315
 node tools/editor_browser_test.mjs http://127.0.0.1:4315
 ```
 
-Encrypted PDFs remain readable but cannot be edited/saved. Dynamic XFA controls
-remain readonly. Pushbuttons, field calculation/validation JavaScript, certificate
+Encrypted saving requires successful authentication and an AES IV provider when
+applicable. Dynamic XFA controls remain readonly. Pushbuttons, field
+calculation/validation JavaScript, certificate
 signing and arbitrary rich-text editing are not implemented. The existing
 visual-baseline differences, OCG control panel and manual assistive-technology
 acceptance remain separate work. These editing paths do not establish complete

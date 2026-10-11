@@ -22,7 +22,7 @@ pub fn open_pdf(bytes : Bytes) -> String {
 }
 
 ///|
-/// Retry an encrypted document with a user password. Password bytes stay in
+/// Retry an encrypted document with a user or owner password. Password bytes stay in
 /// the browser bridge and are never included in the document status JSON.
 pub fn open_pdf_with_password(bytes : Bytes, password : Bytes) -> String {
   current_range.val = None
@@ -30,6 +30,7 @@ pub fn open_pdf_with_password(bytes : Bytes, password : Bytes) -> String {
     let document = @pdf.open_document_with_passwords(
       bytes,
       user_password=Some(password),
+      owner_password=Some(password),
     )
     browser_install_document(document)
   } catch {

@@ -476,6 +476,7 @@ pub fn PdfRangeReader::document_view(
     optional_content_state: None,
     font_fallbacks: [],
     reader_observations,
+    editor_security: None,
   }
 }
 

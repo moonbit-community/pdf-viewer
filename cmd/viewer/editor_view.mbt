@@ -21,7 +21,7 @@ fn editor_view(model : EditorModel, emit : @cmd.Emit[Msg]) -> @html.Html {
             @html.button(
               id="edit-" + value,
               type_="button",
-              disabled=model.busy,
+              disabled=model.busy || (!model.annotations && value != "select"),
               attrs=@html.Attrs::build().aria_pressed(
                 (model.tool == value).to_string(),
               ),
@@ -36,13 +36,16 @@ fn editor_view(model : EditorModel, emit : @cmd.Emit[Msg]) -> @html.Html {
         input_type=Text,
         value=model.text,
         placeholder="批注文字",
-        attrs=@html.Attrs::build().aria_label("批注文字"),
+        attrs=@html.Attrs::build()
+          .aria_label("批注文字")
+          .disabled(!model.annotations),
         on_input=@cmd.Emit(text => emit(Edit(Text(text)))),
       ),
       @html.input(
         id="editor-color",
         input_type=Color,
         value=model.color,
+        attrs=@html.Attrs::build().disabled(!model.annotations),
         title="批注颜色",
         on_input=@cmd.Emit(color => emit(Edit(Color(color)))),
       ),
@@ -52,6 +55,7 @@ fn editor_view(model : EditorModel, emit : @cmd.Emit[Msg]) -> @html.Html {
         min=1,
         max=200,
         value=model.size.to_string(),
+        attrs=@html.Attrs::build().disabled(!model.annotations),
         title="字号／线宽",
         on_input=@cmd.Emit(size => emit(Edit(Size(size)))),
       ),
@@ -67,6 +71,7 @@ fn editor_view(model : EditorModel, emit : @cmd.Emit[Msg]) -> @html.Html {
           id="signature-image",
           input_type=File,
           accept="image/png,image/jpeg,image/webp",
+          attrs=@html.Attrs::build().disabled(!model.annotations),
           on_change=@cmd.Emit(_ => {
             match picked_image().to_option() {
               Some(file) => emit(Edit(PickImage(file)))

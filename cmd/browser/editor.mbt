@@ -18,14 +18,16 @@ pub fn editor_info() -> String {
   guard current_document.val is Some(document) else {
     return browser_error_with_code("document-closed", "No document open")
   }
-  let encrypted = document.document.saved_encryption is Some(_) ||
-    document.document.is_encrypted()
+  let permissions = document.editor_permissions()
   (
     {
       "ok": true,
-      "editable": !encrypted,
-      "reason": if encrypted {
-        "暂不支持保存加密 PDF 的编辑"
+      "editable": permissions.annotations || permissions.forms,
+      "annotations": permissions.annotations,
+      "forms": permissions.forms,
+      "encrypted": permissions.encrypted,
+      "reason": if !permissions.annotations && !permissions.forms {
+        "此 PDF 的权限禁止批注编辑和表单填写"
       } else {
         ""
       },
@@ -56,7 +58,17 @@ pub fn save_pdf() -> String {
   guard current_document.val is Some(document) else {
     return browser_error_with_code("document-closed", "No document open")
   }
-  ({ "ok": true, "data": @base64.encode(document.save_bytes()) } : Json).stringify() catch {
+  (
+    {
+      "ok": true,
+      "data": @base64.encode(
+        document.save_bytes(aes_iv_provider=(_, _, _) => editor_random_iv()),
+      ),
+    } : Json).stringify() catch {
     error => browser_error_with_code("save-error", @debug.to_string(error))
   }
 }
+
+///|
+extern "js" fn editor_random_iv() -> Bytes =
+  #| () => globalThis.crypto.getRandomValues(new Uint8Array(16))

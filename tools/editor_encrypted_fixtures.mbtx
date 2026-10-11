@@ -1,0 +1,36 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/pdflite",
+  "moonbitlang/pdflite/crypt_core",
+}
+
+///|
+// Deterministic providers are only used for authored acceptance fixtures.
+// Browser saves use crypto.getRandomValues for every AES IV.
+async fn main {
+  let args = @env.args()
+  let document = @pdflite.pdf_read_document_from_bytes(@fs.read_file(args[1]).binary())
+  let directory = args[2]
+  let file_id = b"editor-test-id01"
+  let iv = @pdflite.pdf_deterministic_aes_iv_provider_from_seed(b"fixture-iv")
+  let random = @pdflite.pdf_deterministic_aesv3_random_provider_from_seed(b"fixture-random")
+  for method in 0..<9 {
+    let denied : Array[@crypt_core.PdfPermission] = if method == 6 || method == 8 {
+      [@crypt_core.PdfNoAnnot]
+    } else if method == 7 {
+      [@crypt_core.PdfNoAnnot, @crypt_core.PdfNoForms]
+    } else { [@crypt_core.PdfNoCopy] }
+    let user = if method == 8 { b"" } else { b"reader" }
+    let bytes = match method {
+      0 => @pdflite.pdf_write_encrypted_40bit_document(document, user, b"owner", denied, file_id~)
+      1 => @pdflite.pdf_write_encrypted_128bit_document(document, user, b"owner", denied, file_id~)
+      2 => @pdflite.pdf_write_encrypted_128bit_r4_document(document, user, b"owner", denied, encrypt_metadata=false, file_id~)
+      3 | 6 | 8 => @pdflite.pdf_write_encrypted_aesv2_document_with_iv_provider(document, user, b"owner", denied, iv, encrypt_metadata=false, file_id~)
+      _ => @pdflite.pdf_write_encrypted_aesv3_document_with_providers(document, user, b"owner", denied, random, iv, iso=method == 5, encrypt_metadata=false, file_id~)
+    }
+    @fs.write_file(directory + "/encrypted-\{method}.pdf", bytes)
+  }
+}

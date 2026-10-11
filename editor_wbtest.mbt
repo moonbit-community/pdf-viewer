@@ -161,25 +161,12 @@ test "editor preserves multiline highlights ink colours and stroke widths during
 }
 
 ///|
-test "editor respects annotation locks encrypted sources and anonymous direct widget identity" {
+test "editor respects annotation locks and anonymous direct widget identity" {
   let source = annotation_test_document([
     "<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << >> /Annots [4 0 R << /Subtype /Widget /Rect [0 20 100 40] /FT /Tx /V (old) >> << /Subtype /Widget /Rect [0 20 100 40] /FT /Tx /V (old) >>] >>",
     "<< /Subtype /Text /Rect [0 50 20 70] /F 128 /Contents (Locked) >>",
   ])
-  let bytes = @pdflite.pdf_write_encrypted_40bit_document(
-    source.document,
-    @utf8.encode("user-password"),
-    @utf8.encode("owner-password"),
-    [],
-    file_id=b"editor-encrypted",
-  )
-  let encrypted = open_document_with_passwords(
-    bytes,
-    user_password=Some(@utf8.encode("user-password")),
-  )
-  assert_true((try? encrypted.with_editor_changes([])) is Err(_))
-  assert_true((try? encrypted.save_bytes()) is Err(_))
   assert_true(
     (try? source.with_editor_changes([
       { "kind": "delete", "id": "object:4", "page": 1 },

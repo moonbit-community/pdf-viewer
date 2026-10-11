@@ -532,7 +532,7 @@ pub(all) struct PdfTextContent {
 } derive(Eq, Debug, ToJson)
 
 ///|
-/// A parsed, read-only PDF document.
+/// A parsed PDF document with immutable editor snapshots.
 pub struct PdfViewerDocument {
   source_length : Int
   priv source_bytes : Bytes
@@ -542,6 +542,7 @@ pub struct PdfViewerDocument {
   optional_content_state : PdfOptionalContentState?
   font_fallbacks : Array[PdfFontFallback]
   priv reader_observations : Array[PdfReaderDiagnostic]
+  priv editor_security : PdfEditorSecurity?
 }
 
 ///|
@@ -549,14 +550,21 @@ pub struct PdfViewerDocument {
 ///
 /// Unencrypted files follow the same path as
 /// `open_document_with_passwords(bytes)` with no passwords. Encrypted files
-/// raise `SoftError` when no supplied password authenticates.
+/// raise `SoftError` when a nonempty password is required.
 pub fn open_document(bytes : Bytes) -> PdfViewerDocument raise @core.PdfError {
   let document = match pdf_reader_strict_document_for_viewer(bytes) {
     Some(document) => document
     None => @pdflite.pdf_read_document_from_bytes(bytes)
   }
   if document.is_encrypted() {
-    raise @core.SoftError("PDF password authentication failed")
+    guard document.decrypt_with_user_password(b"") is Some(result) else {
+      raise @core.SoftError("PDF password authentication failed")
+    }
+    let view = pdf_viewer_document_of_parsed_document(bytes, result.document)
+    return {
+      ..view,
+      editor_security: Some({ password: b"", owner_authenticated: false, }),
+    }
   }
   pdf_viewer_document_of_parsed_document(bytes, document)
 }
@@ -577,24 +585,58 @@ pub fn open_document_with_passwords(
   if user_password is None && owner_password is None {
     return open_document(bytes)
   }
-  let result = match pdf_reader_strict_document_for_viewer(bytes) {
-    Some(document) =>
-      document.decrypt_with_passwords(
-        user_password=user_password.map(password => password[:]),
-        owner_password=owner_password.map(password => password[:]),
-      )
-    None =>
-      @pdflite.pdf_read_document_from_bytes_with_passwords(
-        bytes,
-        user_password=user_password.map(password => password[:]),
-        owner_password=owner_password.map(password => password[:]),
-      )
+  let parsed = pdf_reader_strict_document_for_viewer(bytes)
+  fn decrypt(
+    user : Bytes?,
+    owner : Bytes?,
+  ) -> @pdflite.PdfDecryptionResult? raise @core.PdfError {
+    match parsed {
+      Some(document) =>
+        document.decrypt_with_passwords(
+          user_password=user.map(password => password[:]),
+          owner_password=owner.map(password => password[:]),
+        )
+      None =>
+        @pdflite.pdf_read_document_from_bytes_with_passwords(
+          bytes,
+          user_password=user.map(password => password[:]),
+          owner_password=owner.map(password => password[:]),
+        )
+    }
+  }
+  // Authenticate an owner credential separately: a valid user password must
+  // never make an incorrect supplied owner password grant owner permissions.
+  let owner_result = owner_password.bind(password => {
+    decrypt(None, Some(password)) catch {
+      _ => None
+    }
+  })
+  let result = match owner_result {
+    Some(result) => Some(result)
+    None => decrypt(user_password, owner_password)
   }
   let document = match result {
     Some(result) => result.document
     None => raise @core.SoftError("PDF password authentication failed")
   }
-  pdf_viewer_document_of_parsed_document(bytes, document)
+  let view = pdf_viewer_document_of_parsed_document(bytes, document)
+  if document.saved_encryption is Some(_) {
+    let owner_authenticated = owner_result is Some(_)
+    let password = if owner_authenticated {
+      owner_password.unwrap()
+    } else {
+      user_password.unwrap_or(b"")
+    }
+    {
+      ..view,
+      editor_security: Some({
+        password: password[:].to_owned(),
+        owner_authenticated,
+      }),
+    }
+  } else {
+    view
+  }
 }
 
 ///|
@@ -640,6 +682,7 @@ fn pdf_viewer_document_of_parsed_document(
     optional_content_state: None,
     font_fallbacks: [],
     reader_observations,
+    editor_security: None,
   }
 }
 

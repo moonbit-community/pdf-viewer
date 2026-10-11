@@ -207,11 +207,16 @@ async fn editor_handle(action : EditorAction) -> Unit {
         if !value_bool(result, "editable") {
           raise ViewerError("edit-unavailable", value_string(result, "reason"))
         }
+        editor.annotations = value_bool(result, "annotations")
       }
       editor.enabled = !editor.enabled
       editor.selected = Json::null()
       editor.status = if editor.enabled {
-        "可填写表单；选择工具后在页面拖动"
+        if editor.annotations {
+          "可填写表单；选择工具后在页面拖动"
+        } else {
+          "此 PDF 允许填写表单，禁止修改批注"
+        }
       } else {
         ""
       }
@@ -219,6 +224,9 @@ async fn editor_handle(action : EditorAction) -> Unit {
       notify()
     }
     Tool(tool) => {
+      if !editor.annotations && tool != "select" {
+        return
+      }
       if tool == "ink" || tool == "signature" {
         editor.size = 2.0
       } else if tool == "text" {

@@ -6,16 +6,22 @@ pub fn PdfViewerDocument::with_editor_changes(
   self : PdfViewerDocument,
   changes : Json,
 ) -> PdfViewerDocument raise @core.PdfError {
-  if self.document.saved_encryption is Some(_) || self.document.is_encrypted() {
-    raise @core.SoftError("Editing encrypted PDFs is not supported")
-  }
+  self.pdf_edit_require_unlocked()
   guard changes is Json::Array(patches) && patches.length() <= 10000 else {
     raise @core.SoftError("Expected at most 10000 editor patches")
   }
   let document = self.document.copy()
   let touched : Map[Int, Array[Json]] = Map([])
   let ids : Map[String, Bool] = Map([])
+  let permissions = self.editor_permissions()
   for patch in patches {
+    if pdf_edit_string(patch, "kind") == "field" {
+      if !permissions.forms {
+        raise @core.SoftError("PDF permissions forbid filling form fields")
+      }
+    } else if !permissions.annotations {
+      raise @core.SoftError("PDF permissions forbid editing annotations")
+    }
     let page = pdf_edit_int(patch, "page")
     if page < 1 || page > self.pages.length() {
       raise @core.SoftError("Editor page does not exist")
@@ -143,11 +149,28 @@ pub fn PdfViewerDocument::with_editor_changes(
 /// a complete PDF, with explicit annotation appearances for other readers.
 pub fn PdfViewerDocument::save_bytes(
   self : PdfViewerDocument,
+  aes_iv_provider? : (Int, Int, Int) -> Bytes raise @core.PdfError,
 ) -> Bytes raise @core.PdfError {
-  if self.document.saved_encryption is Some(_) || self.document.is_encrypted() {
-    raise @core.SoftError("Saving encrypted PDFs is not supported")
+  self.pdf_edit_require_unlocked()
+  let document = match (self.document.saved_encryption, self.editor_security) {
+    (Some(saved), Some(security)) =>
+      match saved.values.crypt_type {
+        @core.PdfCryptARC4(_, _) =>
+          self.document.recrypt_with_password(security.password)
+        @core.PdfCryptAESV2 =>
+          self.document.recrypt_with_password_aesv2_with_iv_provider(
+            security.password,
+            pdf_edit_require_iv_provider(aes_iv_provider),
+          )
+        @core.PdfCryptAESV3(_) =>
+          self.document.recrypt_with_password_aesv3_with_iv_provider(
+            security.password,
+            pdf_edit_require_iv_provider(aes_iv_provider),
+          )
+      }
+    _ => self.document
   }
-  @pdflite.pdf_write_document(self.document)
+  @pdflite.pdf_write_document(document)
 }
 
 ///|

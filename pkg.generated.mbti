@@ -160,6 +160,14 @@ pub(all) struct PdfDestination {
   resolved : Bool
 } derive(Eq, ToJson, @debug.Debug)
 
+pub struct PdfEditorPermissions {
+  encrypted : Bool
+  annotations : Bool
+  forms : Bool
+} derive(Eq, ToJson, @debug.Debug)
+
+type PdfEditorSecurity
+
 pub(all) struct PdfFontFallback {
   pdf_name : String
   family : String
@@ -998,6 +1006,7 @@ pub fn PdfViewerDocument::attachment_manifest_json(Self) -> Json raise @core.Pdf
 pub fn PdfViewerDocument::attachments_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::destination_for_page(Self, Int) -> PdfDestination? raise @core.PdfError
 pub fn PdfViewerDocument::editor_page_json(Self, Int) -> Json?
+pub fn PdfViewerDocument::editor_permissions(Self) -> PdfEditorPermissions
 pub fn PdfViewerDocument::font_fallbacks(Self) -> Array[PdfFontFallback]
 pub fn PdfViewerDocument::info_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::metadata_bytes(Self) -> Bytes? raise @core.PdfError
@@ -1019,7 +1028,7 @@ pub fn PdfViewerDocument::pages(Self) -> Array[PdfPageModel] raise @core.PdfErro
 pub fn PdfViewerDocument::reader_diagnostics(Self) -> Array[PdfReaderDiagnostic]
 pub fn PdfViewerDocument::render_svg(Self, Int, scale? : Double) -> String? raise @core.PdfError
 pub fn PdfViewerDocument::render_svg_with_rotation(Self, Int, Int, scale? : Double) -> String? raise @core.PdfError
-pub fn PdfViewerDocument::save_bytes(Self) -> Bytes raise @core.PdfError
+pub fn PdfViewerDocument::save_bytes(Self, aes_iv_provider? : (Int, Int, Int) -> Bytes raise @core.PdfError) -> Bytes raise @core.PdfError
 pub fn PdfViewerDocument::search(Self, String, options? : PdfSearchOptions, page? : Int?) -> Array[PdfSearchResult] raise @core.PdfError
 pub fn PdfViewerDocument::select(Self, Int, PdfBounds) -> PdfSelection? raise @core.PdfError
 pub fn PdfViewerDocument::source_length(Self) -> Int

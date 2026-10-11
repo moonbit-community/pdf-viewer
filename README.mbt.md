@@ -112,7 +112,8 @@ loading, and dynamic XFA pages. XFA layout and native controls reuse the pinned
 Apache-licensed PDF.js XFA components; the PDF reader and Canvas pipeline remain
 this project's pdflite/MoonBit implementation. See [readonly acceptance and
 CI limits](docs/readonly-completion.md) and [editor acceptance](docs/editor.md).
-Encrypted PDF editing, dynamic XFA editing and certificate signatures remain
+Authenticated encrypted PDFs can be edited and saved with their original
+passwords and permissions. Dynamic XFA editing and certificate signatures remain
 unsupported, and known visual differences prevent a claim of full PDF.js parity.
 
 ## License

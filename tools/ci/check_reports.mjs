@@ -57,12 +57,15 @@ export const requiredEditorChecks=[
   'Late editing replies cannot publish into a replacement document',
   'HTTP Range editing completes the source and retains unvisited objects',
   'Real PDF.js form fixture fills saves and reopens with the selected export value',
+  'Encrypted RC4 and AES PDFs retain passwords permissions and edited appearances',
+  'Encrypted user permissions restrict editing and owner credentials unlock supported changes',
+  'Real encrypted PDF.js fixtures preserve edits with ASCII and Unicode passwords',
 ];
 export function checkEditor(report){
   assert.equal(report.ok,true,'Editor acceptance failed');
   assert.equal(report.failed,null);
   assert.deepEqual(report.errors,[],'Editor raised a browser error');
-  assert.ok(report.checks.length>=22,'Editor checks were dropped');
+  assert.ok(report.checks.length>=25,'Editor checks were dropped');
   assert.equal(new Set(report.checks).size,report.checks.length,'Duplicate editor checks');
   for(const name of requiredEditorChecks) assert.ok(report.checks.includes(name),'Missing editor regression: '+name);
 }

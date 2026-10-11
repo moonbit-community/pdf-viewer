@@ -6,6 +6,7 @@ pub fn PdfViewerDocument::editor_page_json(
 ) -> Json? {
   guard number >= 1 && number <= self.pages.length() else { return None }
   let document = self.document
+  let permissions = self.editor_permissions()
   let output : Array[Json] = []
   for index, raw in pdf_edit_annots(document, self.pages[number - 1].rest) {
     let annotation = document.read_annotation(raw) catch { _ => continue }
@@ -41,9 +42,10 @@ pub fn PdfViewerDocument::editor_page_json(
         field_type == "Ch" ||
         (field_type == "Btn" && (field_flags & 65536) == 0)
       ) &&
-      (field_flags & 1) == 0
+      (field_flags & 1) == 0 &&
+      permissions.forms
     } else {
-      (flags & 704) == 0
+      (flags & 704) == 0 && permissions.annotations
     }
     let color = if subtype == "free-text" {
       pdf_edit_text_color(document, raw)
