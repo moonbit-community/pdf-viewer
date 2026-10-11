@@ -17,8 +17,8 @@ ci_moon_archive_version=${ci_moon_version//+/%2B}
 ci_moon_expected=$(node -p "require('./tools/ci/toolchain.json')['$ci_moon_platform'+'_sha256']")
 ci_core_expected=$(node -p "require('./tools/ci/toolchain.json').core_sha256")
 mkdir -p "$ci_moon_root/lib"
-curl -fLsS --retry 3 "https://cli.moonbitlang.com/binaries/$ci_moon_archive_version/moonbit-$ci_moon_platform.tar.gz" -o "$ci_moon_root/toolchain.tar.gz"
-curl -fLsS --retry 3 "https://cli.moonbitlang.com/cores/core-$ci_moon_archive_version.tar.gz" -o "$ci_moon_root/core.tar.gz"
+curl -fLsS --retry 3 --retry-all-errors --connect-timeout 30 --max-time 120 --retry-max-time 180 "https://cli.moonbitlang.com/binaries/$ci_moon_archive_version/moonbit-$ci_moon_platform.tar.gz" -o "$ci_moon_root/toolchain.tar.gz"
+curl -fLsS --retry 3 --retry-all-errors --connect-timeout 30 --max-time 120 --retry-max-time 180 "https://cli.moonbitlang.com/cores/core-$ci_moon_archive_version.tar.gz" -o "$ci_moon_root/core.tar.gz"
 verify() {
   local ci_digest
   ci_digest=$(shasum -a 256 "$1")
