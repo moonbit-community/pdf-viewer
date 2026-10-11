@@ -1195,6 +1195,9 @@ async fn main {
     browser.ready(2)
     ignore(browser.evaluate("document.getElementById('zoom').value='1'; document.getElementById('zoom').dispatchEvent(new Event('change')); true"))
     browser.ready(2)
+    // ready() covers the visible page. The following comparison explicitly
+    // inspects the asynchronously prefetched neighbouring semantic page too.
+    browser.wait("document.getElementById('file-name').textContent==='accessibility.pdf' && document.querySelector('.accessibility-layer[data-page=\"1\"] [role=heading]') !== null && document.querySelector('.accessibility-layer[data-page=\"2\"]') !== null")
     browser.check("tagged page isolates same MCID across pages and retains untagged tail", (
       #| (() => {
       #|   const first = document.querySelector('.accessibility-layer[data-page="1"]');
