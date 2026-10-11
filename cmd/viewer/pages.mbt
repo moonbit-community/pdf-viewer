@@ -123,16 +123,28 @@ async fn mount_page(result : @js.Value, current : () -> Bool) -> @dom.Element {
   paint.set_attribute("aria-hidden", "true")
   paint.set_property("inert", @js.Value::cast_from(true))
   let canvas = make_element("canvas")
+  append_element(paint, canvas)
+  // Publish the output surface before painting. The renderer fills it tile by
+  // tile; selection and annotation layers still wait for the completed page.
+  if current() && page_element(number) is Some(placeholder) {
+    append_element(placeholder, paint)
+  }
   let rendered = paint_canvas(
     canvas,
     result,
     output_scale(),
     current=Some(current),
-  ).wait()
+  ).wait() catch {
+    error => {
+      if paint.get_parent_element() is Some(parent) {
+        parent.remove_child(paint.as_node())
+      }
+      raise error
+    }
+  }
   if current() {
     report_diagnostics(value_field(rendered, "diagnostics"))
   }
-  append_element(paint, canvas)
   let text = make_text_layer(value_field(result, "layer"))
   let annotations = annotation_layer(state.annotations.unwrap(), result)
   let accessibility = accessibility_layer(result, annotations).to_option()

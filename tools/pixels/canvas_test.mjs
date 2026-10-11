@@ -28,12 +28,33 @@ await test('cropped tiles skip invisible sources and groups without changing pix
  assert.deepEqual(actual.data,control.data);assert.deepEqual(actual.shape,control.shape);
 });
 await test('cancelled tiled paint stops before another tile and frees its output',async()=>{
- const controller=new AbortController(),canvas=createCanvas(1,1);let loads=0,yields=0;
+ const controller=new AbortController(),canvas=createCanvas(1,1);let loads=0,yields=0,closed=0;
  const source=createCanvas(1,1);source.getContext('2d').fillRect(0,0,1,1);
  const input=plan([{kind:'image',paint:{quad:{p0:{x:0,y:0},p1:{x:0,y:20},p2:{x:20,y:20},p3:{x:20,y:0}},bounds:{min_x:0,min_y:0,max_x:20,max_y:20},resource:{data_uri:source.toDataURL(),width:1,height:1},fill_alpha:1,blend_mode:'normal'}}]);
  await assert.rejects(renderPdfPage(canvas,input,{...options,returnPixels:false,tileSize:10,signal:controller.signal,
-  loadImage:async uri=>{loads++;return loadImage(uri);},yieldToHost:async()=>{if(++yields===2)controller.abort();}}),{name:'AbortError'});
- assert.equal(loads,1);assert.equal(yields,2);assert.equal(canvas.width,1);assert.equal(canvas.height,1);
+  loadImage:async uri=>{loads++;const image=await loadImage(uri);image.close=()=>closed++;return image;},yieldToHost:async()=>{if(++yields===2)controller.abort();}}),{name:'AbortError'});
+ assert.equal(loads,1);assert.equal(yields,2);assert.equal(closed,1);assert.equal(canvas.width,1);assert.equal(canvas.height,1);
+});
+await test('page tiles share image decoding and release the bitmap after the page',async()=>{
+ const source=createCanvas(1,1);source.getContext('2d').fillRect(0,0,1,1);
+ const input=plan([{kind:'image',paint:{quad:{p0:{x:0,y:0},p1:{x:0,y:20},p2:{x:20,y:20},p3:{x:20,y:0}},bounds:{min_x:0,min_y:0,max_x:20,max_y:20},resource:{data_uri:source.toDataURL(),width:1,height:1},fill_alpha:1,blend_mode:'normal'}}]);
+ const control=await renderPdfCanvas(createCanvas(1,1),input,options);
+ let loads=0,closed=0;
+ const actual=await renderPdfPage(createCanvas(1,1),input,{...options,tileSize:10,loadImage:async uri=>{
+  loads++;const image=await loadImage(uri);image.close=()=>closed++;return image;
+ }});
+ assert.equal(loads,1,'All four tiles use the same decoded image');assert.equal(closed,1,'The page owns and releases the image exactly once');
+ assert.deepEqual(actual.data,control.data);assert.deepEqual(actual.shape,control.shape);
+});
+await test('page tiles share annotation appearance rasters without changing their pixels',async()=>{
+ const input=plan([path(rect,'#0000ff')]);
+ input.annotation_fragments=[{svg:'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><rect width="20" height="20" fill="red" fill-opacity="0.5"/></svg>',x:0,y:0,width:20,height:20}];
+ const control=await renderPdfCanvas(createCanvas(1,1),input,options);
+ let loads=0,closed=0;
+ const actual=await renderPdfPage(createCanvas(1,1),input,{...options,tileSize:10,loadImage:async uri=>{
+  loads++;const image=await loadImage(uri);image.close=()=>closed++;return image;
+ }});
+ assert.equal(loads,1);assert.equal(closed,1);assert.deepEqual(actual.data,control.data);assert.deepEqual(actual.premultiplied,control.premultiplied);
 });
 await test('structured geometry, separate clip stack and evenodd rule',async()=>{
  const result=await renderPdfCanvas(createCanvas(20,20),plan([path(rect,'#ff0000',{clips:[{svg_path:'M 2 2H18V18H2Z M 6 6H14V14H6Z',even_odd:true}]})]),options);

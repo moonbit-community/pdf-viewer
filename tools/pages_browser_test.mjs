@@ -160,6 +160,9 @@ try{
     await page.locator('#file-input').setInputFiles({name:'reading.pdf',mimeType:'application/pdf',
       buffer:readingFixture(await readFile(resolve('assets/icc/rgb-gamma22.icc')))});
     await page.waitForFunction(()=>typeof window.resumeFirstPaint==='function'&&document.querySelector('#page-count').textContent==='/ 6'&&document.querySelector('.page[data-page="6"]')?.offsetHeight>0);
+    assert.equal(await page.locator('.page[data-page="1"] canvas').count(),1,
+      'The pending page exposes its Canvas so completed tiles can appear before the whole page finishes');
+    assert.equal(await page.locator('.page[data-page="1"]').getAttribute('data-rendered'),'false');
     await page.locator('.page[data-page="6"]').evaluate(page=>page.scrollIntoView({block:'start'}));
     await page.waitForFunction(()=>document.querySelector('#page-number').value==='6');
     await page.evaluate(()=>window.resumeFirstPaint());
@@ -167,6 +170,8 @@ try{
     assert.equal(await page.locator('#error').isVisible(),false);
     assert.match(await page.locator('#status').textContent(),/^6 页 · /,'Cancelled first-page work must not leave a permanent loading status');
     assert.equal(await page.evaluate(()=>window.firstPaintCancelled),true,'The actual renderer rejects the obsolete first-page paint after scrolling');
+    assert.equal(await page.locator('.page[data-page="1"] canvas').count(),0,
+      'A cancelled page removes its partial paint without retaining an obsolete Canvas');
     const tick=await page.evaluate(()=>{
       clearInterval(window.renderTimer);const times=window.renderTicks;
       return {count:times.length,maxGap:Math.max(0,...times.slice(1).map((time,i)=>time-times[i]))};

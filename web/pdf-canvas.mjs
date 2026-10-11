@@ -123,7 +123,8 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
   const inheritedWorkingBytes=options._inheritedWorkingBytes || 0;
   const glyphCache=options._glyphCache;
   const glyphReservation=options._glyphCacheReserved?0:glyphCache.limit;
-  let availableBytes=(options.maxWorkingBytes || 536870912)-inheritedWorkingBytes-glyphReservation;
+  const imageReservation=options._imageCache&&!options._imageCacheReserved?options._imageCache.limit:0;
+  let availableBytes=(options.maxWorkingBytes || 536870912)-inheritedWorkingBytes-glyphReservation-imageReservation;
   let inkMode=plan.page.blend_space==='DeviceCMYK';
   const colorants=options.proof!==true?[]:plan.items.flatMap(item=>[item.paint.fill_source,item.paint.stroke_source].flatMap(source=>source&&['Separation','DeviceN'].includes(source.space)?(source.colorants||[]):[]));
   const hasOverprint=options.proof===true&&plan.items.some(item=>item.paint.fill_overprint || item.paint.stroke_overprint);
@@ -154,9 +155,9 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
   const markCoverage=shape=>{for(let p=0;p<shape.length;p++)plateCoverage[p*4+3]=Math.round(shape[p]*255);};
   const diagnostics=[...(plan.diagnostics || [])];
   if(diagnostics.length&&options.unsupported!=='warn')throw new Error(diagnostics.map(d=>`${d.code}: ${d.message || d.reason}`).join('; '));
-  let maskCacheBytes=0,imageCacheBytes=0,inkImageCache=null,layer=null,shapeLayer=null;
-  const images=new Map(),uncachedImages=new Set();
-  const imageLimit=Math.min(67108864,Math.max(0,Math.floor(availableBytes/8)));
+  let maskCacheBytes=0,inkImageCache=null,layer=null,shapeLayer=null;
+  const imageCache=options._imageCache||{entries:new Map(),bytes:0,limit:Math.min(67108864,Math.max(0,Math.floor(availableBytes/8)))};
+  const images=imageCache.entries,uncachedImages=new Set(),imageLimit=imageCache.limit;
   const releaseImage=value=>{if(typeof value?.close==='function')value.close();};
   const glyphImage=async(svg,w,h)=>{
     const key=svg;
@@ -172,8 +173,8 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
     if(images.has(uri)){const cached=images.get(uri);images.delete(uri);images.set(uri,cached);return cached.value;}
     const value=await loadImage(uri),pixels=Number(value.width)*Number(value.height),bytes=pixels*4;
     if(!Number.isSafeInteger(pixels)||pixels<=0||pixels>(options.maxPixels||16777216)){releaseImage(value);throw new RangeError('Decoded PDF image surface exceeds the configured size limit');}
-    while(images.size&&(imageCacheBytes+bytes>imageLimit||images.size>=64)){const oldest=images.keys().next().value,cached=images.get(oldest);images.delete(oldest);imageCacheBytes-=cached.bytes;releaseImage(cached.value);}
-    if(bytes<=imageLimit){images.set(uri,{value,bytes});imageCacheBytes+=bytes;}
+    while(images.size&&(imageCache.bytes+bytes>imageLimit||images.size>=64)){const oldest=images.keys().next().value,cached=images.get(oldest);images.delete(oldest);imageCache.bytes-=cached.bytes;releaseImage(cached.value);}
+    if(bytes<=imageLimit){images.set(uri,{value,bytes});imageCache.bytes+=bytes;}
     else uncachedImages.add(value);
     return value;
   };
@@ -183,7 +184,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
   const sourcePixels=new Float32Array(width*height*4),sourceShape=new Float32Array(width*height);
   let previousSourceRegion=null;
   const environments={createCanvas,loadImage,Path2D:Path,image,width,height,matrix,page:plan.page,diagnostics,resourceDepth,glyphCache};
-  const retainedWorkingBytes=()=>inheritedWorkingBytes+glyphReservation+proofBytes+maskCacheBytes+imageCacheBytes+(inkImageCache?inkImageCache.data.byteLength+inkImageCache.alpha.byteLength+inkImageCache.canvas.width*inkImageCache.canvas.height*4:0)+availableBytes-(inkMode?compositor.maxBytes:compositor.maxWorkingBytes)+compositor.workingBytes()+rasterBytes;
+  const retainedWorkingBytes=()=>inheritedWorkingBytes+glyphReservation+imageReservation+proofBytes+maskCacheBytes+(options._imageCache?0:imageCache.bytes)+(inkImageCache?inkImageCache.data.byteLength+inkImageCache.alpha.byteLength+inkImageCache.canvas.width*inkImageCache.canvas.height*4:0)+availableBytes-(inkMode?compositor.maxBytes:compositor.maxWorkingBytes)+compositor.workingBytes()+rasterBytes;
   const imageComponent=(resource,component)=>{
     const samples=resource.ink_samples;
     if(!samples||!Number.isInteger(samples.components)||samples.components<1||samples.components>32||samples.bits!==16)throw new Error('Image is missing retained source component samples');
@@ -689,9 +690,10 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
       if(aw*ah*4>availableBytes)throw new RangeError('PDF annotation raster exceeds the working memory budget');
       const svg=fragment.svg.replace(/(<svg\b[^>]*\bwidth=")[^"]*(")/,`$1${aw}$2`).replace(/(<svg\b[^>]*\bheight=")[^"]*(")/,`$1${ah}$2`);
       output.save();output.setTransform(...placement);output.globalCompositeOperation=fragment.blend||'source-over';
-      const raster=await loadImage(svgUri(svg));
+      const uri=svgUri(svg);
+      const raster=options._imageCache&&aw*ah<=(options.maxPixels||16777216)?await image(uri):await loadImage(uri);
       try{output.drawImage(raster,fragment.x,fragment.y,fragment.width,fragment.height);}
-      finally{releaseImage(raster);output.restore();}
+      finally{if(!options._imageCache||images.get(uri)?.value!==raster){uncachedImages.delete(raster);releaseImage(raster);}output.restore();}
     }
     bytes=output.getImageData(0,0,width,height).data;
     rgba8ToPremultiplied(bytes,result.pixels);
@@ -704,8 +706,8 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
   } finally {
     for(const engine of liveCompositors)releaseCompositor(engine);
     if(layer)layer.width=1;if(shapeLayer)shapeLayer.width=1;if(inkImageCache)inkImageCache.canvas.width=1;
-    for(const cached of images.values())releaseImage(cached.value);
+    if(!options._imageCache){for(const cached of images.values())releaseImage(cached.value);images.clear();imageCache.bytes=0;}
     for(const value of uncachedImages)releaseImage(value);
-    images.clear();uncachedImages.clear();
+    uncachedImages.clear();
   }
 }

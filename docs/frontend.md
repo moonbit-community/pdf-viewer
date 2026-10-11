@@ -40,11 +40,16 @@ modules remain adapters rather than application views or navigation controllers.
 
 The PDF parser runs in the Worker. Canvas process-colour conversion uses the
 MoonBit primitive compiled into the UI module, without loading the parser again
-on the main thread. Canvas replay skips paints outside each tile, yields to
-browser events and checks the MoonBit task's lifetime before continuing. Pages,
-thumbnails and printing use the same cancellation boundary. The reader keeps
+on the main thread. Canvas replay skips paints outside each tile and shares a
+bounded image/annotation raster cache across the page's tiles. It releases that
+cache after completion or cancellation, yields to browser events and checks the
+MoonBit task's lifetime before continuing. Pages, thumbnails and printing use
+the same cancellation boundary. The reader keeps
 scroll navigation active during page loading and shows a loading label on each
-pending page.
+pending page. The MoonBit view attaches the page's Canvas before painting, so
+finished tiles appear while the remaining tiles are still loading. Cancellation
+removes only that task's partial paint; text, annotation and editing layers
+mount after the page completes.
 
 `tools/build_web.mbtx` builds both `cmd/browser` and `cmd/viewer`. Static hosting
 must include both generated modules and the existing codec/XFA assets. Develop

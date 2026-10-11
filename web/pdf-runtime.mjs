@@ -57,6 +57,7 @@ async function renderTiledPage(canvas,plan,options,width,height,tileSize){
   if(!Number.isSafeInteger(count)||count>67108864||outputBytes>= (options.maxWorkingBytes||536870912))throw new RangeError('PDF output surface exceeds the working memory budget');
   const createCanvas=options.createCanvas||((w,h)=>{if(typeof OffscreenCanvas==='function')return new OffscreenCanvas(w,h);const c=document.createElement('canvas');c.width=w;c.height=h;return c;});
   const target=createCanvas(1,1),glyphCache={entries:new Map(),bytes:0,limit:16777216};
+  const imageCache={entries:new Map(),bytes:0,limit:Math.min(67108864,(options.maxWorkingBytes||536870912)/8)};
   const pixels=returnPixels?new Uint8ClampedArray(count*4):null;
   const shape=returnPixels?new Float32Array(count):null;
   const premultiplied=returnPixels?new Float32Array(count*4):null;
@@ -73,7 +74,8 @@ async function renderTiledPage(canvas,plan,options,width,height,tileSize){
       const tile=await renderPdfCanvas(target,plan,{...options,width:w,height:h,
         matrix:multiplyMatrix([1,0,0,1,-x,-y],matrix),_profileScope:scope,
         _glyphCache:glyphCache,_glyphCacheReserved:true,
-        _inheritedWorkingBytes:(options._inheritedWorkingBytes||0)+outputBytes+glyphCache.limit});
+        _imageCache:imageCache,_imageCacheReserved:true,
+        _inheritedWorkingBytes:(options._inheritedWorkingBytes||0)+outputBytes+glyphCache.limit+imageCache.limit});
       checkPdfRender(options);
       context.drawImage(target,x,y);
       blendCapabilities ||= tile.blendCapabilities;
@@ -90,5 +92,6 @@ async function renderTiledPage(canvas,plan,options,width,height,tileSize){
     target.width=target.height=1;
     if(scope&&scope!==options._profileScope)scope.dispose();
     for(const entry of glyphCache.entries.values())entry.value.close?.();glyphCache.entries.clear();
+    for(const entry of imageCache.entries.values())entry.value.close?.();imageCache.entries.clear();imageCache.bytes=0;
   }
 }
