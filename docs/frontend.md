@@ -41,6 +41,9 @@ modules remain adapters rather than application views or navigation controllers.
 `tools/build_web.mbtx` builds both `cmd/browser` and `cmd/viewer`. Static hosting
 must include both generated modules and the existing codec/XFA assets. Develop
 with `moon run tools/dev.mbtx 4312` after installing MoonBit and web dependencies.
+For a public static site, `moon run tools/build_pages.mbtx` packages the same
+application in `_build/pages/`. The GitHub Pages workflow verifies it under a
+repository subpath before deploying; see [Pages setup](pages.md).
 
 `tools/browser_test.mbtx` passes 110 checks against the compiled application in Chromium. It
 checks all existing reader behavior plus view updates preserving Canvas/native

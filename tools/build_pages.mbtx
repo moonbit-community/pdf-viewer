@@ -1,0 +1,56 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+}
+
+///|
+async fn main {
+  @shell.Cmd("moon", ["run", "tools/build_web.mbtx"]).run()
+  let output = "_build/pages"
+  if @fs.exists(output) {
+    @fs.rmdir(output, recursive=true)
+  }
+  @fs.walk(
+    "web",
+    max_concurrency=1,
+    exclude=path => path == "web/_test" ||
+      path.split("/").any(part => part.has_prefix(".")),
+    (path, files) => {
+      let target = output + path[3:].to_owned()
+      @fs.mkdir(target, recursive=true, allow_exist=true)
+      for filename in files {
+        if filename.has_prefix(".") {
+          continue
+        }
+        let source = path + "/" + filename
+        match @fs.kind(source, follow_symlink=false) {
+          Regular =>
+            @fs.write_file(
+              target + "/" + filename,
+              @fs.read_file(source).binary(),
+            )
+          Directory => ()
+          _ => fail("Static assets must be regular files: \{source}")
+        }
+      }
+    },
+  )
+  @fs.write_file(output + "/.nojekyll", "")
+  @fs.mkdir(output + "/licenses", allow_exist=true)
+  for
+    (source, filename) in [
+      ("LICENSE", "pdf-viewer.txt"),
+      ("assets/cmaps/LICENSE", "adobe-cmaps.txt"),
+      ("assets/standard14/LICENSE_FOXIT", "foxit-fonts.txt"),
+      ("assets/standard14/LICENSE_LIBERATION", "liberation-fonts.txt"),
+      ("vendor/jpeg2000/LICENSE", "jpeg2000.txt"),
+    ] {
+    @fs.write_file(
+      output + "/licenses/" + filename,
+      @fs.read_file(source).binary(),
+    )
+  }
+  println("Static viewer: \{output}/ (ready for GitHub Pages)")
+}

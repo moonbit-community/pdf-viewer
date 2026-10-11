@@ -344,6 +344,9 @@ fn view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
           ),
           @html.h1("打开一份文档"),
           @html.p("将 PDF 拖到这里，或选择本地文件。"),
+          @html.p(
+            "阅读、搜索、填写表单，或添加批注和签名。",
+          ),
           @html.button(
             id="open-empty",
             type_="button",

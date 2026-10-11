@@ -29,6 +29,7 @@ async fn main {
       "/" | "/index.html" =>
         (Some("web/index.html"), "text/html; charset=utf-8")
       "/viewer.css" => (Some("web/viewer.css"), "text/css; charset=utf-8")
+      "/favicon.svg" => (Some("web/favicon.svg"), "image/svg+xml")
       "/vendor/xfa/xfa.css" => (Some("web/vendor/xfa/xfa.css"), "text/css; charset=utf-8")
       [.. "/_test/", .. filename] if filename.has_suffix(".pdf") && !filename.contains("/") && !filename.contains("..") =>
         (Some("web/_test/" + filename.to_owned()), "application/pdf")

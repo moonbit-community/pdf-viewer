@@ -85,19 +85,26 @@ SVG emits diagnostics for semantics that need the pixel backend.
 
 ## Static Hosting
 
+The web viewer can be published at
+[moonbit-community.github.io/pdf-viewer](https://moonbit-community.github.io/pdf-viewer/).
+The [GitHub Pages workflow](.github/workflows/pages.yml) builds and checks the site
+on every `master` push. Enable **Settings → Pages → Source: GitHub Actions**, then
+run the workflow once to publish it. Until Pages is enabled, builds still produce
+a verified site artifact. See [website setup and deployment](docs/pages.md).
+
 Install the locked asset dependencies (once per checkout or lockfile change),
 then build the browser application:
 
 ```sh
 npm ci --prefix tools/web-assets --ignore-scripts --omit=optional
 moon install
-moon run tools/build_web.mbtx
+moon run tools/build_pages.mbtx
 ```
 
-Serve the complete `web/` directory, including the Worker modules and both generated
-`web/_generated/pdf.js` and `web/_generated/viewer.js`,
-with a static HTTP server. The deployed application runs without a native PDF
-process or a PDF.js renderer. `pdfjs-dist` supplies only the standalone JBIG2
+Serve the generated `_build/pages/` directory with a static HTTP server. It includes
+the Worker modules, both generated MoonBit applications, XFA and codec assets,
+and their licenses, while excluding development test PDFs. The deployed application
+runs without a native PDF process or a PDF.js renderer. `pdfjs-dist` supplies only the standalone JBIG2
 Wasm asset to the product build; its renderer is not deployed. The build does
 not install npm dependencies automatically.
 
@@ -107,6 +114,7 @@ not install npm dependencies automatically.
 - [Architecture](docs/architecture.md)
 - [Editing, form filling, signatures and saving](docs/editor.md)
 - [MoonBit/Rabbita browser interface](docs/frontend.md)
+- [Web viewer and GitHub Pages deployment](docs/pages.md)
 - [Compatibility roadmap](docs/TODO.md)
 - [Validation methodology and results](docs/validation.md)
 - [Contributor workstreams](docs/PARALLEL.md)
