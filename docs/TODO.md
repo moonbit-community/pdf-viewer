@@ -77,10 +77,13 @@ tagged 页按结构树提供标题、段落、列表、表格、语言和替代�
 55 个组合存在像素或文本差异。这是 A2 大规模接入前的历史基线，**57 次测量不是
 57 个视觉通过**。A2 使用实际发布的 Moon JS 入口和 native Canvas 宿主，另有
 原始样本、CMM、alpha、色版及最终像素回归；其记录中的环境因 socket EPERM
-无法启动 Chromium。合并最新 master 后已实际通过 93/93 项 Chromium 检查，
+无法启动 Chromium。A2 首次合并后的历史验收通过 93/93 项 Chromium 检查，
 覆盖 Canvas、批注、可访问性、选择恢复、200 页打印与 raw 图片压力；JS 643 项、
-Wasm/Wasm-GC 各 644 项及 native 可访问性 8 项通过。完整 native suite 在 macOS 的
-可选宿主失败仍待修复，详见 [合并验收](a2-acceptance.md#latest-master-integration-2026-10-11)。
+Wasm/Wasm-GC 各 644 项及 native 可访问性 8 项通过。当时 macOS native 的可选宿主
+失败现已修复；本轮四后端全量测试通过，并通过 104/104 项 Chromium 检查，覆盖新增
+XFA、Range、200 页打印与缓存压力。历史证据见
+[合并验收](a2-acceptance.md#latest-master-integration-2026-10-11)，当前证据见
+[本轮收尾验收](readonly-completion.md#continuous-checks)。
 
 A1 独立收尾记录为四后端 374 个测试通过及 39 项浏览器交互检查，另测量了
 10 个字体、16 个标准字体和 5 个 reader 页面组合，均无测量失败，也均保留像素或文本差异。
