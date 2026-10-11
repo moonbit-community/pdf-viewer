@@ -2,6 +2,7 @@
 // Native browser interactions exercise the shipped MoonBit/Rabbita editor.
 // Saved bytes are reopened by this viewer and the pinned PDF.js reader.
 import assert from 'node:assert/strict';
+import {waitForUI} from './browser_ui.mjs';
 import {createRequire} from 'node:module';
 import {execFileSync} from 'node:child_process';
 import {mkdirSync,writeFileSync,readFileSync} from 'node:fs';
@@ -66,13 +67,8 @@ let current='initialization',completed=false;
 async function check(name,work){if(filter&&!name.includes(filter)) return;current=name;await work();checks.push(name);console.log('PASS '+name);}
 const frame=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
 async function idle(){
-  await page.waitForFunction(async()=>{
-    const ready=()=>document.querySelector('#viewer')?.getAttribute('aria-busy')==='false' &&
-      !document.querySelector('#edit-toggle').disabled && document.querySelector('.page[data-page="'+document.querySelector('#page-number').value+'"][data-rendered="true"]');
-    if(!ready()) return false;
-    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-    return Boolean(ready());
-  });
+  await waitForUI(page,()=>Boolean(document.querySelector('#viewer')?.getAttribute('aria-busy')==='false' &&
+    !document.querySelector('#edit-toggle').disabled && document.querySelector('.page[data-page="'+document.querySelector('#page-number').value+'"][data-rendered="true"]')));
 }
 async function entries(number=1){
   return page.evaluate(async number=>{

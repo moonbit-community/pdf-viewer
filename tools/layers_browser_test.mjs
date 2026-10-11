@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import {waitForUI} from './browser_ui.mjs';
 import {createRequire} from 'node:module';
 import {mkdirSync,writeFileSync,readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
@@ -21,15 +22,10 @@ const checks=[],errors=[],colourComparisons=[];let current='initialization',ok=f
 page.on('pageerror',error=>errors.push(String(error)));
 async function check(name,work){current=name;await work();checks.push(name);console.log('PASS '+name);}
 async function idle(){
-  await page.waitForFunction(async()=>{
-    const ready=()=>document.querySelector('#viewer')?.getAttribute('aria-busy')==='false' &&
+  await waitForUI(page,()=>Boolean(document.querySelector('#viewer')?.getAttribute('aria-busy')==='false' &&
       !document.querySelector('#edit-toggle').disabled &&
       document.querySelector('#layers-config')?.disabled!==true &&
-      document.querySelector('.page[data-page="'+document.querySelector('#page-number').value+'"][data-rendered="true"]');
-    if(!ready())return false;
-    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-    return Boolean(ready());
-  });
+      document.querySelector('.page[data-page="'+document.querySelector('#page-number').value+'"][data-rendered="true"]')));
 }
 async function waitLayers(expected,config){
   await page.waitForFunction(({expected,config})=>(config===undefined||document.querySelector('.layers-panel')?.dataset.configIndex===String(config)) && Object.entries(expected).every(([id,visible])=>{
