@@ -8,7 +8,7 @@ extern "js" fn node_is_text(node : @js.Value) -> Bool =
 
 ///|
 extern "js" fn node_owner(node : @js.Value) -> @js.Nullable[@dom.Element] =
-  #| node => node.nodeType===Node.TEXT_NODE?node.parentElement:node
+  #| node => node.nodeType===Node.TEXT_NODE?node.parentElement:node.nodeType===Node.ELEMENT_NODE?node:null
 
 ///|
 extern "js" fn node_first(node : @js.Value) -> @js.Value =

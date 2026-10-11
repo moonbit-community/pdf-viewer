@@ -657,7 +657,9 @@ async fn main {
       #|   for(const [id,title] of [['info-toggle','文档信息'],['outline-toggle','目录'],['thumbnail-toggle','缩略图']]){document.getElementById(id).click();await wait(()=>document.getElementById('sidebar-title').textContent===title&&!document.getElementById('sidebar').hidden);}
       #|   document.getElementById('sidebar-close').click();await wait(()=>document.getElementById('sidebar').hidden);
       #|   const stable=canvas===document.querySelector('.paint-layer canvas')&&pages===document.getElementById('pages')&&glyph===document.querySelector('.glyph-text').firstChild&&getSelection().toString()===text&&!document.getElementById('copy-selection').disabled;
-      #|   getSelection().removeAllRanges();await host.readSelection();return stable&&document.getElementById('error').hidden;
+      #|   const outside=new Range();outside.selectNodeContents(document);getSelection().removeAllRanges();getSelection().addRange(outside);await host.readSelection();
+      #|   const ignored=document.getElementById('copy-selection').disabled&&document.getElementById('selection-status').textContent==='';
+      #|   getSelection().removeAllRanges();await host.readSelection();return stable&&ignored&&document.getElementById('error').hidden;
       #| })()
     ))
     browser.check("compiled MoonBit thumbnails discard cancelled draws, warnings and late failures", (

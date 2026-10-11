@@ -34,6 +34,7 @@ with `moon run tools/dev.mbtx 4312` after installing MoonBit and web dependencie
 `tools/browser_test.mbtx` passes 110 checks against the compiled application in Chromium. It
 checks all existing reader behavior plus view updates preserving Canvas/native
 selection, stale thumbnail/print draws suppressing publication and warnings,
+selections outside the PDF text layer,
 repeated page clicks, files captured during native drop events, and real warnings
 published by page/thumbnail/print rendering.
 These checks replace the former test that extracted JavaScript controller
