@@ -26,7 +26,8 @@ export class PdfRangeSource {
     const response=await this.fetcher(this.url,{headers,signal:this.signal});
     if(response.status===200){
       if(this.validator&&responseValidator(response)!==this.validator){await response.body?.cancel();throw changedSource();}
-      this.full=await readBody(response,512*1024*1024);this.length=this.full.length;this.stats.received_bytes+=this.length;this.stats.mode='full';
+      const bytes=await readBody(response,512*1024*1024);if(this.length&&bytes.length!==this.length)throw changedSource();
+      this.full=bytes;this.length=this.full.length;this.stats.received_bytes+=this.length;this.stats.mode='full';
       return this.full;
     }
     if(response.status!==206){await response.body?.cancel();throw Error(`PDF Range request failed (${response.status})`);}

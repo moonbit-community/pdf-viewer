@@ -39,6 +39,10 @@ assert.equal(changing.full,null,'Changed response cannot publish mixed source by
 const resized=new PdfRangeSource('https://example.test/resized.pdf',mockFetch(bytes));
 await resized.initialize();resized.fetcher=mockFetch(Buffer.concat([bytes,Buffer.from('x')])).fetch;
 await assert.rejects(()=>resized.get(bytes.length-1024,bytes.length),error=>error.code==='source-changed');
+const resizedFull=new PdfRangeSource('https://example.test/resized-full.pdf',mockFetch(bytes));
+await resizedFull.initialize();resizedFull.fetcher=mockFetch(Buffer.concat([bytes,Buffer.from('x')]),{range:false}).fetch;
+await assert.rejects(()=>resizedFull.get(bytes.length-1024,bytes.length),error=>error.code==='source-changed');
+assert.equal(resizedFull.full,null,'A resized full response must not publish bytes over the original range document');
 const same=new PdfRangeSource('https://example.test/same.pdf',mockFetch(bytes));
 await same.initialize();same.fetcher=mockFetch(bytes,{range:false}).fetch;
 assert.deepEqual(await same.get(bytes.length-1024,bytes.length),new Uint8Array(bytes.subarray(bytes.length-1024)),'Same validated source may switch to a complete response');
