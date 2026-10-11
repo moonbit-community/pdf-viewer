@@ -2,8 +2,15 @@
 // component-space compositing still need the retained transparency renderer.
 const opaqueColour=colour=>/^#[\da-f]{3}(?:[\da-f]{3})?$/i.test(colour);
 const independentPattern=resource=>{
-  const tile=resource?.tile_plan;
+  const tile=resource?.tile_plan||resource?.pattern_plan;
   if(!tile||tile.page.blend_space!=='DeviceRGB'||tile.blend_profile_id||tile.page.blend_profile_id||tile.blend_calibration||tile.page.blend_calibration)return false;
+  if(resource.pattern_plan){
+    if(tile.items.length!==1)return false;
+    const item=tile.items[0],p=item.paint,groups=item.groups||p.group_path||[];
+    // A single opaque normal shading has shape == alpha, including the
+    // elementary nonisolated knockout group emitted for shading patterns.
+    return item.kind==='shading'&&!p.shading?.pattern_plan&&!item.mask&&!p.soft_mask&&p.fill_alpha===1&&!p.alpha_is_shape&&!p.fill_overprint&&['normal','compatible'].includes(p.blend_mode)&&groups.every(g=>g.alpha===1&&!g.alpha_is_shape&&!g.soft_mask&&!g.icc_profile_id&&!g.calibration&&(!g.color_space||g.color_space==='DeviceRGB')&&['normal','compatible'].includes(g.blend_mode));
+  }
   return tile.items.every(item=>{
     const p=item.paint;
     return ['path','image'].includes(item.kind)&&!(item.groups||p.group_path||[]).length&&!item.mask&&!p.soft_mask&&!item.pattern&&!p.pattern&&!item.stroke_pattern&&!p.stroke_pattern&&!p.shading_pattern&&!p.fill_overprint&&!p.stroke_overprint&&!p.alpha_is_shape&&['normal','compatible'].includes(p.blend_mode);
@@ -46,8 +53,8 @@ export function prepareNativeCanvasItems(plan,options={}){
     if(raw.mask||p.soft_mask||p.fill_overprint||p.stroke_overprint||p.alpha_is_shape||!['normal','compatible'].includes(p.blend_mode))return null;
     const patterns=[raw.pattern||p.pattern,raw.stroke_pattern||p.stroke_pattern,p.shading_pattern].filter(Boolean);
     if(patterns.length){
-      // Normal cells without transparency groups or nested patterns do not
-      // depend on the page backdrop. Keep the existing pattern rasterizer.
+      // Simple tiling cells and opaque normal shading scenes are independent
+      // of the page backdrop. Rasterize only the pattern; keep siblings native.
       if(raw.kind!=='path'||!patterns.every(independentPattern))return null;
       items.push({kind:'retained',native:false,scene:{...plan,items:[raw],annotation_svg:null,annotation_fragments:[]}});
       continue;

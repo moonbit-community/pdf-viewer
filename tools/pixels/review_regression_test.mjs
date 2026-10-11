@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 import * as bridge from '../../web/_generated/pdf.js';
 import {renderPdfPage} from '../../web/pdf-runtime.mjs';
 import {createPdfIccEngine} from '../../web/pdf-icc.mjs';
+import {PdfCompositor} from '../../web/pdf-compositor.mjs';
 import {annotationFixture,makePdf} from './readonly_fixtures.mjs';
 const require=createRequire(process.env.PDF_CANVAS_PACKAGE||import.meta.url);
 const {createCanvas,Path2D,loadImage,GlobalFonts}=require('@napi-rs/canvas');
@@ -66,6 +67,26 @@ for(const [matrix,width,height,axis] of [['1 0 0 16 0 0',16,16,'y'],['16 0 0 1 0
  }
  assert.deepEqual(rendered.diagnostics,[]);
 }
+// A source-over gradient inside an isolated Form must not make its ordinary
+// siblings allocate PDF transparency frames. The gradient still uses the
+// retained renderer, including inherited opacity and the fractional Form clip.
+const isolatedGradient=page('1 0 0 rg 0 0 20 20 re f /O gs /F Do',
+ '/ExtGState << /O << /ca .5 >> >> /XObject << /F 5 0 R >>',[
+ stream('/Type /XObject /Subtype /Form /BBox [2.25 2 17.75 18] /Group << /S /Transparency /I true /CS /DeviceRGB >> /Resources << /Pattern << /P 6 0 R >> /ExtGState << /I << /ca 1 /CA 1 >> >> >>',
+  '/I gs /Pattern cs /P scn 0 0 20 20 re f 0 0 1 rg 4 4 8 8 re f'),
+ '<< /Type /Pattern /PatternType 2 /Shading 7 0 R >>',
+ '<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 20 0] /Extend [true true] /Function << /FunctionType 2 /Domain [0 1] /C0 [0 1 0] /C1 [1 1 0] /N 1 >> >>',
+]);
+let gradientFrames=0;const beginGroup=PdfCompositor.prototype.beginGroup;
+PdfCompositor.prototype.beginGroup=function(...args){gradientFrames++;return beginGroup.apply(this,args);};
+try{
+ const control=await renderPdfPage(createCanvas(1,1),isolatedGradient,{...options,nativeCanvas:false});
+ const retainedFrames=gradientFrames;gradientFrames=0;const canvas=createCanvas(1,1);
+ await renderPdfPage(canvas,isolatedGradient,{...options,returnPixels:false});
+ assert(gradientFrames<retainedFrames,'The gradient preserves its sibling paths on the native renderer');
+ const actual=canvas.getContext('2d').getImageData(0,0,20,20).data;
+ for(let i=0;i<actual.length;i++)assert(Math.abs(actual[i]-control.data[i])<=2,`isolated gradient pixel ${i}: ${actual[i]} != ${control.data[i]}`);
+}finally{PdfCompositor.prototype.beginGroup=beginGroup;}
 const logical=page('1 0 0 rg 0 0 10 20 re f');
 for(const method of ['render_page','render_print_page']){
  const legacy=JSON.parse(bridge[method](1,1,0)),compact=JSON.parse(bridge[method](1,1,0,true));

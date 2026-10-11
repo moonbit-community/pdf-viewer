@@ -49,7 +49,8 @@ Display rendering (`returnPixels: false`) paints ordinary RGB source-over pages
 directly through Canvas2D. Opaque Type3 glyphs containing one filled path reuse
 that path, and empty charprocs skip painting. Isolated normal groups render into
 bounded transparent surfaces before applying group opacity once. Simple patterns
-reuse the existing pattern rasterizer. Backdrop-dependent blending, knockout,
+and opaque normal shading scenes reuse the existing rasterizers while ordinary
+sibling paints stay on Canvas. Backdrop-dependent blending, knockout,
 masks, CMYK, calibrated/ICC blend groups and proof/component outputs retain the
 PDF compositor wherever needed. `nativeCanvas: false` selects the retained
 renderer for comparisons. Native display uses the browser's RGBA8 rasterization;
