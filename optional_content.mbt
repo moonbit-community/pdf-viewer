@@ -11,6 +11,14 @@ pub(all) struct PdfOptionalContentState {
 } derive(Eq, Debug, ToJson)
 
 ///|
+/// The usage state to apply before collecting visible page content.
+pub(all) enum PdfOptionalContentIntent {
+  Display
+  Print
+  Export
+} derive(Eq, Debug, ToJson)
+
+///|
 /// Build a selectable optional-content state using pdflite's object-number
 /// identity. Keeping object numbers in the public state avoids inventing a
 /// second layer identifier and lets hosts join this state with
@@ -66,6 +74,24 @@ fn pdf_optional_content_group_state(
     }
   } nobreak {
     None
+  }
+}
+
+///|
+fn pdf_optional_content_visible_annotation(
+  document : @pdflite.PdfDocument,
+  object : @syntax.PdfObject,
+  view : PdfOptionalContentView?,
+) -> Bool {
+  match view {
+    Some(view) =>
+      match
+        pdf_optional_content_raw_entry(document, pdf_name_key("/OC"), object) {
+        Some(layer) =>
+          pdf_optional_content_visible_object(document, layer, view.groups[:])
+        None => true
+      }
+    None => true
   }
 }
 
@@ -194,59 +220,31 @@ fn pdf_optional_content_visible_object(
 fn pdf_optional_content_view(
   document : @pdflite.PdfDocument,
   selected : PdfOptionalContentState?,
+  intent? : PdfOptionalContentIntent = Display,
 ) -> PdfOptionalContentView? raise @core.PdfError {
   match document.read_optional_content_groups() {
     None => None
     Some(content) => {
-      let selected_config_index = match selected {
-        Some(value) => value.config_index
-        None => None
-      }
-      let config = match selected_config_index {
-        Some(index) if index >= 0 && index < content.configs.length() =>
-          content.configs[index]
-        _ => content.default_config
-      }
-      let groups : Array[(Int, Bool)] = []
-      let base_visible = match config.base_state {
-        @ocg.OcgOff => false
-        _ => true
-      }
-      for entry in content.ocgs {
-        groups.push((entry.0, base_visible))
-      }
-      for number in config.off {
-        for index, entry in groups {
-          if entry.0 == number {
-            groups[index] = (number, false)
-          }
+      let groups = pdf_optional_content_base_groups(content, selected)
+      for index, (number, visible) in groups {
+        let overridden = match selected {
+          Some(state) => state.on.contains(number) || state.off.contains(number)
+          None => false
         }
-      }
-      for number in config.on {
-        for index, entry in groups {
-          if entry.0 == number {
-            groups[index] = (number, true)
-          }
+        if !visible || overridden {
+          continue
         }
-      }
-      match selected {
-        Some(state) => {
-          for number in state.off {
-            for index, entry in groups {
-              if entry.0 == number {
-                groups[index] = (number, false)
-              }
-            }
+        let usage = content.ocgs[index].1.usage
+        let state = usage.bind(usage => {
+          match intent {
+            Display => usage.view_state
+            Print => usage.print_state
+            Export => usage.export_state
           }
-          for number in state.on {
-            for index, entry in groups {
-              if entry.0 == number {
-                groups[index] = (number, true)
-              }
-            }
-          }
+        })
+        if state == Some(pdf_name_key("/OFF")) {
+          groups[index] = (number, false)
         }
-        None => ()
       }
       Some({ groups, })
     }

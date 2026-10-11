@@ -296,6 +296,12 @@ pub(all) struct PdfNamedDestination {
   destination : PdfDestination
 } derive(Eq, ToJson, @debug.Debug)
 
+pub(all) enum PdfOptionalContentIntent {
+  Display
+  Print
+  Export
+} derive(Eq, ToJson, @debug.Debug)
+
 pub(all) struct PdfOptionalContentState {
   config_index : Int?
   on : Array[Int]
@@ -1015,16 +1021,17 @@ pub fn PdfViewerDocument::named_destinations(Self) -> Array[PdfNamedDestination]
 pub fn PdfViewerDocument::named_destinations_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::operator_list(Self, Int) -> Array[PdfPageItem]? raise @core.PdfError
 pub fn PdfViewerDocument::optional_content_json(Self) -> Json? raise @core.PdfError
+pub fn PdfViewerDocument::optional_content_layers_json(Self) -> Json? raise @core.PdfError
 pub fn PdfViewerDocument::optional_content_state(Self) -> PdfOptionalContentState?
 pub fn PdfViewerDocument::outline_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::outline_navigation_json(Self) -> Json raise @core.PdfError
-pub fn PdfViewerDocument::page(Self, Int) -> PdfPageModel? raise @core.PdfError
+pub fn PdfViewerDocument::page(Self, Int, optional_content_intent? : PdfOptionalContentIntent) -> PdfPageModel? raise @core.PdfError
 pub fn PdfViewerDocument::page_count(Self) -> Int
 pub fn PdfViewerDocument::page_json(Self, Int) -> Json? raise @core.PdfError
 pub fn PdfViewerDocument::page_labels(Self) -> Array[String] raise @core.PdfError
 pub fn PdfViewerDocument::page_labels_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::page_viewport(Self, Int, scale? : Double, rotation? : Int) -> PdfViewport?
-pub fn PdfViewerDocument::pages(Self) -> Array[PdfPageModel] raise @core.PdfError
+pub fn PdfViewerDocument::pages(Self, optional_content_intent? : PdfOptionalContentIntent) -> Array[PdfPageModel] raise @core.PdfError
 pub fn PdfViewerDocument::reader_diagnostics(Self) -> Array[PdfReaderDiagnostic]
 pub fn PdfViewerDocument::render_svg(Self, Int, scale? : Double) -> String? raise @core.PdfError
 pub fn PdfViewerDocument::render_svg_with_rotation(Self, Int, Int, scale? : Double) -> String? raise @core.PdfError
@@ -1041,7 +1048,9 @@ pub fn PdfViewerDocument::text_provenance(Self, Int) -> Array[PdfTextProvenance]
 pub fn PdfViewerDocument::text_recovery_diagnostics(Self, Int) -> Array[PdfTextRecoveryDiagnostic]? raise @core.PdfError
 pub fn PdfViewerDocument::with_editor_changes(Self, Json) -> Self raise @core.PdfError
 pub fn PdfViewerDocument::with_font_fallbacks(Self, Array[PdfFontFallback]) -> Self
+pub fn PdfViewerDocument::with_optional_content_config(Self, Int?) -> Self raise @core.PdfError
 pub fn PdfViewerDocument::with_optional_content_state(Self, PdfOptionalContentState) -> Self
+pub fn PdfViewerDocument::with_optional_content_visibility(Self, Int, Bool) -> Self raise @core.PdfError
 pub fn PdfViewerDocument::xfa_font_glyphs_json(Self, String, String) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::xfa_fonts_json(Self) -> Json
 pub fn PdfViewerDocument::xfa_needs_rendering(Self) -> Bool

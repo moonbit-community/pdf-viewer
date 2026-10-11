@@ -80,6 +80,13 @@ async fn handle(message : Msg) -> Unit {
     }
     ToggleSidebar(sidebar) => toggle_sidebar(sidebar)
     CloseSidebar => close_sidebar()
+    LayerVisibility(number, visible) =>
+      layers_update("set_optional_content_visibility", [
+        @js.Value::cast_from(number),
+        @js.Value::cast_from(visible),
+      ])
+    LayerConfig(index) =>
+      layers_update("set_optional_content_config", [@js.Value::cast_from(index)])
     SearchInput(value) => {
       state.search_input = value
       search_document()

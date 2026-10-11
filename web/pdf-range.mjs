@@ -117,7 +117,7 @@ export class PdfRangeDocument {
       if(!this.structureReady){await this.hydrate('structure',0);this.structureReady=true;}
       await this.hydrate('page',args[0]);
     }
-    else if(['document_info','download_metadata','download_attachment','xfa_data'].includes(method))await this.hydrate('metadata',0);
+    else if(['document_info','download_metadata','download_attachment','xfa_data','optional_content_info','set_optional_content_visibility','set_optional_content_config'].includes(method))await this.hydrate('metadata',0);
     if(method!=='cache_info'&&this.changed){checked(this.bridge.range_document());this.changed=false;}
   }
   async search(args){const count=JSON.parse(this.bridge.page_layouts()).layouts.length,results=[];

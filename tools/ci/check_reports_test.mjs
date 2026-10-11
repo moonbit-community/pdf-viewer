@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {checkVisual,checkCorpus,checkEditor,requiredEditorChecks} from './check_reports.mjs';
+import {checkVisual,checkCorpus,checkEditor,requiredEditorChecks,checkLayers,requiredLayerChecks} from './check_reports.mjs';
 const baseline=JSON.parse(readFileSync('tools/ci/visual_baseline.json','utf8'));
 const results=baseline.cases.map(item=>({file:item.file,page:item.page,rotation:item.rotation,file_sha256:item.sha256,geometry:{equal_within_1e_6:true},text:{without_whitespace_equal:item.text_equal},pixels:{changed_above_tolerance:item.measured_changed_pixels,missing_ink:item.measured_missing_ink,viewer_ink:item.measured_viewer_ink}}));
 const good={reference_revision:baseline.reference_revision,backend:baseline.backend,scale:baseline.scale,failed:0,runtime_exceptions:[],total:results.length,results};
@@ -21,3 +21,9 @@ for(const mutate of [p=>p.ok=false,p=>p.failed='failed save',p=>p.errors.push('e
   const report=structuredClone(editor);mutate(report);assert.throws(()=>checkEditor(report));
 }
 console.log('Report gates reject dropped measurements, blank renders, viewport/text failures, source changes and corpus failures.');
+const layers={ok:true,failed:null,errors:[],checks:[...requiredLayerChecks],colour_comparisons:
+  ['issue17679.pdf','issue17679_2.pdf'].flatMap(file=>[[true,true],[true,false],[false,true]].map(visible=>({file,visible,samples:15,max_channel_delta:1})))};
+checkLayers(layers);
+for(const mutate of [p=>p.ok=false,p=>p.failed='failed toggle',p=>p.errors.push('error'),p=>p.checks.pop(),p=>p.checks[0]='missing required layer case',p=>p.checks[1]=p.checks[0],p=>p.colour_comparisons.pop(),p=>p.colour_comparisons[0].samples=0,p=>p.colour_comparisons[0].max_channel_delta=2,p=>p.colour_comparisons[0].max_channel_delta=NaN,p=>p.colour_comparisons[1]=p.colour_comparisons[0]]){
+  const report=structuredClone(layers);mutate(report);assert.throws(()=>checkLayers(report));
+}

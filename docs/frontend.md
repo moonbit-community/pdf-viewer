@@ -12,6 +12,8 @@ tracks document generations, abort controllers and page/selection lifetimes in
 MoonBit. Navigation and page/text mounting live in `pages.mbt`, search and native
 selection in their corresponding files, and file/print lifecycle in `document.mbt`
 and `print.mbt`. Native browser events are connected in `events.mbt`.
+`layers.mbt` implements the Rabbita layer panel and configuration changes,
+including editor flushing, cache invalidation and stale-reply suppression.
 
 The editor follows the same boundary: `editor_model.mbt` defines its typed state,
 `editor_view.mbt` builds Rabbita controls, and `editor.mbt` applies snapshots,
@@ -60,3 +62,9 @@ The pinned PDF.js reader reopens the downloaded bytes and
 renders saved annotation appearances; Chromium also exports edited print output.
 CI retains these reports and PDFs alongside the existing reader reports. See
 [editor behavior and limits](editor.md).
+
+`node tools/layers_browser_test.mjs <viewer-url>` adds 11 layer checks for Unicode
+order, usage, radio/locked constraints, actual print pixels, thumbnail updates,
+editor snapshots, Range hydration, wrapped toolbars and replacement races.
+Two real PDF.js layer fixtures compare sampled paint in three visibility states.
+Layer manifests and constraints reuse pdflite; see [layer behavior](layers.md).

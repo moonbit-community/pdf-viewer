@@ -7,8 +7,17 @@ pub fn PdfViewerDocument::editor_page_json(
   guard number >= 1 && number <= self.pages.length() else { return None }
   let document = self.document
   let permissions = self.editor_permissions()
+  let optional_content = pdf_optional_content_view(
+    document,
+    self.optional_content_state,
+  ) catch {
+    _ => None
+  }
   let output : Array[Json] = []
   for index, raw in pdf_edit_annots(document, self.pages[number - 1].rest) {
+    if !pdf_optional_content_visible_annotation(document, raw, optional_content) {
+      continue
+    }
     let annotation = document.read_annotation(raw) catch { _ => continue }
     let subtype = pdf_annotation_subtype_name(annotation.subtype)
     if subtype == "link" || subtype == "popup" {

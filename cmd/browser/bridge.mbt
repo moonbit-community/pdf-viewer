@@ -148,6 +148,9 @@ pub fn document_info() -> String {
     "outline": outline,
     "info": info,
     "attachments": attachments,
+    "layers": (document.optional_content_layers_json() catch { _ => None }).unwrap_or(
+      Json::null(),
+    ),
     "metadata": {
       "available": metadata is Some(_),
       "size": match metadata {
@@ -199,26 +202,29 @@ fn browser_page(number : Int) -> @pdf.PdfPageModel? raise {
     return Some(page)
   }
   guard current_document.val is Some(document) else { return None }
-  let page = document
-    .page(number)
-    .map(page => {
-      // SVG @font-face rules share the document CSS namespace. Identical PDF
-      // resource names on separate pages must not replace each other's fonts.
-      let fonts = page.fonts.map(font => {
-        if font.data_uri is Some(_) &&
-          font.format != "cff" &&
-          font.format != "type1" {
-          { ..font, family: "pdf-page-\{number}-" + font.family, }
-        } else {
-          font
-        }
-      })
-      { ..page, fonts, }
-    })
+  let page = document.page(number).map(page => browser_page_fonts(number, page))
   if page is Some(page) {
     browser_cache_page(number, page)
   }
   page
+}
+
+///|
+fn browser_page_fonts(
+  number : Int,
+  page : @pdf.PdfPageModel,
+) -> @pdf.PdfPageModel {
+  // Display and print SVGs share the document CSS font namespace.
+  let fonts = page.fonts.map(font => {
+    if font.data_uri is Some(_) &&
+      font.format != "cff" &&
+      font.format != "type1" {
+      { ..font, family: "pdf-page-\{number}-" + font.family, }
+    } else {
+      font
+    }
+  })
+  { ..page, fonts, }
 }
 
 ///|
@@ -244,7 +250,14 @@ fn browser_render_page(
     )
   }
   try {
-    guard browser_page(number) is Some(page) else {
+    let page = if printing {
+      current_document.val
+      .bind(document => document.page(number, optional_content_intent=Print))
+      .map(page => browser_page_fonts(number, page))
+    } else {
+      browser_page(number)
+    }
+    guard page is Some(page) else {
       return browser_error_with_code(
         "page-missing", "No document or page does not exist",
       )

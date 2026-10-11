@@ -109,6 +109,10 @@ The browser bridge exports `editor_info`, `prepare_editor`, `apply_edits` and
 undo/redo snapshots against it. Page/thumbnail caches clear after edits.
 The app checks document generations before publishing async replies or errors,
 including preparation and image-decoder failures from a replaced document.
+Layer changes flush active fields and retain visibility through editing snapshots
+and undo/redo; hidden layer fields/annotations are omitted from editor controls.
+Saving retains the document's original layer configurations, as described in
+[layer behavior](layers.md).
 
 ## Validation and remaining work
 
@@ -142,6 +146,6 @@ Encrypted saving requires successful authentication and an AES IV provider when
 applicable. Dynamic XFA controls remain readonly. Pushbuttons, field
 calculation/validation JavaScript, certificate
 signing and arbitrary rich-text editing are not implemented. The existing
-visual-baseline differences, OCG control panel and manual assistive-technology
+visual-baseline differences and manual assistive-technology
 acceptance remain separate work. These editing paths do not establish complete
 PDF.js parity.

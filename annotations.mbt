@@ -182,6 +182,7 @@ fn pdf_annotation_items_of_page(
   page : @page.PdfPage,
   page_number : Int,
   next_index : Ref[Int],
+  optional_content_view? : PdfOptionalContentView? = None,
 ) -> Array[PdfAnnotationItem] {
   // Read the page's raw `/Annots` array instead of using
   // `annotations_of_page`. The pdflite convenience accessor intentionally
@@ -195,6 +196,11 @@ fn pdf_annotation_items_of_page(
   }
   let output : Array[PdfAnnotationItem] = []
   for index, raw_annotation in raw_annotations {
+    if !pdf_optional_content_visible_annotation(
+        document, raw_annotation, optional_content_view,
+      ) {
+      continue
+    }
     // Popup entries are UI children. pdf.js renders the parent annotation and
     // manages the popup separately, so do not expose a popup as a page paint
     // item here.

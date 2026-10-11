@@ -64,7 +64,7 @@ async function searchRanges(args) {
   try { return await rangeDocument.search(args); }
   catch (error) {
     if (error.code === "source-changed") throw error;
-    const opened = JSON.parse(bridge.open_pdf(await rangeSource.complete(error.message)));
+    const opened = JSON.parse(bridge.prepare_editor(await rangeSource.complete(error.message)));
     if (!opened.ok) throw Error(opened.error);
     rangeDocument = null;
     clearRenders();
@@ -100,7 +100,7 @@ async function handleMessage(event) {
       try { await rangeDocument.prepare(method, args); }
       catch (error) {
         if (error.code === "source-changed") throw error;
-        bridge.open_pdf(await rangeSource.complete(error.message));
+        bridge.prepare_editor(await rangeSource.complete(error.message));
         rangeDocument = null;
         clearRenders();
       }
@@ -129,7 +129,7 @@ async function handleMessage(event) {
       }
     }
     if (method === "close_pdf") {xfa?.dispose();xfa = null;}
-    if (method === "apply_edits" && JSON.parse(result).ok) clearRenders();
+    if (["apply_edits", "set_optional_content_visibility", "set_optional_content_config"].includes(method) && JSON.parse(result).ok) clearRenders();
     if (["render_page", "render_print_page"].includes(method) && rangeSource && rangeSource.stats.first_page_bytes === null && JSON.parse(result).ok) {
       rangeSource.stats.first_page_bytes = rangeSource.stats.received_bytes;
     }

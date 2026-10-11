@@ -70,6 +70,38 @@ export function checkEditor(report){
   for(const name of requiredEditorChecks) assert.ok(report.checks.includes(name),'Missing editor regression: '+name);
 }
 
+export const requiredLayerChecks=[
+  'Rabbita layers show Unicode nested order usage hints and locked controls',
+  'Layer radio toggles invalidate paint text annotations and worker caches',
+  'Layer configurations reset overrides and locked radio failures stay atomic',
+  'Layer changes clear stale native selection and search results',
+  'Layer usage prints actual Canvas output against pinned PDF.js intent',
+  'Layer changes regenerate thumbnails with current visibility',
+  'Layer selection survives field editing undo redo and saved original configuration',
+  'HTTP Range hydration and editor completion retain layer selection',
+  'Layer sidebar follows wrapped reader and editor toolbars',
+  'Late layer replies cannot publish into a replacement document',
+  'Real PDF.js optional-content fixtures toggle Form transparency and painted colours',
+];
+export function checkLayers(report){
+  assert.equal(report.ok,true,'Layer acceptance failed');
+  assert.equal(report.failed,null);
+  assert.deepEqual(report.errors,[],'Layer controls raised a browser error');
+  assert.ok(report.checks.length>=requiredLayerChecks.length,'Layer checks were dropped');
+  assert.equal(new Set(report.checks).size,report.checks.length,'Duplicate layer checks');
+  for(const name of requiredLayerChecks)assert.ok(report.checks.includes(name),'Missing layer regression: '+name);
+  assert.equal(report.colour_comparisons.length,6,'Real layer measurements were dropped');
+  const expected=new Set(['issue17679.pdf','issue17679_2.pdf'].flatMap(file=>
+    [[true,true],[true,false],[false,true]].map(visible=>file+JSON.stringify(visible))));
+  for(const item of report.colour_comparisons){
+    const key=item.file+JSON.stringify(item.visible);
+    assert.ok(expected.delete(key),'Unknown or duplicate real layer measurement: '+key);
+    assert.equal(item.samples,15);
+    assert.ok(Number.isInteger(item.max_channel_delta)&&item.max_channel_delta>=0&&item.max_channel_delta<=1,'Real layer colour regression');
+  }
+  assert.equal(expected.size,0);
+}
+
 if(process.argv[1]?.endsWith('/check_reports.mjs')){
   const corpus=latest('reader-corpus-'),visual=latest('visual-test-'),browser=latest('browser-test-');
   checkCorpus(read(`${corpus}/report.json`),read('tools/ci/corpus.json'));
@@ -92,5 +124,7 @@ if(process.argv[1]?.endsWith('/check_reports.mjs')){
   assert.ok(dom.remaining_readonly.range_first_page.first_page_bytes<dom.remaining_readonly.range_first_page.total_bytes/10);
   const editor=latest('editor-test-');
   checkEditor(read(editor+'/report.json'));
-  console.log(`Accepted corpus, browser, editor and visual reports: ${corpus}, ${browser}, ${editor}, ${visual}. Visual differences remain recorded.`);
+  const layers=latest('layers-test-');
+  checkLayers(read(layers+'/report.json'));
+  console.log(`Accepted corpus, browser, editor, layers and visual reports: ${corpus}, ${browser}, ${editor}, ${layers}, ${visual}. Visual differences remain recorded.`);
 }

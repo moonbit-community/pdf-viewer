@@ -11,6 +11,7 @@ page APIs, a Canvas2D pixel backend, and SVG compatibility output for native app
 
 - Open local PDF files through the file picker or drag and drop.
 - Navigate documents with page controls, thumbnails, outlines, and page labels.
+- Toggle PDF layers and configurations, respecting radio groups, locks and display/print usage.
 - Follow PDF links and open readonly annotation comments with mouse or keyboard.
 - Read tagged headings, lists, tables, and alternative text through a page-local DOM/ARIA layer.
 - Zoom, rotate, select and copy text, and search across pages.
@@ -50,6 +51,10 @@ Select **编辑** to fill fields or use the annotation/signature tools, then
 **下载** (Ctrl/Cmd+S) to save the edited PDF. See [editing and saving](docs/editor.md)
 for controls, supported fields and limitations. Handwritten/image signatures are
 visual annotations; certificate signing is separate work.
+
+Select **图层** to change layer visibility or restore a configuration. Display and
+print usage can differ; layer choices remain viewing preferences when saving.
+See [layer controls](docs/layers.md).
 
 ## Command-Line Usage
 

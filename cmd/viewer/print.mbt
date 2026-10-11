@@ -17,6 +17,12 @@ async fn print_document_async() -> Unit {
     return
   }
   let document_generation = state.document_generation
+  while state.layers_busy {
+    native_frame().wait()
+    if document_generation != state.document_generation {
+      return
+    }
+  }
   editor_flush_field()
   while editor.applying {
     native_frame().wait()

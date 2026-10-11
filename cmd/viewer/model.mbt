@@ -3,6 +3,7 @@ enum Sidebar {
   Outline
   Thumbnails
   Info
+  Layers
 } derive(Eq)
 
 ///|
@@ -44,6 +45,8 @@ struct Model {
   view_mode : String
   sidebar : Sidebar?
   document_info : Json
+  layers : Json
+  layers_busy : Bool
   busy : Bool
   status : String
   error : String
@@ -73,6 +76,8 @@ enum Msg {
   ChangeView(String)
   ToggleSidebar(Sidebar)
   CloseSidebar
+  LayerVisibility(Int, Bool)
+  LayerConfig(Int)
   SearchInput(String)
   SearchOptions
   SearchKey(@dom.KeyboardEvent)
@@ -102,6 +107,8 @@ struct Runtime {
   mut labels : Array[String]
   mut layouts : Array[PageLayout]
   mut document_info : Json
+  mut layers : Json
+  mut layers_busy : Bool
   mut sidebar : Sidebar?
   mut zoom : String
   mut view_mode : String
@@ -152,6 +159,8 @@ let state : Runtime = {
   labels: [],
   layouts: [],
   document_info: Json::null(),
+  layers: Json::null(),
+  layers_busy: false,
   sidebar: None,
   zoom: "fit",
   view_mode: "scroll",
@@ -217,6 +226,8 @@ fn snapshot() -> Model {
     view_mode: state.view_mode,
     sidebar: state.sidebar,
     document_info: state.document_info,
+    layers: state.layers,
+    layers_busy: state.layers_busy,
     busy: state.busy,
     status: state.status,
     error: state.error,

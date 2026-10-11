@@ -170,7 +170,18 @@ pub fn PdfViewerDocument::annotation_layer_json(
     _ => []
   }
   let output : Array[Json] = []
+  let optional_content = pdf_optional_content_view(
+    document,
+    self.optional_content_state,
+  ) catch {
+    _ => None
+  }
   for index, object in annotations {
+    if !pdf_optional_content_visible_annotation(
+        document, object, optional_content,
+      ) {
+      continue
+    }
     if document.lookup_direct(pdf_name_key("/Subtype"), object) ==
       Some(@syntax.PdfNameObject(pdf_name_key("/Popup"))) {
       continue

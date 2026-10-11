@@ -744,6 +744,7 @@ pub fn PdfViewerDocument::source_length(self : PdfViewerDocument) -> Int {
 pub fn PdfViewerDocument::page(
   self : PdfViewerDocument,
   page_number : Int,
+  optional_content_intent? : PdfOptionalContentIntent = Display,
 ) -> PdfPageModel? raise @core.PdfError {
   if page_number < 1 || page_number > self.pages.length() {
     None
@@ -755,6 +756,7 @@ pub fn PdfViewerDocument::page(
         page_number,
         self.optional_content_state,
         self.font_fallbacks,
+        optional_content_intent~,
       ),
     )
   }
@@ -764,6 +766,7 @@ pub fn PdfViewerDocument::page(
 /// Return all page models in source order.
 pub fn PdfViewerDocument::pages(
   self : PdfViewerDocument,
+  optional_content_intent? : PdfOptionalContentIntent = Display,
 ) -> Array[PdfPageModel] raise @core.PdfError {
   [
     for index, page in self.pages => {
@@ -773,6 +776,7 @@ pub fn PdfViewerDocument::pages(
         index + 1,
         self.optional_content_state,
         self.font_fallbacks,
+        optional_content_intent~,
       )
     }
   ]
@@ -1164,6 +1168,7 @@ fn pdf_page_model(
   page_number : Int,
   optional_content_state : PdfOptionalContentState?,
   font_fallbacks : ArrayView[PdfFontFallback],
+  optional_content_intent? : PdfOptionalContentIntent = Display,
 ) -> PdfPageModel raise @core.PdfError {
   let rectangle = pdf_page_view_box(document, page)
   let user_unit = pdf_page_user_unit(document, page)
@@ -1178,6 +1183,11 @@ fn pdf_page_model(
       for fallback in font_fallbacks => fallback
     ],
   }
+  let optional_content_view = pdf_optional_content_view(
+    document,
+    optional_content_state,
+    intent=optional_content_intent,
+  )
   let items = pdf_items_of_page(
     document,
     page,
@@ -1187,9 +1197,7 @@ fn pdf_page_model(
     rectangle.max_y - rectangle.min_y,
     resource_context~,
     page_fonts~,
-    optional_content_view=pdf_optional_content_view(
-      document, optional_content_state,
-    ),
+    optional_content_view~,
   )
   let text = pdf_text_of_items(items)
   let fonts = page_fonts.fonts
@@ -1198,7 +1206,11 @@ fn pdf_page_model(
     next_index.val = next_index.val.max(pdf_page_item_index(item) + 1)
   }
   let annotations = pdf_annotation_items_of_page(
-    document, page, page_number, next_index,
+    document,
+    page,
+    page_number,
+    next_index,
+    optional_content_view~,
   )
   {
     number: page_number,

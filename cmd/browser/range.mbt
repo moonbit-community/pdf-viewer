@@ -88,7 +88,13 @@ pub fn range_document() -> String {
     }
     let view = reader.document_view()
     let view = match current_document.val {
-      Some(old) => view.with_font_fallbacks(old.font_fallbacks())
+      Some(old) => {
+        let view = view.with_font_fallbacks(old.font_fallbacks())
+        match old.optional_content_state() {
+          Some(selected) => view.with_optional_content_state(selected)
+          None => view
+        }
+      }
       None => view
     }
     if current_document.val is None {

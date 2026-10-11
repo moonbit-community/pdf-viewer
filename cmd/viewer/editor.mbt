@@ -131,6 +131,12 @@ async fn editor_history(delta : Int) -> Unit {
 ///|
 async fn editor_save() -> Unit {
   let generation = state.document_generation
+  while state.layers_busy {
+    native_frame().wait()
+    if generation != state.document_generation {
+      return
+    }
+  }
   editor_flush_field()
   while editor.applying {
     native_frame().wait()

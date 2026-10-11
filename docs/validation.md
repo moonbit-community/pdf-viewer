@@ -6,6 +6,32 @@ CLI. That conversion baseline does not measure parity with pdf.js rendering.
 The automated selected-page visual baseline below now measures actual output
 against the same pinned PDF.js build.
 
+## Layer controls and display/print usage (2026-10-12)
+
+The MoonBit/Rabbita layer panel reuses pdflite's OCG/configuration/usage model.
+The eight new core regressions pass; full totals are **690 JS, 691 Wasm,
+691 Wasm-GC and 699 native**. `moon info && moon fmt` updates only the expected
+public layer methods and optional page-intent parameters. Native command logs
+are `_build/layers-{js,wasm,wasm-gc,native}.log`.
+
+The original reader suite passes **110 checks** in
+`_build/browser-test-1791737863519/report.json`; the editor suite passes **25** in
+`_build/editor-test-1791737834695/report.json`. The new layer suite passes **11**
+in `_build/layers-test-1791738150266/report.json`. It tests real native toggles,
+locked rejection with injected property drift, print Canvas samples against
+PDF.js, refreshed thumbnails, active-input persistence, editor undo/redo,
+Range hydration/completion, responsive sidebars and late layer/print replies.
+
+The real `issue17679.pdf` and `issue17679_2.pdf` fixtures compare 15 interior
+colour samples in each of three visibility states. Visibility, Form filtering
+and transparency agree; the existing byte conversion rounds the `0.3` green
+component to 77 while PDF.js returns 76. The maximum one-byte difference is
+recorded in each report entry and enforced by CI. The authored primary-colour
+print samples match exactly. These are sampled comparisons, not whole-page
+visual parity. Existing corpus/visual baselines remain unchanged and CI reruns
+them alongside all reader/editor/layer gates. Behavior and remaining environment
+usage limits are documented in [layers.md](layers.md).
+
 The upstream browser-host baseline at `eb4e017` contained **376 tests on each
 of wasm, wasm-gc, JavaScript, and native**; that stage added two lightweight
 page-layout regressions to the final A1 results recorded below. The upstream

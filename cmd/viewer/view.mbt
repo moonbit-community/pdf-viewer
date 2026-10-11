@@ -66,11 +66,13 @@ fn view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
     Some(Outline) | None => "目录"
     Some(Thumbnails) => "缩略图"
     Some(Info) => "文档信息"
+    Some(Layers) => "图层"
   }
   let sidebar = match model.sidebar {
     Some(Outline) => outline_view(model, emit)
     Some(Thumbnails) => thumbnails_view(model, emit)
     Some(Info) => info_view(model, emit)
+    Some(Layers) => layers_view(model, emit)
     None => @html.fragment([])
   }
   let viewer_class = (if model.view_mode == "page" { "page-mode " } else { "" }) +
@@ -135,6 +137,14 @@ fn view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
             disabled~,
             on_click=emit(ToggleSidebar(Info)),
             "信息",
+          ),
+          @html.button(
+            id="layers-toggle",
+            type_="button",
+            hidden=model.layers is Null,
+            disabled~,
+            on_click=emit(ToggleSidebar(Layers)),
+            "图层",
           ),
         ]),
         @html.div(class="page-controls", [
@@ -267,12 +277,12 @@ fn view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
           "print",
           "打印",
           "打印",
-          disabled || model.printing,
+          disabled || model.printing || model.layers_busy,
           emit(Print),
         ),
         @html.button(
           id="edit-toggle",
-          disabled=disabled || model.editor.busy,
+          disabled=disabled || model.editor.busy || model.layers_busy,
           on_click=emit(Edit(Toggle)),
           if model.editor.enabled {
             "结束编辑"
@@ -282,7 +292,7 @@ fn view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
         ),
         @html.button(
           id="download",
-          disabled=disabled || model.editor.busy,
+          disabled=disabled || model.editor.busy || model.layers_busy,
           on_click=emit(Download),
           "下载",
         ),

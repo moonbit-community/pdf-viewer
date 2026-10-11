@@ -23,6 +23,8 @@ pub fn close_document() -> Unit {
   state.file_name = ""
   state.file_path = ""
   state.document_info = Json::null()
+  state.layers = Json::null()
+  state.layers_busy = false
   state.labels = []
   state.layouts = []
   element("viewer").set_scroll_top(0.0)
@@ -127,6 +129,7 @@ async fn load_document(file : @js.Value, path : String) -> Unit {
       return
     }
     state.document_info = value_json(info)
+    state.layers = json_field(state.document_info, "layers")
     let labels = value_strings(value_field(info, "labels"))
     if labels.length() == state.count {
       state.labels = labels.iter().collect()

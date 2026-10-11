@@ -1,6 +1,6 @@
 # PDF.js 对齐 TODO
 
-更新日期：2026-10-11。最终产品目标是完整阅读器，包括批注编辑、表单填写和签名。
+更新日期：2026-10-12。最终产品目标是完整阅读器，包括批注编辑、表单填写和签名。
 本轮 6 个剩余只读功能与 review 回归的验收见 [收尾记录](readonly-completion.md)。
 本文件的 **50 项是只读渲染与浏览基线**；编辑、保存和签名在后面的扩展路线单列，
 尚未纳入这 50 项统计。Office viewer、OpenSeek 接入和文档 JavaScript 执行不在当前任务内。
@@ -43,8 +43,8 @@ C-01 的真实印刷色彩路径已通过分阶段验收；原始整页残差保
 | 独立只读 viewer | 无 | 批注、只读表单与固定版本 CI 已接入 |
 | 大文件与特殊格式 | 无 | 按需 Range 与动态只读 XFA 已实现，资源边界见验收 |
 
-OCG 的 usage、RBGroups、Locked 控制及图层面板仍属于浏览器扩展，未计入这
-50 项；增加为独立 P1 条目时总数与剩余数须一起更新。
+OCG 图层面板、显示／打印 usage、RBGroups 和 Locked 已接入，作为浏览器扩展
+单列验收，未改变只读 50 项的历史统计。见 [图层控制](layers.md)。
 
 已有主路径还包括 CMap、CID 纵排、编码字距、宿主字体策略、密码入口、页面边界、
 目的地与导航、文字选择和搜索。其真实验收与开放边界继续保留在下面对应条目；
@@ -104,7 +104,7 @@ A1 独立收尾记录为四后端 374 个测试通过及 39 项浏览器交互�
 | 透明合成 | group、backdrop、knockout、soft mask、16 blend | 参考实现分歧见逐项证据 | 0 | — |
 | pattern/shading | 完整单元、文字/stencil paint、源分量逐像素插值 | 有界采样与资源限制见记录 | 0 | — |
 | 批注/只读表单 | AP/DA/DR、字体排版、几何/图标、choice/radio、popup/链接和屏幕/打印 | vendor/rich-text 外观继续扩大样本；编辑另计 | 0 | — |
-| 导航/图层 | 导航、metadata、附件、OCG 核心过滤和批注链接 | 图层 UI 另计扩展 | 0 | — |
+| 导航/图层 | 导航、metadata、附件、OCG 核心过滤和批注链接 | 图层 UI 已单列扩展验收；环境 usage 规则未实现 | 0 | — |
 | 浏览器体验 | 独立应用、Worker/取消、可见页与缩略图调度、来源选择/搜索、导航、popup/链接 DOM 及全页打印 | 打印使用工具栏或 Ctrl/Cmd+P；特殊外观与编辑另行跟踪 | 0 | — |
 | 可访问性/XFA | structure tree、DOM/ARIA、Chromium AX、动态 XFA 绑定/分页/只读控件 | 人工辅助技术、特殊标签/XFA 模板继续验证 | 0 | — |
 | 验证/性能 | 四后端 CI、corpus/视觉门槛、Chromium 调度/打印/压力、缓存预算 | 扩大自然样本；缓存预算不限制解码峰值 | 0 | — |
@@ -207,8 +207,8 @@ A1 独立收尾记录为四后端 374 个测试通过及 39 项浏览器交互�
 - [x] A-03 / P1：choice 保留 export/display、重复值的 I 选中索引、TI、列表选中色和 combo 标签；button/radio 保留继承 V/DV、Kids/Opt 身份和 MK caption。只读外观与字段模型通过测试，填写/保存另计。见 [收尾验收](readonly-completion.md#annotations-and-readonly-fields)。
 - [x] A-04 / P1：轻量交互数据保留原 `/Annots` 索引、PDF-space bounds/quads、内容与 URI/本地/远程/named-action 目标；不解码 AP，循环名字有界解析且保持未解析状态。原生 DOM 链接与 popup 支持鼠标/键盘、Escape 返回焦点、XYZ/Fit 和页码/历史；markup 拖选仍进入来源映射，未知/远程/action 保持禁用。打印按 Print 标志选择 AP，与显示缓存分开，NoView/Print 可仅打印，Hidden 同时抑制。上游 `1f9db19` 的真实批注/隐藏 widget、四旋转/缩放、重绘/关闭回归通过，尚未代表 A2 合并后的 DOM 复跑；NoZoom/NoRotate 等特殊图标/AP 外观已由 A-01 补齐，编辑与保存仍在扩展路线。见 [批注验收](validation.md#readonly-annotation-interaction-and-print-intent)。
 - [x] D-01 / P1：viewer API 已解析旧式 `/Dests` 字典和 `/Names` `/Dests` name tree，覆盖 named/explicit destination、`XYZ`、`Fit`、`FitH`、`FitV`、`FitR`、`FitB`、`FitBH`、`FitBV`；`destination_for_page`、`named_destination`、`named_destinations_json` 和 `outline_navigation_json` 提供一基页码及结构化视图。当前文档页会标记为 `resolved`，远程页保留 `remote_page` 并不会误跳到本地；本地目录点击和滚动定位已由 D-03 接入，批注链接已由 A-04 接入。destination 回归见 [validation.md](validation.md#destinations-and-document-navigation)。
-- [x] D-02 / P0：viewer 读取 pdflite 的 `/OCProperties`、默认/备用配置和 `/ON`/`/OFF`，在 display-list 收集阶段过滤文字、路径、图片、inline image、shading 及带 `/OC` 的嵌套 Form；`PdfOptionalContentState` 按 OCG 对象号选择配置并覆盖状态，隐藏文字不会进入 text clipping、text content、operator list 或 selection。回归 fixture 覆盖默认关闭、显式打开和选择结果，当前四后端 209/209 通过，见 [validation.md](validation.md#optional-content-visibility)。OCMD 的常见 `/P` 与 `/VE` 表达式已支持；usage、RBGroups、Locked 的 UI 语义和浏览器图层面板仍是后续图层工作。
-- [x] D-03 / P1：独立浏览器已接入 outline 目录树、page label 状态、Info/XMP 面板和附件清单；本地 destination 点击可滚动到目标页，远程或未解析目标保持禁用；附件和 XMP 通过 bridge 按需下载，不把字节放进打开文档的状态 JSON。`nested_outline.pdf`、`labelled_pages.pdf` 和 `attachment.pdf` 的 Chromium 回归覆盖目录、缩略图/信息入口、页标签、metadata 和附件字节；批注链接由 A-04 接入，OCG usage/RBGroups/Locked 的图层 UI 仍待完成。
+- [x] D-02 / P0：viewer 读取 pdflite 的 `/OCProperties`、默认/备用配置和 `/ON`/`/OFF`，在 display-list 收集阶段过滤文字、路径、图片、inline image、shading 及带 `/OC` 的嵌套 Form；`PdfOptionalContentState` 按 OCG 对象号选择配置并覆盖状态，隐藏文字不会进入 text clipping、text content、operator list 或 selection。回归 fixture 覆盖默认关闭、显式打开和选择结果，该阶段四后端 209/209 通过，见 [validation.md](validation.md#optional-content-visibility)。OCMD 的常见 `/P` 与 `/VE` 表达式已支持；显示／打印 usage、RBGroups、Locked 和浏览器图层面板现已另行接入，见 [图层验收](layers.md)。
+- [x] D-03 / P1：独立浏览器已接入 outline 目录树、page label 状态、Info/XMP 面板和附件清单；本地 destination 点击可滚动到目标页，远程或未解析目标保持禁用；附件和 XMP 通过 bridge 按需下载，不把字节放进打开文档的状态 JSON。`nested_outline.pdf`、`labelled_pages.pdf` 和 `attachment.pdf` 的 Chromium 回归覆盖目录、缩略图/信息入口、页标签、metadata 和附件字节；批注链接由 A-04 接入，OCG 图层 UI 已作为浏览器扩展单列 [验收](layers.md)。
 
 ## 独立浏览器体验、可访问性与验证
 
@@ -249,8 +249,13 @@ A1 独立收尾记录为四后端 374 个测试通过及 39 项浏览器交互�
 文件 ID、metadata 加密标志与权限；用户密码受批注/表单权限限制，所有者密码可编辑。
 AES 保存使用浏览器 CSPRNG 提供新 IV，测试确定性 provider 仅用于 fixture。
 
+图层控制已接入 MoonBit/Rabbita，复用 pdflite 的配置、usage、互斥组和锁定信息。
+显示／打印分别过滤正文、Form 和批注／表单；切换会更新缓存、缩略图、选择与搜索，
+活动输入先提交，编辑撤销／重做和 Range 补全保留选择。8 项核心与 11 项 Chromium
+回归覆盖作者 fixture 和两份真实 PDF.js 样本；具体边界见 [图层验收](layers.md)。
+
 仍待完成：动态 XFA 编辑、证书/CMS 数字签名、
-字段脚本/计算、rich-text 编辑、OCG usage/RBGroups/Locked 面板和人工辅助技术验收。
+字段脚本/计算、rich-text 编辑和人工辅助技术验收。图层的缩放／语言／用户环境规则未执行。
 中文新内容保留 Unicode 值，外观可用浏览器字体的栅格回退，不能承诺原字体排版。
 既有整页视觉差异仍保留，不能据此宣称全面对齐 PDF.js。
 

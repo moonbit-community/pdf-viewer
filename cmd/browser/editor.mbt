@@ -6,9 +6,15 @@ pub fn prepare_editor(bytes : Bytes) -> String {
   let fallbacks = current_document.val
     .map(document => document.font_fallbacks())
     .unwrap_or([])
+  let selected = current_document.val.bind(document => {
+    document.optional_content_state()
+  })
   let result = open_pdf(bytes)
   if current_document.val is Some(document) && !fallbacks.is_empty() {
     current_document.val = Some(document.with_font_fallbacks(fallbacks))
+  }
+  if current_document.val is Some(document) && selected is Some(selected) {
+    current_document.val = Some(document.with_optional_content_state(selected))
   }
   result
 }
