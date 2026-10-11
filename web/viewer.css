@@ -176,6 +176,13 @@ main:focus-visible {
 .paint-layer svg {
   display: block;
 }
+#print-pages {
+  position: fixed;
+  left: -100000px;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
 .text-layer {
   position: absolute;
   inset: 0;
@@ -375,6 +382,7 @@ h1 {
 }
 .thumbnail-item {
   display: flex;
+  height: 122px;
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
@@ -495,5 +503,29 @@ h1 {
   }
   .text-layer {
     display: none;
+  }
+  #viewer {
+    display: none;
+  }
+  #print-pages {
+    display: none;
+    position: static;
+    visibility: visible;
+  }
+  body.pdf-print-ready #print-pages {
+    display: block;
+  }
+  #print-pages svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  #print-pages .page:last-of-type {
+    break-after: auto;
+  }
+  body:not(.pdf-print-ready)::before {
+    content: "请使用阅读器工具栏的“打印”按钮，准备完整文档后再打印。";
+    display: block;
+    padding: 24px;
   }
 }

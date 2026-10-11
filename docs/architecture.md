@@ -251,10 +251,17 @@ reports the surviving page count, unlike PDF.js's lazy failure for a bad page.
 The standalone browser shell lives in `web/`, with a MoonBit JS bridge in
 `cmd/browser/`. PDF bytes are decoded entirely by the MoonBit/pdflite module;
 the JavaScript shell handles file input, DOM mounting and native browser
-selection. `open_pdf`, `render_page`, `select_text`, `search_pdf`, `document_info`,
-`download_attachment`, `download_metadata` and `close_pdf` are the JS bridge
-surface. Page models are cached until close/reopen, and
-embedded font families receive page prefixes so multiple SVGs do not replace
+selection. `web/pdf-client.js` sends asynchronous operations to the native
+module Worker in `web/pdf-worker.js`; the generated MoonBit bridge runs there.
+The bridge includes `open_pdf`, `render_page`, `select_text`, `select_page_text`,
+`search_pdf`, `document_info`, `page_layouts`, `cache_info`, downloads and close.
+Page models use an LRU budget of eight pages/estimated 32 MiB; serialized render
+responses use twelve entries/24 MiB. These bounds exclude parsed input and
+temporary decoding. Closing/replacing a document terminates its Worker and
+rejects outstanding work. AbortSignal removes queued tasks and discards active
+results; a synchronous active operation can finish before the next RPC. The
+host contract does not reproduce PDF.js loading/render task objects. Embedded
+font families receive page prefixes so multiple SVGs do not replace
 each other's @font-face rules. Rendering an already decoded page uses
 `PdfPageModel::render_svg`.
 
@@ -264,8 +271,12 @@ metadata and XMP availability. Attachment and XMP bytes are requested by
 index/on demand and converted to local browser downloads. Local outline targets
 scroll to their one-based page; unresolved or remote targets stay disabled.
 The shell also exposes thumbnails, print, continuous/single-page modes and a
-`#page=N` history state. Repainting still eagerly rebuilds every mounted page;
-worker scheduling and virtualization remain a performance TODO.
+`#page=N` history state. `PdfViewerDocument::page_viewport` and `page_layouts`
+resolve geometry without interpreting content. `web/page-scheduler.js` keeps
+those page boxes and uses IntersectionObserver to mount nearby paint/text DOM;
+thumbnails use a separate visible-row observer. Scale/rotation cancels the
+previous layout generation, and stale results cannot mount. Source selection
+pins only its endpoints and neighbors, rather than every selected page.
 
 `PdfViewerDocument::search` consumes the same page text/content model as
 selection. It returns source UTF-16 offsets, original matched text, source item
@@ -274,8 +285,9 @@ categories come from pinned `normalization`/`ucd` packages. Each normalized
 code unit retains its source interval through expansions and canonical mark
 reordering; offsets never refer to the normalized string. The browser maps
 item indices to its transparent text layer and emits `pdf-search-change`.
-Exact substring highlighting, complete locale/case-fold policy and asynchronous
-search remain future work.
+Search runs asynchronously through the Worker adapter; the underlying MoonBit
+operation remains synchronous. Exact substring highlighting and complete
+locale/case-fold policy remain future work.
 
 `text_columns.mbt` partitions persistent horizontal-page gutters into reading
 blocks before line grouping. `text_bidi.mbt` maps `bidi` code-point permutations
@@ -342,9 +354,15 @@ ligatures retain a complete source glyph quad, and raw PDF byte spans are not
 claimed. The writing-direction separator heuristic is independent of page
 rotation; complex reading-order/bidi reconstruction still needs coverage.
 
-The current browser eagerly mounts every page and yields between pages.
-Worker decoding, cancellation, page virtualization and memory bounds remain
-pending. The body text layer does not reconstruct annotation appearance
+The browser combines source ranges from unloaded pages through the Worker, so
+whole-document selection/copy does not require mounting every text layer.
+Native selection text reflects mounted DOM; `pdf-selection-change` and copy
+retain the complete source range. Print preparation separately renders all
+pages at their physical point sizes, waits for fonts/images, and clears that
+temporary DOM after printing. Use the toolbar or Ctrl/Cmd+P for this asynchronous
+preparation. Cache and sampled heap evidence is in
+[validation.md](validation.md#browser-host-lifecycle-scheduling-and-pressure).
+The body text layer does not reconstruct annotation appearance
 streams or readonly widgets as DOM; those belong to the annotation layer.
 
 The validation renderer is separate from the standalone viewer. A temporary
@@ -364,7 +382,7 @@ The A1 font/text main paths are complete; measured differences and retained
 fallback branches are recorded in [validation.md](validation.md#a1-completion-validation).
 The remaining implementation stages are ordered by the visible compatibility gap:
 
-1. Worker/page scheduling and larger visual baselines, retaining measured
+1. Larger visual/large-document baselines and CI, retaining measured
    font rasterization differences and fallback observations;
 2. CTM-preserving path/image geometry, complete group-level mask compositing, and pixel-level
    Gouraud interpolation for mesh triangles;

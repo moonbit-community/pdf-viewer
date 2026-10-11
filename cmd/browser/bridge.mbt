@@ -2,7 +2,7 @@
 let current_document : Ref[@pdf.PdfViewerDocument?] = Ref(None)
 
 ///|
-let page_cache : Map[Int, @pdf.PdfPageModel] = Map([])
+let page_cache : Map[Int, BrowserCachedPage] = Map([])
 
 ///|
 /// JS Bytes are Uint8Array. Read the document once and cache page models so
@@ -16,7 +16,7 @@ pub fn open_pdf(bytes : Bytes) -> String {
       browser_error_with_code(
         "password-required", "This PDF requires a password",
       )
-    error => browser_error(@debug.to_string(error))
+    error => browser_error_with_code("document-error", @debug.to_string(error))
   }
 }
 
@@ -35,7 +35,7 @@ pub fn open_pdf_with_password(bytes : Bytes, password : Bytes) -> String {
       browser_error_with_code(
         "password-invalid", "The PDF password is incorrect",
       )
-    error => browser_error(@debug.to_string(error))
+    error => browser_error_with_code("document-error", @debug.to_string(error))
   }
 }
 
@@ -46,7 +46,7 @@ pub fn open_pdf_with_password(bytes : Bytes, password : Bytes) -> String {
 /// resolving an installed or otherwise licensed font.
 pub fn set_font_fallbacks(fallbacks_json : String) -> String {
   guard current_document.val is Some(document) else {
-    return browser_error("No document open")
+    return browser_error_with_code("document-closed", "No document open")
   }
   let fallbacks = match browser_parse_font_fallbacks(fallbacks_json) {
     Some(value) => value
@@ -56,7 +56,7 @@ pub fn set_font_fallbacks(fallbacks_json : String) -> String {
       )
   }
   current_document.val = Some(document.with_font_fallbacks(fallbacks))
-  page_cache.clear()
+  browser_clear_pages()
   let result : Json = { "ok": true, "count": fallbacks.length() }
   result.stringify()
 }
@@ -96,7 +96,7 @@ fn browser_parse_font_fallbacks(
 ///|
 fn browser_install_document(document : @pdf.PdfViewerDocument) -> String {
   current_document.val = Some(document)
-  page_cache.clear()
+  browser_clear_pages()
   let labels = document.page_labels() catch { _ => [] }
   let info : Json = {
     "ok": true,
@@ -121,7 +121,7 @@ fn browser_error_with_code(code : String, message : String) -> String {
 ///|
 pub fn close_pdf() -> Unit {
   current_document.val = None
-  page_cache.clear()
+  browser_clear_pages()
 }
 
 ///|
@@ -129,7 +129,7 @@ pub fn close_pdf() -> Unit {
 /// pdflite implementation types to JavaScript.
 pub fn document_info() -> String {
   guard current_document.val is Some(document) else {
-    return browser_error("No document open")
+    return browser_error_with_code("document-closed", "No document open")
   }
   let labels = document.page_labels() catch { _ => [] }
   let outline = document.outline_navigation_json() catch { _ => [] }
@@ -158,7 +158,7 @@ pub fn document_info() -> String {
 pub fn download_attachment(index : Int) -> String {
   try {
     guard current_document.val is Some(document) else {
-      return browser_error("No document open")
+      return browser_error_with_code("document-closed", "No document open")
     }
     guard document.attachment_bytes(index) is Some(bytes) else {
       return browser_error("Attachment does not contain downloadable bytes")
@@ -175,7 +175,7 @@ pub fn download_attachment(index : Int) -> String {
 pub fn download_metadata() -> String {
   try {
     guard current_document.val is Some(document) else {
-      return browser_error("No document open")
+      return browser_error_with_code("document-closed", "No document open")
     }
     guard document.metadata_bytes() is Some(bytes) else {
       return browser_error("Document has no XMP metadata")
@@ -189,7 +189,7 @@ pub fn download_metadata() -> String {
 
 ///|
 fn browser_page(number : Int) -> @pdf.PdfPageModel? raise {
-  if page_cache.get(number) is Some(page) {
+  if browser_cached_page(number) is Some(page) {
     return Some(page)
   }
   guard current_document.val is Some(document) else { return None }
@@ -210,7 +210,7 @@ fn browser_page(number : Int) -> @pdf.PdfPageModel? raise {
       { ..page, fonts, }
     })
   if page is Some(page) {
-    page_cache[number] = page
+    browser_cache_page(number, page)
   }
   page
 }
@@ -218,14 +218,20 @@ fn browser_page(number : Int) -> @pdf.PdfPageModel? raise {
 ///|
 pub fn render_page(number : Int, scale : Double, rotation : Int) -> String {
   if scale <= 0.0 || scale.is_nan() || scale.is_inf() {
-    return browser_error("Scale must be finite and positive")
+    return browser_error_with_code(
+      "invalid-scale", "Scale must be finite and positive",
+    )
   }
   if rotation % 90 != 0 {
-    return browser_error("Rotation must be a multiple of 90")
+    return browser_error_with_code(
+      "invalid-rotation", "Rotation must be a multiple of 90",
+    )
   }
   try {
     guard browser_page(number) is Some(page) else {
-      return browser_error("No document or page does not exist")
+      return browser_error_with_code(
+        "page-missing", "No document or page does not exist",
+      )
     }
     let rotation = page.rotation + rotation
     let svg = page.render_svg(rotation~, scale~)
@@ -237,7 +243,7 @@ pub fn render_page(number : Int, scale : Double, rotation : Int) -> String {
     }
     result.stringify()
   } catch {
-    error => browser_error(@debug.to_string(error))
+    error => browser_error_with_code("render-error", @debug.to_string(error))
   }
 }
 
@@ -251,11 +257,13 @@ pub fn select_text(
 ) -> String {
   try {
     guard browser_page(number) is Some(page) else {
-      return browser_error("No document or page does not exist")
+      return browser_error_with_code(
+        "page-missing", "No document or page does not exist",
+      )
     }
     guard page.select_text(start_item, start_offset, end_item, end_offset)
       is Some(selection) else {
-      return browser_error("Invalid text range")
+      return browser_error_with_code("invalid-range", "Invalid text range")
     }
     let result : Json = { "ok": true, "selection": selection }
     result.stringify()
@@ -276,7 +284,7 @@ pub fn search_pdf(
 ) -> String {
   try {
     guard current_document.val is Some(document) else {
-      return browser_error("No document open")
+      return browser_error_with_code("document-closed", "No document open")
     }
     let results = document.search(
       query,

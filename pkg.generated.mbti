@@ -767,6 +767,7 @@ pub fn PdfViewerDocument::page_count(Self) -> Int
 pub fn PdfViewerDocument::page_json(Self, Int) -> Json? raise @core.PdfError
 pub fn PdfViewerDocument::page_labels(Self) -> Array[String] raise @core.PdfError
 pub fn PdfViewerDocument::page_labels_json(Self) -> Json raise @core.PdfError
+pub fn PdfViewerDocument::page_viewport(Self, Int, scale? : Double, rotation? : Int) -> PdfViewport?
 pub fn PdfViewerDocument::pages(Self) -> Array[PdfPageModel] raise @core.PdfError
 pub fn PdfViewerDocument::reader_diagnostics(Self) -> Array[PdfReaderDiagnostic]
 pub fn PdfViewerDocument::render_svg(Self, Int, scale? : Double) -> String? raise @core.PdfError

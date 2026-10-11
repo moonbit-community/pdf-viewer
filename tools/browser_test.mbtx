@@ -3,16 +3,20 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/process",
+  "moonbitlang/async/shell",
   "moonbitlang/async/http",
   "moonbitlang/async/websocket",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/base64",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/pdflite",
 }
 
 ///|
 struct Browser {
   socket : @websocket.Conn
+  browser_url : String
   mut id : Int
   errors : Array[Json]
   checks : Array[String]
@@ -23,10 +27,19 @@ async fn Browser::command(
   self : Browser,
   operation : String,
   params? : Json = {},
+  session? : String,
 ) -> Json {
   self.id += 1
   let id = self.id
-  let request : Json = { "id": id, "method": operation, "params": params }
+  let request : Json = match session {
+    Some(session) => {
+      "id": id,
+      "method": operation,
+      "params": params,
+      "sessionId": session,
+    }
+    None => { "id": id, "method": operation, "params": params }
+  }
   self.socket.send_text(request.stringify())
   for ;; {
     let message = @async.with_timeout(30000, () => {
@@ -72,6 +85,17 @@ async fn Browser::check(
   }
   println("PASS: " + name)
   self.checks.push(name)
+}
+
+///|
+async fn Browser::wait(self : Browser, condition : String) -> Unit {
+  for _ in 0..<1000 {
+    if self.evaluate(condition) == Json::boolean(true) {
+      return
+    }
+    @async.sleep(25)
+  }
+  fail("Browser condition did not complete: " + condition)
 }
 
 ///|
@@ -143,6 +167,132 @@ async fn Browser::upload(self : Browser, filename : String) -> Unit {
       "files": [filename],
     }),
   )
+}
+
+///|
+async fn Browser::heap(self : Browser, collect? : Bool = false) -> Json {
+  if collect {
+    ignore(self.command("HeapProfiler.collectGarbage"))
+  }
+  let main = self.command("Runtime.getHeapUsage")
+  // Flattened Worker sessions route through the browser endpoint. Sending
+  // their sessionId to a page endpoint silently stalls on Chromium.
+  let remote : Browser = {
+    socket: @websocket.connect(self.browser_url),
+    browser_url: self.browser_url,
+    id: 0,
+    errors: self.errors,
+    checks: self.checks,
+  }
+  defer remote.socket.close()
+  let targets = remote.command("Target.getTargets")
+  let mut worker : Json = Json::null()
+  match targets {
+    { "targetInfos": Array(targets), .. } =>
+      for target in targets {
+        if target
+          is {
+            "type": String("worker"),
+            "url": String(url),
+            "targetId": String(id),
+            ..
+          } &&
+          (url.is_empty() || url.has_suffix("/pdf-worker.js")) {
+          let attached = remote.command("Target.attachToTarget", params={
+            "targetId": id,
+            "flatten": true,
+          })
+          guard attached is { "sessionId": String(session), .. } else {
+            fail("Unable to measure Worker heap")
+          }
+          let location = remote.command("Runtime.evaluate", session~, params={
+            "expression": "location.href",
+            "returnByValue": true,
+          })
+          if collect {
+            ignore(remote.command("HeapProfiler.collectGarbage", session~))
+          }
+          worker = remote.command("Runtime.getHeapUsage", session~)
+          ignore(
+            remote.command("Target.detachFromTarget", params={ "sessionId": session }),
+          )
+          if location
+            is { "result": { "value": String(url), .. }, .. } &&
+            url.has_suffix("/pdf-worker.js") {
+            break
+          }
+          worker = Json::null()
+        }
+      }
+    _ => fail("Missing Worker targets")
+  }
+  guard worker != Json::null() else { fail("No PDF Worker to measure: " + targets.stringify()) }
+  { "main": main, "worker": worker }
+}
+
+///|
+/// Authored pressure fixtures: many cheap pages and independent raw images.
+/// ASCII samples make byte lengths exact, including the actual xref offsets.
+fn host_test_document(count : Int, images? : Bool = false) -> Bytes {
+  let font = 3 + count * 2
+  let objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Count \{count} /Kids [" +
+    [ for number in 0..<count => "\{number + 3} 0 R" ].join(" ") +
+    "] >>",
+  ]
+  for number in 1..<=count {
+    let extra = if number % 10 == 0 { "/Rotate 90 /UserUnit 1.5" } else { "" }
+    let resource = if images { "/XObject << /Im \{font + number} 0 R >>" } else { "" }
+    objects.push(
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] " +
+      "\{extra} /Contents \{count + 2 + number} 0 R /Resources << /Font << /F1 \{font} 0 R >> \{resource} >> >>",
+    )
+  }
+  for number in 1..<=count {
+    let image = if images { "q 512 0 0 512 40 160 cm /Im Do Q\n" } else { "" }
+    let contents = image +
+      "BT /F1 20 Tf 40 720 Td (Host page " +
+      number.to_string().pad_start(3, '0') +
+      ") Tj ET"
+    objects.push(
+      "<< /Length \{contents.length()} >>\nstream\n\{contents}\nendstream",
+    )
+  }
+  objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+  if images {
+    for number in 1..<=count {
+      let samples = StringBuilder()
+      let mut seed = number * 97
+      for _ in 0..<(512 * 512 * 3) {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff
+        samples.write_char(Char::from_int(32 + (seed >> 16) % 95))
+      }
+      objects.push(
+        "<< /Type /XObject /Subtype /Image /Width 512 /Height 512 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length 786432 >>\nstream\n" +
+        samples.to_string() +
+        "\nendstream",
+      )
+    }
+  }
+  let output = StringBuilder()
+  output.write_string("%PDF-1.7\n")
+  let offsets : Array[Int] = []
+  let mut length = 9
+  for index, object in objects {
+    offsets.push(length)
+    let chunk = "\{index + 1} 0 obj\n\{object}\nendobj\n"
+    output.write_string(chunk)
+    length += chunk.length()
+  }
+  output.write_string("xref\n0 \{objects.length() + 1}\n0000000000 65535 f \n")
+  for offset in offsets {
+    output.write_string(offset.to_string().pad_start(10, '0') + " 00000 n \n")
+  }
+  output.write_string(
+    "trailer\n<< /Size \{objects.length() + 1} /Root 1 0 R >>\nstartxref\n\{length}\n%%EOF\n",
+  )
+  @utf8.encode(output.to_string())
 }
 
 ///|
@@ -283,6 +433,9 @@ async fn main {
     }
     let browser : Browser = {
       socket: @websocket.connect(url),
+      browser_url: "ws://127.0.0.1:" +
+        port +
+        @fs.read_file(port_path).text().split("\n").to_array()[1].to_owned(),
       id: 0,
       errors: [],
       checks: [],
@@ -290,6 +443,13 @@ async fn main {
     defer browser.socket.close()
     ignore(browser.command("Page.enable"))
     ignore(browser.command("Runtime.enable"))
+    ignore(
+      browser.command("Target.setAutoAttach", params={
+        "autoAttach": true,
+        "waitForDebuggerOnStart": false,
+        "flatten": true,
+      }),
+    )
     ignore(
       browser.command("Emulation.setDeviceMetricsOverride", params={
         "width": 1280,
@@ -306,8 +466,8 @@ async fn main {
       "font fallback bridge accepts host family mappings",
       (
         #| (async () => {
-        #|   const bridge = await import('./_generated/pdf.js');
-        #|   const result = JSON.parse(bridge.set_font_fallbacks(JSON.stringify([{pdf_name: 'Helvetica', family: 'Arial'}])));
+        #|   const bridge = await import('./pdf-client.js');
+        #|   const result = JSON.parse(await bridge.set_font_fallbacks(JSON.stringify([{pdf_name: 'Helvetica', family: 'Arial'}])));
         #|   return result.ok && result.count === 1;
         #| })()
       ),
@@ -321,7 +481,7 @@ async fn main {
         #| (async () => {
         #|   const input = document.getElementById('search-query');
         #|   input.value = '日本語'; input.dispatchEvent(new Event('input', {bubbles: true}));
-        #|   await new Promise(r => requestAnimationFrame(r));
+        #|   await (await import('./viewer.js')).performSearch();
         #|   return document.getElementById('search-status').textContent === '1 / 1' && document.querySelectorAll('.pdf-search-hit').length >= 1 && document.querySelector('.pdf-search-active') !== null;
         #| })()
       ),
@@ -334,8 +494,8 @@ async fn main {
       "document bridge exposes outline and info",
       (
         #| (async () => {
-        #|   const bridge = await import('./_generated/pdf.js');
-        #|   const info = JSON.parse(bridge.document_info());
+        #|   const bridge = await import('./pdf-client.js');
+        #|   const info = JSON.parse(await bridge.document_info());
         #|   return info.ok && info.outline.length > 0 && info.info.Pages === 9 && info.labels.length === 9;
         #| })()
       ),
@@ -365,7 +525,28 @@ async fn main {
       ),
     )
     browser.check(
-      "thumbnail panel renders page previews", "document.getElementById('sidebar-title').textContent === '缩略图' && document.querySelectorAll('.thumbnail-preview svg').length === 9",
+      "thumbnail panel renders page previews",
+      (
+        #| (async () => {
+        #|   for (let i = 0; i < 400; i++) {
+        #|     if (document.querySelector('.thumbnail-preview svg')) break;
+        #|     await new Promise(r => setTimeout(r, 25));
+        #|   }
+        #|   const count = document.querySelectorAll('.thumbnail-preview svg').length;
+        #|   return document.getElementById('sidebar-title').textContent === '缩略图' && document.querySelectorAll('.thumbnail-item').length === 9 && count > 0 && count < 9;
+        #| })()
+      ),
+    )
+    browser.check(
+      "thumbnail scrolling loads its destination and releases hidden previews",
+      (
+        #| (async () => {
+        #|   const last = document.querySelector('.thumbnail-item[data-page="9"]');
+        #|   last.scrollIntoView({block: 'end'});
+        #|   for (let i = 0; i < 400 && !last.querySelector('svg'); i++) await new Promise(r => setTimeout(r, 25));
+        #|   return Boolean(last.querySelector('svg')) && document.querySelectorAll('.thumbnail-preview svg').length < 9;
+        #| })()
+      ),
     )
     ignore(
       browser.evaluate("document.getElementById('info-toggle').click(); true"),
@@ -378,8 +559,8 @@ async fn main {
       "page labels remain available to the browser host",
       (
         #| (async () => {
-        #|   const bridge = await import('./_generated/pdf.js');
-        #|   const info = JSON.parse(bridge.document_info());
+        #|   const bridge = await import('./pdf-client.js');
+        #|   const info = JSON.parse(await bridge.document_info());
         #|   return info.ok && info.labels.length === 11 && info.labels[0] !== '1';
         #| })()
       ),
@@ -388,9 +569,9 @@ async fn main {
       "embedded XMP metadata can be downloaded",
       (
         #| (async () => {
-        #|   const bridge = await import('./_generated/pdf.js');
-        #|   const info = JSON.parse(bridge.document_info());
-        #|   const metadata = JSON.parse(bridge.download_metadata());
+        #|   const bridge = await import('./pdf-client.js');
+        #|   const info = JSON.parse(await bridge.document_info());
+        #|   const metadata = JSON.parse(await bridge.download_metadata());
         #|   return info.metadata.available && info.metadata.size > 0 && metadata.ok && metadata.data.length > 0;
         #| })()
       ),
@@ -414,9 +595,9 @@ async fn main {
       "attachment manifest and download bytes are available",
       (
         #| (async () => {
-        #|   const bridge = await import('./_generated/pdf.js');
-        #|   const info = JSON.parse(bridge.document_info());
-        #|   const data = info.attachments.length ? JSON.parse(bridge.download_attachment(0)) : {ok: false};
+        #|   const bridge = await import('./pdf-client.js');
+        #|   const info = JSON.parse(await bridge.document_info());
+        #|   const data = info.attachments.length ? JSON.parse(await bridge.download_attachment(0)) : {ok: false};
         #|   return info.ok && info.attachments.length > 0 && data.ok && data.data.length > 0;
         #| })()
       ),
@@ -527,11 +708,11 @@ async fn main {
       "MoonBit range selection matches DOM text",
       (
         #| (async () => {
-        #|   const bridge = await import('./_generated/pdf.js');
+        #|   const bridge = await import('./pdf-client.js');
         #|   const glyphs = [...document.querySelectorAll('.glyph')];
         #|   const first = glyphs.find(g => g.textContent === '日');
         #|   const last = glyphs.find(g => g.textContent === 'ト');
-        #|   const result = JSON.parse(bridge.select_text(1, +first.dataset.item, 0, +last.dataset.item, 1));
+        #|   const result = JSON.parse(await bridge.select_text(1, +first.dataset.item, 0, +last.dataset.item, 1));
         #|   return result.ok && result.selection.text === '日本語テスト' && result.selection.quads.length === 6;
         #| })()
       ),
@@ -549,7 +730,7 @@ async fn main {
         #|   range.setStart(first.firstChild.firstChild, 0);
         #|   range.setEnd(last.firstChild.firstChild, 1);
         #|   getSelection().removeAllRanges(); getSelection().addRange(range);
-        #|   await new Promise(r => setTimeout(r, 100));
+        #|   await (await import('./viewer.js')).readSelection();
         #|   return getSelection().toString() === '日本語テスト' && lastPdfSelection.text === '日本語テスト' && lastPdfSelection.file.path === '/fixtures/90ms_rksj_h_sample.pdf' && lastPdfSelection.ranges[0].item_indices.length === 6;
         #| })()
       ),
@@ -598,13 +779,17 @@ async fn main {
       "multi-page source range and normalized copied lines",
       (
         #| (async () => {
+        #|   const host = await import('./viewer.js');
+        #|   const schedulerPage = document.querySelector('.page[data-page="2"]');
+        #|   schedulerPage.scrollIntoView({block: 'start'});
+        #|   for (let i = 0; i < 400 && !schedulerPage.querySelector('.glyph-text'); i++) await new Promise(r => setTimeout(r, 25));
         #|   document.getElementById('viewer').addEventListener('pdf-selection-change', e => window.lastPdfSelection = e.detail);
         #|   const pages = document.querySelectorAll('.page');
         #|   const first = pages[0].querySelector('.glyph-text').firstChild;
         #|   const last = pages[1].querySelector('.glyph-text').firstChild;
         #|   const range = new Range(); range.setStart(first, 0); range.setEnd(last, last.length);
         #|   getSelection().removeAllRanges(); getSelection().addRange(range);
-        #|   await new Promise(r => setTimeout(r, 100));
+        #|   await (await import('./viewer.js')).readSelection();
         #|   return lastPdfSelection.ranges.length === 2 && lastPdfSelection.ranges[0].page === 1 && lastPdfSelection.ranges[1].page === 2 && lastPdfSelection.text.includes('\n');
         #| })()
       ),
@@ -615,8 +800,9 @@ async fn main {
       (
         #| (async () => {
         #|   document.getElementById('viewer').focus();
+        #|   const done = new Promise(resolve => document.getElementById('viewer').addEventListener('pdf-selection-change', function ready(e) { if (e.detail?.ranges.length === 14) { this.removeEventListener('pdf-selection-change', ready); resolve(); } }));
         #|   document.getElementById('viewer').dispatchEvent(new KeyboardEvent('keydown', {key: 'a', ctrlKey: true, bubbles: true, cancelable: true}));
-        #|   await new Promise(r => setTimeout(r, 100));
+        #|   await Promise.race([done, new Promise((_, reject) => setTimeout(() => reject(new Error('select all timed out')), 25000))]);
         #|   return (lastPdfSelection?.ranges.length === 14 && !getSelection().toString().includes('打开 PDF')) || {ranges: lastPdfSelection?.ranges.map(r => r.page), text: getSelection().toString().slice(0, 100), error: document.getElementById('error').textContent};
         #| })()
       ),
@@ -634,9 +820,9 @@ async fn main {
     let invalid = output + "/invalid.pdf"
     @fs.write_file(invalid, "invalid PDF data")
     browser.upload(cwd + "/" + invalid)
-    @async.sleep(100)
+    browser.wait("!document.getElementById('error').hidden")
     browser.check(
-      "invalid input reports an error and retains the previous preview", "!document.getElementById('error').hidden && document.querySelector('.text-layer').textContent.includes('日本語テスト')",
+      "invalid input reports an error and releases the previous document", "!document.getElementById('error').hidden && document.querySelectorAll('.page').length === 0 && document.getElementById('download').disabled",
     )
     browser.upload(cwd + "/reference/pdf.js/test/pdfs/90ms_rksj_h_sample.pdf")
     browser.ready(1)
@@ -675,6 +861,254 @@ async fn main {
     browser.check(
       "cyclic page tree retains its readable page in the browser", "document.getElementById('error').hidden && document.querySelectorAll('.page').length === 1 && [...document.querySelectorAll('.glyph-text')].map(g => g.textContent).join('').includes('Testcase: ’Pages loop’')",
     )
+    let pressure = output + "/host-pages.pdf"
+    let images = output + "/host-images.pdf"
+    @fs.write_file(pressure, host_test_document(200))
+    @fs.write_file(images, host_test_document(16, images=true))
+    let pressure_hash = @shell.Cmd("sha256sum", [pressure]).output()
+    let image_hash = @shell.Cmd("sha256sum", [images]).output()
+    guard pressure_hash.exit_code() == 0 && image_hash.exit_code() == 0 else {
+      fail("Unable to hash pressure fixtures")
+    }
+    browser.navigate(base + "/", 0)
+    ignore(
+      browser.evaluate(
+        "document.getElementById('zoom').value = '1'; document.getElementById('view-mode').value = 'scroll'; document.getElementById('view-mode').dispatchEvent(new Event('change')); window.hostStart = performance.now(); true",
+      ),
+    )
+    browser.upload(cwd + "/" + pressure)
+    browser.ready(200)
+    let cold_open = browser.evaluate("performance.now() - hostStart")
+    browser.check(
+      "long document opens in a Worker without mounting off-screen pages",
+      (
+        #| (async () => {
+        #|   const host = await import('./viewer.js');
+        #|   const data = await host.runtimeDiagnostics();
+        #|   return data.worker.worker && data.worker.ready && data.pages === 200 && data.mounted.length > 0 && data.mounted.length < 12 && document.querySelector('.page[data-page="150"]').dataset.rendered === 'false';
+        #| })()
+      ),
+    )
+    let memory : Array[Json] = [{ "phase": "long-document-open", "heap": browser.heap() }]
+    browser.check(
+      "select all copies every page while keeping off-screen DOM unloaded",
+      (
+        #| (async () => {
+        #|   const host = await import('./viewer.js');
+        #|   document.getElementById('viewer').addEventListener('pdf-selection-change', e => window.hostSelection = e.detail);
+        #|   await host.selectAllText();
+        #|   const data = new DataTransfer();
+        #|   document.dispatchEvent(new ClipboardEvent('copy', {clipboardData: data, bubbles: true, cancelable: true}));
+        #|   const text = data.getData('text/plain');
+        #|   const runtime = await host.runtimeDiagnostics();
+        #|   return hostSelection.ranges.length === 200 && text.includes('Host page 001') && text.includes('Host page 200') && runtime.mounted.length < 12;
+        #| })()
+      ),
+    )
+    browser.check(
+      "off-screen search keeps the main thread responsive and mounts its result",
+      (
+        #| (async () => {
+        #|   const host = await import('./viewer.js');
+        #|   getSelection().removeAllRanges(); await host.readSelection();
+        #|   document.getElementById('search-query').value = 'Host page 137';
+        #|   const start = performance.now();
+        #|   const pending = host.performSearch();
+        #|   await new Promise(r => setTimeout(r, 30));
+        #|   window.hostTimer = performance.now() - start;
+        #|   await pending;
+        #|   return hostTimer < 250 && document.getElementById('search-status').textContent === '1 / 1' && document.getElementById('page-number').value === '137' && document.querySelector('.page[data-page="137"] .pdf-search-active') !== null;
+        #| })()
+      ),
+    )
+    let cached_render = browser.evaluate(
+      (
+        #| (async () => {
+        #|   const bridge = await import('./pdf-client.js');
+        #|   const first = performance.now();
+        #|   const cold = await bridge.render_page(151, 1.37, 90);
+        #|   const second = performance.now();
+        #|   const hot = await bridge.render_page(151, 1.37, 90);
+        #|   return {cold_ms: second - first, hot_ms: performance.now() - second, identical: cold === hot, cache: JSON.parse(await bridge.cache_info())};
+        #| })()
+      ),
+    )
+    guard cached_render is { "identical": True, .. } else {
+      fail("Warm render changed its output")
+    }
+    browser.check(
+      "queued cancellation never dispatches the cancelled page",
+      (
+        #| (async () => {
+        #|   const {pdf} = await import('./pdf-client.js');
+        #|   const before = pdf.diagnostics().cancelled;
+        #|   const blocker = pdf.call('render_page', [152, 1, 0]);
+        #|   const controller = new AbortController();
+        #|   const pending = pdf.call('render_page', [153, 1, 0], {signal: controller.signal}).catch(error => error.name);
+        #|   controller.abort();
+        #|   await blocker;
+        #|   return await pending === 'AbortError' && pdf.diagnostics().cancelled === before + 1;
+        #| })()
+      ),
+    )
+    for number in [1, 20, 40, 60, 80, 100, 120, 160, 180, 200] {
+      ignore(
+        browser.evaluate(
+          "document.getElementById('page-number').value = \{number}; document.getElementById('page-number').dispatchEvent(new Event('change')); true",
+        ),
+      )
+      browser.wait(
+        "document.querySelector('.page[data-page=\"\{number}\"]').dataset.rendered === 'true'",
+      )
+      memory.push({ "phase": "scroll-\{number}", "heap": browser.heap() })
+    }
+    browser.check(
+      "scrolling evicts page models and render strings within both budgets",
+      (
+        #| (async () => {
+        #|   const data = await (await import('./viewer.js')).runtimeDiagnostics();
+        #|   return data.mounted.length < 12 && data.cache.pages <= data.cache.max_pages && data.cache.estimated_bytes <= data.cache.budget_bytes && data.cache.evictions > 0 && data.cache.render.entries <= data.cache.render.max_entries && data.cache.render.bytes <= data.cache.render.budget_bytes && data.cache.render.evictions > 0;
+        #| })()
+      ),
+    )
+    ignore(
+      browser.evaluate(
+        "for (const scale of ['2','0.75','1.25']) { document.getElementById('zoom').value = scale; document.getElementById('zoom').dispatchEvent(new Event('change')); } document.getElementById('rotate').click(); document.getElementById('rotate').click(); true",
+      ),
+    )
+    browser.ready(200)
+    browser.check(
+      "rapid scale and rotation publish only the latest viewport",
+      "document.getElementById('error').hidden && document.querySelector('.page[data-page=\"200\"]').style.width === '1485px' && document.querySelector('.page[data-page=\"200\"]').style.height === '1147.5px'",
+    )
+    browser.check(
+      "print prepares all pages and releases its temporary DOM afterwards",
+      (
+        #| (async () => {
+        #|   const host = await import('./viewer.js');
+        #|   const original = window.print;
+        #|   let printed = false;
+        #|   let calls = 0;
+        #|   window.print = () => {
+        #|     calls++;
+        #|     const pages = [...document.querySelectorAll('#print-pages .page')];
+        #|     printed = document.body.classList.contains('pdf-print-ready') && pages.length === 200 && pages.every(page => page.querySelector('svg') && page.style.width.endsWith('pt'));
+        #|   };
+        #|   try { await Promise.all([host.printDocument(), host.printDocument()]); } finally { window.print = original; }
+        #|   return printed && calls === 1 && !document.getElementById('print').disabled;
+        #| })()
+      ),
+    )
+    let printed = browser.command("Page.printToPDF", params={
+      "preferCSSPageSize": true,
+      "printBackground": true,
+    })
+    guard printed is { "data": String(data), .. } else {
+      fail("Chromium did not generate a print PDF")
+    }
+    let print_bytes = @base64.decode(data)
+    @fs.write_file(output + "/host-printed.pdf", print_bytes)
+    let print_document = @pdflite.pdf_read_document_from_bytes(print_bytes)
+    let print_pages = print_document.pages_of_pagetree()
+    guard print_pages.length() == 200 else {
+      fail("Printed PDF lost pages: \{print_pages.length()}")
+    }
+    let first_paper = print_document.parse_rectangle(print_pages[0].mediabox)
+    let tenth_paper = print_document.parse_rectangle(print_pages[9].mediabox)
+    guard (first_paper.max_x - first_paper.min_x - 612.0).abs() < 0.1 &&
+      (first_paper.max_y - first_paper.min_y - 792.0).abs() < 0.1 &&
+      (tenth_paper.max_x - tenth_paper.min_x - 1188.0).abs() < 0.1 &&
+      (tenth_paper.max_y - tenth_paper.min_y - 918.0).abs() < 0.1 else {
+      fail("Printed physical page dimensions changed")
+    }
+    ignore(browser.evaluate("window.dispatchEvent(new Event('afterprint')); true"))
+    browser.check(
+      "printed PDF retains all physical page sizes and temporary DOM is released",
+      "!document.querySelector('#print-pages .page') && !document.body.classList.contains('pdf-print-ready')",
+    )
+    browser.check(
+      "replacing a document terminates its running work and ignores stale results",
+      (
+        #| (async () => {
+        #|   const host = await import('./viewer.js');
+        #|   const {pdf} = await import('./pdf-client.js');
+        #|   const file = new File([await (await fetch('/fixtures/90ms_rksj_h_sample.pdf')).blob()], 'replacement.pdf');
+        #|   const pending = pdf.call('render_page', [180, 2, 90]).catch(error => error.name);
+        #|   await host.loadFile(file, '/local/replacement.pdf');
+        #|   const outcome = await pending;
+        #|   const data = await host.runtimeDiagnostics();
+        #|   return outcome === 'AbortError' && data.pages === 1 && document.querySelectorAll('#pages .page').length === 1 && document.querySelector('.text-layer').textContent.includes('日本語テスト') && document.getElementById('file-name').textContent === 'replacement.pdf' && document.getElementById('error').hidden;
+        #| })()
+      ),
+    )
+    browser.check(
+      "Worker startup failure rejects queued work and can be recovered",
+      (
+        #| (async () => {
+        #|   const {PdfWorkerClient} = await import('./pdf-client.js');
+        #|   const client = new PdfWorkerClient({workerURL: '/missing-pdf-worker.js'});
+        #|   client.reset();
+        #|   const error = await client.call('cache_info').catch(error => error.code);
+        #|   const released = !client.diagnostics().worker && client.diagnostics().queued === 0;
+        #|   client.workerURL = new URL('./pdf-worker.js', location.href);
+        #|   client.reset();
+        #|   const bytes = new Uint8Array(await (await fetch('/fixtures/90ms_rksj_h_sample.pdf')).arrayBuffer());
+        #|   const reopened = JSON.parse(await client.call('open_pdf', [bytes]));
+        #|   client.close();
+        #|   return error === 'worker-error' && released && reopened.ok && reopened.pages === 1;
+        #| })()
+      ),
+    )
+    browser.check(
+      "bridge errors distinguish invalid scale rotation and missing pages",
+      (
+        #| (async () => {
+        #|   const bridge = await import('./pdf-client.js');
+        #|   const scale = JSON.parse(await bridge.render_page(1, NaN, 0));
+        #|   const rotation = JSON.parse(await bridge.render_page(1, 1, 5));
+        #|   const page = JSON.parse(await bridge.render_page(2, 1, 0));
+        #|   return scale.code === 'invalid-scale' && rotation.code === 'invalid-rotation' && page.code === 'page-missing';
+        #| })()
+      ),
+    )
+    browser.check(
+      "close releases Worker queues and page DOM and rejects later operations",
+      (
+        #| (async () => {
+        #|   const host = await import('./viewer.js');
+        #|   const {pdf} = await import('./pdf-client.js');
+        #|   const pending = pdf.call('render_page', [1, 2, 90]).catch(error => error.name);
+        #|   host.closeDocument();
+        #|   const cancelled = await pending;
+        #|   const closed = await pdf.call('document_info').catch(error => error.code);
+        #|   return cancelled === 'AbortError' && closed === 'document-closed' && !pdf.diagnostics().worker && !pdf.diagnostics().queued && document.querySelectorAll('#pages .page').length === 0 && document.getElementById('download').disabled && !document.getElementById('empty-state').hidden;
+        #| })()
+      ),
+    )
+    ignore(browser.evaluate("document.getElementById('zoom').value = '1'; window.hostStart = performance.now(); true"))
+    browser.upload(cwd + "/" + images)
+    browser.ready(16)
+    let image_open = browser.evaluate("performance.now() - hostStart")
+    for number in 1..<=16 {
+      let rendered = browser.evaluate(
+        "(async () => { const bridge = await import('./pdf-client.js'); const page = JSON.parse(await bridge.render_page(\{number}, 1, 0)); return page.ok && page.svg.includes('<image'); })()",
+      )
+      guard rendered == Json::boolean(true) else {
+        fail("Pressure image page \{number} was not rendered")
+      }
+      memory.push({ "phase": "image-\{number}", "heap": browser.heap() })
+    }
+    browser.check(
+      "raw image pressure evicts retained assets without blanking the visible page",
+      (
+        #| (async () => {
+        #|   const data = await (await import('./viewer.js')).runtimeDiagnostics();
+        #|   return data.source_bytes > 12 * 1024 * 1024 && data.cache.estimated_bytes <= data.cache.budget_bytes && data.cache.pages <= 8 && data.cache.evictions > 0 && data.cache.render.bytes <= data.cache.render.budget_bytes && data.cache.render.entries <= 12 && data.cache.render.evictions > 0 && document.querySelector('.paint-layer image') !== null && document.getElementById('error').hidden;
+        #| })()
+      ),
+    )
+    let pressure_end = browser.evaluate("(async () => await (await import('./viewer.js')).runtimeDiagnostics())()")
+    let retained = browser.heap(collect=true)
     guard browser.errors.is_empty() else {
       fail("Browser errors: " + browser.errors.to_json().stringify())
     }
@@ -682,11 +1116,33 @@ async fn main {
       "status": "passed",
       "checks": browser.checks,
       "passed": browser.checks.length(),
-      "scope": "Browser DOM text, source ranges, zoom/rotation, copy and multi-page smoke tests; not pixel parity",
+      "scope": "Browser interaction, Worker lifecycle, virtual page selection/printing and cache pressure; not pixel parity",
       "fixtures": [
         "90ms_rksj_h_sample.pdf", "vertical.pdf", "tracemonkey.pdf", "Pages-tree-refs.pdf",
       ],
       "font_loading": font_loading,
+      "host_runtime": {
+        "long_document": {
+          "pages": 200,
+          "source_bytes": @fs.read_file(pressure).binary().length(),
+          "sha256": pressure_hash.stdout().split(" ").next().unwrap().to_owned(),
+          "first_page_ms": cold_open,
+          "main_thread_timer_ms": browser.evaluate("hostTimer"),
+        },
+        "image_document": {
+          "pages": 16,
+          "source_bytes": @fs.read_file(images).binary().length(),
+          "sha256": image_hash.stdout().split(" ").next().unwrap().to_owned(),
+          "first_page_ms": image_open,
+          "samples": "Independent 512x512 raw RGB images; authored deterministic fixture",
+        },
+        "cold_hot_render": cached_render,
+        "memory_samples": memory,
+        "retained_after_gc": retained,
+        "printed_pages": print_pages.length(),
+        "final_runtime": pressure_end,
+        "memory_scope": "CDP main/Worker JS heap samples, not continuous process peak RSS; cache bytes are estimates and exclude parsed input and temporary decoding",
+      },
       "artifacts": output,
     }
     @fs.write_file(output + "/report.json", report.stringify(indent=2))

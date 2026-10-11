@@ -6,8 +6,9 @@ CLI. That conversion baseline does not measure parity with pdf.js rendering.
 The automated selected-page visual baseline below now measures actual output
 against the same pinned PDF.js build.
 
-The suite currently contains **374 tests on each of wasm, wasm-gc, JavaScript,
-and native**; the final A1 results are recorded below. Earlier stages included
+The suite currently contains **376 tests on each of wasm, wasm-gc, JavaScript,
+and native**; the browser host adds two lightweight page-layout regressions to
+the final A1 results recorded below. Earlier stages included
 13 annotation tests, 17 CFF tests, 25 Type 1 tests, 5 CID
 layout tests, 9 variable-length CMap tests, 4 text-geometry tests, and 8
 text-clipping tests, one mixed-paint scaling regression, and one tiling-pattern
@@ -33,6 +34,87 @@ The expanded selected-page baseline in `_build/visual-test-1791598324155/`
 measured **57/57 combinations from 20 PDFs**, **0 failures**, and **55 with
 pixel or text differences**. Its calibrated-colour interior samples below
 are an additional diagnostic, not an exemption from full-page differences.
+
+## Browser host lifecycle, scheduling and pressure
+
+Validated on 2026-10-11 using Chromium **145.0.7632.6** on macOS arm64.
+The browser report is `_build/browser-test-1791696549159/report.json`:
+**53/53 checks pass**, including the existing real-file interactions and 14
+additional scheduling/lifecycle/pressure checks. All four MoonBit backends pass
+**376/376**. This accepts the host main paths **P-02, U-05 and V-02** and brings
+the readonly checklist to **28/50**. Rendering/annotation parity is unchanged.
+
+`web/pdf-client.js` owns a native module Worker, a priority queue, startup
+failure/timeout handling and AbortSignal cleanup. `web/pdf-worker.js` runs the
+existing MoonBit bridge. Opening another file or closing the document
+terminates the old Worker and rejects its queued/active tasks; stale results
+cannot replace the new document. Cancelling an individual RPC rejects the
+caller and removes queued work; an already running synchronous page/search
+operation can finish before the Worker accepts another task. This is a host
+task contract, rather than a copy of PDF.js loading/render task objects.
+
+`PdfViewerDocument::page_viewport` resolves the same CropBox, origin, UserUnit
+and rotation as rendering without interpreting page contents/fonts/images.
+Its two tests compare geometry and preserve layout access with a corrupt page
+stream. `web/page-scheduler.js` retains cheap page boxes and mounts paint/text
+only near the viewport and selection endpoints. Thumbnails use a separate
+visible-row observer. Scale/rotation cancels the previous layout generation.
+Source selection/copy and search read unloaded pages through the Worker;
+200-page Ctrl+A does not mount 200 text layers. Native selection text covers
+mounted DOM; the rich selection event and clipboard contain the whole source
+range. Existing drag, Shift-arrow, vertical-text, font and navigation checks
+still pass.
+
+The authored deterministic pressure fixtures and measured timings are:
+
+| Fixture | Pages / input bytes | First page | Other observation |
+| --- | ---: | ---: | --- |
+| Simple text, varying Rotate/UserUnit | 200 / 56,204 | 635.2 ms | A requested 30 ms main-thread timer fires after 31.5 ms during Worker search |
+| Independent 512×512 raw RGB images | 16 / 12,591,301 | 551.3 ms | All pages render; the visible page remains painted after eviction |
+
+First-page time includes the file-input path, Worker startup and layout/font
+readiness. The text fixture SHA-256 is
+`cf9b2cb8c0569876f73aa66c80ff0fff3c2ef9767307e8689897fdcdb4075c02`;
+the image fixture is
+`a3ff2fa1be1b7203df98f28e290cae5b9eae8fb19a58b1915fe91cd1dcd14f3f`.
+These are scheduling pressure fixtures, not a natural large-document corpus
+or visual compatibility evidence. Cold/hot page rendering takes **4.4/0.2 ms**
+in this run and returns identical content with a recorded render-cache hit.
+
+| Retained cache | Budget | Final image-pressure sample |
+| --- | --- | --- |
+| Page models, including font/image assets | 8 pages and estimated 32 MiB | 8 pages, 17,566,298 estimated bytes, 8 evictions |
+| Serialized SVG/text layer | 12 entries and 24 MiB | 11 entries, 24,020,794 bytes, 5 evictions |
+| Main-thread font width measurements | 4,096 entries | Bounded independently of document length |
+
+Oversized entries are returned without retention. Page-model estimates use
+serialized UTF-16 size plus item/font overhead; they are cache accounting,
+not object-heap measurements. Parsed input, temporary decoding, browser
+font/image resources and the explicit whole-document print DOM are outside
+these budgets. `runtimeDiagnostics()` reports mounted pages, queue/cancellation
+counts and both caches. The final sample retains pages **1 and 2**, no queued
+tasks and no active RPC. Twenty-seven CDP samples report main-thread/Worker JS
+heap maxima of **33.71/127.60 MiB**; after explicit GC the retained heaps are
+**1.28/36.72 MiB**. Backing storage and embedder fields are also in the report.
+These are sampled JS heaps, not a continuous process peak or an RSS limit.
+
+The print entry prepares every page at its physical point size, waits for
+fonts/images, and releases temporary DOM on `afterprint`. A real Chromium
+`Page.printToPDF` export is read back with pdflite: **200 pages**, with page 1
+at **612×792 pt** and page 10 at **1188×918 pt**, preserving intrinsic Rotate
+and UserUnit. Repeated print preparation cancels the old task without clearing
+the new one. Use the toolbar or Ctrl/Cmd+P to prepare printing; a direct native
+browser-menu print cannot asynchronously prepare unloaded pages and displays
+that instruction. Screen/print annotation AP switching remains A-04.
+
+Reproduce with the development server running:
+
+```sh
+moon run tools/dev.mbtx 4312
+# In another terminal:
+moon run tools/browser_test.mbtx http://127.0.0.1:4312 /path/to/chromium
+moon test --target all
+```
 
 ## A1 completion validation
 
@@ -189,7 +271,7 @@ tables/compound outlines, multiple-FD CID Type 1 and unrecoverable streams
 retain documented recovery/error branches. Untagged ambiguous structures do
 not recover author semantics automatically; unverifiable bidi retains content
 order. Complete stroking/rasterization, image/colour/compositing and annotation
-parity remain in A2 and later TODO items. The global checklist is now **25/50**;
+parity remain in A2 and later TODO items. At A1 acceptance the checklist was **25/50**;
 editing, form saving and signatures are still outside that readonly baseline.
 
 ## A1 fonts, Unicode and reading order
@@ -1228,15 +1310,14 @@ with per-glyph writes; it now reuses inline styles and cached measurements.
 
 Limits: these are Chromium interaction checks and structural geometry
 assertions, **not automated PDF.js pixel parity** or an all-browser fidelity
-score. The browser eagerly mounts all pages, so Worker scheduling,
-virtualization, cancellation, memory limits and performance budgets remain
-pending. The body layer now uses the A1 block/line/bidi reading-order view;
-complex layouts and raw PDF byte spans are not completed. Annotation
+score. The later [browser host checks](#browser-host-lifecycle-scheduling-and-pressure)
+cover Worker scheduling, virtualization, cancellation and cache budgets. The
+body layer uses the A1 block/line/bidi reading-order view; ambiguous untagged
+layouts retain their documented limits. Annotation
 appearances and readonly widgets still need their own DOM interaction layer.
 Search currently highlights complete source items; exact character-range
 painting and complete locale/case-fold policy remain TODO.
-Scale and rotation still rebuild all mounted pages even though the page models
-are cached.
+Scale and rotation now rebuild only wanted pages while retaining cheap page boxes.
 
 ## Host font fallback policy
 
@@ -1345,8 +1426,10 @@ toolbar adds the three options, displays the result count, scrolls to the active
 page and highlights source text-layer items. The latest Chromium run is
 `_build/browser-test-1791598489760/report.json`, with all 33 checks passing.
 A1 now supplies Unicode NFKD source mapping and checked mixed-direction/column
-ordering. Complex PDF.js reading-order cases, substring highlighting inside a
-multi-character item and cancellable Worker search remain incomplete.
+ordering. Complex PDF.js reading-order cases and substring highlighting inside a
+multi-character item remain incomplete. Search now runs asynchronously in the
+Worker; cancelled or superseded results cannot publish, though a synchronous
+search already running in that Worker may finish before the next RPC.
 
 ## Automated PDF.js visual baseline
 

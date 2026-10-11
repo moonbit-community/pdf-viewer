@@ -10,6 +10,8 @@ page APIs, and SVG output for native applications.
 - Open local PDF files through the file picker or drag and drop.
 - Navigate documents with page controls, thumbnails, outlines, and page labels.
 - Zoom, rotate, select and copy text, and search across pages.
+- Decode in a browser Worker, mount nearby pages/thumbnails, and retain bounded page/render caches.
+- Print the complete document at its original page sizes using the toolbar or Ctrl/Cmd+P.
 - Open password-protected documents and inspect document information and attachments.
 - Export pages as SVG through the native command-line interface.
 - Access page geometry, text, display lists, and selection data through MoonBit APIs.
@@ -54,7 +56,7 @@ Build the browser application:
 moon run tools/build_web.mbtx
 ```
 
-Serve the `web/` directory, including the generated `web/_generated/pdf.js`,
+Serve the complete `web/` directory, including the Worker modules and generated `web/_generated/pdf.js`,
 with a static HTTP server. The deployed application runs without a native PDF
 process or a PDF.js runtime.
 

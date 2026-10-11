@@ -27,6 +27,12 @@ async fn main {
         (Some("web/index.html"), "text/html; charset=utf-8")
       "/viewer.css" => (Some("web/viewer.css"), "text/css; charset=utf-8")
       "/viewer.js" => (Some("web/viewer.js"), "text/javascript; charset=utf-8")
+      "/pdf-client.js" =>
+        (Some("web/pdf-client.js"), "text/javascript; charset=utf-8")
+      "/pdf-worker.js" =>
+        (Some("web/pdf-worker.js"), "text/javascript; charset=utf-8")
+      "/page-scheduler.js" =>
+        (Some("web/page-scheduler.js"), "text/javascript; charset=utf-8")
       "/_generated/pdf.js" =>
         (Some("web/_generated/pdf.js"), "text/javascript; charset=utf-8")
       [.. "/fixtures/", .. filename] if filename.has_suffix(".pdf") &&

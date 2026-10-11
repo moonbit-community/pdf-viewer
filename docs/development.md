@@ -95,6 +95,22 @@ moon run tools/dev.mbtx 4312
 ```
 
 打开 `http://127.0.0.1:4312/`，选择或拖入本地 PDF；文件读取和 PDF 解码在浏览器中进行。
+解码、搜索和页面渲染运行在 module Worker，正文与缩略图按可见范围挂载。
+部署时提供完整 `web/` 目录，包括 `pdf-client.js`、`pdf-worker.js`、`page-scheduler.js`
+和生成的 `_generated/pdf.js`，通过 HTTP 服务加载这些 ES modules。
+宿主诊断可在浏览器控制台读取：
+
+```js
+const host = await import("./viewer.js");
+await host.runtimeDiagnostics();
+// 关闭文档并释放 Worker、任务队列和页面 DOM：
+host.closeDocument();
+```
+
+页面模型缓存限 8 页/估算 32 MiB，序列化渲染缓存限 12 项/24 MiB；
+这些是缓存预算，原始文档、临时解码及浏览器字体/图片仍占用额外内存。
+工具栏打印和 Ctrl/Cmd+P 会按原始页面尺寸准备全文件，再打开打印对话框，
+打印后释放临时 DOM。直接用浏览器菜单打印时，页面会提示使用该入口。
 开发服务器也提供已下载的对照 fixture，例如
 `http://127.0.0.1:4312/?file=/fixtures/90ms_rksj_h_sample.pdf`。
 浏览器交互检查（需要 Chromium，可在第二个参数指定可执行文件）：
@@ -291,10 +307,13 @@ MoonBit 宿主可用 `reinterpret_as_uint()` 取得无符号值。原始 byte sp
 浏览器在 `#viewer` 上发出 `pdf-selection-change`，`event.detail` 包含
 `file: { name, path }`、归并的 `text` 和每页的 `ranges`；选区清空时为 `null`。
 本地文件的 `path` 为浏览器能获得的文件名，URL 载入保留传入的 URL。
+全选或跨页选区可以包含尚未挂载的页面；复制内容和该事件来自 Worker 的来源范围。
+虚拟化后原生 `getSelection().toString()` 只覆盖当前挂载的 DOM，宿主应读取事件中的完整文字。
 这只是独立 viewer 的来源信息，未接入 OpenSeek。搜索结果通过 `pdf-search-change` 事件提供
 查询词和几何丰富的结果；当前浏览器按 source item 高亮并滚动到活动结果。
-歧义布局/tagged PDF、完整 locale/case-fold 策略、批注与表单的 DOM 层、Worker/取消和大文件内存上限继续由
-TODO 跟踪；缩略图和基础打印入口已经提供。
+歧义布局/tagged PDF、完整 locale/case-fold 策略、批注与表单的 DOM 层继续由 TODO 跟踪；
+Worker/取消、虚拟化和缓存预算的边界与压力数据见
+[浏览器宿主验证](validation.md#browser-host-lifecycle-scheduling-and-pressure)。
 
 旋转参数按 pdf.js 规则只接受 `0/90/180/270`（允许等价的负数和大于 360 的整数）；
 SVG 渲染遇到其它角度会返回 `PageRotationExpected`，不会静默近似成另一个角度。
