@@ -8,6 +8,7 @@ let page_cache : Map[Int, BrowserCachedPage] = Map([])
 /// JS Bytes are Uint8Array. Read the document once and cache page models so
 /// toolbar changes do not repeatedly decode the PDF or its embedded fonts.
 pub fn open_pdf(bytes : Bytes) -> String {
+  current_range.val = None
   try {
     let document = @pdf.open_document(bytes)
     browser_install_document(document)
@@ -24,6 +25,7 @@ pub fn open_pdf(bytes : Bytes) -> String {
 /// Retry an encrypted document with a user password. Password bytes stay in
 /// the browser bridge and are never included in the document status JSON.
 pub fn open_pdf_with_password(bytes : Bytes, password : Bytes) -> String {
+  current_range.val = None
   try {
     let document = @pdf.open_document_with_passwords(
       bytes,
@@ -120,6 +122,7 @@ fn browser_error_with_code(code : String, message : String) -> String {
 
 ///|
 pub fn close_pdf() -> Unit {
+  current_range.val = None
   current_document.val = None
   browser_clear_pages()
 }

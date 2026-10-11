@@ -394,6 +394,7 @@ fn pdf_text_located_scope(
   resources : @syntax.PdfObject,
   source : PdfCollectedTextSource,
   source_bytes : Bytes,
+  source_stream_spans : Map[Int, PdfByteSpan],
 ) -> PdfTextLocatedScope {
   let frames : Array[PdfTextLocatedStream] = []
   let decoded : Array[Bytes] = []
@@ -417,7 +418,10 @@ fn pdf_text_located_scope(
             None
           }
         }
-        _ => None
+        _ =>
+          pdf_text_object_number(object).bind(number => {
+            source_stream_spans.get(number)
+          })
       }
       let file_start = match
         (
@@ -430,6 +434,12 @@ fn pdf_text_located_scope(
           | Some(@syntax.PdfNull)
           | Some(@syntax.PdfArray([])),
         ) if value.crypt.is_identity() => encoded.map(span => span.start)
+        (
+          @syntax.StreamGot(_),
+          None
+          | Some(@syntax.PdfNull)
+          | Some(@syntax.PdfArray([])),
+        ) => encoded.map(span => span.start)
         _ => None
       }
       let bytes = document.pdf_decode_stream(object).stream_bytes()
@@ -562,6 +572,7 @@ pub fn PdfViewerDocument::text_lexical_sources(
               entry.resources,
               captured,
               self.source_bytes,
+              self.source_stream_spans,
             )
             scopes.push(scope)
             scope

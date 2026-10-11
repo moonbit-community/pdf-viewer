@@ -3,9 +3,16 @@ const namedActions = new Set(["FirstPage", "LastPage", "NextPage", "PrevPage", "
 // The viewport matrix is shared with body/text paint, including CropBox,
 // UserUnit and intrinsic/requested page rotation.
 export function annotationRects(annotation, viewport) {
-  const matrix = viewport.matrix;
+  let matrix = viewport.matrix;
   if (!Array.isArray(matrix) || matrix.length !== 6 || !matrix.every(Number.isFinite)) return [];
   const { min_x: x0, min_y: y0, max_x: x1, max_y: y1 } = annotation.bounds;
+  if(annotation.flags & 24){
+    let [a,b,c,d,e,f]=matrix;
+    const anchorX=a*x0+c*y1+e,anchorY=b*x0+d*y1+f;
+    if(annotation.flags & 16){a=Math.hypot(a,b);b=0;d=-Math.hypot(c,d);c=0;}
+    if(annotation.flags & 8){const scale=viewport.scale*(viewport.user_unit||1);a/=scale;b/=scale;c/=scale;d/=scale;}
+    matrix=[a,b,c,d,anchorX-a*x0-c*y1,anchorY-b*x0-d*y1];
+  }
   const quads = annotation.quad_points?.length ? annotation.quad_points : [{
     p0: { x: x0, y: y0 }, p1: { x: x1, y: y0 },
     p2: { x: x1, y: y1 }, p3: { x: x0, y: y1 },

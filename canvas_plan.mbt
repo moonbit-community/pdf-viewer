@@ -217,10 +217,65 @@ fn pdf_canvas_plan(
     output.write_string("</svg>")
     output.to_string().to_json()
   }
+  let annotation_fragments : Array[Json] = []
+  for annotation in self.annotations {
+    if !annotation.visible {
+      continue
+    }
+    let x = annotation.bounds.min_x - self.origin_x
+    let y = self.origin_y + self.height - annotation.bounds.max_y
+    let padding = annotation.border_width.max(1.0) * 8.0
+    let width = annotation.bounds.max_x -
+      annotation.bounds.min_x +
+      2.0 * padding
+    let height = annotation.bounds.max_y -
+      annotation.bounds.min_y +
+      2.0 * padding
+    if width <= 0.0 || height <= 0.0 {
+      continue
+    }
+    let output = StringBuilder()
+    output.write_string(
+      "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"\{width}\" height=\"\{height}\" viewBox=\"\{x - padding} \{y - padding} \{width} \{height}\">",
+    )
+    pdf_svg_fonts(output, self)
+    pdf_svg_annotations(
+      output,
+      {
+        ..self,
+        rotation: 0,
+        annotations: [
+          {
+            ..annotation,
+            style: { ..annotation.style, no_zoom: false, no_rotate: false, },
+          },
+        ],
+      },
+      1.0,
+    )
+    output.write_string("</svg>")
+    annotation_fragments.push({
+      "svg": output.to_string().to_json(),
+      "x": (x - padding).to_json(),
+      "y": (y - padding).to_json(),
+      "width": width.to_json(),
+      "height": height.to_json(),
+      "anchor": [x, y].to_json(),
+      "no_zoom": annotation.style.no_zoom.to_json(),
+      "no_rotate": annotation.style.no_rotate.to_json(),
+      "blend": (if annotation.subtype == "highlight" &&
+        annotation.appearance is None {
+        "multiply"
+      } else {
+        "source-over"
+      }).to_json(),
+    })
+  }
   {
     "version": 1,
     "diagnostics": self.graphics_diagnostics().to_json(),
     "annotation_svg": annotation_svg,
+    "annotation_fragments": annotation_fragments.to_json(),
     "surface": "rgba8-straight",
     "icc_profiles": profiles.to_json(),
     "blend_space": self.blend_space.to_json(),

@@ -132,13 +132,10 @@ export function createPatternPainter(options={}) {
       drawField(context,bitmap,path,operation,env);
       return;
     }
-    // Singular values bound the affine footprint without discarding shear.
-    const aa=patternToDevice[0]**2+patternToDevice[1]**2;
-    const bb=patternToDevice[2]**2+patternToDevice[3]**2;
-    const ab=patternToDevice[0]*patternToDevice[2]+patternToDevice[1]*patternToDevice[3];
-    const discriminant=Math.hypot(aa-bb,2*ab);
-    const sx=Math.max(1e-6,Math.sqrt((aa+bb+discriminant)/2));
-    const sy=Math.max(1e-6,Math.sqrt(Math.max(0,(aa+bb-discriminant)/2)));
+    // Sample each cell axis using its own device-space footprint. Sorted
+    // singular values exchange the axes when Y is stretched more than X.
+    const sx=Math.max(1e-6,Math.hypot(patternToDevice[0],patternToDevice[1]));
+    const sy=Math.max(1e-6,Math.hypot(patternToDevice[2],patternToDevice[3]));
     const stepX=Math.abs(resource.x_step),stepY=Math.abs(resource.y_step),b=resource.bbox;
     if (!(stepX>0&&stepY>0)) throw new Error('Invalid PDF pattern lattice');
     const width=Math.max(1,Math.ceil(stepX*sx)),height=Math.max(1,Math.ceil(stepY*sy));

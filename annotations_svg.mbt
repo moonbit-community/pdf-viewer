@@ -6,7 +6,25 @@ fn pdf_svg_annotations(
 ) -> Unit {
   for annotation in page.annotations {
     if annotation.visible {
+      let x = (annotation.bounds.min_x - page.origin_x) * scale
+      let y = (page.origin_y + page.height - annotation.bounds.max_y) * scale
+      let compensation = if annotation.style.no_zoom {
+        1.0 / scale
+      } else {
+        1.0
+      }
+      let rotation = if annotation.style.no_rotate { -page.rotation } else { 0 }
+      output.write_string(
+        "<g opacity=\"\{annotation.style.opacity}\"" +
+        (if annotation.subtype == "highlight" && annotation.appearance is None {
+          " style=\"mix-blend-mode:multiply\""
+        } else {
+          ""
+        }) +
+        " transform=\"translate(\{x} \{y}) rotate(\{rotation}) scale(\{compensation}) translate(\{-x} \{-y})\">",
+      )
       pdf_svg_annotation(output, page, annotation, scale)
+      output.write_string("</g>")
     }
   }
 }
@@ -30,7 +48,20 @@ fn pdf_svg_annotation(
         _ => "#000000"
       }
   }
-  let stroke_width = if annotation.border_width * scale < 0.5 {
+  let stroke_width = if (
+      annotation.subtype == "square" || annotation.subtype == "circle"
+    ) &&
+    annotation.border_width <= 0.0 {
+    0.0
+  } else if (
+      annotation.subtype == "line" ||
+      annotation.subtype == "polyline" ||
+      annotation.subtype == "polygon" ||
+      annotation.subtype == "ink"
+    ) &&
+    annotation.border_width <= 0.0 {
+    scale
+  } else if annotation.border_width * scale < 0.5 {
     0.5
   } else {
     annotation.border_width * scale
@@ -87,7 +118,7 @@ fn pdf_svg_annotation(
       if annotation.quad_points.length() > 0 {
         for quad in annotation.quad_points {
           pdf_svg_annotation_quad(
-            output, page, annotation, quad, color, "0.35", "none", "", scale,
+            output, page, annotation, quad, color, "1", "none", "", scale,
           )
         }
       } else {
@@ -104,7 +135,7 @@ fn pdf_svg_annotation(
           height.to_string() +
           "\" fill=\"" +
           color +
-          "\" fill-opacity=\"0.35\" stroke=\"none\"/>",
+          "\" fill-opacity=\"1\" stroke=\"none\"/>",
         )
       }
     "underline" | "strikeout" | "squiggly" =>
@@ -130,21 +161,16 @@ fn pdf_svg_annotation(
           } else {
             quad.p1
           }
-          pdf_svg_annotation_line(
-            output,
-            page,
-            annotation,
-            first,
-            second,
-            color,
-            stroke_width,
-            if annotation.subtype == "squiggly" {
-              " stroke-dasharray=\"4 2\""
-            } else {
-              dash
-            },
-            scale,
-          )
+          if annotation.subtype == "squiggly" {
+            pdf_svg_annotation_squiggly(
+              output, page, annotation, first, second, color, stroke_width, scale,
+            )
+          } else {
+            pdf_svg_annotation_line(
+              output, page, annotation, first, second, color, stroke_width, dash,
+              scale,
+            )
+          }
         }
       } else {
         pdf_svg_annotation_line(
@@ -161,10 +187,14 @@ fn pdf_svg_annotation(
       }
     "line" =>
       match annotation.line_points {
-        [first, second, ..] =>
+        [first, second, ..] => {
           pdf_svg_annotation_line(
             output, page, annotation, first, second, color, stroke_width, dash, scale,
           )
+          pdf_svg_annotation_line_endings(
+            output, page, annotation, first, second, color, stroke_width, scale,
+          )
+        }
         _ =>
           pdf_svg_annotation_line(
             output,
@@ -191,6 +221,18 @@ fn pdf_svg_annotation(
           annotation.subtype == "polygon",
           scale,
         )
+        if annotation.subtype == "polyline" {
+          pdf_svg_annotation_line_endings(
+            output,
+            page,
+            annotation,
+            annotation.vertices[0],
+            annotation.vertices[annotation.vertices.length() - 1],
+            color,
+            stroke_width,
+            scale,
+          )
+        }
       } else {
         pdf_svg_annotation_rect(
           output, annotation, x, y, width, height, color, stroke_width, dash, name,
@@ -241,7 +283,9 @@ fn pdf_svg_annotation(
         (width / 2.0).to_string() +
         "\" ry=\"" +
         (height / 2.0).to_string() +
-        "\" fill=\"none\" stroke=\"" +
+        "\" fill=\"" +
+        annotation.style.interior_color.unwrap_or("none") +
+        "\" stroke=\"" +
         color +
         "\" stroke-width=\"" +
         stroke_width.to_string() +
@@ -249,20 +293,26 @@ fn pdf_svg_annotation(
         dash +
         "/>",
       )
-    "text" => {
-      let radius = 6.0.max(width.min(height) / 3.0)
+    "caret" =>
+      output.write_string(
+        "<path " +
+        name +
+        " d=\"M \{x} \{y + height} L \{x + width / 2.0} \{y} L \{x + width} \{y + height} Z\" fill=\"\{color}\"/>",
+      )
+    "text" | "file-attachment" | "sound" => {
+      let icon = if annotation.subtype == "file-attachment" &&
+        annotation.style.icon == "Note" {
+        "Paperclip"
+      } else {
+        annotation.style.icon
+      }
       output.write_string(
         "<g " +
         name +
-        "><circle cx=\"" +
-        (x + radius).to_string() +
-        "\" cy=\"" +
-        (y + radius).to_string() +
-        "\" r=\"" +
-        radius.to_string() +
-        "\" fill=\"" +
-        color +
-        "\" fill-opacity=\"0.9\" stroke=\"white\" stroke-width=\"1\"/>" +
+        " data-pdf-annotation-icon=\"" +
+        pdf_escape_xml(icon) +
+        "\" transform=\"translate(\{x} \{y}) scale(\{width / 40.0} \{height / 40.0})\">" +
+        pdf_annotation_icon_svg(icon) +
         pdf_svg_annotation_title(annotation) +
         "</g>",
       )
@@ -298,10 +348,17 @@ fn pdf_svg_annotation_field_attributes(
     None => ()
   }
   match annotation.field_value {
-    Some(value) =>
+    Some(value) => {
+      let value = if annotation.field_type == Some("Tx") &&
+        annotation.field_flags.unwrap_or(0).land(8192) != 0 {
+        String::from_iter(value.iter().map(_ => '*'))
+      } else {
+        value
+      }
       output.write_string(
         " data-pdf-field-value=\"" + pdf_escape_xml(value) + "\"",
       )
+    }
     None => ()
   }
   match annotation.field_flags {
@@ -685,7 +742,11 @@ fn pdf_svg_annotation_polyline(
     "\" points=\"" +
     values.to_string() +
     "\" fill=\"" +
-    (if closed { "none" } else { "none" }) +
+    (if closed {
+      annotation.style.interior_color.unwrap_or("none")
+    } else {
+      "none"
+    }) +
     "\" stroke=\"" +
     color +
     "\" stroke-width=\"" +
@@ -720,7 +781,9 @@ fn pdf_svg_annotation_rect(
     width.to_string() +
     "\" height=\"" +
     height.to_string() +
-    "\" fill=\"none\" stroke=\"" +
+    "\" fill=\"" +
+    annotation.style.interior_color.unwrap_or("none") +
+    "\" stroke=\"" +
     color +
     "\" stroke-width=\"" +
     stroke_width.to_string() +

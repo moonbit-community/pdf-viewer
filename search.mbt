@@ -80,6 +80,7 @@ pub fn PdfViewerDocument::search(
   self : PdfViewerDocument,
   query : String,
   options? : PdfSearchOptions = pdf_search_options(),
+  page? : Int? = None,
 ) -> Array[PdfSearchResult] raise @core.PdfError {
   if query.length() == 0 {
     return []
@@ -89,7 +90,12 @@ pub fn PdfViewerDocument::search(
     return []
   }
   let output : Array[PdfSearchResult] = []
-  for page_number in 1..<=self.page_count() {
+  let first = page.unwrap_or(1)
+  let last = page.unwrap_or(self.page_count())
+  if page is Some(_) && (first < 1 || first > self.page_count()) {
+    raise @core.SoftError("Search page does not exist")
+  }
+  for page_number in first..<=last {
     let page = self.page(page_number).unwrap()
     let content = page.text_content()
     let source = content.text

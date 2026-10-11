@@ -1,0 +1,134 @@
+name: Readonly validation
+on:
+  push:
+    branches: [master]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: readonly-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  moon:
+    name: Moon ${{ matrix.target }} / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-24.04, target: js, codecs: '0'}
+          - {os: ubuntu-24.04, target: wasm, codecs: '0'}
+          - {os: ubuntu-24.04, target: wasm-gc, codecs: '0'}
+          - {os: ubuntu-24.04, target: native, codecs: '1'}
+          - {os: macos-15, target: native, codecs: '0'}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      PDF_REQUIRE_NATIVE_CODECS: ${{ matrix.codecs }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24.15.0'
+      - name: Install verified MoonBit
+        shell: bash
+        run: |
+          bash tools/ci/install_moon.sh "$RUNNER_TEMP/pdf-moon"
+          echo "$RUNNER_TEMP/pdf-moon/bin" >> "$GITHUB_PATH"
+          echo "MOON_HOME=$RUNNER_TEMP/pdf-moon" >> "$GITHUB_ENV"
+      - name: Install pinned web primitives
+        run: npm ci --prefix tools/web-assets --ignore-scripts --omit=optional
+      - name: Install Linux colour engine
+        if: matrix.os == 'ubuntu-24.04' && matrix.target == 'native'
+        run: sudo apt-get update && sudo apt-get install -y liblcms2-2
+      - name: Build verified assets and bridge
+        run: moon run tools/build_web.mbtx
+      - name: Check formatting and public interfaces
+        run: |
+          moon info
+          moon fmt
+          git diff --exit-code -- '*.mbt' '*.mbti'
+      - name: Test target
+        shell: bash
+        run: |
+          mkdir -p _build/ci-logs
+          set -o pipefail
+          moon test --target '${{ matrix.target }}' 2>&1 | tee '_build/ci-logs/${{ matrix.os }}-${{ matrix.target }}.log'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: moon-${{ matrix.os }}-${{ matrix.target }}
+          path: _build/ci-logs
+          if-no-files-found: error
+  browser:
+    name: Corpus, browser and visual baselines
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: mozilla/pdf.js
+          ref: 89b500f5e1d98ed89bb90211e45b28730b2d99ac
+          path: reference/pdf.js
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24.15.0'
+      - name: Install verified MoonBit
+        run: |
+          bash tools/ci/install_moon.sh "$RUNNER_TEMP/pdf-moon"
+          echo "$RUNNER_TEMP/pdf-moon/bin" >> "$GITHUB_PATH"
+          echo "MOON_HOME=$RUNNER_TEMP/pdf-moon" >> "$GITHUB_ENV"
+      - name: Install pinned browser and test primitives
+        run: |
+          npm ci --prefix tools/web-assets --ignore-scripts --omit=optional
+          npm ci --prefix tools/test-host --ignore-scripts
+          tools/test-host/node_modules/.bin/playwright install --with-deps chromium
+          echo "PDF_CANVAS_PACKAGE=$GITHUB_WORKSPACE/tools/test-host/package.json" >> "$GITHUB_ENV"
+          node --input-type=module -e "import{createRequire}from'node:module';const r=createRequire(process.cwd()+'/tools/test-host/package.json'); console.log('PDF_CHROMIUM='+r('playwright').chromium.executablePath())" >> "$GITHUB_ENV"
+      - name: Build fixed PDF.js reference
+        working-directory: reference/pdf.js
+        run: |
+          npm ci --ignore-scripts
+          npx gulp generic
+      - name: Build viewer and authored fixtures
+        run: |
+          moon run tools/build_web.mbtx
+          node tools/pixels/write_readonly_fixtures.mjs
+          node tools/ci/prepare_corpus.mjs
+          moon run tools/text_host_pen.mbtx
+      - name: Check gap table and focused regressions
+        run: |
+          node tools/ci/check_scope.mjs
+          node tools/ci/check_reports_test.mjs
+          node tools/pixels/canvas_test.mjs
+          node tools/pixels/worker_canvas_test.mjs
+          node tools/pixels/review_regression_test.mjs
+          node tools/pixels/text_diagnostic_test.mjs
+          node tools/pixels/range_reader_test.mjs
+          node tools/pixels/xfa_test.mjs
+      - name: Measure corpus and visual baseline
+        run: |
+          moon run tools/reader_corpus.mbtx _build/ci-corpus
+          moon run tools/visual_test.mbtx tools/ci/visual_cases.json "$PDF_CHROMIUM"
+      - name: Exercise browser and print output
+        shell: bash
+        run: |
+          moon run tools/dev.mbtx 4314 > _build/ci-dev.log 2>&1 &
+          ci_dev_pid=$!
+          trap 'kill "$ci_dev_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..60}; do curl --fail --silent http://127.0.0.1:4314/ > /dev/null && break || sleep 1; done
+          moon run tools/browser_test.mbtx http://127.0.0.1:4314 "$PDF_CHROMIUM"
+          node tools/ci/check_reports.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: readonly-reports
+          path: |
+            _build/reader-corpus-*/
+            _build/visual-test-*/
+            _build/browser-test-*/
+            _build/ci-corpus/manifest.json
+            _build/ci-dev.log
+            web/_test/manifest.json
+            web/vendor/xfa/UPSTREAM.json
+          if-no-files-found: error

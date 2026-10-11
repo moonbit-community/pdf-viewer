@@ -1,4 +1,22 @@
 ///|
+/// Whether this host has installed the bounded JBIG2 decoder.
+/// Availability does not imply that arbitrary input can be decoded.
+pub fn available() -> Bool {
+  host_available()
+}
+
+///|
+#cfg(target="js")
+extern "js" fn host_available() -> Bool =
+  #| () => typeof globalThis.__pdf_viewer_jbig2_decode === "function"
+
+///|
+#cfg(not(any(target="js", target="native")))
+fn host_available() -> Bool {
+  false
+}
+
+///|
 /// Standalone JBIG2 host adapter. Output is tight, row-aligned, MSB-first
 /// one-bit luminance (0 black, 1 white). Decode, colour keys, ImageMask and
 /// alpha are applied by the image pipeline, never by this codec.

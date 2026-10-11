@@ -16,6 +16,9 @@ web/_generated/
 
 # Verified npm assets are build output, not source-controlled binaries.
 /tools/web-assets/node_modules/
+/tools/test-host/node_modules/
 /vendor/jbig2/jbig2.wasm
 /web/vendor/lcms-wasm/lcms.mjs
 /web/vendor/lcms-wasm/lcms.wasm
+/web/vendor/xfa/
+/web/_test/

@@ -5,6 +5,7 @@
 fn pdf_recover_compressed_document(
   bytes : Bytes,
   original : @pdflite.PdfDocument,
+  source_spans? : Map[Int, PdfByteSpan]? = None,
 ) -> @pdflite.PdfDocument raise @core.PdfError {
   if original.is_encrypted() {
     raise @core.PageTreeExpected
@@ -70,7 +71,13 @@ fn pdf_recover_compressed_document(
       entry.object_stream is Some(_) {
       continue
     }
-    let parsed = pdf_recovery_object(bytes, entry.offset, original) catch {
+    let stream_start : Ref[Int?] = Ref(None)
+    let parsed = pdf_recovery_object(
+      bytes,
+      entry.offset,
+      original,
+      stream_start=Some(stream_start),
+    ) catch {
       _ => continue
     }
     if parsed.number == entry.object_number &&
@@ -80,6 +87,12 @@ fn pdf_recover_compressed_document(
         parsed.object,
         generation=parsed.generation,
       )
+      if source_spans is Some(spans) &&
+        stream_start.val is Some(start) &&
+        parsed.object is @syntax.PdfStreamObject(stream) {
+        let length = @syntax.pdf_stream_data_bytes(stream.data).length()
+        spans[parsed.number] = { start, end: start + length, }
+      }
     }
   }
   let active = entries.values().collect()
@@ -188,8 +201,11 @@ fn pdf_recovery_object(
   bytes : Bytes,
   offset : Int,
   document : @pdflite.PdfDocument,
+  stream_start? : Ref[Int?]? = None,
+  require_end? : Bool = false,
+  header_only? : Bool = false,
 ) -> @syntax.PdfParsedIndirectObject raise @core.PdfError {
-  if offset <= 0 || offset >= bytes.length() {
+  if offset < 0 || offset >= bytes.length() {
     raise @core.XRefEntryExpected
   }
   let cursor = @core.byte_cursor_of_view(bytes)
@@ -208,12 +224,18 @@ fn pdf_recovery_object(
     }
   }
   let parsed = @syntax.pdf_parse_indirect_object_prefix_lexemes(tokens)
+  if header_only {
+    return parsed
+  }
   if tokens.last() is Some(@syntax.LexEndObj) {
     return parsed
   }
   if !@syntax.pdf_cursor_matches_ascii_at(cursor, cursor.absolute_position(), [
       115, 116, 114, 101, 97, 109,
     ]) {
+    if require_end {
+      raise @core.ParseEndObjectExpected
+    }
     return parsed
   }
   guard parsed.object is @syntax.PdfDictionary(_) else {
@@ -237,6 +259,9 @@ fn pdf_recovery_object(
   }
   if length < 0 || length > bytes.length() - cursor.absolute_position() {
     raise @core.StreamDataExpected
+  }
+  if stream_start is Some(output) {
+    output.val = Some(cursor.absolute_position())
   }
   let data = cursor.read_bytes(length)
   @syntax.pdf_cursor_drop_whitespace(cursor)

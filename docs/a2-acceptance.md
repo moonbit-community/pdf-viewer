@@ -211,9 +211,10 @@ against Ghostscript. No remote PDF upload or external rendering service is used.
 ## Pre-merge review: open regressions (2026-10-11)
 
 Review of PR #1 at `6b8072be8bf7d16cfad8237d9dd3507c2db4b7bb` confirmed the
-following six P2 issues. They remain open after conflict resolution with
-`60e4b69`; the checked main-path inventory above does not claim these branches
-are correct. They are regression follow-ups rather than new checklist capabilities.
+following six P2 issues. They were open after conflict resolution with
+`60e4b69` and have now been fixed in the readonly completion work below. The
+historical measurements are retained; these are regression follow-ups rather
+than new checklist capabilities.
 
 | Area | Reproduction and observed result | Follow-up |
 | --- | --- | --- |
@@ -254,7 +255,26 @@ The actual Worker/Canvas suite and host-text diagnostic controls also passed
 against the freshly built bridge. These results supersede the original author's
 browser-launch limitation for this integrated tree; they do not establish
 reference-renderer appearance equality, manual screen-reader acceptance or a
-whole-document RSS bound. All six review regressions above remain open.
+whole-document RSS bound. All six review regressions were open at this integration checkpoint; see the subsequent fixes below.
+
+## Readonly completion and regression fixes (2026-10-11)
+
+The six pre-merge regressions are fixed: source ICC Alternate survives a missing
+CMM and malformed source profiles; anisotropic pattern sampling keeps each
+transformed cell axis; grayscale single-component JPEG scans use noninterleaved
+block order; host text preserves stroke CA; DPR and 150-DPI print output use
+physical backing dimensions with bounded tiled replay; optional native hosts
+are queried before use. Linux CI requires real ICC/JBIG2 engines rather than
+allowing capability tests to skip them.
+
+Focused public-bridge tests cover every affected branch. Tile boundaries retain
+clipping, pattern phase, masks, alpha and annotation output. Full macOS native
+validation now passes; the previous optional-engine abort is resolved. The
+readonly inventory additionally completes annotation/field appearances, Range,
+XFA and CI. See [completion evidence and limits](readonly-completion.md) for the
+four-target totals, browser/print checks, corpus hashes and retained visual
+residuals. The historical whole-page colour and Type3 differences still apply;
+these fixes do not establish complete pixel fidelity.
 
 ## Common reproduction
 

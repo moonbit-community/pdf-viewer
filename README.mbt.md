@@ -91,6 +91,14 @@ not install npm dependencies automatically.
 - [Validation methodology and results](docs/validation.md)
 - [Contributor workstreams](docs/PARALLEL.md)
 
+
+The standalone viewer supports readonly annotation/field fallbacks, HTTP Range
+loading, and dynamic XFA pages. XFA layout and native controls reuse the pinned
+Apache-licensed PDF.js XFA components; the PDF reader and Canvas pipeline remain
+this project's pdflite/MoonBit implementation. See [readonly acceptance and
+CI limits](docs/readonly-completion.md), including known visual differences and
+the separate editing, saving and signing roadmap.
+
 ## License
 
 Licensed under the [Apache License 2.0](LICENSE).

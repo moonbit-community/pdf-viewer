@@ -1,4 +1,4 @@
-import {pdfDeviceRgbToCmyk} from './pdf-icc.mjs';
+import {pdfDeviceRgbToCmyk,currentIccAlternate} from './pdf-icc.mjs';
 const clamp=x=>Math.max(0,Math.min(1,x));
 const channels=space=>space==='DeviceCMYK'?4:['DeviceGray','CalGray'].includes(space)?1:3;
 /** One group's original component domain and its explicit output transform. */
@@ -31,6 +31,7 @@ export function pdfGroupColour(space,profileId,scope,options={},intent=undefined
     if(rgb)values=n===1?[rgb[0]*.3+rgb[1]*.59+rgb[2]*.11]:rgb;
    }
   }
+  if(!values&&source.space==='ICCBased'&&source.alternate&&!profile&&!calibration)return convert(currentIccAlternate(source));
   if(!values||values.length!==n||!Array.from(values).every(Number.isFinite))return failure(`${source.space} cannot be converted to ${profile||space}`);
   return Array.from(values,clamp);
  };

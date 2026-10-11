@@ -1,5 +1,26 @@
 import * as bridge from "./_generated/pdf.js";
 import { initializePdfGraphics } from "./pdf-runtime.mjs";
+import { createXfaDocument } from "./pdf-xfa.mjs";
+import { PdfRangeSource, PdfRangeDocument } from "./pdf-range.mjs";
+
+let xfa = null;
+let rangeDocument = null;
+let rangeSource = null;
+
+async function openURL(url, password) {
+  if (!password || rangeSource?.url !== url) rangeSource = new PdfRangeSource(url);
+  rangeDocument = null;
+  if (password) return bridge.open_pdf_with_password(await rangeSource.complete("encrypted PDF"), password);
+  const reader = new PdfRangeDocument(rangeSource, bridge);
+  try {
+    const result = await reader.open();
+    if (!rangeSource.full) rangeDocument = reader;
+    return result;
+  } catch (error) {
+    if (error.code === "source-changed") throw error;
+    return bridge.open_pdf(await rangeSource.complete(error.message));
+  }
+}
 
 const renders = new Map();
 const budget = 24 * 1024 * 1024;
@@ -39,22 +60,71 @@ function render(method, args) {
   return result;
 }
 
-function handleMessage(event) {
+async function searchRanges(args) {
+  try { return await rangeDocument.search(args); }
+  catch (error) {
+    if (error.code === "source-changed") throw error;
+    const opened = JSON.parse(bridge.open_pdf(await rangeSource.complete(error.message)));
+    if (!opened.ok) throw Error(opened.error);
+    rangeDocument = null;
+    clearRenders();
+    return bridge.search_pdf(...args);
+  }
+}
+
+async function handleMessage(event) {
   const { id, method, args } = event.data;
   try {
-    if (!Object.hasOwn(bridge, method) || typeof bridge[method] !== "function") {
+    if (method !== "open_pdf_url" && (!Object.hasOwn(bridge, method) || typeof bridge[method] !== "function")) {
       throw Object.assign(new Error("Unknown PDF operation"), { code: "invalid-operation" });
     }
-    if (["open_pdf", "open_pdf_with_password", "close_pdf", "set_font_fallbacks"].includes(method)) {
+    if (["open_pdf", "open_pdf_url", "open_pdf_with_password", "close_pdf", "set_font_fallbacks"].includes(method)) {
       clearRenders();
     }
-    let result = ["render_page", "render_print_page"].includes(method)
-      ? render(method, args) : bridge[method](...args);
+    if (["open_pdf", "open_pdf_with_password", "close_pdf"].includes(method)) {
+      rangeDocument = rangeSource = null;
+    }
+    if (rangeDocument && method !== "open_pdf_url" && (!xfa || ["document_info", "download_metadata", "download_attachment"].includes(method))) {
+      try { await rangeDocument.prepare(method, args); }
+      catch (error) {
+        if (error.code === "source-changed") throw error;
+        bridge.open_pdf(await rangeSource.complete(error.message));
+        rangeDocument = null;
+        clearRenders();
+      }
+    }
+    let result = rangeDocument && !xfa && method === "search_pdf" ? await searchRanges(args) : xfa && ["render_page", "render_print_page"].includes(method)
+      ? xfa.render(...args) : xfa && method === "page_layouts"
+      ? JSON.stringify({ok:true,layouts:xfa.layouts}) : xfa && method === "select_page_text"
+      ? xfa.select(...args) : xfa && method === "search_pdf"
+      ? xfa.search(...args) : ["render_page", "render_print_page"].includes(method)
+      ? render(method, args) : method === "open_pdf_url" ? await openURL(...args) : bridge[method](...args);
+    if (["open_pdf", "open_pdf_url", "open_pdf_with_password"].includes(method)) {
+      xfa?.dispose();
+      xfa = null;
+      const opened = JSON.parse(result);
+      if (opened.ok) {
+        let data = JSON.parse(bridge.xfa_data());
+        if (rangeDocument && (data.needs_rendering || !opened.pages)) {
+          await rangeDocument.prepare("xfa_data", []);
+          data = JSON.parse(bridge.xfa_data());
+        }
+        if (!data.ok) throw Error(data.error);
+        if (data.packets.length && (data.needs_rendering || !opened.pages)) {
+          xfa = await createXfaDocument(data, bridge);
+          result = JSON.stringify({...opened,pages:xfa.count,labels:[],xfa:true});
+        }
+      }
+    }
+    if (method === "close_pdf") {xfa?.dispose();xfa = null;}
+    if (["render_page", "render_print_page"].includes(method) && rangeSource && rangeSource.stats.first_page_bytes === null && JSON.parse(result).ok) {
+      rangeSource.stats.first_page_bytes = rangeSource.stats.received_bytes;
+    }
     if (method === "cache_info") {
       result = JSON.stringify({ ...JSON.parse(result), render: {
         entries: renders.size, bytes, budget_bytes: budget,
         max_entries: maxEntries, hits, misses, evictions,
-      } });
+      }, range: rangeSource ? {...rangeSource.diagnostics(), objects: JSON.parse(bridge.range_cache_info())} : null });
     }
     self.postMessage({ id, result });
   } catch (error) {

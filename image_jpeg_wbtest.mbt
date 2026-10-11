@@ -313,3 +313,23 @@ test "JPEG cmyk_progressive sample oracle" {
     msg="sum channel difference: \{sum_error}",
   )
 }
+
+///|
+test "single-component JPEG sampling factors preserve raster block order" {
+  // Original 32x16 constant blocks, cjpeg -grayscale -sample 2x2 -quality 100.
+  let bytes = @base64.decode(
+    "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAIBAQEBAQIBAQECAgICAgQDAgICAgUEBAMEBgUGBgYFBgYGBwkIBgcJBwYGCAsICQoKCgoKBggLDAsKDAkKCgr/wAALCAAQACABASIA/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/9oACAEBAAA/APx3r6gr6gr6gr8b6+oK+oK+oK//2Q==",
+  )
+  let decoded = pdf_jpeg_decode(bytes, None)
+  assert_eq(decoded.width, 32)
+  assert_eq(decoded.height, 16)
+  assert_eq(decoded.components, 1)
+  let expected = [[30, 70, 110, 150], [50, 90, 130, 170]]
+  for y in 0..<16 {
+    for x in 0..<32 {
+      assert_true(
+        (decoded.bytes[y * 32 + x].to_int() - expected[y / 8][x / 8]).abs() <= 1,
+      )
+    }
+  }
+}

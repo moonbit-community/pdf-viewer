@@ -1,0 +1,11 @@
+{
+  "name": "pdf-viewer-test-host",
+  "private": true,
+  "version": "0.0.0",
+  "dependencies": {
+    "@napi-rs/canvas": "1.0.10",
+    "@resvg/resvg-js": "2.6.2",
+    "pdfjs-dist": "6.4.299",
+    "playwright": "1.58.2"
+  }
+}

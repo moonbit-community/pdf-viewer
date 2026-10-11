@@ -1,0 +1,157 @@
+{
+  "project": "Mozilla PDF.js",
+  "commit": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+  "source": "https://github.com/mozilla/pdf.js/tree/89b500f5e1d98ed89bb90211e45b28730b2d99ac/src/core/xfa",
+  "license": "Apache-2.0",
+  "scope": "Unmodified XFA XML/binding/layout and XfaLayer DOM components, without the PDF reader, Worker or PDF Canvas renderer.",
+  "files": [
+    {
+      "path": "src/core/base_stream.js",
+      "sha256": "966fa974b44407d2d6cd266ee21584726818f7837faf0c43d739fd42260af2cc"
+    },
+    {
+      "path": "src/core/core_utils.js",
+      "sha256": "2965027a2f5d5e4a4b510efcadd4babb369e89ab4ab9a61761e3a0a6770bcf46"
+    },
+    {
+      "path": "src/core/primitives.js",
+      "sha256": "59a138c1353f25190775726274dadd2d92a934394ecf6ad177af7379ca96dd1d"
+    },
+    {
+      "path": "src/core/string_utils.js",
+      "sha256": "6b5c43fe9dfd73fc6fe7e9eae5a99672eb5f5e43d2879dab7be35eb0d82e5320"
+    },
+    {
+      "path": "src/core/xfa/bind.js",
+      "sha256": "f5183d6c8a4f8554092f52e07d6e61a68178e72e489326a9ddb0eb5e1d1811e0"
+    },
+    {
+      "path": "src/core/xfa/builder.js",
+      "sha256": "ae9767f99bbbaf77c99e3b33e7c76228b71173ebdda855599dc5d38c8f41c653"
+    },
+    {
+      "path": "src/core/xfa/config.js",
+      "sha256": "aa5777c996e068771bcb741cb3272b6e6a83cdd4f6c83e87c9899a13e457db5e"
+    },
+    {
+      "path": "src/core/xfa/connection_set.js",
+      "sha256": "c7cb9b0e8afc1603c20b266fac9449f9c795264bdea4c1218a9215e127290ea3"
+    },
+    {
+      "path": "src/core/xfa/data.js",
+      "sha256": "996e6d2d27665c852b9b66ef4c0d2d47f7d471c63abd8ad8724cd5951236b15e"
+    },
+    {
+      "path": "src/core/xfa/datasets.js",
+      "sha256": "d9dba8919b991390a8954e9cda198b5d20a8fe420f5c93305d25e3ac908f2a23"
+    },
+    {
+      "path": "src/core/xfa/factory.js",
+      "sha256": "2c3c71886cd191093225c80032ffeeb8569d8bdd1baf03ac0499c7172b359bc9"
+    },
+    {
+      "path": "src/core/xfa/fonts.js",
+      "sha256": "ef54b49d0520bfd9c3b0c74eedab887bd2df59e200ceb0205f2b7b670812241f"
+    },
+    {
+      "path": "src/core/xfa/html_utils.js",
+      "sha256": "6cae3229a6640737d995b6a9b6aff8faafe5462c7955e3d43abac3119fd7ccf9"
+    },
+    {
+      "path": "src/core/xfa/layout.js",
+      "sha256": "831a6d1d7762052a7f73e6e7f2028b76f82062155a254e13f160da94c2ee10bb"
+    },
+    {
+      "path": "src/core/xfa/locale_set.js",
+      "sha256": "300916f8fcc9bcf920abd15e8642a04069a306cce400eccc9f07def3084d0fd6"
+    },
+    {
+      "path": "src/core/xfa/namespaces.js",
+      "sha256": "6c798e7e20fee3878b2c4f3a04b3fd62d48c1a48ca69439cc19f9b8e1418f7e7"
+    },
+    {
+      "path": "src/core/xfa/parser.js",
+      "sha256": "6ac64327df1b785b576703ff9a7488858430cd8fe961d69db25dcebbad8b8d37"
+    },
+    {
+      "path": "src/core/xfa/setup.js",
+      "sha256": "3b35d1da3fa8bc01add1b06ff83ea6be9c00920c4b55d0d767c88fa9618877ed"
+    },
+    {
+      "path": "src/core/xfa/signature.js",
+      "sha256": "fa5dffb1c2f969873bf3fe1eb34b15ae2be4fcbd0cc735fe06e2b3d4aa845646"
+    },
+    {
+      "path": "src/core/xfa/som.js",
+      "sha256": "88f6c0463f133da3610527b46fcc1d099c326a8bdd36d9d9251cc6ef3e8c3d56"
+    },
+    {
+      "path": "src/core/xfa/stylesheet.js",
+      "sha256": "e6cf20ec7723d3d259c38b3b8ac2dbc7b1ce29a65694cba10aa623dab4580325"
+    },
+    {
+      "path": "src/core/xfa/symbol_utils.js",
+      "sha256": "f4e53116c3fd18fd7026b4e0b5b4ed7763f42f889dd989989730875b2f8fe7ac"
+    },
+    {
+      "path": "src/core/xfa/template.js",
+      "sha256": "99986a3718286fd6400a2f9e16672431caf7cc0f2fe50cbdac38aa90c3db4a97"
+    },
+    {
+      "path": "src/core/xfa/text.js",
+      "sha256": "11c45260eee2af7a712dad10ea1dac54d7a50a1c64d177045bfceef1926bc2aa"
+    },
+    {
+      "path": "src/core/xfa/unknown.js",
+      "sha256": "41046c44c7b1ab408da6f0ded2e8cb6fdd103e1c529316e777c5c8775b23c885"
+    },
+    {
+      "path": "src/core/xfa/utils.js",
+      "sha256": "a5d6b113d722b62b6277a52099c1091653a988b204240c5476837d72ad7aac24"
+    },
+    {
+      "path": "src/core/xfa/xdp.js",
+      "sha256": "b33428aa448b0a62eecd9c739f22198027eed51022e2683d76a2c1042a14f99b"
+    },
+    {
+      "path": "src/core/xfa/xfa_object.js",
+      "sha256": "fbf3307b7241df34bb048f185932c475e6c1e1d1b5a8d5e8c1826911c03dc740"
+    },
+    {
+      "path": "src/core/xfa/xhtml.js",
+      "sha256": "81201c6579ca6d1fda694b1ea66bc93ae586016e4d57e706f79ae81f6916d70b"
+    },
+    {
+      "path": "src/core/xml_parser.js",
+      "sha256": "a18d8d4eb585be736c075ea5bada8eb3c41fc57edd0e208b6ba6e66928292611"
+    },
+    {
+      "path": "src/display/page_viewport.js",
+      "sha256": "c1933abcad25644a12926540fd7a0a3761893d9a192a43da8e74c3d1f390a855"
+    },
+    {
+      "path": "src/display/xfa_layer.js",
+      "sha256": "d334375a0dcc5ebbe0b712ec67f9782f617a3615e14350cd36cae665cc721397"
+    },
+    {
+      "path": "src/display/xfa_text.js",
+      "sha256": "59ae55214def2215271c22b93fe17349426f9ff2be6a987c8447c099fac2287a"
+    },
+    {
+      "path": "src/shared/css_utils.js",
+      "sha256": "565fdb3ebce33906b50d6a24489d06a20c0621c64f734972f5ba8d1fb5339e5e"
+    },
+    {
+      "path": "src/shared/math_clamp.js",
+      "sha256": "177a9924f860fa5d6016284924f2296921811af2b9eb2400c32bb95d7a18fb97"
+    },
+    {
+      "path": "src/shared/util.js",
+      "sha256": "813a0d2c45a22ebbdb499386a22eb48733155a7e292abbc7cb04e552f4ee9fdf"
+    },
+    {
+      "path": "web/xfa_layer_builder.css",
+      "sha256": "935f2947d46eceb1eed174927bdf2fe8851ad4ac71c42dccee5bb93b2c242e86"
+    }
+  ]
+}

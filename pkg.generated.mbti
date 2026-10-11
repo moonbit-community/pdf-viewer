@@ -17,6 +17,8 @@ pub fn open_document(Bytes) -> PdfViewerDocument raise @core.PdfError
 
 pub fn open_document_with_passwords(Bytes, user_password? : Bytes?, owner_password? : Bytes?) -> PdfViewerDocument raise @core.PdfError
 
+pub fn open_range_reader(Bytes, Bytes, Int, stream_budget? : Int) -> PdfRangeReader raise @core.PdfError
+
 pub fn pdf_optional_content_state(config_index? : Int?, on? : Array[Int], off? : Array[Int]) -> PdfOptionalContentState
 
 pub fn pdf_search_options(case_sensitive? : Bool, whole_word? : Bool, diacritic_sensitive? : Bool) -> PdfSearchOptions
@@ -52,11 +54,13 @@ pub(all) struct PdfAnnotationItem {
   vertices : Array[PdfPoint]
   ink_paths : Array[Array[PdfPoint]]
   appearance : PdfAnnotationAppearance?
+  style : PdfAnnotationStyle
   field_name : String?
   field_type : String?
   field_value : String?
   field_flags : Int?
   field_options : Array[String]
+  choice_options : Array[PdfChoiceOption]
   field_tooltip : String?
   button_value : String?
   button_checked : Bool?
@@ -76,6 +80,16 @@ pub fn PdfAnnotationItem::not_equal(Self, Self) -> Bool
 pub fn PdfAnnotationItem::to_json(Self) -> Json
 #deprecated
 pub fn PdfAnnotationItem::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfAnnotationStyle {
+  interior_color : String?
+  opacity : Double
+  icon : String
+  line_endings : Array[String]
+  caption : String?
+  no_zoom : Bool
+  no_rotate : Bool
+} derive(Eq, ToJson, @debug.Debug)
 
 pub(all) struct PdfBounds {
   min_x : Double
@@ -104,6 +118,13 @@ pub fn PdfByteSpan::not_equal(Self, Self) -> Bool
 pub fn PdfByteSpan::to_json(Self) -> Json
 #deprecated
 pub fn PdfByteSpan::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfChoiceOption {
+  index : Int
+  export_value : String
+  display_value : String
+  selected : Bool
+} derive(Eq, ToJson, @debug.Debug)
 
 pub(all) struct PdfClipPath {
   svg_path : String
@@ -437,6 +458,19 @@ pub fn PdfQuad::not_equal(Self, Self) -> Bool
 pub fn PdfQuad::to_json(Self) -> Json
 #deprecated
 pub fn PdfQuad::to_repr(Self) -> @debug.Repr
+
+pub struct PdfRangeReader {
+  // private fields
+}
+pub fn PdfRangeReader::cache_info(Self) -> Json
+pub fn PdfRangeReader::document_view(Self) -> PdfViewerDocument raise @core.PdfError
+pub fn PdfRangeReader::install_object(Self, Int, Bytes) -> Unit raise @core.PdfError
+pub fn PdfRangeReader::install_section(Self, Int, Bytes) -> Unit raise @core.PdfError
+pub fn PdfRangeReader::missing(Self, String, Int) -> Array[Int] raise @core.PdfError
+pub fn PdfRangeReader::next_section(Self) -> Int?
+pub fn PdfRangeReader::object_dependencies(Self, Bytes) -> Array[Int] raise @core.PdfError
+pub fn PdfRangeReader::object_loaded(Self, Int) -> Bool
+pub fn PdfRangeReader::object_request(Self, Int) -> (Int, Int, Int)?
 
 pub(all) struct PdfReaderDiagnostic {
   resource : String
@@ -984,7 +1018,7 @@ pub fn PdfViewerDocument::pages(Self) -> Array[PdfPageModel] raise @core.PdfErro
 pub fn PdfViewerDocument::reader_diagnostics(Self) -> Array[PdfReaderDiagnostic]
 pub fn PdfViewerDocument::render_svg(Self, Int, scale? : Double) -> String? raise @core.PdfError
 pub fn PdfViewerDocument::render_svg_with_rotation(Self, Int, Int, scale? : Double) -> String? raise @core.PdfError
-pub fn PdfViewerDocument::search(Self, String, options? : PdfSearchOptions) -> Array[PdfSearchResult] raise @core.PdfError
+pub fn PdfViewerDocument::search(Self, String, options? : PdfSearchOptions, page? : Int?) -> Array[PdfSearchResult] raise @core.PdfError
 pub fn PdfViewerDocument::select(Self, Int, PdfBounds) -> PdfSelection? raise @core.PdfError
 pub fn PdfViewerDocument::source_length(Self) -> Int
 pub fn PdfViewerDocument::struct_tree_json(Self) -> Json raise @core.PdfError
@@ -996,6 +1030,10 @@ pub fn PdfViewerDocument::text_provenance(Self, Int) -> Array[PdfTextProvenance]
 pub fn PdfViewerDocument::text_recovery_diagnostics(Self, Int) -> Array[PdfTextRecoveryDiagnostic]? raise @core.PdfError
 pub fn PdfViewerDocument::with_font_fallbacks(Self, Array[PdfFontFallback]) -> Self
 pub fn PdfViewerDocument::with_optional_content_state(Self, PdfOptionalContentState) -> Self
+pub fn PdfViewerDocument::xfa_font_glyphs_json(Self, String, String) -> Json raise @core.PdfError
+pub fn PdfViewerDocument::xfa_fonts_json(Self) -> Json
+pub fn PdfViewerDocument::xfa_needs_rendering(Self) -> Bool
+pub fn PdfViewerDocument::xfa_packets(Self) -> Array[PdfXfaPacket] raise @core.PdfError
 
 pub(all) struct PdfViewport {
   width : Double
@@ -1049,6 +1087,11 @@ pub fn PdfVisualItem::not_equal(Self, Self) -> Bool
 pub fn PdfVisualItem::to_json(Self) -> Json
 #deprecated
 pub fn PdfVisualItem::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PdfXfaPacket {
+  name : String
+  data : Bytes
+} derive(Eq, @debug.Debug)
 
 // Type aliases
 

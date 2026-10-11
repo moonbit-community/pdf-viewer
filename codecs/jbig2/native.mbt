@@ -1,5 +1,15 @@
 ///|
 #cfg(target="native")
+extern "C" fn native_available() -> Int = "pdf_viewer_jbig2_native_available"
+
+///|
+#cfg(target="native")
+fn host_available() -> Bool {
+  native_available() == 1
+}
+
+///|
+#cfg(target="native")
 #borrow(data, globals, output)
 extern "C" fn native_decode(
   data : Bytes,

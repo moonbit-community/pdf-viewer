@@ -364,6 +364,27 @@ pub(all) struct PdfTransparencyGroup {
 } derive(Eq, Debug, ToJson)
 
 ///|
+/// One choice option, retaining its PDF export value and display label.
+pub(all) struct PdfChoiceOption {
+  index : Int
+  export_value : String
+  display_value : String
+  selected : Bool
+} derive(Eq, Debug, ToJson)
+
+///|
+/// Additional annotation appearance properties from its own dictionary.
+pub(all) struct PdfAnnotationStyle {
+  interior_color : String?
+  opacity : Double
+  icon : String
+  line_endings : Array[String]
+  caption : String?
+  no_zoom : Bool
+  no_rotate : Bool
+} derive(Eq, Debug, ToJson)
+
+///|
 /// A page annotation exposed to the standalone renderer and host adapters.
 ///
 /// The typed fields keep the annotation layer independent from pdflite's PDF
@@ -388,12 +409,14 @@ pub(all) struct PdfAnnotationItem {
   /// Paths from `/InkList` for ink annotations.
   ink_paths : Array[Array[PdfPoint]]
   appearance : PdfAnnotationAppearance?
+  style : PdfAnnotationStyle
   /// AcroForm metadata inherited from a widget's field parents.
   field_name : String?
   field_type : String?
   field_value : String?
   field_flags : Int?
   field_options : Array[String]
+  choice_options : Array[PdfChoiceOption]
   field_tooltip : String?
   /// The widget's own on-state name and resolved check/radio state. These
   /// differ from the inherited `/V`, which is shared by a radio group.
@@ -513,6 +536,7 @@ pub(all) struct PdfTextContent {
 pub struct PdfViewerDocument {
   source_length : Int
   priv source_bytes : Bytes
+  priv source_stream_spans : Map[Int, PdfByteSpan]
   document : @pdflite.PdfDocument
   pages : Array[@page.PdfPage]
   optional_content_state : PdfOptionalContentState?
@@ -578,9 +602,14 @@ fn pdf_viewer_document_of_parsed_document(
   bytes : Bytes,
   document : @pdflite.PdfDocument,
 ) -> PdfViewerDocument raise @core.PdfError {
+  let source_stream_spans : Map[Int, PdfByteSpan] = Map([])
   let document = if !document.is_encrypted() &&
     pdf_reader_has_dropped_page_contents(document) {
-    pdf_recover_compressed_document(bytes, document) catch {
+    pdf_recover_compressed_document(
+      bytes,
+      document,
+      source_spans=Some(source_stream_spans),
+    ) catch {
       _ => document
     }
   } else {
@@ -590,7 +619,11 @@ fn pdf_viewer_document_of_parsed_document(
     document,
   ) catch {
     original_error => {
-      let recovered = pdf_recover_compressed_document(bytes, document) catch {
+      let recovered = pdf_recover_compressed_document(
+        bytes,
+        document,
+        source_spans=Some(source_stream_spans),
+      ) catch {
         _ => raise original_error
       }
       pdf_page_tree_for_viewer(recovered) catch {
@@ -601,6 +634,7 @@ fn pdf_viewer_document_of_parsed_document(
   {
     source_length: bytes.length(),
     source_bytes: bytes,
+    source_stream_spans,
     document,
     pages,
     optional_content_state: None,

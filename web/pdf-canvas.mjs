@@ -77,8 +77,10 @@ export async function renderPdfCanvas(canvas, plan, options = {}) {
   const glyphCache=options._glyphCache||{entries:new Map(),bytes:0,limit:Math.max(0,Math.min(options.maxGlyphCacheBytes??16777216,(options.maxWorkingBytes||536870912)/32))};
   if(!scope&&(plan.icc_profiles?.length||plan.blend_calibration||plan.page.blend_calibration||plan.items.some(item=>(item.groups||item.paint.group_path||[]).some(group=>group.calibration)))){
     const engine=options.iccEngine||globalThis.__moonbit_pdf_icc;
-    if(!engine?.createProfileScope)throw new Error('PDF ICC group catalog requires an initialized colour engine');
-    owned=scope=engine.createProfileScope(plan.icc_profiles||[]);
+    // Ordinary ICC paints retain their legal PDF Alternate. A catalog alone
+    // does not require CMM support; ICC/calibrated blend groups still enforce
+    // their output-transform capability at the group boundary below.
+    if(engine?.createProfileScope)owned=scope=engine.createProfileScope(plan.icc_profiles||[]);
   }
   try{return await renderPdfCanvasScoped(canvas,plan,{...options,_profileScope:scope,_glyphCache:glyphCache});}
   finally{owned?.dispose();if(ownedGlyphCache){for(const entry of glyphCache.entries.values())entry.value.close?.();glyphCache.entries.clear();glyphCache.bytes=0;}}
@@ -604,7 +606,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
           const mode=item.paint.rendering_mode,filled=[0,2,4,6].includes(mode),stroked=[1,2,5,6].includes(mode);
           if(item.paint.fill_path!==null&&item.paint.fill_path!==undefined)item={...item,kind:'path',paint:{...item.paint,svg_path:item.paint.fill_path,filled,stroked,stroke_alpha:pen?.stroke_alpha??item.paint.stroke_alpha,line_cap:pen?.line_cap,line_join:pen?.line_join}};
           else if(pen?.svg_path!==null&&pen?.svg_path!==undefined)item={...item,kind:'path',paint:{...item.paint,svg_path:pen.svg_path,fill_transform:pen.transform,filled,stroked,stroke_alpha:pen.stroke_alpha,line_cap:pen.line_cap,line_join:pen.line_join}};
-          else if(item.text_fill_svg&&item.text_stroke_svg)item={...item,paint:{...item.paint,filled,stroked}};
+          else if(item.text_fill_svg&&item.text_stroke_svg)item={...item,paint:{...item.paint,filled,stroked,stroke_alpha:pen?.stroke_alpha??item.paint.stroke_alpha}};
         }
         if((item.kind==='path'||item.kind==='text'&&item.text_fill_svg&&item.text_stroke_svg)&&item.paint.filled&&item.paint.stroked){
           const p=item.paint,equalOverprint=p.fill_overprint&&p.stroke_overprint&&p.fill_alpha===p.stroke_alpha;
@@ -648,10 +650,29 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
   let bytes=premultipliedToRgba8(result.pixels);
   canvas.width=width;canvas.height=height;
   const output=canvas.getContext('2d'),data=output.createImageData(width,height);data.data.set(bytes);output.putImageData(data,0,0);
-  if(plan.annotation_svg){
-    output.save();output.setTransform(...matrix);
-    output.drawImage(await image(svgUri(plan.annotation_svg)),0,0,plan.page.width,plan.page.height);
-    output.restore();bytes=output.getImageData(0,0,width,height).data;
+  if(plan.annotation_svg||plan.annotation_fragments?.length){
+    // Rasterize annotation vectors at the output density before placing them
+    // in logical page space, so AP text and edges retain their print/DPR detail.
+    const fragments=plan.annotation_fragments || [{svg:plan.annotation_svg,x:0,y:0,width:plan.page.width,height:plan.page.height}];
+    for(const fragment of fragments){
+      let placement=matrix;
+      if(fragment.no_zoom||fragment.no_rotate){
+        const anchor=fragment.anchor,logicalScale=plan.viewport.scale*(plan.page.user_unit||1);
+        let a=matrix[0],b=matrix[1],c=matrix[2],d=matrix[3];
+        if(fragment.no_rotate){const sx=Math.hypot(a,b),sy=Math.hypot(c,d);a=sx;b=0;c=0;d=sy;}
+        if(fragment.no_zoom){a/=logicalScale;b/=logicalScale;c/=logicalScale;d/=logicalScale;}
+        placement=[a,b,c,d,matrix[0]*anchor[0]+matrix[2]*anchor[1]+matrix[4]-a*anchor[0]-c*anchor[1],matrix[1]*anchor[0]+matrix[3]*anchor[1]+matrix[5]-b*anchor[0]-d*anchor[1]];
+      }
+      const aw=Math.max(1,Math.ceil(fragment.width*Math.hypot(placement[0],placement[1])));
+      const ah=Math.max(1,Math.ceil(fragment.height*Math.hypot(placement[2],placement[3])));
+      if(aw*ah*4>availableBytes)throw new RangeError('PDF annotation raster exceeds the working memory budget');
+      const svg=fragment.svg.replace(/(<svg\b[^>]*\bwidth=")[^"]*(")/,`$1${aw}$2`).replace(/(<svg\b[^>]*\bheight=")[^"]*(")/,`$1${ah}$2`);
+      output.save();output.setTransform(...placement);output.globalCompositeOperation=fragment.blend||'source-over';
+      const raster=await loadImage(svgUri(svg));
+      try{output.drawImage(raster,fragment.x,fragment.y,fragment.width,fragment.height);}
+      finally{releaseImage(raster);output.restore();}
+    }
+    bytes=output.getImageData(0,0,width,height).data;
     rgba8ToPremultiplied(bytes,result.pixels);
   }
   layer.width=shapeLayer.width=1;

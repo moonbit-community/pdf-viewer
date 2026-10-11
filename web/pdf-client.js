@@ -128,6 +128,7 @@ export class PdfWorkerClient {
 
 export const pdf = new PdfWorkerClient();
 export const open_pdf = (bytes) => pdf.call("open_pdf", [bytes], { transfer: [bytes.buffer], priority: 100 });
+export const open_pdf_url = (url, password = null) => pdf.call("open_pdf_url", [url, password], { priority: 100 });
 export const open_pdf_with_password = (bytes, password) =>
   pdf.call("open_pdf_with_password", [bytes, password], { transfer: [bytes.buffer], priority: 100 });
 export const set_font_fallbacks = (value) => pdf.call("set_font_fallbacks", [value]);

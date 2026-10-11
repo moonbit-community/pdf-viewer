@@ -38,8 +38,8 @@ assert.equal(JSON.stringify(plan),before,'Approximate replay cannot mutate or re
 const viewer=readFileSync(new URL('../../web/viewer.js',import.meta.url),'utf8');
 assert.match(viewer,/const graphicsOptions = \{\s*unsupported: "warn"/);
 assert.match(viewer,/renderPdfPage\(canvas, result\.canvas, graphicsOptions\);\s*if \(current\(\)\) showGraphicsDiagnostics\(rendered\.diagnostics\)/);
-assert.match(viewer,/renderPdfPage\(canvas, result\.canvas, graphicsOptions\);\s*if \(task\.signal\.aborted \|\| controller\.signal\.aborted\) return;\s*preview\.replaceChildren\(canvas\);\s*showGraphicsDiagnostics\(rendered\.diagnostics\)/);
-assert.match(viewer,/renderPdfPage\(canvas, result\.canvas, graphicsOptions\);\s*if \(controller\.signal\.aborted \|\| generation !== state\.documentGeneration\) return;\s*page\.append\(canvas\);\s*root\.append\(page\);\s*showGraphicsDiagnostics\(rendered\.diagnostics\)/);
+assert.match(viewer,/renderPdfPage\(canvas, result\.canvas, graphicsOptions\);\s*if \(task\.signal\.aborted \|\| controller\.signal\.aborted\) return;\s*preview\.replaceChildren\(canvas\);\s*(?:if \(result\.xfa\) [^\n]+\s*)?showGraphicsDiagnostics\(rendered\.diagnostics\)/);
+assert.match(viewer,/renderPdfPage\(canvas, result\.canvas, \{\s*\.\.\.graphicsOptions, outputScale: 150 \/ 72,\s*\}\);\s*if \(controller\.signal\.aborted \|\| generation !== state\.documentGeneration\) return;\s*page\.append\(canvas\);\s*root\.append\(page\);\s*showGraphicsDiagnostics\(rendered\.diagnostics\)/);
 const warning=viewer.match(/function showGraphicsDiagnostics\(diagnostics = \[\]\) \{[\s\S]*?\n\}/)?.[0];assert(warning);
 const element={textContent:'',hidden:true};
 runInNewContext(`${warning}; showGraphicsDiagnostics(diagnostics);`,{$:id=>{assert.equal(id,'error');return element;},diagnostics:preview.diagnostics});

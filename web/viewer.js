@@ -1,5 +1,6 @@
 import {
   open_pdf,
+  open_pdf_url,
   open_pdf_with_password,
   render_page,
   render_print_page,
@@ -15,6 +16,7 @@ import {
 import { PageScheduler } from "./page-scheduler.js";
 import { AnnotationLayer } from "./annotation-layer.js";
 import { makeAccessibilityLayer } from "./accessibility-layer.js";
+import { makeXfaLayer, clearXfaFonts } from "./pdf-xfa-layer.mjs";
 
 // This pure synchronous colour helper is shared with Canvas replay. Document
 // parsing, decoded page ownership and navigation operations stay in the Worker.
@@ -24,6 +26,8 @@ import { renderPdfPage } from "./pdf-runtime.mjs";
 
 const graphicsOptions = {
   unsupported: "warn",
+  returnPixels: false,
+  get outputScale() { return Math.max(1, window.devicePixelRatio || 1); },
   convertProcess: values => process_cmyk_to_rgb(...values),
 };
 let graphicsInitialization;
@@ -48,6 +52,7 @@ const state = {
   fileName: "",
   filePath: "",
   count: 0,
+  xfa: false,
   labels: [],
   documentInfo: null,
   sidebarMode: null,
@@ -303,10 +308,11 @@ function renderThumbnails() {
             signal: task.signal, priority: -5,
           }));
           if (task.signal.aborted || controller.signal.aborted) return;
-          const canvas = document.createElement("canvas");
-          const rendered = await renderPdfPage(canvas, result.canvas, graphicsOptions);
+          const canvas = result.xfa ? await makeXfaLayer(result) : document.createElement("canvas");
+          const rendered = result.xfa ? { diagnostics: [] } : await renderPdfPage(canvas, result.canvas, graphicsOptions);
           if (task.signal.aborted || controller.signal.aborted) return;
           preview.replaceChildren(canvas);
+          if (result.xfa) {preview.style.width=`${result.layer.viewport.width}px`;preview.style.height=`${result.layer.viewport.height}px`;}
           showGraphicsDiagnostics(rendered.diagnostics);
         } catch (error) {
           if (!task.signal.aborted && !controller.signal.aborted) showError(error);
@@ -409,7 +415,7 @@ function highlightSearchResults() {
       byPageAndItem.set(key, values);
     }
   }
-  for (const glyph of pages.querySelectorAll(".glyph")) {
+  for (const glyph of pages.querySelectorAll(".glyph, .xfa-text")) {
     const key = `${glyph.closest(".page")?.dataset.page}:${glyph.dataset.item}`;
     const matches = byPageAndItem.get(key) || [];
     glyph.classList.toggle("pdf-search-hit", matches.length > 0);
@@ -658,6 +664,11 @@ async function mountPage(result, current = () => true) {
   page.setAttribute("aria-label", `第 ${result.page} 页`);
   page.style.width = `${result.layer.viewport.width}px`;
   page.style.height = `${result.layer.viewport.height}px`;
+  if (result.xfa) {
+    page.append(await makeXfaLayer(result));
+    page.dataset.xfa = "true";
+    return page;
+  }
   const paint = document.createElement("div");
   paint.className = "paint-layer";
   paint.setAttribute("aria-hidden", "true");
@@ -782,11 +793,11 @@ async function loadFile(file, path = "") {
     let info;
     let passwordAttempt = null;
     while (true) {
-      const data = new Uint8Array(await file.arrayBuffer());
+      const data = file.url ? null : new Uint8Array(await file.arrayBuffer());
       if (generation !== state.documentGeneration) return;
       try {
         info = checked(
-          passwordAttempt !== null
+          file.url ? await open_pdf_url(file.url, passwordAttempt !== null ? new TextEncoder().encode(passwordAttempt) : null) : passwordAttempt !== null
             ? await open_pdf_with_password(data, new TextEncoder().encode(passwordAttempt))
             : await open_pdf(data),
         );
@@ -811,11 +822,10 @@ async function loadFile(file, path = "") {
     state.fileName = file.name || "document.pdf";
     state.filePath = path || file.name || "document.pdf";
     state.count = info.pages;
+    state.xfa = Boolean(info.xfa);
     state.labels = info.labels;
-    const documentInfo = checked(await document_info());
     const layouts = checked(await page_layouts()).layouts;
     if (generation !== state.documentGeneration) return;
-    state.documentInfo = documentInfo;
     state.layouts = layouts;
     scheduler.setDocument(layouts);
     state.rotation = 0;
@@ -830,6 +840,10 @@ async function loadFile(file, path = "") {
     for (const id of enabledControls) $(id).disabled = false;
     closeSidebar();
     await repaint({ preserveSelection: false });
+    const documentInfo = checked(await document_info());
+    if (generation !== state.documentGeneration) return;
+    state.documentInfo = documentInfo;
+    if (documentInfo.labels?.length === state.count) state.labels = documentInfo.labels;
   } catch (error) {
     if (generation === state.documentGeneration) {
       closeDocument();
@@ -842,6 +856,9 @@ async function loadFile(file, path = "") {
 
 function boundary(node, offset, end = false) {
   const owner = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+  const xfaText = owner?.closest?.(".xfa-text");
+  if (xfaText) return { page: Number(xfaText.closest(".page").dataset.page),
+    item: Number(xfaText.dataset.item), offset: node.nodeType === Node.TEXT_NODE ? offset : offset ? xfaText.textContent.length : 0 };
   const glyph = owner?.closest?.(".glyph");
   if (glyph) {
     const textNode = glyph.firstChild.firstChild;
@@ -1003,6 +1020,7 @@ function clearPrint() {
 }
 
 export function closeDocument() {
+  clearXfaFonts();
   state.documentGeneration++;
   state.generation++;
   state.fetchController?.abort();
@@ -1014,7 +1032,7 @@ export function closeDocument() {
   clearPrint();
   scheduler.clear();
   widthCache.clear();
-  Object.assign(state, { count: 0, file: null, fileName: "", filePath: "",
+  Object.assign(state, { count: 0, xfa: false, file: null, fileName: "", filePath: "",
     documentInfo: null, labels: [], layouts: [] });
   $("page-count").textContent = "/ 0";
   $("page-number").value = 1;
@@ -1056,8 +1074,10 @@ export async function printDocument() {
       page.style.height = `${height}pt`;
       page.style.page = name;
       rules.push(`@page ${name} { size: ${width}pt ${height}pt; margin: 0; }`);
-      const canvas = document.createElement("canvas");
-      const rendered = await renderPdfPage(canvas, result.canvas, graphicsOptions);
+      const canvas = result.xfa ? await makeXfaLayer(result, "print") : document.createElement("canvas");
+      const rendered = result.xfa ? {diagnostics:[]} : await renderPdfPage(canvas, result.canvas, {
+        ...graphicsOptions, outputScale: 150 / 72,
+      });
       if (controller.signal.aborted || generation !== state.documentGeneration) return;
       page.append(canvas);
       root.append(page);
@@ -1087,7 +1107,7 @@ export async function runtimeDiagnostics() {
   const cache = checked(await cache_info());
   return { pages: state.count, documentGeneration: state.documentGeneration,
     mounted: [...pages.querySelectorAll('[data-rendered="true"]')].map(page => Number(page.dataset.page)),
-    source_bytes: state.file?.size || 0, worker: pdf.diagnostics(), cache };
+    source_bytes: state.file?.size || cache.range?.total_bytes || 0, worker: pdf.diagnostics(), cache };
 }
 
 export { loadFile, performSearch, readSelection, selectAllText };
@@ -1103,8 +1123,8 @@ function restoreSelection({ start, end }) {
     return;
   }
   const range = new Range();
-  range.setStart(startGlyph.firstChild.firstChild, start.offset);
-  range.setEnd(endGlyph.firstChild.firstChild, end.offset);
+  range.setStart(state.xfa ? startGlyph.firstChild : startGlyph.firstChild.firstChild, start.offset);
+  range.setEnd(state.xfa ? endGlyph.firstChild : endGlyph.firstChild.firstChild, end.offset);
   const selection = window.getSelection();
   selection.removeAllRanges();
   selection.addRange(range);
@@ -1181,11 +1201,11 @@ $("sidebar-close").addEventListener("click", closeSidebar);
 $("print").addEventListener("click", () => printDocument());
 $("download").addEventListener("click", () => {
   const link = document.createElement("a");
-  const url = URL.createObjectURL(state.file);
+  const url = state.file.url || URL.createObjectURL(state.file);
   link.href = url;
   link.download = state.fileName;
   link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  if (!state.file.url) setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 $("search-query").addEventListener("input", performSearch);
 $("search-query").addEventListener("keydown", (event) => {
@@ -1242,7 +1262,7 @@ document.addEventListener("copy", (event) => {
   }
 });
 viewer.addEventListener("keydown", (event) => {
-  if (event.target.matches("input, select, button")) return;
+  if (event.target.matches("input, textarea, select, button")) return;
   const selection = getSelection();
   if (!selection || !selection.modify) return;
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
@@ -1347,22 +1367,16 @@ window.addEventListener("pageshow", event => {
 // browser-only and are not uploaded to the development server.
 const initialFile = new URL(location.href).searchParams.get("file");
 if (initialFile) {
-  const controller = new AbortController();
-  state.fetchController = controller;
   try {
-    const response = await fetch(initialFile, { signal: controller.signal });
-    if (!response.ok) throw new Error(`无法打开文档 (${response.status})`);
     const name =
       decodeURIComponent(
         new URL(initialFile, location.href).pathname.split("/").pop(),
       ) || "document.pdf";
-    const blob = await response.blob();
-    if (controller.signal.aborted) throw new DOMException("File load cancelled", "AbortError");
     await loadFile(
-      new File([blob], name, { type: "application/pdf" }),
+      { name, url: new URL(initialFile, location.href).href },
       initialFile,
     );
   } catch (error) {
-    if (!controller.signal.aborted) showError(error);
+    showError(error);
   }
 }

@@ -100,6 +100,13 @@ test "JBIG2 resource explicit mask Decode preserves stencil polarity once" {
   guard page.items is [Image({ resource: Some(image), .. }), ..] else {
     fail("missing JBIG2 resource")
   }
+  if !@jbig2.available() {
+    assert_true(image.error is Some(_))
+    assert_true(
+      image.data_uri is Some(uri) && uri.has_prefix("data:image/jbig2;"),
+    )
+    return
+  }
   assert_eq(image.error, None)
   assert_eq(image.alpha_mask_data_uri, None)
   let pixels = colour_image_scanlines(image)
@@ -128,6 +135,11 @@ test "JBIG2 standalone ImageMask emits a decoded stencil PNG" {
   )
   guard page.items is [Image({ resource: Some(image), .. }), ..] else {
     fail("missing JBIG2 stencil")
+  }
+  if !@jbig2.available() {
+    assert_true(image.error is Some(_))
+    assert_eq(image.mask_data_uri, None)
+    return
   }
   assert_eq(image.error, None)
   assert_eq(image.data_uri, None)

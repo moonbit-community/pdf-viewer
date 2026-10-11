@@ -503,7 +503,8 @@ async fn Browser::check_annotation_geometry(self : Browser, name : String) -> Un
     #|   const bridge = await import('./pdf-client.js');
     #|   const result = JSON.parse(await bridge.render_page(1, viewport.scale, viewport.rotation - 90));
     #|   const canvas = page.querySelector('.paint-layer canvas');
-    #|   if (!result.ok || !canvas || canvas.width !== Math.ceil(viewport.width) || canvas.height !== Math.ceil(viewport.height)) return false;
+    #|   const outputScale = Math.max(1, window.devicePixelRatio || 1);
+    #|   if (!result.ok || !canvas || canvas.width !== Math.ceil(viewport.width * outputScale) || canvas.height !== Math.ceil(viewport.height * outputScale)) return false;
     #|   const reference = document.createElement('div');
     #|   reference.style.cssText = 'position:absolute;inset:0;visibility:hidden;pointer-events:none';
     #|   reference.inert = true;
@@ -606,6 +607,17 @@ async fn main {
     browser.check(
       "predefined CMap paints and exposes native DOM text", "document.querySelector('.text-layer').textContent.includes('日本語テスト') && [...document.querySelectorAll('.paint-layer canvas')].some(c => c.width > 0 && c.getContext('2d').getImageData(0, 0, c.width, c.height).data.some((v, i) => i % 4 !== 3 && v < 240)) && document.getElementById('error').hidden",
     )
+    ignore(browser.command("Emulation.setDeviceMetricsOverride", params={ "width": 1280, "height": 900, "deviceScaleFactor": 2, "mobile": false }))
+    browser.navigate(base + "/?file=/fixtures/90ms_rksj_h_sample.pdf", 1)
+    browser.check("DPR 2 doubles the paint surface and preserves logical text geometry", (
+      #| (() => {
+      #|   const page=document.querySelector('#pages .page[data-page="1"]'),canvas=page.querySelector('canvas');
+      #|   const viewport=JSON.parse(page.querySelector('.annotation-layer').dataset.viewport);
+      #|   return window.devicePixelRatio===2 && canvas.width===Math.ceil(viewport.width*2) && canvas.height===Math.ceil(viewport.height*2) && parseFloat(page.style.width)===viewport.width && Math.abs(canvas.getBoundingClientRect().width-viewport.width)<1 && Math.abs(canvas.getBoundingClientRect().height-viewport.height)<1 && document.getElementById('error').hidden;
+      #| })()
+    ))
+    ignore(browser.command("Emulation.setDeviceMetricsOverride", params={ "width": 1280, "height": 900, "deviceScaleFactor": 1, "mobile": false }))
+    browser.navigate(base + "/?file=/fixtures/90ms_rksj_h_sample.pdf", 1)
     browser.check(
       "font fallback bridge accepts host family mappings",
       (
@@ -1133,7 +1145,7 @@ async fn main {
       #|   const { renderPdfPage } = await import('./pdf-runtime.mjs');
       #|   const expected = JSON.parse(await bridge.render_print_page(1, 1, 0));
       #|   const reference = document.createElement('canvas');
-      #|   await renderPdfPage(reference, expected.canvas, { unsupported: 'warn' });
+      #|   await renderPdfPage(reference, expected.canvas, { unsupported: 'warn', outputScale: 150 / 72 });
       #|   const pixels = canvas?.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
       #|   const referencePixels = reference.getContext('2d').getImageData(0, 0, reference.width, reference.height).data;
       #|   const valid = document.querySelectorAll('#print-pages .page').length === 2 &&
@@ -1499,6 +1511,57 @@ async fn main {
     )
     let pressure_end = browser.evaluate("(async () => await (await import('./viewer.js')).runtimeDiagnostics())()")
     let retained = browser.heap(collect=true)
+    let host_timer = browser.evaluate("hostTimer")
+    @shell.Cmd("node", ["tools/pixels/write_readonly_fixtures.mjs"]).run()
+    browser.navigate(base + "/?file=/_test/annotations-readonly.pdf", 1)
+    browser.check("no-AP readonly fields and annotation vectors paint in the real browser", (
+      #| (async()=>{
+      #|   const {pdf}=await import('./pdf-client.js');const result=JSON.parse(await pdf.call('render_page',[1,1,0]));
+      #|   const fragments=result.canvas.annotation_fragments.map(value=>value.svg).join('');
+      #|   const canvas=document.querySelector('.paint-layer canvas'),pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
+      #|   return result.ok && result.annotations.length===7 && result.canvas.annotation_fragments.length===7 && fragments.includes('Readonly field') && fragments.includes('*************') && !fragments.includes('hidden-secret') && fragments.includes('Alpha') && fragments.includes('Beta') && pixels.some((value,index)=>index%4===0&&value<100) && document.getElementById('error').hidden;
+      #| })()
+    ))
+    ignore(browser.evaluate("document.getElementById('zoom').value='2';document.getElementById('zoom').dispatchEvent(new Event('change'));document.getElementById('rotate').click();true"))
+    browser.ready(1)
+    browser.check("NoZoom NoRotate note hit box stays at its logical icon size", (
+      #| (()=>{const hit=document.querySelector('[data-annotation-index="0"]');return hit && Math.abs(hit.getBoundingClientRect().width-20)<1 && Math.abs(hit.getBoundingClientRect().height-20)<1 && document.getElementById('error').hidden;})()
+    ))
+    browser.navigate(base + "/?file=/_test/xfa-binding.pdf", 2)
+    browser.check("XFA binds data paginates and locks all form controls", (
+      #| (()=>{const controls=[...document.querySelectorAll('#pages .xfaLayer input,#pages .xfaLayer textarea,#pages .xfaLayer select,#pages .xfaLayer button')];return controls.some(control=>control.value==='Bound value') && controls.every(control=>control.readOnly||control.disabled) && document.querySelector('.xfaLayer').textContent.includes('Readonly XFA heading') && !document.querySelector('#pages canvas') && document.getElementById('error').hidden;})()
+    ))
+    browser.check("XFA text supports document selection and search without fabricated PDF byte ranges", (
+      #| (async()=>{const host=await import('./viewer.js');let selected;document.getElementById('viewer').addEventListener('pdf-selection-change',event=>{if(event.detail)selected=event.detail;});await host.selectAllText();document.getElementById('search-query').value='Second page';await host.performSearch();const {pdf}=await import('./pdf-client.js');const search=JSON.parse(await pdf.call('search_pdf',['Second page',false,false,false]));return selected?.text.includes('Readonly XFA heading') && selected.text.includes('Second page content') && selected.ranges.every(range=>range.source_kind==='xfa'&&range.byte_ranges.length===0) && search.results.length===1 && search.results[0].page===2 && document.getElementById('error').hidden;})()
+    ))
+    browser.check("XFA prints every generated page with readonly values", (
+      #| (async()=>{const host=await import('./viewer.js'),original=window.print;let calls=0;window.print=()=>calls++;try{await host.printDocument();}finally{window.print=original;}return calls===1 && document.querySelectorAll('#print-pages .xfaLayer').length===2 && [...document.querySelectorAll('#print-pages input,#print-pages textarea')].some(control=>control.value==='Bound value'&&control.readOnly) && document.getElementById('error').hidden;})()
+    ))
+    let xfa_print = browser.command("Page.printToPDF", params={ "preferCSSPageSize": true, "printBackground": true })
+    guard xfa_print is { "data": String(xfa_pdf), .. } else { fail("Missing XFA print PDF") }
+    let xfa_printed_bytes = @base64.decode(xfa_pdf)
+    @fs.write_file(output + "/xfa-printed.pdf", xfa_printed_bytes)
+    guard @pdflite.pdf_read_document_from_bytes(xfa_printed_bytes).pages_of_pagetree().length() == 2 else { fail("XFA print lost pagination") }
+    ignore(browser.evaluate("window.dispatchEvent(new Event('afterprint'));true"))
+    browser.navigate(base + "/?file=/fixtures/xfa_filled_imm1344e.pdf", 7)
+    browser.check("real dynamic XFA retains seven pages bound values and searchable text", (
+      #| (async()=>{const {pdf}=await import('./pdf-client.js');const result=JSON.parse(await pdf.call('search_pdf',['Canada',false,false,false]));return result.ok && result.results.length>20 && document.querySelector('.xfaLayer') && document.querySelectorAll('.xfaLayer input,.xfaLayer textarea').length>0 && document.getElementById('error').hidden;})()
+    ))
+    browser.navigate(base + "/?file=/_test/xfa-static.pdf", 1)
+    browser.check("static XFA keeps PDF appearances and replacement releases dynamic fonts", "Boolean(document.querySelector('#pages canvas')) && !document.querySelector('#pages .xfaLayer') && ![...document.fonts].some(font=>font.family.startsWith('PdfXfa')) && document.getElementById('error').hidden")
+    browser.navigate(base + "/?file=/_test/range-large.pdf", 2)
+    browser.check("HTTP Range paints the first page before downloading the large second-page resource", (
+      #| (async()=>{const data=await (await import('./viewer.js')).runtimeDiagnostics();const range=data.cache.range;return range?.mode==='range' && range.first_page_bytes<range.total_bytes/10 && range.received_bytes<range.total_bytes/10 && document.querySelector('.text-layer').textContent.includes('Range first page') && document.querySelector('.page[data-page="2"]').dataset.rendered!=='true' && document.getElementById('error').hidden;})()
+    ))
+    let range_first = browser.evaluate("(async()=>{const data=await (await import('./viewer.js')).runtimeDiagnostics();return data.cache.range;})()")
+    ignore(browser.evaluate("document.getElementById('page-number').value='2';document.getElementById('page-number').dispatchEvent(new Event('change'));true"))
+    browser.wait("document.querySelector('.page[data-page=\"2\"]').dataset.rendered==='true'")
+    browser.check("HTTP Range hydrates the next page within the cache budget", (
+      #| (async()=>{const data=await (await import('./viewer.js')).runtimeDiagnostics();return data.cache.range.received_bytes>7*1024*1024 && data.cache.range.cache_bytes<=data.cache.range.cache_budget_bytes && document.querySelector('.page[data-page="2"] canvas')?.width>0 && document.getElementById('error').hidden;})()
+    ))
+    browser.check("closing a running range request terminates the Worker and cancels publication", (
+      #| (async()=>{const {PdfWorkerClient}=await import('./pdf-client.js');const client=new PdfWorkerClient();client.reset();const opened=JSON.parse(await client.call('open_pdf_url',[new URL('/_test/range-large.pdf',location.href).href,null]));const pending=client.call('render_page',[2,1,0]).catch(error=>error.name);client.close();return opened.ok && await pending==='AbortError' && !client.diagnostics().worker && client.diagnostics().queued===0;})()
+    ))
     guard browser.errors.is_empty() else {
       fail("Browser errors: " + browser.errors.to_json().stringify())
     }
@@ -1530,7 +1593,7 @@ async fn main {
           "source_bytes": @fs.read_file(pressure).binary().length(),
           "sha256": pressure_hash.stdout().split(" ").next().unwrap().to_owned(),
           "first_page_ms": cold_open,
-          "main_thread_timer_ms": browser.evaluate("hostTimer"),
+          "main_thread_timer_ms": host_timer,
         },
         "image_document": {
           "pages": 16,
@@ -1546,6 +1609,7 @@ async fn main {
         "final_runtime": pressure_end,
         "memory_scope": "CDP main/Worker JS heap samples, not continuous process peak RSS; cache bytes are estimates and exclude parsed input and temporary decoding",
       },
+      "remaining_readonly": { "range_first_page": range_first, "xfa_printed_pages": 2, "real_xfa_pages": 7, "authored_manifest": "web/_test/manifest.json" },
       "artifacts": output,
     }
     @fs.write_file(output + "/report.json", report.stringify(indent=2))

@@ -1,0 +1,56 @@
+{
+  "authored_pdfs": [
+    {
+      "name": "range-large.pdf",
+      "bytes": 8389611,
+      "sha256": "99dce67cae7ca2df4e7b45252889a3238dfe0ae566455688c37ccd44a4c3a23f",
+      "source": "Authored in tools/pixels/readonly_fixtures.mjs",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "xfa-binding.pdf",
+      "bytes": 1364,
+      "sha256": "269a6b9eface20b298ed772a1ee74fcfa05f4f76042918926650a6f90d4c2674",
+      "source": "Authored in tools/pixels/readonly_fixtures.mjs",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "xfa-static.pdf",
+      "bytes": 1344,
+      "sha256": "6dd36d55c5059d2f9d320bcbdfb76babc144f7957fd4684770c93992afcb9ffa",
+      "source": "Authored in tools/pixels/readonly_fixtures.mjs",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "annotations-readonly.pdf",
+      "bytes": 1747,
+      "sha256": "ba95c12721ef456a34e4bc97f1f513f8a1494639d9e6836409951c94f189c15a",
+      "source": "Authored in tools/pixels/readonly_fixtures.mjs",
+      "license": "Apache-2.0"
+    }
+  ],
+  "gray_jpeg": {
+    "source": "Original 32x16 constant grayscale blocks, encoded with cjpeg -grayscale -sample 2x2 -quality 100; embedded in image_jpeg_wbtest.mbt",
+    "sha256": "78a8f9cc9af53fc8afdec095404c077f356f4c677cd183a7b14d51b14dab85d9",
+    "license": "Apache-2.0",
+    "pixel_blocks": [
+      [
+        30,
+        70,
+        110,
+        150
+      ],
+      [
+        50,
+        90,
+        130,
+        170
+      ]
+    ]
+  },
+  "runtime_assets": "tools/web-assets/package-lock.json and tools/prepare_web_assets.mjs",
+  "test_hosts": "tools/test-host/package-lock.json",
+  "xfa": "vendor/xfa/UPSTREAM.json and LICENSE",
+  "icons": "assets/annotations/UPSTREAM.json and LICENSE",
+  "real_pdfs": "tools/ci/corpus.json; original fixture copyrights remain with their authors"
+}

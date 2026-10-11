@@ -1,0 +1,57 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import * as bridge from '../../web/_generated/pdf.js';
+import {PdfRangeSource,PdfRangeDocument} from '../../web/pdf-range.mjs';
+import {rangeFixture} from './readonly_fixtures.mjs';
+const parse=value=>{const result=JSON.parse(value);assert.equal(result.ok,true,result.error);return result;};
+const bytes=rangeFixture();
+function mockFetch(data,{range=true,etag='"fixture-v1"',truncate=false,badRange=false}={}){
+  const requests=[];
+  const fetch=async (url,options={})=>{
+    const request=options.headers?.Range;requests.push(request||'full');
+    if(!range||!request)return new Response(data,{headers:{etag,'content-length':String(data.length)}});
+    const [,a,b]=/^bytes=(\d+)-(\d+)$/.exec(request),start=Number(a),end=Math.min(data.length,Number(b)+1);
+    const body=data.subarray(start,end-(truncate?1:0));
+    return new Response(new ReadableStream({start(controller){for(let offset=0;offset<body.length;offset+=4096)controller.enqueue(body.subarray(offset,offset+4096));controller.close();}}),
+      {status:206,headers:{etag,'content-range':`bytes ${badRange?start+1:start}-${end-1}/${data.length}`}});
+  };
+  return {fetch,requests};
+}
+parse(bridge.open_pdf(bytes));
+const full= parse(bridge.render_page(1,1,0));const expectedSelection=parse(bridge.select_page_text(1,-1,-1,-1,-1));
+const mocked=mockFetch(bytes),source=new PdfRangeSource('https://example.test/large.pdf',mocked),reader=new PdfRangeDocument(source,bridge);
+const opened=parse(await reader.open());assert.equal(opened.pages,2);assert.equal(source.full,null);
+await reader.prepare('render_page',[1]);const partial=parse(bridge.render_page(1,1,0));
+assert.deepEqual(partial,full,'Range must preserve the public page model and Canvas plan');
+assert.deepEqual(parse(bridge.select_page_text(1,-1,-1,-1,-1)),expectedSelection,'Range retains verified PDF byte provenance');
+const first=source.diagnostics();assert.ok(first.received_bytes<bytes.length/10,JSON.stringify(first));assert.ok(!mocked.requests.includes('full'));
+await reader.prepare('render_page',[2]);assert.equal(parse(bridge.render_page(2,1,0)).page,2);assert.ok(source.stats.received_bytes>first.received_bytes+7*1024*1024);
+assert.ok(source.cacheBytes<=source.diagnostics().cache_budget_bytes);
+for(const options of [{range:false},{badRange:true},{truncate:true},{etag:''}]){
+  const mock=mockFetch(bytes,options),source=new PdfRangeSource('https://example.test/fallback.pdf',mock);
+  await source.initialize();assert.equal(source.full.length,bytes.length);assert.equal(source.stats.mode,'full');
+}
+const changed=mockFetch(bytes),changing=new PdfRangeSource('https://example.test/changed.pdf',changed);
+await changing.initialize();changing.fetcher=mockFetch(bytes,{etag:'"fixture-v2"'}).fetch;
+await assert.rejects(()=>changing.get(bytes.length-1024,bytes.length),error=>error.code==='source-changed');
+assert.equal(changing.full,null,'Changed response cannot publish mixed source bytes');
+const resized=new PdfRangeSource('https://example.test/resized.pdf',mockFetch(bytes));
+await resized.initialize();resized.fetcher=mockFetch(Buffer.concat([bytes,Buffer.from('x')])).fetch;
+await assert.rejects(()=>resized.get(bytes.length-1024,bytes.length),error=>error.code==='source-changed');
+const same=new PdfRangeSource('https://example.test/same.pdf',mockFetch(bytes));
+await same.initialize();same.fetcher=mockFetch(bytes,{range:false}).fetch;
+assert.deepEqual(await same.get(bytes.length-1024,bytes.length),new Uint8Array(bytes.subarray(bytes.length-1024)),'Same validated source may switch to a complete response');
+const fullSearch=parse(bridge.open_pdf(bytes));assert.equal(fullSearch.pages,2);
+const expectedSearch=parse(bridge.search_pdf('Range',false,false,false)).results;
+const searchReader=new PdfRangeDocument(new PdfRangeSource('https://example.test/search.pdf',mockFetch(bytes)),bridge);
+parse(await searchReader.open());assert.deepEqual(parse(await searchReader.search(['Range',false,false,false])).results,expectedSearch);
+const aborted=new AbortController();aborted.abort();
+const cancelled=new PdfRangeSource('https://example.test/cancelled.pdf',{signal:aborted.signal,fetch:async(url,options)=>{options.signal.throwIfAborted();}});
+await assert.rejects(()=>cancelled.initialize(),error=>error.name==='AbortError');
+// Exercise actual classic and compressed xrefs from the pinned PDF.js corpus.
+for(const name of ['tracemonkey.pdf','Pages-tree-refs.pdf','xfa_issue14315.pdf']){
+  const bytes=readFileSync(new URL(`../../reference/pdf.js/test/pdfs/${name}`,import.meta.url)),mock=mockFetch(bytes);
+  const source=new PdfRangeSource('https://example.test/'+name,mock),reader=new PdfRangeDocument(source,bridge);
+  const opened=parse(await reader.open());assert.ok(opened.pages>0);if(!source.full)await reader.prepare('render_page',[1]);parse(bridge.render_page(1,1,0));
+}
+console.log(JSON.stringify({passed:true,first_page_bytes:first.received_bytes,total_bytes:bytes.length,range_requests:mocked.requests.length,checks:['page equality','source provenance','lazy second page','streamed body','full fallback','truncated range','invalid Content-Range','validator change','abort','real xrefs']}));

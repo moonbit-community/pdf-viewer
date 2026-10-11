@@ -452,7 +452,9 @@ fn pdf_jpeg_decode(
       }
       let ns = data[pos + 2].to_int()
       guard frame_info is Some(fi) else { raise MissingChunk("SOF0") }
-      if ns != fi.components.length() || seg_len != 6 + ns * 2 {
+      // A one-component scan is noninterleaved even when it includes every
+      // frame component. Its MCUs are single blocks, independent of H/V.
+      if ns == 1 || ns != fi.components.length() || seg_len != 6 + ns * 2 {
         return pdf_jpeg_decode_multiscan(data, color_transform)
       }
       if data[pos + seg_len - 3].to_int() != 0 ||

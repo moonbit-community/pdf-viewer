@@ -97,6 +97,14 @@ uint64_t monotonic_ms() {
 
 // Raw C ABI, borrowed buffers. Child isolation contains native OOM/abort and
 // malformed entropy loops; parent remains responsive and copies only success.
+extern "C" int pdf_viewer_jbig2_native_available() {
+#if defined(__linux__)
+  return 1;
+#else
+  return 0;
+#endif
+}
+
 extern "C" int pdf_viewer_jbig2_native(const uint8_t* data, int data_size,
     const uint8_t* globals, int globals_size, int width, int height,
     uint8_t* output, int output_size) {

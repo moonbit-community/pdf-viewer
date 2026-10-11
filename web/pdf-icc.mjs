@@ -53,7 +53,7 @@ function validProfile(bytes, n) {
 // ICC Alternate receives the current sample, unlike a Separation tint whose
 // alternate components were evaluated by its PDF function. Samplers replace
 // source.components after constructing their reusable metadata record.
-function currentIccAlternate(source) {
+export function currentIccAlternate(source) {
   const alternate=source?.alternate,values=source?.components;
   if(!alternate||!values||!Array.from(values).every(Number.isFinite))return null;
   const ranges=source.component_ranges;

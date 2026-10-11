@@ -159,7 +159,7 @@ fn pdf_annotation_button_state(
       None =>
         match appearance_state {
           Some(state) if state != "Off" && state != "" => Some(state)
-          _ => None
+          _ => pdf_annotation_radio_option(document, object)
         }
     }
     (button_value, Some(button_value is Some(_) && value == button_value))
@@ -238,13 +238,9 @@ fn pdf_annotation_items_of_page(
           ),
           ink_paths: pdf_annotation_ink_paths(document, annotation.rest),
           appearance: pdf_annotation_appearance_of(
-            document,
-            annotation.rest,
-            rectangle,
-            page_number,
-            index,
-            next_index,
+            document, raw_annotation, rectangle, page_number, index, next_index,
           ),
+          style: pdf_annotation_style(document, raw_annotation, flags),
           field_name: if widget {
             pdf_annotation_field_full_name(document, annotation.rest)
           } else {
@@ -267,6 +263,11 @@ fn pdf_annotation_items_of_page(
           },
           field_options: if widget {
             pdf_annotation_field_options(document, annotation.rest)
+          } else {
+            []
+          },
+          choice_options: if widget {
+            pdf_annotation_choice_options(document, raw_annotation)
           } else {
             []
           },
@@ -445,7 +446,11 @@ fn pdf_annotation_appearance_of(
 ) -> PdfAnnotationAppearance? {
   let appearance = match pdf_annotation_normal_appearance(document, rest) {
     Some(value) => value
-    None => return None
+    None =>
+      match pdf_annotation_generated_appearance(document, rest, rectangle) {
+        Some(value) => value
+        None => return None
+      }
   }
   let stream = match document.direct(appearance) {
     @syntax.PdfStreamObject(stream) => stream
@@ -716,7 +721,11 @@ fn pdf_annotation_field_value(
 ) -> String? {
   let value = match pdf_annotation_field_lookup(document, object, "/V", 0) {
     Some(value) => value
-    None => return None
+    None =>
+      match pdf_annotation_field_lookup(document, object, "/DV", 0) {
+        Some(value) => value
+        None => return None
+      }
   }
   match document.direct(value) {
     @syntax.PdfArray(values) => {

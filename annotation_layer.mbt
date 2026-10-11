@@ -226,6 +226,7 @@ pub fn PdfPageModel::with_print_annotations(
     annotations: self.annotations.map(annotation => {
       ..annotation,
       visible: annotation.print,
+      style: { ..annotation.style, no_zoom: false, no_rotate: false, },
     }),
   }
 }

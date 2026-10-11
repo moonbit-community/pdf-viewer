@@ -2,6 +2,8 @@
 package "moonbit-community/pdf-viewer/codecs/jbig2"
 
 // Values
+pub fn available() -> Bool
+
 pub fn decode(Bytes, Bytes?, Int, Int) -> Bytes?
 
 // Errors

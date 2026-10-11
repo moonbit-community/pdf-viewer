@@ -176,7 +176,15 @@ main:focus-visible {
 .paint-layer svg,
 .paint-layer canvas {
   display: block;
+  width: 100%;
+  height: 100%;
 }
+.xfaLayer .xfa-text { pointer-events: auto; user-select: text; }
+.xfaLayer input:disabled, .xfaLayer select:disabled, .xfaLayer button:disabled { opacity: 1; color: inherit; }
+.xfaLayer .pdf-search-hit { background-color: #ffec80; }
+.xfaLayer .pdf-search-active { background-color: #ffbd69; }
+.thumbnail-preview { position: relative; }
+@media print { #print-pages .xfaLayer { transform: scale(1.3333333333333333) !important; } }
 .annotation-layer {
   position: absolute;
   inset: 0;

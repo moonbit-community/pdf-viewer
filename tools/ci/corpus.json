@@ -1,0 +1,187 @@
+{
+  "reference_revision": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+  "cases": [
+    {
+      "file": "90ms_rksj_h_sample.pdf",
+      "sha256": "d50ad3b93685e9d6061f5cc9957c49ca232a0dd0771aad71e4a615f87f2674be",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/90ms_rksj_h_sample.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "vertical.pdf",
+      "sha256": "514511143db12309893fb69cdf98c76f2361c20da394f79fdff2c119ed7a4393",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/vertical.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "tracemonkey.pdf",
+      "sha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/tracemonkey.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "Pages-tree-refs.pdf",
+      "sha256": "77c8817ea016296ea59e0991ea1a6d1440ef2480cdcd9acb59106938b649233f",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/Pages-tree-refs.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "issue18117.pdf",
+      "sha256": "36df977bee762441a06312aa9ba514cfe9d600a6d9f4d3d00c16039645d84bb7",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/issue18117.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "cidfont_cmap_overflow.pdf",
+      "sha256": "ecb07ca4b3c6a9fd408db07c29c7e4426fb1bd6ee9e2bbdfa4997b65be602c13",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/cidfont_cmap_overflow.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "issue14462_reduced.pdf",
+      "sha256": "8524a00cc4fe9f2bece570525f24b3bdac45af51a521dfc886e226f94484dc61",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/issue14462_reduced.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "issue18548_reduced.pdf",
+      "sha256": "9c2e99d83bb1d1143874e72c67a6efa832f4b6887ab0d6a85be8de8622ba9a25",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/issue18548_reduced.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "text_clip_cff_cid.pdf",
+      "sha256": "81aaf48f55c659d29d7a533cd913bd9d028ffad183b46580a2122eebe5187506",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/text_clip_cff_cid.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "annotation-highlight.pdf",
+      "sha256": "72b6387356ccfdfb95a0a5eff5e1ceb9b7667019807d7b04abaf64dad7ea143a",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/annotation-highlight.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "annotation-freetext.pdf",
+      "sha256": "318ed4bead93fa6ff023571b17ddca41e82fe2347b497ea24903a11e1892fb71",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/annotation-freetext.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "annotation-link-text-popup.pdf",
+      "sha256": "06917202feda6b6bb8b57b048655f946f749bdff5a8bfcb35eb0116f38910312",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/annotation-link-text-popup.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "annotation-text-without-popup.pdf",
+      "sha256": "2e0c788c795ab08178c12d26f73bebb6e18455a885568005770e8b6b947c4ceb",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/annotation-text-without-popup.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "widget_hidden_print.pdf",
+      "sha256": "025fddaaed7deb42b10dd7b09923d20b07f77c448eabfb8c7dbe7b28197b8ecf",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/widget_hidden_print.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "issue19176.pdf",
+      "sha256": "5fafd5649ade0b3f5b12c647d877f7f3723fa14d4104648548aa25c9b1add122",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/issue19176.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "standard_fonts.pdf",
+      "sha256": "4d48fc12e619a823bf70b3a4d8e9d916a85683ecb176d138af66a57351bd21f9",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/standard_fonts.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "tiling_patterns_variations.pdf",
+      "sha256": "2b7b9cccccef7407c18690cf4f007a04fc8a013b868738d025a71113a4700350",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/tiling_patterns_variations.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "calgray.pdf",
+      "sha256": "5521110fbe2a8cf1d299b3a9d9a03d0db928de7addfa2ea50e32fb440575fc12",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/calgray.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "calrgb.pdf",
+      "sha256": "c59544af2bdce1e53e28359a8320f26c90f7f5fcf7b294c3d2d8a35abccd9428",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/calrgb.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "function_based_shading_cmyk.pdf",
+      "sha256": "c624d33b595af80746dd96f6440d335a30b1bee3e484d9b0b2cfb0cd54c62be3",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/function_based_shading_cmyk.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "issue10339_reduced.pdf",
+      "sha256": "7d2e9133129d33f5ba17c7701a3a98e3ba37777bf5dee593a4bc0ab1dd8a4926",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/issue10339_reduced.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "devicen.pdf",
+      "sha256": "1fbaf094e1c714513aea19258e74269b6b5365ea769e288a8e142773f6cf2b94",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/devicen.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "devicen-none-zero-domain.pdf",
+      "sha256": "aff262dc5d70f832cadf2c705b5cf7a0651825e4b0627f25cd4129aa1d10d09e",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/devicen-none-zero-domain.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "colorkeymask.pdf",
+      "sha256": "655a470881a3bc4fac682abe88522c86c11ff41d08ecf94fae2f53ecd0c2d27c",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/colorkeymask.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "xfa_issue14315.pdf",
+      "sha256": "d039a40ea28384bae8d1a24929a4288aae1aeb433c441fd39c04fad618fa6f19",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/xfa_issue14315.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "xfa_filled_imm1344e.pdf",
+      "sha256": "8313c52ea97b49908137fd744e85fc37584b502210fcc0a73d6c272cca9d7889",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/xfa_filled_imm1344e.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import {
   "moonbitlang/async/socket",
   "moonbitlang/core/env",
   "moonbitlang/core/string",
+  "moonbitlang/x/crypto",
 }
 
 ///|
@@ -17,6 +18,8 @@ async fn main {
   @shell.Cmd("moon", ["run", "tools/build_web.mbtx"]).run()
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:\{port}"))
   println("PDF viewer: http://127.0.0.1:\{port}/")
+  let pdf_cache : Map[String, ((Int64, Int), Bytes, String)] = Map([])
+  let mut cache_bytes = 0
   server.run_forever((request, _, conn) => {
     let path = match request.path.find("?") {
       Some(index) => request.path[:index].to_owned()
@@ -26,6 +29,9 @@ async fn main {
       "/" | "/index.html" =>
         (Some("web/index.html"), "text/html; charset=utf-8")
       "/viewer.css" => (Some("web/viewer.css"), "text/css; charset=utf-8")
+      "/vendor/xfa/xfa.css" => (Some("web/vendor/xfa/xfa.css"), "text/css; charset=utf-8")
+      [.. "/_test/", .. filename] if filename.has_suffix(".pdf") && !filename.contains("/") && !filename.contains("..") =>
+        (Some("web/_test/" + filename.to_owned()), "application/pdf")
       "/viewer.js" => (Some("web/viewer.js"), "text/javascript; charset=utf-8")
       "/pdf-client.js" =>
         (Some("web/pdf-client.js"), "text/javascript; charset=utf-8")
@@ -74,15 +80,63 @@ async fn main {
       conn.end_response()
       return
     }
-    let data = @fs.read_file(file).binary()
+    let (data, etag) = if mime == "application/pdf" {
+      let stamp = @fs.mtime(file)
+      match pdf_cache.get(file) {
+        Some((old_stamp, data, etag)) if old_stamp == stamp => (data, etag)
+        _ => {
+          let data = @fs.read_file(file).binary()
+          let etag = "\"" + @crypto.bytes_to_hex_string(@crypto.sha256(data)) + "\""
+          if data.length() <= 16777216 {
+            if cache_bytes + data.length() > 67108864 { pdf_cache.clear(); cache_bytes = 0 }
+            pdf_cache[file] = (stamp, data, etag)
+            cache_bytes += data.length()
+          }
+          (data, etag)
+        }
+      }
+    } else { (@fs.read_file(file).binary(), "") }
+    if !etag.is_empty() && request.headers.get("if-match") is Some(wanted) && wanted != etag {
+      conn.send_response(412, "Precondition Failed")
+      conn.end_response()
+      return
+    }
+    let range = request.headers.get("range")
+    if mime == "application/pdf" && range is Some(range) && request.headers.get("if-range").map(value => value == etag).unwrap_or(true) {
+      let bounds = parse_http_range(range, data.length())
+      guard bounds is Some((start, end)) else {
+        conn.send_response(416, "Range Not Satisfiable", extra_headers={ "Content-Range": "bytes */\{data.length()}" })
+        conn.end_response()
+        return
+      }
+      conn.send_response(206, "Partial Content", extra_headers={
+        "Content-Type": mime, "Content-Length": (end - start).to_string(),
+        "Content-Range": "bytes \{start}-\{end - 1}/\{data.length()}",
+        "Accept-Ranges": "bytes", "ETag": etag, "Cache-Control": "no-store",
+      })
+      if request.meth is Get { conn.write(data[start:end]) }
+      conn.end_response()
+      return
+    }
     conn.send_response(200, "OK", extra_headers={
       "Content-Type": mime,
       "Content-Length": data.length().to_string(),
       "Cache-Control": "no-store",
+      "ETag": etag,
     })
     if request.meth is Get {
       conn.write(data)
     }
     conn.end_response()
   })
+}
+
+///|
+fn parse_http_range(value : String, length : Int) -> (Int, Int)? {
+  guard value.has_prefix("bytes=") else { return None }
+  let parts = value[6:].split("-").map(part => part.to_owned()).collect()
+  guard parts.length() == 2 else { return None }
+  let start = @string.parse_int(parts[0]) catch { _ => return None }
+  let end = if parts[1].is_empty() { length } else { (@string.parse_int(parts[1]) catch { _ => return None }).min(length - 1) + 1 }
+  if start < 0 || start >= length || end <= start { None } else { Some((start, end)) }
 }

@@ -1,0 +1,12 @@
+{
+  "moonbit": "0.10.14+7d59c7ec9",
+  "moon": "0.1.20260920",
+  "core_sha256": "6f18b8fdea18f85e628a75e4a1bd3977c5a5c9c6a836fd8824192b0e6bd91b14",
+  "linux-x86_64_sha256": "9226694de9ff978db1ecf820b7710c4224e84ec7a76b19a222d96f0cd4e31b6a",
+  "darwin-aarch64_sha256": "20967f9389ac54508899ee2fc051a3470d051452bac5818a9696ed4c144f3ec3",
+  "node": "24.15.0",
+  "playwright": "1.58.2",
+  "pdfjs_reference": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+  "pdfjs_codecs": "6.4.299",
+  "source": "https://www.moonbitlang.com/download/"
+}

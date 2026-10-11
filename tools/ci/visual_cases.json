@@ -1,0 +1,17 @@
+{
+  "reference_revision": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+  "backend": "canvas",
+  "use_system_fonts": false,
+  "scale": 2,
+  "cases": [
+    {"file":"annotations-readonly.pdf","pages":[1],"rotations":[0,90],"features":["no-ap-fields","password","comb","choice","line-ending","icon","squiggly","annotation-flags"]},
+    {"file":"annotation-highlight.pdf","pages":[1],"rotations":[0],"features":["annotation","markup"]},
+    {"file":"annotation-freetext.pdf","pages":[1],"rotations":[0],"features":["annotation-ap","embedded-font"]},
+    {"file":"issue18117.pdf","pages":[1],"rotations":[0],"features":["embedded-truetype","cmap"]},
+    {"file":"issue14462_reduced.pdf","pages":[1],"rotations":[0],"features":["type1"]},
+    {"file":"standard_fonts.pdf","pages":[1,5,9],"rotations":[0],"features":["fixed-standard-14"]},
+    {"file":"tiling_patterns_variations.pdf","pages":[1],"rotations":[0],"features":["tiling-pattern","uncolored-pattern"]},
+    {"file":"calgray.pdf","pages":[1],"rotations":[0],"features":["calgray"]},
+    {"file":"colorkeymask.pdf","pages":[1],"rotations":[0],"features":["raw-image","colour-key-mask"]}
+  ]
+}
