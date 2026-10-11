@@ -110,7 +110,9 @@ try{
       };
     });
     await page.locator('#layers-config').selectOption('-1');
-    await page.waitForFunction(()=>window.layerConfigResponseReady);
+    // A fast Worker can reach the held response before Rabbita commits the
+    // busy view. Keep the response held until its disabled control is painted.
+    await waitForUI(page,()=>window.layerConfigResponseReady&&document.querySelector('#layers-config').disabled);
     // Both configurations have the same checked groups; wait for the accepted
     // configuration rather than mistaking the previous group state for success.
     assert.equal(await page.locator('.layers-panel').getAttribute('data-config-index'),'1');
