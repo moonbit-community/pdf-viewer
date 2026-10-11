@@ -375,6 +375,69 @@ async fn Browser::drag(self : Browser, first : String, last : String) -> Unit {
 }
 
 ///|
+fn accessibility_test_document() -> Bytes {
+  let first = "/Artifact BMC BT /F1 10 Tf 20 380 Td (Running header) Tj ET EMC\n" +
+    [
+      for index, (tag, y, text) in [
+        ("H1", 350, "Tagged heading"), ("P", 300, "Visible paragraph"),
+        ("LI", 250, "First item"), ("LI", 220, "Second item"),
+        ("TH", 170, "Header"), ("TD", 130, "Cell"), ("Link", 60, "Tagged link"),
+      ] => {
+        let text = if tag == "TD" {
+          "(Before ) Tj /Span << /ActualText (replacement) >> BDC (XX) Tj (YY) Tj EMC ( after) Tj"
+        } else { "(\{text}) Tj" }
+        "/\{tag} << /MCID \{index} >> BDC BT /F1 12 Tf 20 \{y} Td \{text} ET EMC"
+      }
+    ].join("\n")
+  let second = "/P << /MCID 0 >> BDC BT /F1 12 Tf 20 350 Td (Second page) Tj ET EMC\nBT /F1 12 Tf 20 300 Td (Unmapped tail) Tj ET"
+  let objects = [
+    "<< /Type /Catalog /Pages 2 0 R /Lang (en-US) /StructTreeRoot 8 0 R >>",
+    "<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Contents 5 0 R /Resources << /Font << /F1 7 0 R >> >> /Annots [22 0 R] >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Contents 6 0 R /Resources << /Font << /F1 7 0 R >> >> >>",
+    "<< /Length \{first.length()} >>\nstream\n\{first}\nendstream",
+    "<< /Length \{second.length()} >>\nstream\n\{second}\nendstream",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    "<< /Type /StructTreeRoot /K 9 0 R /RoleMap << /TitleAlias /H1 >> >>",
+    "<< /Type /StructElem /S /Document /Lang (en-US) /K [10 0 R 11 0 R 12 0 R 15 0 R 19 0 R 20 0 R 21 0 R 23 0 R] >>",
+    "<< /Type /StructElem /S /TitleAlias /Pg 3 0 R /K 0 >>",
+    "<< /Type /StructElem /S /P /Pg 3 0 R /Lang (fr) /ActualText (Actual paragraph) /K 1 >>",
+    "<< /Type /StructElem /S /L /Pg 3 0 R /K [13 0 R 14 0 R] >>",
+    "<< /Type /StructElem /S /LI /K 2 >>",
+    "<< /Type /StructElem /S /LI /K 3 >>",
+    "<< /Type /StructElem /S /Table /Pg 3 0 R /K 16 0 R >>",
+    "<< /Type /StructElem /S /TR /K [17 0 R 18 0 R] >>",
+    "<< /Type /StructElem /S /TH /K 4 /A [<< /O /Layout >> << /O /Table /ColSpan 2 /RowSpan 2 /Scope /Column >>] >>",
+    "<< /Type /StructElem /S /TD /K 5 >>",
+    "<< /Type /StructElem /S /Figure /Pg 3 0 R /Alt (<b>Literal image</b>) >>",
+    "<< /Type /StructElem /S /Link /Pg 3 0 R /K [6 << /Type /OBJR /Pg 3 0 R /Obj 22 0 R >>] >>",
+    "<< /Type /StructElem /S /P /Pg 4 0 R /K 0 >>",
+    "<< /Subtype /Link /Rect [20 45 160 75] /A << /S /URI /URI (https://example.com/) >> >>",
+    "<< /Type /StructElem /S /Unknown /Pg 3 0 R /K 23 0 R >>",
+  ]
+  let output = StringBuilder()
+  output.write_string("%PDF-1.7\n")
+  let offsets : Array[Int] = []
+  let mut length = 9
+  for index, object in objects {
+    offsets.push(length)
+    let chunk = "\{index + 1} 0 obj\n\{object}\nendobj\n"
+    output.write_string(chunk)
+    length += chunk.length()
+  }
+  output.write_string("xref\n0 \{objects.length() + 1}\n0000000000 65535 f \n")
+  for offset in offsets { output.write_string(offset.to_string().pad_start(10, '0') + " 00000 n \n") }
+  output.write_string("trailer\n<< /Size \{objects.length() + 1} /Root 1 0 R >>\nstartxref\n\{length}\n%%EOF\n")
+  @utf8.encode(output.to_string())
+}
+
+///|
+async fn Browser::accessibility_check(self : Browser, name : String, predicate : String) -> Unit {
+  let tree = self.command("Accessibility.getFullAXTree")
+  self.check(name, "(" + predicate + ")(" + tree.stringify() + ")")
+}
+
+///|
 /// Authored interaction fixture: two cropped/UserUnit pages, intrinsic rotation,
 /// links, popup text and independent screen/print flags. Not a fidelity sample.
 fn annotation_browser_fixture() -> Bytes {
@@ -888,6 +951,20 @@ async fn main {
         #| })()
       ),
     )
+    browser.check("pending full selection survives a collapsed native selection notification", (
+      #| (async () => {
+      #|   const host = await import('./viewer.js'); getSelection().removeAllRanges();
+      #|   const pending = host.selectAllText(); await host.readSelection(); await pending;
+      #|   return lastPdfSelection?.ranges.length === 14 && !getSelection().isCollapsed && !document.getElementById('copy-selection').disabled;
+      #| })()
+    ))
+    browser.check("new pointer input cancels pending full selection", (
+      #| (async () => {
+      #|   const host = await import('./viewer.js'); const pending = host.selectAllText();
+      #|   document.getElementById('viewer').dispatchEvent(new PointerEvent('pointerdown', {bubbles:true})); await pending;
+      #|   return getSelection().isCollapsed && document.getElementById('copy-selection').disabled && document.getElementById('selection-status').textContent === '';
+      #| })()
+    ))
     browser.navigate(base + "/", 0)
     browser.check(
       "standalone empty state allows local PDF input", "!document.getElementById('empty-state').hidden && document.getElementById('file-input').accept.includes('.pdf')",
@@ -1081,6 +1158,99 @@ async fn main {
     browser.check("closing the document releases popup content and annotation targets", (
       #| (async () => { const host = await import('./viewer.js'); host.closeDocument(); return document.querySelector('.annotation-popup').hidden && document.querySelector('.annotation-popup').children.length === 0 && document.querySelector('.annotation-target') === null; })()
     ))
+    browser.navigate(base + "/?file=/fixtures/structure_simple.pdf", 1)
+    browser.check("real tagged PDF joins headings and paragraphs to original glyph indices", (
+      #| (() => {
+      #|   const layer = document.querySelector('.accessibility-layer');
+      #|   const headings = [...layer.querySelectorAll('[role=heading]')];
+      #|   return layer.dataset.tagged === 'true' && layer.querySelector('[lang="en-US"]') !== null && headings.length === 2 && headings.every(h => h.dataset.sourceItems.split(' ').every(i => document.querySelector('.glyph[data-item="'+i+'"]'))) && document.querySelector('.text-layer').getAttribute('aria-hidden') === 'true';
+      #| })()
+    ))
+    browser.accessibility_check("Chromium exposes real PDF H1 and H2 in its accessibility tree", (
+      #| tree => {
+      #|   const headings = tree.nodes.filter(n => !n.ignored && n.role?.value === 'heading');
+      #|   return headings.length === 2 && headings.map(n => n.properties.find(p => p.name === 'level')?.value.value).join(',') === '1,2' && headings.every(n => n.name.value.length > 0);
+      #| }
+    ))
+    let accessibility_path = output + "/accessibility.pdf"
+    @fs.write_file(accessibility_path, accessibility_test_document())
+    let accessibility_hash = @shell.Cmd("sha256sum", [accessibility_path]).output()
+    guard accessibility_hash.exit_code() == 0 else { fail("Unable to hash accessibility fixture") }
+    browser.upload(cwd + "/" + accessibility_path)
+    browser.ready(2)
+    ignore(browser.evaluate("document.getElementById('zoom').value='1'; document.getElementById('zoom').dispatchEvent(new Event('change')); true"))
+    browser.ready(2)
+    browser.check("tagged page isolates same MCID across pages and retains untagged tail", (
+      #| (() => {
+      #|   const first = document.querySelector('.accessibility-layer[data-page="1"]');
+      #|   const second = document.querySelector('.accessibility-layer[data-page="2"]');
+      #|   return first.querySelector('[role=heading]').textContent === 'Tagged heading' && !first.textContent.includes('Second page') && second.textContent.includes('Second page') && second.textContent.includes('Unmapped tail') && !second.textContent.includes('Tagged heading');
+      #| })()
+    ))
+    browser.check("language table spans and literal figure alternative are native DOM attributes", (
+      #| (() => {
+      #|   const layer = document.querySelector('.accessibility-layer[data-page="1"]');
+      #|   const header = layer.querySelector('[role=columnheader]');
+      #|   return layer.lang === 'en-US' && layer.querySelector('[lang=fr]').textContent === 'Actual paragraph' && header.getAttribute('aria-colspan') === '2' && header.getAttribute('aria-rowspan') === '2' && layer.querySelector('[role=cell]').textContent === 'Before replacement after' && layer.querySelector('[role=img]').getAttribute('aria-label') === '<b>Literal image</b>' && layer.querySelector('b,script,img') === null;
+      #| })()
+    ))
+    browser.accessibility_check("Chromium reads lists table headers cells and figure alternatives", (
+      #| tree => {
+      #|   const nodes = tree.nodes.filter(n => !n.ignored);
+      #|   const has = role => nodes.some(n => n.role?.value === role);
+      #|   return has('list') && nodes.filter(n => n.role?.value === 'listitem').length === 2 && has('table') && has('row') && has('columnheader') && has('cell') && nodes.some(n => n.role?.value === 'image' && n.name?.value === '<b>Literal image</b>');
+      #| }
+    ))
+    browser.accessibility_check("ActualText replaces glyph narration once and artifacts stay out of AX", (
+      #| tree => {
+      #|   const text = tree.nodes.filter(n => !n.ignored && n.role?.value === 'StaticText').map(n => n.name.value);
+      #|   return text.filter(s => s === 'Actual paragraph').length === 1 && text.filter(s => s === 'replacement').length === 1 && text.some(s => s === 'Before ') && text.some(s => s === ' after') && !text.some(s => s.includes('Running header') || s.includes('Visible paragraph') || s.includes('XX') || s.includes('YY'));
+      #| }
+    ))
+    browser.accessibility_check("tagged OBJR owns the native link once with its source text label", (
+      #| tree => tree.nodes.filter(n => !n.ignored && n.role?.value === 'link' && n.name?.value === 'Tagged link').length === 1
+    ))
+    browser.check("accessible narration preserves visible glyph selection and copied source text", (
+      #| (async () => {
+      #|   const page = document.querySelector('.page[data-page="1"]');
+      #|   const glyphs = [...page.querySelectorAll('.glyph')];
+      #|   const start = glyphs.findIndex(g => g.textContent === 'V');
+      #|   const selected = glyphs.slice(start, start + 'Visible paragraph'.length);
+      #|   const range = document.createRange(); range.setStart(selected[0].querySelector('.glyph-text').firstChild, 0); range.setEnd(selected.at(-1).querySelector('.glyph-text').firstChild, 1);
+      #|   let copied; const viewer = document.getElementById('viewer'); const capture = e => { if(e.detail) copied = e.detail; };
+      #|   viewer.addEventListener('pdf-selection-change', capture);
+      #|   getSelection().removeAllRanges(); getSelection().addRange(range); await (await import('./viewer.js')).readSelection();
+      #|   viewer.removeEventListener('pdf-selection-change', capture);
+      #|   return getSelection().toString() === 'Visible paragraph' && copied?.text === 'Visible paragraph' && !getSelection().containsNode(page.querySelector('.accessibility-layer'), true);
+      #| })()
+    ))
+    let accessibility_tree = browser.command("Accessibility.getFullAXTree")
+    @fs.write_file(output + "/accessibility-tree.json", accessibility_tree.stringify(indent=2))
+    ignore(browser.evaluate("getSelection().removeAllRanges(); document.getElementById('rotate').click(); document.getElementById('zoom').value='1.5'; document.getElementById('zoom').dispatchEvent(new Event('change')); true"))
+    browser.ready(2)
+    browser.accessibility_check("rotation and repaint retain exactly one heading narration", (
+      #| tree => tree.nodes.filter(n => !n.ignored && n.role?.value === 'heading' && n.name?.value === 'Tagged heading').length === 1
+    ))
+    ignore(browser.evaluate("document.getElementById('next-page').focus(); true"))
+    ignore(browser.command("Input.dispatchKeyEvent", params={ "type": "keyDown", "key": "Enter", "code": "Enter", "windowsVirtualKeyCode": 13, "text": "\r" }))
+    ignore(browser.command("Input.dispatchKeyEvent", params={ "type": "keyUp", "key": "Enter", "code": "Enter", "windowsVirtualKeyCode": 13 }))
+    browser.wait("document.getElementById('page-number').value === '2' && document.querySelector('.accessibility-layer[data-page=\"2\"]') !== null")
+    browser.check("native keyboard page navigation loads the next semantic page", "document.querySelector('.accessibility-layer[data-page=\"2\"]').textContent.includes('Second page')")
+    browser.navigate(base + "/?file=/fixtures/issue6782.pdf", -1)
+    browser.check("real MCR reference PDF maps source content into semantic paragraphs", (
+      #| (async () => {
+      #|   const data = JSON.parse(await (await import('./pdf-client.js')).render_page(1,1,0));
+      #|   return data.ok && data.accessibility.tagged && data.accessibility.mapped_items > 0 && document.querySelector('.accessibility-layer [role=paragraph]') !== null;
+      #| })()
+    ))
+    browser.navigate(base + "/?file=/fixtures/90ms_rksj_h_sample.pdf", 1)
+    browser.accessibility_check("untagged Unicode fallback reads text once without fake PDF headings", (
+      #| tree => {
+      #|   const nodes = tree.nodes.filter(n => !n.ignored);
+      #|   return nodes.some(n => n.role?.value === 'paragraph') && nodes.filter(n => n.role?.value === 'StaticText' && n.name?.value.includes('日本語テスト')).length === 1 && !nodes.some(n => n.role?.value === 'heading');
+      #| }
+    ))
+    browser.check("document replacement clears semantic labels from the prior PDF", "!document.querySelector('.accessibility-layer').textContent.includes('Actual paragraph') && document.getElementById('pdf-annotation-1-0') === null")
     let pressure = output + "/host-pages.pdf"
     let images = output + "/host-images.pdf"
     @fs.write_file(pressure, host_test_document(200))
@@ -1346,6 +1516,13 @@ async fn main {
         "sha256": annotations_hash.stdout().split(" ").next().unwrap().to_owned(),
         "real_fixtures": ["annotation-link-text-popup.pdf", "annotation-text-without-popup.pdf", "widget_hidden_print.pdf"],
         "scope": "Read-only popup/link DOM over Canvas, independent SVG viewport geometry oracle, native pointer/keyboard/selection, print intent Canvas equivalence and document cleanup; not reference-renderer appearance pixel parity",
+      },
+      "accessibility": {
+        "authored_fixture": accessibility_path,
+        "sha256": accessibility_hash.stdout().split(" ").next().unwrap().to_owned(),
+        "real_fixtures": ["structure_simple.pdf", "issue6782.pdf", "90ms_rksj_h_sample.pdf"],
+        "ax_tree": output + "/accessibility-tree.json",
+        "scope": "Chromium AX roles, labels and ownership; page-local MCID/source associations and native navigation/selection. Not an assistive-technology or PDF/UA conformance certification",
       },
       "host_runtime": {
         "long_document": {

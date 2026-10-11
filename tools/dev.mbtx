@@ -35,6 +35,8 @@ async fn main {
         (Some("web/page-scheduler.js"), "text/javascript; charset=utf-8")
       "/annotation-layer.js" =>
         (Some("web/annotation-layer.js"), "text/javascript; charset=utf-8")
+      "/accessibility-layer.js" =>
+        (Some("web/accessibility-layer.js"), "text/javascript; charset=utf-8")
       "/_generated/pdf.js" =>
         (Some("web/_generated/pdf.js"), "text/javascript; charset=utf-8")
       [.. "/", .. filename] if !filename.contains("..") &&

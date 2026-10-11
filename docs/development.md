@@ -92,8 +92,10 @@ JS codec/CMM 宿主；`renderPdfPage()` 安装共享 pattern/shading painter 并
 保留诊断和可见警告。资源缓存/深度/工作面预算已有边界，但不代表全文档峰值 RSS 或硬取消。
 详见 [A2 目标、资源限制与公开入口](a2-acceptance.md)。
 
-A2 的 shipped web bridge/runtime 已在 native Canvas 宿主验证；当前记录中的 Chromium
-因 socket EPERM 无法启动，不据此声称合并后的浏览器 DOM/交互测试通过。
+A2 的 shipped web bridge/runtime 已在 native Canvas 宿主验证；合并最新 master 后，
+Chromium 的 Canvas/DOM、可访问性、交互与压力回归 93/93 通过。
+原作者环境的 socket EPERM 属于历史验证限制，最新结果与 6 项开放回归见
+[A2 合并验收](a2-acceptance.md#latest-master-integration-2026-10-11)。
 
 ## 本地运行
 
@@ -116,7 +118,7 @@ JS/Wasm 与独立 JBIG2 Wasm；这些生成资产不进入 Git。构建不会自
 解码、搜索和 Canvas 计划生成运行在 module Worker；主线程执行 Canvas replay，
 正文与缩略图按可见范围挂载。Worker 与主线程分别初始化所需的图像/色彩宿主。
 部署时提供完整 `web/` 目录，包括 `pdf-client.js`、`pdf-worker.js`、`page-scheduler.js`、
-`annotation-layer.js`，以及 Canvas runtime、随包 codec/CMM 资产和生成的 `_generated/pdf.js`，
+`annotation-layer.js`、`accessibility-layer.js`，以及 Canvas runtime、随包 codec/CMM 资产和生成的 `_generated/pdf.js`，
 通过 HTTP 服务加载这些 ES modules。
 宿主诊断可在浏览器控制台读取：
 
@@ -267,6 +269,7 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs vertical 1,2,3
 | document outline/info/attachments in browser | `document_info()` / `download_attachment(index)` / `download_metadata()` |
 | readonly annotation interactions | `PdfViewerDocument::annotation_layer_json(n)`；PDF-space 坐标、原 `/Annots` 索引、popup 内容和链接目标 |
 | annotation print intent | `PdfPageModel::with_print_annotations()`；bridge `render_print_page`，与屏幕缓存分开 |
+| page-local accessible semantics | `PdfViewerDocument::accessibility_page_json(n)`；结构树、稳定 glyph indices、Form 调用与批注 OBJR；bridge 显示响应的 `accessibility` |
 
 文档读取补充 API：`outline_json()`、`page_labels_json()`、`page_labels()`、
 `attachments_json()`、`optional_content_json()`、`struct_tree_json()`、`info_json()`、
@@ -330,9 +333,9 @@ ARC4、128-bit ARC4 和 AESV2，浏览器 viewer 在本地弹出密码提示并�
 罕见字体格式、无法恢复的损坏流、歧义几何布局与像素差异保留在验证报告中。
 A2 的 ICC、组/mask、pattern、shading 与 affine pen 已进入 Canvas 主路径，
 目标差异、资源限制和真实页面残差见 [A2 验收](a2-acceptance.md)。完整 annotation
-appearance/form 行为、可访问性、CI 和更大的真实文档基线仍是后续工作。
-宿主生命周期、Worker/取消、虚拟化与有界缓存已接入；其上游验收不替代 A2 合并后的
-DOM/压力复跑，也不保证全文档峰值内存。SVG 输出保留调试/兼容用途及明确诊断，
+appearance/form 行为、人工辅助技术/特殊标签覆盖、CI 和更大的真实文档基线仍是后续工作。
+宿主生命周期、Worker/取消、虚拟化与有界缓存已接入，并完成 A2 合并后的 DOM/压力复跑；
+缓存预算不保证全文档峰值内存。SVG 输出保留调试/兼容用途及明确诊断，
 不能当作 Canvas 主路径或 PDF.js 整页像素一致的替代证明。
 
 四字节字符码的高位保留在 `PdfTextItem.charcode` 的 `Int` 位模式中，可能显示为负数；
@@ -354,7 +357,13 @@ MoonBit 宿主可用 `reinterpret_as_uint()` 取得无符号值。原始 byte sp
 页面卸载、重绘或关闭文档会清空 popup 内容。打印按独立 Print 标志选择外观，
 NoView/Print 批注可以仅出现在打印里，Hidden 会同时抑制两种用途。
 交互与剩余外观限制见 [批注验收](validation.md#readonly-annotation-interaction-and-print-intent)。
-歧义布局/tagged PDF、完整 locale/case-fold 策略、批注外观和表单控件继续由 TODO 跟踪；
+`accessibility_page_json(n)` 把 tagged 页的 MCID 和原 item indices 关联到 DOM/ARIA，
+保留 RoleMap、语言、Alt/ActualText、列表/表格和原生批注控件的所有权。
+未关联文字按 A1 几何段落提供旁白；装饰内容排除，复制/搜索仍沿用 A1 的来源顺序。
+旁白随页面虚拟化挂载，用有标签的原生页码/上下页控件逐页读取；打印不包含旁白 DOM。
+Chromium AX 验收及人工辅助技术、特殊标签的剩余边界见
+[可访问性验收](validation.md#tagged-page-accessibility-and-source-association)。
+歧义未标记布局、完整 locale/case-fold 策略、批注外观和表单控件继续由 TODO 跟踪；
 Worker/取消、虚拟化和缓存预算的边界与压力数据见
 [浏览器宿主验证](validation.md#browser-host-lifecycle-scheduling-and-pressure)。
 

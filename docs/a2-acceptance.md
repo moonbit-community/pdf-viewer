@@ -30,7 +30,7 @@ capabilities.
 | C-03 | Checked main path | Whole tint function/domain, None/All, display alternates, original components, explicit process-space OP/OPM | `tools/pixels/compare_ink_planes.mjs`, `docs/a2-compositing-validation.md`;16 CMYK blends and process group cases compared with Ghostscript tiffsep. Arbitrary physical spot-ink proofing requires an actual matching profile; display alternates follow ISO8.6.6. |
 | G-01 | Checked main path | Affine path pen, A1 embedded/Standard 14 contours and optional native host outlines; independent width/dash/caps/joins | 56 original and 8 CFF variants; default shipped web bridge/runtime passes 24 exact same-font Standard 14 fill/stroke/viewport controls with no native resolver. Native public default output is byte-identical. Explicit host overrides and nonstandard fonts without contours retain `PDF_TEXT_STROKE_GEOMETRY`, strict rejection and visible warning. See `docs/validation/standard14-pen.md` and `docs/validation/host-text-pen.md`. |
 | G-02 | Checked main path | Independent fill/clip winding, delayed W/W*, empty clips, Form intersections, hairline dashes and degenerate caps | `path_clip_wbtest.mbt`, `tools/pixels/hairline_test.mjs`, real affine and CFF clipping fixtures. Subpixel non-hairline minimum coverage differs between reference-renderer policies; it is not silently clamped to one pixel. |
-| G-03 | Checked main path | Reusable Canvas2D pixel backend with RGBA8 public surfaces, Float32 premultiplied group data, separate shape/alpha and resource limits | Actual web JS-entry smoke and native CLI→plan→PNG path; `tools/render_canvas.mjs`. Native Canvas host tested. Chromium process cannot launch in this environment (socket EPERM), so full DOM/browser interaction is not claimed. |
+| G-03 | Checked main path | Reusable Canvas2D pixel backend with RGBA8 public surfaces, Float32 premultiplied group data, separate shape/alpha and resource limits | Actual web JS-entry smoke and native CLI→plan→PNG path; `tools/render_canvas.mjs`. Native Canvas host and the latest-master Chromium integration below are tested; reference pixel parity remains separately measured. |
 | M-01 | Checked main path | Isolated/nonisolated groups, backdrop removal, knockout, nested boundaries, process and ICC blend spaces, text TK | `docs/a2-compositing-validation.md`, `docs/validation/text-knockout.md`; authored full PDFs and real regression pages, multiple reference renderers. |
 | M-02 | Checked main path | Structured Alpha/Luminosity soft-mask replay, installation CTM, BC in group space before CMM, TR and image-local mask precedence | Mask model and Canvas pixel tests; nested knockout/masked-TK reference disagreements recorded rather than hidden. |
 | M-03 | Checked main path | All16 PDF blend modes plus preference arrays and CompatibleOverprint semantics | RGB full-PDF and CMYK tiffsep pixel oracles; unsupported host blend primitives fail explicitly. |
@@ -81,7 +81,7 @@ does not change the historical measurements below.
 
 | Host | Decode / colour capability | Pixel output and limitations |
 | --- | --- | --- |
-| JS web host | Moon JPEG/JPX; bundled JBIG2 and LittleCMS extraWasm installed before parsing | Canvas2D groups, masks, patterns and shading. Actual shipped bridge/runtime tested with a native Canvas host; real browser DOM is untested here. Bundled Standard 14 paints directly from A1 contours. Explicit host overrides/nonstandard text without contours retain the geometry warning. The default viewer decodes in its Worker; queued tasks can be cancelled and active results discarded. Closing/replacing the document terminates the Worker. Canvas replay remains on the main thread. |
+| JS web host | Moon JPEG/JPX; bundled JBIG2 and LittleCMS extraWasm installed before parsing | Canvas2D groups, masks, patterns and shading. Actual shipped bridge/runtime tested with a native Canvas host and 93 Chromium integration checks below. Bundled Standard 14 paints directly from A1 contours. Explicit host overrides/nonstandard text without contours retain the geometry warning. The default viewer decodes in its Worker; queued tasks can be cancelled and active results discarded. Closing/replacing the document terminates the Worker. Canvas replay remains on the main thread. |
 | JS Node host | Same JS/Wasm adapters | `renderPdfPage` / `renderPdfCanvas` accept host `createCanvas`, `Path2D`, `loadImage`. Public runner installs the native text-outline callback when available. |
 | Moon native Linux | Moon JPEG/JPX; vendored PDFium C++20 child-process JBIG2; dynamically loaded LittleCMS2 | Native parsing produces public Canvas JSON. The Node Canvas runner produces the PNG; a standalone Moon software rasterizer is not implied. Native host text-outline adapter tested. |
 | Moon native macOS/Windows | JPEG/JPX source path; JBIG2 deliberately unavailable without equivalent process isolation. Native ICC availability is target-specific and untested here | No native-platform acceptance claimed. Explicit codec/colour capability boundaries remain. |
@@ -207,6 +207,54 @@ those entire corpora or the browser DOM were rerun after A1 changed font geometr
 The host runner consumes the public JSON, not a special test-only renderer. The
 native Pattern Multiply fixture produces zero pixels above8 and maximum1 byte
 against Ghostscript. No remote PDF upload or external rendering service is used.
+
+## Pre-merge review: open regressions (2026-10-11)
+
+Review of PR #1 at `6b8072be8bf7d16cfad8237d9dd3507c2db4b7bb` confirmed the
+following six P2 issues. They remain open after conflict resolution with
+`60e4b69`; the checked main-path inventory above does not claim these branches
+are correct. They are regression follow-ups rather than new checklist capabilities.
+
+| Area | Reproduction and observed result | Follow-up |
+| --- | --- | --- |
+| ICC Alternate | A page with a legal ICC Alternate fails Canvas replay when the CMM is unavailable. A CMYK group with a malformed source profile also fails with the CMM installed. | Preserve the PDF Alternate through the public replay/profile-scope boundary. |
+| Pattern sampling | A red/white two-row cell under matrix `[1,0,0,16,0,0]` becomes solid pink; Ghostscript and Poppler retain the stripes. The npm PDF.js 6.4.299 oracle also has this case's defect. | Derive each cell-axis sampling density from its transformed geometry. |
+| Gray JPEG | A single-component 32×16 JPEG with 2×2 sampling yields blocks `[[30,70,50,90],[110,150,130,170]]` instead of `[[30,70,110,150],[50,90,130,170]]`. | Treat single-component scans as noninterleaved even when they contain every frame component. |
+| Host text alpha | Explicit Helvetica → Liberation Sans with `CA=.25`, `ca=.5` and `Tr=2` loses stroke opacity in Canvas replay; restoring `stroke_alpha` in the emitted item corrects the pixels. | Carry stroke alpha through the host-text fallback branch. |
+| Output resolution | At Chromium DPR 2, the backing Canvas still matches its CSS dimensions; a 612×792-point print page uses a 612×792 backing bitmap. | Separate logical viewport geometry from screen output scale and print raster resolution. |
+| Optional native hosts | The full native suite aborts on macOS at `colour_icc_wbtest.mbt:106` when an unavailable engine is unwrapped. Native JBIG2 tests also assume the Linux-only decoder exists. | Gate optional-host assertions by actual platform/capability, retaining integration checks where engines exist. |
+
+On macOS arm64, independent review passed **635 JS**, **636 Wasm** and
+**636 Wasm-GC** tests, all-target checking, the web build, six asset-integrity
+checks, the actual Worker/Canvas suite and **78/78 Chromium checks** on the
+reviewed PR head. The full native run failed as described above; the earlier
+author's **643 native** total remains evidence for its own environment. These
+checks do not replace real-corpus pixel measurements or manual assistive-technology
+acceptance. The latest-master integration results are recorded separately below.
+
+## Latest-master integration (2026-10-11)
+
+Conflict resolution combines PR head `6b8072` with master `60e4b69`. The viewer
+retains asynchronous detached Canvas replay together with the text/annotation
+layers, page-local DOM/ARIA narration and the selection-restoration race fix.
+The bridge returns both `canvas` and `accessibility`; printing omits narration.
+
+Fresh checks on macOS arm64 passed **643/643 JS**, **644/644 Wasm** and
+**644/644 Wasm-GC** tests, plus **8/8 native accessibility** tests. `moon info &&
+moon fmt`, all-target checking and the release web build passed; the interface
+merge retains master's public accessibility method. The full native suite's
+optional-engine failure remains open above and is not a native acceptance pass.
+
+Chromium **145.0.7632.6** passed **93/93** checks in
+`_build/browser-test-1791706542666/report.json`: actual Canvas painting, fonts,
+selection/copy/search and both restoration races, annotation geometry and
+screen/print intent, CDP accessibility roles/ownership, Worker cancellation and
+bounded caches, 200-page physical print export, and 12 MiB raw-image pressure.
+The actual Worker/Canvas suite and host-text diagnostic controls also passed
+against the freshly built bridge. These results supersede the original author's
+browser-launch limitation for this integrated tree; they do not establish
+reference-renderer appearance equality, manual screen-reader acceptance or a
+whole-document RSS bound. All six review regressions above remain open.
 
 ## Common reproduction
 

@@ -10,6 +10,7 @@ page APIs, a Canvas2D pixel backend, and SVG compatibility output for native app
 - Open local PDF files through the file picker or drag and drop.
 - Navigate documents with page controls, thumbnails, outlines, and page labels.
 - Follow PDF links and open readonly annotation comments with mouse or keyboard.
+- Read tagged headings, lists, tables, and alternative text through a page-local DOM/ARIA layer.
 - Zoom, rotate, select and copy text, and search across pages.
 - Decode in a browser Worker, mount nearby pages/thumbnails, and retain bounded page/render caches.
 - Print the complete document at its original page sizes using the toolbar or Ctrl/Cmd+P.
