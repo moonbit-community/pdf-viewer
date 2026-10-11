@@ -6,6 +6,7 @@
   "darwin-aarch64_sha256": "20967f9389ac54508899ee2fc051a3470d051452bac5818a9696ed4c144f3ec3",
   "node": "24.15.0",
   "playwright": "1.58.2",
+  "rabbita": "0.16.4",
   "pdfjs_reference": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
   "pdfjs_codecs": "6.4.299",
   "source": "https://www.moonbitlang.com/download/"

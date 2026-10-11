@@ -53,7 +53,14 @@ if(process.argv[1]?.endsWith('/check_reports.mjs')){
   assert.match(host,/Linux|Macintosh/,'No measured visual baseline for this platform');
   checkVisual(visualReport,read(/Linux/.test(host)?'tools/ci/visual_baseline_linux.json':'tools/ci/visual_baseline.json'));
   const dom=read(`${browser}/report.json`);
-  assert.equal(dom.status,'passed');assert.ok(dom.passed>=104,'Browser checks were dropped');
+  assert.equal(dom.status,'passed');assert.ok(dom.passed>=109,'Browser checks were dropped');
+  for(const name of [
+    'Rabbita updates sidebars and controls while preserving Canvas and native selection',
+    'compiled MoonBit thumbnails discard cancelled draws, warnings and late failures',
+    'compiled MoonBit printing discards a draw completed after document close',
+    'rapid page button clicks retain each navigation before the next view update',
+    'Rabbita captures a dropped file before the native drag data is released',
+  ])assert.ok(dom.checks.includes(name),`Missing frontend regression: ${name}`);
   assert.equal(dom.host_runtime.printed_pages,200);
   assert.equal(dom.remaining_readonly.xfa_printed_pages,2);
   assert.equal(dom.remaining_readonly.real_xfa_pages,7);

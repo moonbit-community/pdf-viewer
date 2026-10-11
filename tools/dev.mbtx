@@ -33,6 +33,7 @@ async fn main {
       [.. "/_test/", .. filename] if filename.has_suffix(".pdf") && !filename.contains("/") && !filename.contains("..") =>
         (Some("web/_test/" + filename.to_owned()), "application/pdf")
       "/viewer.js" => (Some("web/viewer.js"), "text/javascript; charset=utf-8")
+      "/viewer-host.mjs" => (Some("web/viewer-host.mjs"), "text/javascript; charset=utf-8")
       "/pdf-client.js" =>
         (Some("web/pdf-client.js"), "text/javascript; charset=utf-8")
       "/pdf-worker.js" =>
@@ -45,6 +46,8 @@ async fn main {
         (Some("web/accessibility-layer.js"), "text/javascript; charset=utf-8")
       "/_generated/pdf.js" =>
         (Some("web/_generated/pdf.js"), "text/javascript; charset=utf-8")
+      "/_generated/viewer.js" =>
+        (Some("web/_generated/viewer.js"), "text/javascript; charset=utf-8")
       [.. "/", .. filename] if !filename.contains("..") &&
         !filename.contains("\\") &&
         (filename.has_suffix(".mjs") || filename.has_suffix(".wasm")) &&

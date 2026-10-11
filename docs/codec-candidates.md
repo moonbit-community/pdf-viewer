@@ -168,6 +168,7 @@ PDF 色彩状态与资源缓存仍需 viewer 适配；专色/overprint 不等同
 | --- | --- | --- |
 | [moonbit-community/XMLParser](https://mooncakes.io/docs/moonbit-community/XMLParser@0.2.5) | 历史候选 0.2.5，Apache-2.0 | 未采用：单独 XML parser 不覆盖 XFA binder/paginator；本轮改为直接复用完整纯 XFA 组件 |
 | PDF.js 纯 XFA 组件 | 固定 `89b500f5e1d98ed89bb90211e45b28730b2d99ac`，36 个未修改模块及 Apache-2.0 许可；[来源与 SHA](../vendor/xfa/UPSTREAM.json) | 已接入 XML/template/data binding/pagination/XfaLayer；pdflite 保持 PDF reader，字体复用既有程序/metrics，控件锁为只读，无文档脚本/编辑；[验收](readonly-completion.md#dynamic-xfa) |
+| [moonbit-community/rabbita](https://mooncakes.io/docs/moonbit-community/rabbita) | 已接入 0.16.4，使用仓库固定的 MoonBit 编译器 | 工具栏、侧栏、状态视图、事件及异步命令复用框架；阅读器控制器在 MoonBit 中，Canvas/Worker/XFA 保留现有引擎适配；[前端边界](frontend.md) |
 | [mizchi/js_web](https://mooncakes.io/docs/mizchi/js_web@0.13.1) | 0.13.1；上游文档/API 已核查 | Worker/MessagePort、Fetch/Streams 等 JS 绑定候选；已有宿主 JS 可直接用浏览器 API，无需为此强制加包 |
 | pdflite 0.2.2（已有依赖） | 本地 `pkg.generated.mbti` 已核查 | reader/CMap/AFM/structure tree、批注模型；`pdf_write_document` 和增量 writer 可用于后续编辑保存，不另写 serializer |
 | 既有 Chromium/MoonBit/视觉 runner | 已有主路径，验证见 [validation.md](validation.md) | V-03 复用 runner 接 CI；不用为扩大 fixture 重建测试框架 |

@@ -1,0 +1,30 @@
+import {
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/html",
+  "moonbit-community/rabbita/dom",
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/js",
+  "moonbitlang/async/js_async",
+  "moonbitlang/core/json",
+}
+
+supported_targets = "js"
+
+pkgtype(kind: "executable")
+
+options(
+  link: {
+    "js": {
+      "format": "esm",
+      "exports": [
+        "load_file",
+        "perform_search",
+        "read_selection",
+        "select_all_text",
+        "close_document",
+        "print_document",
+        "runtime_diagnostics",
+      ],
+    },
+  },
+)

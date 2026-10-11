@@ -2,6 +2,8 @@
 
 A read-only PDF viewer and rendering library written in [MoonBit](https://www.moonbitlang.com/),
 built on [`moonbitlang/pdflite`](https://mooncakes.io/docs/moonbitlang/pdflite).
+The browser interface uses the MoonBit [Rabbita](https://mooncakes.io/docs/moonbit-community/rabbita)
+framework; its views and reader controller are in [`cmd/viewer/`](cmd/viewer/).
 The project provides a standalone browser application, structured document and
 page APIs, a Canvas2D pixel backend, and SVG compatibility output for native applications.
 
@@ -30,6 +32,7 @@ Node 22.13.0 or newer with npm, then clone the repository:
 ```sh
 git clone https://github.com/moonbit-community/pdf-viewer.git
 cd pdf-viewer
+moon install
 npm ci --prefix tools/web-assets --ignore-scripts --omit=optional
 moon run tools/dev.mbtx 4312
 ```
@@ -74,10 +77,12 @@ then build the browser application:
 
 ```sh
 npm ci --prefix tools/web-assets --ignore-scripts --omit=optional
+moon install
 moon run tools/build_web.mbtx
 ```
 
-Serve the complete `web/` directory, including the Worker modules and generated `web/_generated/pdf.js`,
+Serve the complete `web/` directory, including the Worker modules and both generated
+`web/_generated/pdf.js` and `web/_generated/viewer.js`,
 with a static HTTP server. The deployed application runs without a native PDF
 process or a PDF.js renderer. `pdfjs-dist` supplies only the standalone JBIG2
 Wasm asset to the product build; its renderer is not deployed. The build does

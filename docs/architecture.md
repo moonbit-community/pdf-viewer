@@ -21,8 +21,8 @@ Canvas plan → shared Canvas2D runtime / SVG compatibility / DOM text layer
 
 `pdflite` owns PDF syntax, xref recovery, resources, font decoding, content
 operators, and image decoding primitives. The viewer package owns the stable
-host-facing model and coordinate conversion. This keeps an OpenSeek adapter (or
-a future Rabbita browser shell) from depending on `pdflite` internals.
+host-facing model and coordinate conversion. This keeps the Rabbita browser
+interface and an OpenSeek adapter from depending on `pdflite` internals.
 
 The collector retains a display list instead of drawing directly while parsing.
 That gives us independently testable page geometry, positioned text/source
@@ -293,13 +293,23 @@ and stream backing. `reader_diagnostics()` records original paths and node IDs;
 if no page survives, the located original error propagates. This eager recovery
 reports the surviving page count, unlike PDF.js's lazy failure for a bad page.
 
-The standalone browser shell lives in `web/`, with a MoonBit JS bridge in
-`cmd/browser/`. `web/pdf-client.js` sends asynchronous operations to the native
+The standalone browser interface uses Rabbita 0.16.4. MoonBit views, typed
+messages, navigation, search, selection, document lifecycle and print orchestration
+live in `cmd/viewer/`, compiled to `web/_generated/viewer.js`. Rabbita reconciles
+the toolbar, sidebars and status; stable empty page/print containers preserve
+native Canvas and selection nodes across model updates. `web/viewer.js` loads
+the application and preserves the host exports. The small `web/viewer-host.mjs`
+adapter connects the existing rendering engines and page scheduler to MoonBit.
+See [frontend boundaries](frontend.md) for module responsibilities.
+
+`cmd/browser/` provides the PDF engine bridge.
+`web/pdf-client.js` sends asynchronous operations to the native
 module Worker in `web/pdf-worker.js`; the generated MoonBit bridge runs there.
 `initializePdfGraphics()` installs the image/colour host adapters before
-MoonBit/pdflite parses PDF bytes in that Worker. The JavaScript shell handles
-file input, DOM mounting, Canvas replay and native browser selection; its
-separate JS realm also initializes the graphics host needed for replay.
+MoonBit/pdflite parses PDF bytes in that Worker. The Rabbita application handles
+file input, navigation and native browser selection through DOM bindings and
+narrow native API calls. The main thread initializes the graphics host needed
+for Canvas replay.
 The bridge includes `open_pdf`, `open_pdf_with_password`, `render_page`,
 `render_print_page`, `select_text`, `select_page_text`, `search_pdf`,
 `document_info`, `page_layouts`,

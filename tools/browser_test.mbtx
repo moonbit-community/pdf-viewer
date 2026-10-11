@@ -79,6 +79,9 @@ async fn Browser::check(
   name : String,
   expression : String,
 ) -> Unit {
+  // Rabbita applies queued model updates on animation frames. Wait for the
+  // preceding user action before evaluating each assertion once.
+  ignore(self.evaluate("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))"))
   let result = self.evaluate(expression)
   guard result == Json::boolean(true) else {
     fail("Browser assertion failed (" + name + "): " + result.stringify())
@@ -100,6 +103,7 @@ async fn Browser::wait(self : Browser, condition : String) -> Unit {
 
 ///|
 async fn Browser::ready(self : Browser, expected_pages : Int) -> Unit {
+  ignore(self.evaluate("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))"))
   let page_condition = if expected_pages < 0 {
     "document.querySelectorAll('.page').length > 0"
   } else {
@@ -486,7 +490,7 @@ fn annotation_browser_fixture() -> Bytes {
 
 ///|
 async fn Browser::click_annotation(self : Browser, index : Int) -> Unit {
-  let position = self.evaluate("(() => { const e = document.querySelector('.annotation-target[data-annotation-index=\"\{index}\"]'); e.scrollIntoView({block:'center'}); const r=e.getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}; })()")
+  let position = self.evaluate("(async () => { const e = document.querySelector('.annotation-target[data-annotation-index=\"\{index}\"]'); e.scrollIntoView({block:'center'}); await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); const r=e.getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}; })()")
   guard position is { "x": Number(x, ..), "y": Number(y, ..), .. } else { fail("Missing annotation point") }
   ignore(self.command("Input.dispatchMouseEvent", params={ "type": "mousePressed", "x": x, "y": y, "button": "left", "buttons": 1, "clickCount": 1 }))
   ignore(self.command("Input.dispatchMouseEvent", params={ "type": "mouseReleased", "x": x, "y": y, "button": "left", "buttons": 0, "clickCount": 1 }))
@@ -645,6 +649,43 @@ async fn main {
     browser.check(
       "search result navigation keeps the active match", "document.getElementById('search-next').disabled === false && document.getElementById('search-previous').disabled === false && document.getElementById('search-status').textContent === '1 / 1'",
     )
+    browser.check("Rabbita updates sidebars and controls while preserving Canvas and native selection", (
+      #| (async()=>{
+      #|   const host=await import('./viewer.js'),canvas=document.querySelector('.paint-layer canvas'),glyph=document.querySelector('.glyph-text').firstChild,pages=document.getElementById('pages');
+      #|   const range=new Range();range.setStart(glyph,0);range.setEnd(glyph,glyph.length);getSelection().removeAllRanges();getSelection().addRange(range);await host.readSelection();
+      #|   const text=getSelection().toString(),wait=async condition=>{for(let n=0;n<100&&!condition();n++)await new Promise(r=>setTimeout(r,10));if(!condition())throw Error('Rabbita DOM did not update');};
+      #|   for(const [id,title] of [['info-toggle','文档信息'],['outline-toggle','目录'],['thumbnail-toggle','缩略图']]){document.getElementById(id).click();await wait(()=>document.getElementById('sidebar-title').textContent===title&&!document.getElementById('sidebar').hidden);}
+      #|   document.getElementById('sidebar-close').click();await wait(()=>document.getElementById('sidebar').hidden);
+      #|   const stable=canvas===document.querySelector('.paint-layer canvas')&&pages===document.getElementById('pages')&&glyph===document.querySelector('.glyph-text').firstChild&&getSelection().toString()===text&&!document.getElementById('copy-selection').disabled;
+      #|   getSelection().removeAllRanges();await host.readSelection();return stable&&document.getElementById('error').hidden;
+      #| })()
+    ))
+    browser.check("compiled MoonBit thumbnails discard cancelled draws, warnings and late failures", (
+      #| (async()=>{
+      #|   const {viewerHost}=await import('./viewer-host.mjs'),originalPaint=viewerHost.paintCanvas,OriginalObserver=globalThis.IntersectionObserver;
+      #|   let observe,start,finish;const wait=async condition=>{for(let n=0;n<200&&!condition();n++)await new Promise(r=>setTimeout(r,10));if(!condition())throw Error('Thumbnail condition did not complete');};
+      #|   globalThis.IntersectionObserver=function(callback,options){if(options?.root?.id==='sidebar'){observe=callback;return{observe(){},disconnect(){}};}return new OriginalObserver(callback,options);};
+      #|   viewerHost.paintCanvas=async(...args)=>{const painted=await originalPaint(...args);start();return new Promise((resolve,reject)=>{finish={resolve:diagnostics=>resolve({...painted,diagnostics}),reject};});};
+      #|   try{
+      #|     for(const outcome of ['stale-success','stale-error','fresh']){
+      #|       document.getElementById('thumbnail-toggle').click();await wait(()=>!document.getElementById('sidebar').hidden&&document.querySelector('.thumbnail-preview')&&observe);
+      #|       const button=document.querySelector('.thumbnail-item'),preview=button.querySelector('.thumbnail-preview');let begun=new Promise(resolve=>start=resolve);observe([{target:button,isIntersecting:true}]);await begun;
+      #|       if(outcome!=='fresh')observe([{target:button,isIntersecting:false}]);
+      #|       if(outcome==='stale-error')finish.reject(Error('obsolete thumbnail failure'));else finish.resolve(outcome==='fresh'?[]:[{code:'obsolete-thumbnail',message:'obsolete thumbnail warning'}]);
+      #|       await new Promise(r=>setTimeout(r,50));if(preview.children.length!==(outcome==='fresh'?1:0)||!document.getElementById('error').hidden)return false;
+      #|       document.getElementById('sidebar-close').click();await wait(()=>document.getElementById('sidebar').hidden);observe=null;
+      #|     }return true;
+      #|   }finally{viewerHost.paintCanvas=originalPaint;globalThis.IntersectionObserver=OriginalObserver;}
+      #| })()
+    ))
+    browser.check("compiled MoonBit printing discards a draw completed after document close", (
+      #| (async()=>{
+      #|   const host=await import('./viewer.js'),{viewerHost}=await import('./viewer-host.mjs'),paint=viewerHost.paintCanvas,print=window.print;let started,finish,calls=0;
+      #|   const begun=new Promise(resolve=>started=resolve);viewerHost.paintCanvas=async(...args)=>{const rendered=await paint(...args);started();return new Promise(resolve=>finish=()=>resolve({...rendered,diagnostics:[{code:'obsolete-print',message:'obsolete print warning'}]}));};window.print=()=>calls++;
+      #|   try{const printing=host.printDocument();await begun;host.closeDocument();finish();await printing;return calls===0&&!document.querySelector('#print-pages .page')&&!document.body.classList.contains('pdf-print-ready')&&document.getElementById('error').hidden;}
+      #|   finally{viewerHost.paintCanvas=paint;window.print=print;}
+      #| })()
+    ))
     browser.navigate(base + "/?file=/fixtures/nested_outline.pdf", 9)
     browser.check(
       "document bridge exposes outline and info",
@@ -746,6 +787,13 @@ async fn main {
     browser.check(
       "page navigation writes browser history", "location.hash === '#page=2' && document.getElementById('page-number').value === '2'",
     )
+    browser.check("rapid page button clicks retain each navigation before the next view update", (
+      #| (async()=>{
+      #|   const wait=async page=>{for(let n=0;n<100&&document.getElementById('page-number').value!==String(page);n++)await new Promise(r=>setTimeout(r,10));return document.getElementById('page-number').value===String(page)&&location.hash===`#page=${page}`;};
+      #|   document.getElementById('next-page').click();document.getElementById('next-page').click();if(!await wait(4))return false;
+      #|   document.getElementById('previous-page').click();document.getElementById('previous-page').click();return await wait(2)&&document.getElementById('error').hidden;
+      #| })()
+    ))
     browser.navigate(base + "/?file=/fixtures/attachment.pdf", 1)
     browser.check(
       "attachment manifest and download bytes are available",
@@ -984,6 +1032,15 @@ async fn main {
     browser.check(
       "standalone empty state allows local PDF input", "!document.getElementById('empty-state').hidden && document.getElementById('file-input').accept.includes('.pdf')",
     )
+    browser.check("Rabbita captures a dropped file before the native drag data is released", (
+      #| (async()=>{
+      #|   const transfer=new DataTransfer(),file=new File([await(await fetch('/fixtures/90ms_rksj_h_sample.pdf')).blob()],'dropped.pdf',{type:'application/pdf'});transfer.items.add(file);
+      #|   document.getElementById('viewer').dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true}));transfer.items.clear();
+      #|   for(let n=0;n<400&&!document.querySelector('.text-layer');n++)await new Promise(r=>setTimeout(r,25));
+      #|   return document.getElementById('file-name').textContent==='dropped.pdf'&&document.querySelector('.text-layer')?.textContent.includes('日本語テスト')&&location.search===''&&document.getElementById('error').hidden;
+      #| })()
+    ))
+    browser.navigate(base + "/", 0)
     let cwd = @env.current_dir().unwrap()
     browser.upload(cwd + "/reference/pdf.js/test/pdfs/90ms_rksj_h_sample.pdf")
     browser.ready(1)
@@ -1489,6 +1546,7 @@ async fn main {
         #|   host.closeDocument();
         #|   const cancelled = await pending;
         #|   const closed = await pdf.call('document_info').catch(error => error.code);
+        #|   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         #|   return cancelled === 'AbortError' && closed === 'document-closed' && !pdf.diagnostics().worker && !pdf.diagnostics().queued && document.querySelectorAll('#pages .page').length === 0 && document.getElementById('download').disabled && !document.getElementById('empty-state').hidden;
         #| })()
       ),

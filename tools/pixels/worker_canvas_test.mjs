@@ -9,7 +9,6 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
-import { runInNewContext } from 'node:vm';
 import { PdfWorkerClient } from '../../web/pdf-client.js';
 import { PageScheduler } from '../../web/page-scheduler.js';
 import { annotationRects, annotationURL } from '../../web/annotation-layer.js';
@@ -346,81 +345,7 @@ scheduler.clear();
 assert.equal(unloads, 2);
 assert.deepEqual(pages.children, []);
 report.tests.push('actual async PageScheduler discards old epoch/navigation Canvas mounts and mounts a fresh result; unloading/clearing invokes annotation cleanup');
-// Execute the shipped thumbnail/print functions with delayed drawing. These
-// exact binding checks cover the additional async publication boundaries;
-// their Canvas implementation was exercised with real pixels above.
-const viewerSource = readFileSync(new URL('../../web/viewer.js', import.meta.url), 'utf8');
-const functionSource = name => {
-  const source = viewerSource.match(new RegExp(`(?:export )?(?:async )?function ${name}\\([^]*?\\n\\}`))?.[0];
-  assert(source, `Missing shipped viewer function ${name}`);
-  return source.replace(/^export /, '');
-};
-const uiElement = () => {
-  const node = element();
-  node.append = (...children) => node.childNodes.push(...children);
-  Object.defineProperty(node, 'children', { get: () => node.childNodes });
-  node.classList = { add() {}, remove() {} };
-  node.addEventListener = () => {};
-  node.querySelector = selector => node.childNodes.find(child => `.${child.className}` === selector);
-  return node;
-};
-const ui = Object.fromEntries(['sidebar-content', 'sidebar', 'print', 'print-pages', 'status'].map(id => [id, uiElement()]));
-let observer, finishPaint, beginPaint, prints = 0;
-const renderIntents = [];
-const uiResult = intent => JSON.stringify({ ok: true, intent, canvas: {}, layer: { viewport: { width: 32, height: 32 } } });
-const warnings = [], errors = [];
-const uiState = { count: 1, documentGeneration: 1, scale: 1 };
-const context = {
-  state: uiState, AbortController,
-  $: id => ui[id],
-  document: { createElement: uiElement, body: { classList: { add() {}, remove() {} } }, fonts: { ready: Promise.resolve() } },
-  window: { print: () => { prints++; } },
-  IntersectionObserver: class {
-    constructor(callback) { observer = callback; }
-    observe() {} disconnect() {}
-  },
-  sidebarButton: uiElement, pageLabel: number => String(number), goToPage() {},
-  checked,
-  render_page: async () => { renderIntents.push('display'); return uiResult('display'); },
-  render_print_page: async () => { renderIntents.push('print'); return uiResult('print'); },
-  graphicsOptions: {},
-  renderPdfPage: async () => {
-    beginPaint();
-    return new Promise((resolve, reject) => { finishPaint = { resolve, reject }; });
-  },
-  showGraphicsDiagnostics: diagnostics => warnings.push(...diagnostics),
-  showError: error => errors.push(error),
-};
-runInNewContext(`${functionSource('renderThumbnails')}\n${functionSource('clearPrint')}\n${functionSource('printDocument')}`, context);
-const begin = () => new Promise(resolve => { beginPaint = resolve; });
-const flush = () => new Promise(resolve => setImmediate(resolve));
-for (const outcome of ['stale-success', 'stale-error', 'fresh']) {
-  context.renderThumbnails();
-  const button = ui['sidebar-content'].children[0], preview = button.querySelector('.thumbnail-preview');
-  const begun = begin();
-  observer([{ target: button, isIntersecting: true }]);
-  await begun;
-  if (outcome !== 'fresh') observer([{ target: button, isIntersecting: false }]);
-  if (outcome === 'stale-error') finishPaint.reject(new Error('obsolete image failed'));
-  else finishPaint.resolve({ diagnostics: [{ code: outcome }] });
-  await flush();
-  assert.equal(preview.children.length, outcome === 'fresh' ? 1 : 0);
-}
-assert.deepEqual(warnings, [{ code: 'fresh' }]);
-assert.deepEqual(errors, []);
-uiState.thumbnailController.abort();
-for (const cancel of [true, false]) {
-  const begun = begin();
-  const printing = context.printDocument();
-  await begun;
-  if (cancel) context.clearPrint();
-  finishPaint.resolve({ diagnostics: [{ code: 'print' }] });
-  await printing;
-  assert.equal(prints, cancel ? 0 : 1);
-  assert.equal(ui['print-pages'].children.length, cancel ? 0 : 2);
-}
-assert.deepEqual(warnings, [{ code: 'fresh' }, { code: 'print' }]);
-assert.deepEqual(renderIntents, ['display', 'display', 'display', 'print', 'print']);
-report.tests.push('exact shipped thumbnail/print functions suppress stale Canvas results, warnings and late errors; fresh results publish');
+// Thumbnail/print publication is checked against the compiled Rabbita app
+// and real browser DOM in tools/browser_test.mbtx.
 writeFileSync(`${output}/report.json`, JSON.stringify(report, null, 2) + '\n');
 console.log(JSON.stringify(report));

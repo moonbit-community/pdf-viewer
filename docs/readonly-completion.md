@@ -113,6 +113,14 @@ AP opacity regression, plus **104 browser checks**, 26/26 corpus reads and
 12/12 successful visual measurements. Reports are build artifacts; rerun the
 workflow to reproduce them on a clean checkout.
 
+The subsequent [Rabbita frontend migration](frontend.md) passed **109 browser
+checks**, retaining the original 104 and adding view/selection preservation,
+cancelled thumbnail/print publication, repeated page clicks and dropped-file
+capture. The four backend suites still pass at **668 JS, 669 Wasm, 669 Wasm-GC
+and 677 native**. Nine Worker/Canvas checks remain in the Node runner; the former
+JavaScript function-extraction test now exercises the compiled MoonBit app and
+real DOM through the browser suite.
+
 ```sh
 npm ci --prefix tools/web-assets --ignore-scripts --omit=optional
 npm ci --prefix tools/test-host --ignore-scripts

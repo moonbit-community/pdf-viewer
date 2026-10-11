@@ -34,4 +34,5 @@ import {
   "moonbit-community/ucd@0.5.2",
   "moonbit-community/flate@0.8.1",
   "mizchi/font@0.7.4",
+  "moonbit-community/rabbita@0.16.4",
 }
