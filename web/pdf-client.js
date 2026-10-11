@@ -125,6 +125,8 @@ export const open_pdf_with_password = (bytes, password) =>
 export const set_font_fallbacks = (value) => pdf.call("set_font_fallbacks", [value]);
 export const render_page = (number, scale, rotation, options) =>
   pdf.call("render_page", [number, scale, rotation], options);
+export const render_print_page = (number, scale, rotation, options) =>
+  pdf.call("render_print_page", [number, scale, rotation], options);
 export const select_text = (...args) => pdf.call("select_text", args, { priority: 20 });
 export const select_page_text = (args, options) => pdf.call("select_page_text", args, options);
 export const search_pdf = (...args) => pdf.call("search_pdf", args, { priority: 20 });

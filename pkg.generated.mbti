@@ -256,6 +256,7 @@ pub fn PdfPageModel::to_json(Self) -> Json
 #deprecated
 pub fn PdfPageModel::to_repr(Self) -> @debug.Repr
 pub fn PdfPageModel::viewport(Self, scale? : Double, rotation? : Int) -> PdfViewport
+pub fn PdfPageModel::with_print_annotations(Self) -> Self
 
 pub(all) struct PdfPathItem {
   index : Int
@@ -747,6 +748,7 @@ pub struct PdfViewerDocument {
   font_fallbacks : Array[PdfFontFallback]
   // private fields
 }
+pub fn PdfViewerDocument::annotation_layer_json(Self, Int) -> Json?
 pub fn PdfViewerDocument::attachment_bytes(Self, Int) -> Bytes? raise @core.PdfError
 pub fn PdfViewerDocument::attachment_manifest_json(Self) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::attachments_json(Self) -> Json raise @core.PdfError

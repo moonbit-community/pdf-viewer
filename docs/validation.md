@@ -6,9 +6,9 @@ CLI. That conversion baseline does not measure parity with pdf.js rendering.
 The automated selected-page visual baseline below now measures actual output
 against the same pinned PDF.js build.
 
-The suite currently contains **376 tests on each of wasm, wasm-gc, JavaScript,
-and native**; the browser host adds two lightweight page-layout regressions to
-the final A1 results recorded below. Earlier stages included
+The suite currently contains **379 tests on each of wasm, wasm-gc, JavaScript,
+and native**; the browser host adds two lightweight page-layout regressions and
+three annotation interaction/print regressions to the final A1 results below. Earlier stages included
 13 annotation tests, 17 CFF tests, 25 Type 1 tests, 5 CID
 layout tests, 9 variable-length CMap tests, 4 text-geometry tests, and 8
 text-clipping tests, one mixed-paint scaling regression, and one tiling-pattern
@@ -34,6 +34,73 @@ The expanded selected-page baseline in `_build/visual-test-1791598324155/`
 measured **57/57 combinations from 20 PDFs**, **0 failures**, and **55 with
 pixel or text differences**. Its calibrated-colour interior samples below
 are an additional diagnostic, not an exemption from full-page differences.
+
+## Readonly annotation interaction and print intent
+
+Validated on 2026-10-11 with Chromium **145.0.7632.6** on macOS arm64.
+Report: `_build/browser-test-1791698888406/report.json`, **78/78 checks pass**.
+The 25 additional checks preserve the previous 53 browser interactions and
+pressure checks. MoonBit passes **379/379** on each of wasm, wasm-gc, JavaScript
+and native. This accepts the **A-04 main path** and brings the readonly
+checklist to **29/50**; annotation appearance/form fidelity remains A-01–A-03.
+
+`annotation_layer.mbt` adds `PdfViewerDocument::annotation_layer_json(n)`:
+PDF-space rectangles/quads, original `/Annots` indices, display/print flags,
+plain popup text and local/remote/URI/named-action targets. It reuses pdflite's
+annotation and destination parsing without decoding AP streams. Named and
+dictionary targets have a 32-step resolution bound; unresolved names do not
+re-enter pdflite's recursive page resolver. Popup children and malformed
+siblings are skipped without renumbering. Three new library tests cover
+cyclic/unresolved/remote links, metadata with a corrupt AP, quads, and an
+unchanged source model when selecting printable appearances.
+
+`web/annotation-layer.js` mounts native links and keyboard-accessible comment
+buttons over the same viewport matrix used by body/text paint. URI quad
+regions remain separate. The popup displays author/subject/contents as text,
+supports native Enter activation, Escape/close with focus return, and clears
+on scrolling, repaint/unmount or document close. Markup mouse hits are handled
+after a collapsed-selection click, allowing body text to retain native drag
+selection. The visual SVG layer is inert, so only the DOM interaction controls
+receive keyboard/link activation. `pdf-annotation-activate` carries the source
+page/index/subtype/link. Local destination clicks apply page/history and
+XYZ/Fit view parameters; supported named actions navigate pages/history.
+Unknown/remote/unsupported actions are disabled. Native HTTP(S)/mailto/tel
+links use `noopener noreferrer`; relative URIs require a fetched PDF URL base.
+
+Real fixtures validate these paths:
+
+| Fixture | Checked behavior |
+| --- | --- |
+| `annotation-link-text-popup.pdf` | HTTP link and comment controls, plain popup content and close |
+| `annotation-text-without-popup.pdf` | Text comments work without an explicit Popup child |
+| `widget_hidden_print.pdf` | Hidden cancels Print: the widget stays absent in both intents |
+
+The authored two-page fixture `_build/browser-test-1791698888406/annotation-interactions.pdf`
+has SHA-256 `a49171925da8be3623218be0edc0036713e76bf4342e129f83ec61f71d4fa7b7`.
+It covers nonzero CropBox origins, UserUnit, intrinsic/requested rotation,
+multiregion URI links, literal markup-looking popup text, malformed/unsupported
+targets, source text selection, XYZ zoom, named NextPage, repaint and close.
+Native pointer hits and DOM/paint bounding boxes pass at all four rotations;
+the overlay also matches after rescaling. Screenshots are retained as
+`annotation-rotation-{0,90,180,270}.png` in the report directory.
+
+`PdfPageModel::with_print_annotations()` selects the independent Print flag
+without mutating the display model. The bridge's `render_print_page` uses the
+same body renderer and a separate render-cache key. The synthetic Print and
+NoView/Print annotations are present in prepared print DOM; display-only and
+Hidden annotations are absent. Print DOM contains no popup/link control layer.
+The existing real 200-page print export still preserves all pages and physical
+sizes. These are interaction and intent checks, not AP pixel parity. NoZoom/
+NoRotate icon/AP fidelity, richer comment/attachment presentations and readonly
+widget layout remain in A-01–A-03; editing/saving remains outside this baseline.
+
+Reproduce with the development server running:
+
+```sh
+moon run tools/browser_test.mbtx http://127.0.0.1:4312 /path/to/chromium
+moon test --target all
+moon test --target native
+```
 
 ## Browser host lifecycle, scheduling and pressure
 
@@ -105,7 +172,8 @@ at **612×792 pt** and page 10 at **1188×918 pt**, preserving intrinsic Rotate
 and UserUnit. Repeated print preparation cancels the old task without clearing
 the new one. Use the toolbar or Ctrl/Cmd+P to prepare printing; a direct native
 browser-menu print cannot asynchronously prepare unloaded pages and displays
-that instruction. Screen/print annotation AP switching remains A-04.
+that instruction. Screen/print annotation AP switching was subsequently accepted
+in the [A-04 checks](#readonly-annotation-interaction-and-print-intent).
 
 Reproduce with the development server running:
 
@@ -925,7 +993,7 @@ viewer implementation (`Fit`, `FitH`, `FitV`, `FitR`, `FitB`, `FitBH`, `FitBV`).
 
 This validates the reader/viewer API boundary. The standalone browser now
 consumes local outline destinations in its directory panel and leaves remote
-targets disabled; annotation links remain a separate A-04 layer. A remote
+targets disabled; annotation links are now handled by the separate A-04 layer. A remote
 destination is reported with `remote: true` and is never used as a local scroll
 target.
 
@@ -1313,8 +1381,10 @@ assertions, **not automated PDF.js pixel parity** or an all-browser fidelity
 score. The later [browser host checks](#browser-host-lifecycle-scheduling-and-pressure)
 cover Worker scheduling, virtualization, cancellation and cache budgets. The
 body layer uses the A1 block/line/bidi reading-order view; ambiguous untagged
-layouts retain their documented limits. Annotation
-appearances and readonly widgets still need their own DOM interaction layer.
+layouts retain their documented limits. The later
+[A-04 checks](#readonly-annotation-interaction-and-print-intent) cover comment
+and link interaction; special annotation appearances and readonly widget
+layout remain A-01–A-03.
 Search currently highlights complete source items; exact character-range
 painting and complete locale/case-fold policy remain TODO.
 Scale and rotation now rebuild only wanted pages while retaining cheap page boxes.

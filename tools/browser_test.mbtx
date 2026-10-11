@@ -375,6 +375,61 @@ async fn Browser::drag(self : Browser, first : String, last : String) -> Unit {
 }
 
 ///|
+/// Authored interaction fixture: two cropped/UserUnit pages, intrinsic rotation,
+/// links, popup text and independent screen/print flags. Not a fidelity sample.
+fn annotation_browser_fixture() -> Bytes {
+  let annotations = [
+    "<< /Subtype /Link /Rect [30 170 100 185] /Dest /chapter >>",
+    "<< /Subtype /Link /Rect [30 135 100 150] /QuadPoints [30 150 100 150 30 145 100 145 30 140 60 140 30 135 60 135] /A << /S /URI /URI (https://example.com/read) >> >>",
+    "<< /Subtype /Text /Rect [150 170 170 190] /T (Reviewer) /Subj (Note) /Contents (<b>Plain</b>\nSecond line) /Popup 19 0 R >>",
+    "<< /Subtype /Highlight /Rect [30 185 100 205] /QuadPoints [30 205 100 205 30 185 100 185] /Contents (Body comment) >>",
+    "<< /Subtype /Square /Rect [130 100 150 120] /F 4 /C [1 0 0] >>",
+    "<< /Subtype /Square /Rect [160 100 180 120] /F 36 /C [0 0 1] >>",
+    "<< /Subtype /Square /Rect [190 100 210 120] /F 2 >>",
+    "<< /Subtype /Link /Rect [30 80 100 95] /A << /S /GoToR /D [0 /Fit] >> >>",
+    "<< /Subtype /Link /Rect [30 60 100 75] /A << /S /JavaScript /JS (alert(1)) >> >>",
+    "<< /Subtype /Link /Rect [30 40 100 55] /A << /S /URI /URI (javascript:alert(1)) >> >>",
+    "<< /Subtype /Link /Rect [110 60 180 75] /Dest /missing >>",
+    "<< /Subtype /Link /Rect [110 40 180 55] /A << /S /Named /N /NextPage >> >>",
+    "<< /Subtype /Popup /Parent 9 0 R /Rect [170 170 230 220] >>",
+    "<< /Subtype /Square /Rect [190 130 210 150] /F 0 /C [0 1 0] >>",
+  ]
+  let content = "BT /F1 12 Tf 30 190 Td (Body text) Tj ET"
+  let references = [for index in 0..<annotations.length() => "\{index + 7} 0 R"].join(" ")
+  let objects = [
+    "<< /Type /Catalog /Pages 2 0 R /Dests << /chapter [4 0 R /XYZ 30 550 1.25] >> >>",
+    "<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 240 240] /CropBox [10 20 230 220] /Rotate 90 /UserUnit 1.5 /Contents 5 0 R /Resources << /Font << /F1 6 0 R >> >> /Annots [\{references}] >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 350 600] /CropBox [10 20 250 580] /UserUnit 1.25 /Contents 5 0 R /Resources << /Font << /F1 6 0 R >> >> >>",
+    "<< /Length \{content.length()} >>\nstream\n\{content}\nendstream",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ..annotations,
+  ]
+  let output = StringBuilder()
+  output.write_string("%PDF-1.7\n")
+  let offsets : Array[Int] = []
+  for index, object in objects {
+    offsets.push(output.to_string().length())
+    output.write_string("\{index + 1} 0 obj\n\{object}\nendobj\n")
+  }
+  let xref = output.to_string().length()
+  output.write_string("xref\n0 \{objects.length() + 1}\n0000000000 65535 f \n")
+  for offset in offsets {
+    output.write_string(offset.to_string().pad_start(10, '0') + " 00000 n \n")
+  }
+  output.write_string("trailer\n<< /Size \{objects.length() + 1} /Root 1 0 R >>\nstartxref\n\{xref}\n%%EOF\n")
+  @utf8.encode(output.to_string())
+}
+
+///|
+async fn Browser::click_annotation(self : Browser, index : Int) -> Unit {
+  let position = self.evaluate("(() => { const e = document.querySelector('.annotation-target[data-annotation-index=\"\{index}\"]'); e.scrollIntoView({block:'center'}); const r=e.getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}; })()")
+  guard position is { "x": Number(x, ..), "y": Number(y, ..), .. } else { fail("Missing annotation point") }
+  ignore(self.command("Input.dispatchMouseEvent", params={ "type": "mousePressed", "x": x, "y": y, "button": "left", "buttons": 1, "clickCount": 1 }))
+  ignore(self.command("Input.dispatchMouseEvent", params={ "type": "mouseReleased", "x": x, "y": y, "button": "left", "buttons": 0, "clickCount": 1 }))
+}
+
+///|
 async fn main {
   let args = @env.args()
   let base = if args.length() > 1 { args[1] } else { "http://127.0.0.1:4312" }
@@ -861,6 +916,147 @@ async fn main {
     browser.check(
       "cyclic page tree retains its readable page in the browser", "document.getElementById('error').hidden && document.querySelectorAll('.page').length === 1 && [...document.querySelectorAll('.glyph-text')].map(g => g.textContent).join('').includes('Testcase: ’Pages loop’')",
     )
+    browser.navigate(base + "/?file=/fixtures/annotation-link-text-popup.pdf", -1)
+    browser.check(
+      "real link and popup annotations have usable DOM controls",
+      "document.querySelector('.annotation-link[href^=\"http\"]') !== null && document.querySelector('.annotation-comment[aria-haspopup=\"dialog\"]') !== null && document.getElementById('error').hidden",
+    )
+    browser.check("real popup content remains text and can be closed", (
+      #| (() => {
+      #|   const button = document.querySelector('.annotation-comment'); button.click();
+      #|   const popup = document.querySelector('.annotation-popup');
+      #|   const valid = !popup.hidden && popup.querySelector('.annotation-popup-content').textContent.length > 0 && button.getAttribute('aria-expanded') === 'true';
+      #|   popup.querySelector('button').click();
+      #|   return valid && popup.hidden && button.getAttribute('aria-expanded') === 'false';
+      #| })()
+    ))
+    browser.navigate(base + "/?file=/fixtures/annotation-text-without-popup.pdf", -1)
+    browser.check("real text annotations work without an explicit Popup child", (
+      #| (() => {
+      #|   const button = document.querySelector('.annotation-comment'); button.click();
+      #|   const popup = document.querySelector('.annotation-popup');
+      #|   const valid = !popup.hidden && popup.querySelector('.annotation-popup-content').textContent.length > 0;
+      #|   popup.querySelector('button').click(); return valid && popup.hidden;
+      #| })()
+    ))
+    browser.navigate(base + "/?file=/fixtures/widget_hidden_print.pdf", -1)
+    browser.check("Hidden cancels Print for a real widget in both intents", (
+      #| (async () => {
+      #|   const bridge = await import('./pdf-client.js');
+      #|   const screen = JSON.parse(await bridge.render_page(1, 1, 0));
+      #|   const print = JSON.parse(await bridge.render_print_page(1, 1, 0));
+      #|   const hidden = screen.annotations.filter(a => (a.flags & 6) === 6);
+      #|   return screen.ok && print.ok && hidden.length > 0 && hidden.every(a => !a.visible && !a.print &&
+      #|     !screen.svg.includes(`data-pdf-annotation-index="${a.index}"`) && !print.svg.includes(`data-pdf-annotation-index="${a.index}"`));
+      #| })()
+    ))
+    let annotations_path = output + "/annotation-interactions.pdf"
+    @fs.write_file(annotations_path, annotation_browser_fixture())
+    let annotations_hash = @shell.Cmd("sha256sum", [annotations_path]).output()
+    guard annotations_hash.exit_code() == 0 else { fail("Unable to hash annotation fixture") }
+    browser.navigate(base + "/", 0)
+    ignore(browser.evaluate("document.getElementById('zoom').value='1'; true"))
+    browser.upload(cwd + "/" + annotations_path)
+    browser.ready(2)
+    browser.check("annotation controls retain source indices and reject unusable actions", (
+      #| (async () => {
+      #|   const bridge = await import('./pdf-client.js');
+      #|   const result = JSON.parse(await bridge.render_page(1, 1, 0));
+      #|   return result.annotations.length === 13 && !result.annotations.some(a => a.index === 12) &&
+      #|     [7,8,9,10].every(index => document.querySelector(`.annotation-unavailable[data-annotation-index="${index}"][aria-disabled="true"]`)) &&
+      #|     !document.querySelector('.annotation-target[data-annotation-index="5"]') &&
+      #|     !document.querySelector('.annotation-target[data-annotation-index="6"]') && document.querySelector('.paint-layer').inert;
+      #| })()
+    ))
+    browser.click_annotation(2)
+    browser.check("native pointer hit opens a plain-text popup", "!document.querySelector('.annotation-popup').hidden && document.querySelector('#annotation-popup-title').textContent === 'Reviewer' && document.querySelector('.annotation-popup-content').textContent === '<b>Plain</b>\\nSecond line' && document.querySelector('.annotation-popup-content b') === null")
+    ignore(browser.command("Input.dispatchKeyEvent", params={ "type": "keyDown", "key": "Escape", "code": "Escape" }))
+    browser.check("Escape closes the popup and restores keyboard focus", "document.querySelector('.annotation-popup').hidden && document.activeElement.matches('.annotation-comment[data-annotation-index=\"2\"]')")
+    ignore(browser.command("Input.dispatchKeyEvent", params={ "type": "keyDown", "key": "Enter", "code": "Enter", "windowsVirtualKeyCode": 13, "nativeVirtualKeyCode": 13, "text": "\r", "unmodifiedText": "\r" }))
+    ignore(browser.command("Input.dispatchKeyEvent", params={ "type": "keyUp", "key": "Enter", "code": "Enter", "windowsVirtualKeyCode": 13, "nativeVirtualKeyCode": 13 }))
+    browser.check("keyboard activates the same annotation popup", "!document.querySelector('.annotation-popup').hidden && document.querySelector('.annotation-popup').dataset.annotationIndex === '2'")
+    ignore(browser.evaluate("document.querySelector('.annotation-popup button').click(); true"))
+    browser.check("URI quad regions and URL policy preserve browser link behavior", (
+      #| (async () => {
+      #|   const { annotationURL } = await import('./annotation-layer.js');
+      #|   const links = [...document.querySelectorAll('.annotation-link[data-annotation-index="1"]')];
+      #|   return links.length === 2 && links.every(a => a.href === 'https://example.com/read' && a.target === '_blank' && a.rel.includes('noopener') && a.rel.includes('noreferrer')) &&
+      #|     annotationURL('javascript:alert(1)') === null && annotationURL('data:text/html,x') === null &&
+      #|     annotationURL('file:///tmp/x.pdf') === null && annotationURL('next.pdf') === null &&
+      #|     annotationURL('next.pdf', 'https://example.com/files/book.pdf') === 'https://example.com/files/next.pdf';
+      #| })()
+    ))
+    for rotation in [0, 90, 180, 270] {
+      browser.ready(2)
+      browser.check("annotation hit boxes follow painted CropBox UserUnit and rotation " + rotation.to_string(), (
+        #| (() => {
+        #|   const page = document.querySelector('#pages .page[data-page="1"]');
+        #|   const control = page.querySelector('.annotation-target[data-annotation-index="0"]').getBoundingClientRect();
+        #|   const paint = page.querySelector('.paint-layer [data-pdf-annotation-index="0"]').getBoundingClientRect();
+        #|   return ['left','top','width','height'].every(key => Math.abs(control[key] - paint[key]) < 1);
+        #| })()
+      ))
+      browser.click_annotation(2)
+      browser.check("rotated annotation pointer hit still opens its source popup " + rotation.to_string(), "!document.querySelector('.annotation-popup').hidden && document.querySelector('.annotation-popup').dataset.annotationIndex === '2'")
+      browser.screenshot(output + "/annotation-rotation-" + rotation.to_string() + ".png")
+      ignore(browser.evaluate("document.querySelector('.annotation-popup button').click(); document.getElementById('rotate').click(); true"))
+    }
+    browser.ready(2)
+    browser.drag("B", "y")
+    browser.check("markup hit regions preserve native text drag and source copy", (
+      #| (async () => { const host = await import('./viewer.js'); await host.readSelection(); return document.querySelector('.annotation-popup').hidden && getSelection().toString().includes('Body') && document.getElementById('selection-status').textContent.includes('4'); })()
+    ))
+    ignore(browser.evaluate("getSelection().removeAllRanges(); window.oldAnnotation = document.querySelector('.annotation-comment[data-annotation-index=\"2\"]'); oldAnnotation.click(); document.getElementById('zoom').value='2'; document.getElementById('zoom').dispatchEvent(new Event('change')); true"))
+    browser.ready(2)
+    browser.check("repaint releases popup content and its old annotation control", "!oldAnnotation.isConnected && document.querySelector('.annotation-popup').hidden && document.querySelector('.annotation-popup').children.length === 0")
+    ignore(browser.evaluate("delete window.oldAnnotation; true"))
+    ignore(browser.evaluate("getSelection().removeAllRanges(); document.querySelector('.annotation-link[data-annotation-index=\"0\"]').click(); true"))
+    browser.wait("location.hash === '#page=2' && document.getElementById('zoom').value === '1.25' && document.getElementById('viewer').getAttribute('aria-busy') === 'false'")
+    browser.check("named annotation destination navigates and applies XYZ zoom", "document.getElementById('page-number').value === '2' && document.querySelector('#pages .page[data-page=\"2\"] .paint-layer svg') !== null && document.getElementById('error').hidden")
+    browser.wait("document.querySelector('#pages .page[data-page=\"1\"] .annotation-link[data-annotation-index=\"0\"]') !== null")
+    browser.check("annotation overlay rescales with the painted page", (
+      #| (() => {
+      #|   const page = document.querySelector('#pages .page[data-page="1"]');
+      #|   const control = page.querySelector('.annotation-target[data-annotation-index="0"]').getBoundingClientRect();
+      #|   const paint = page.querySelector('.paint-layer [data-pdf-annotation-index="0"]').getBoundingClientRect();
+      #|   return ['left','top','width','height'].every(key => Math.abs(control[key] - paint[key]) < 1);
+      #| })()
+    ))
+    browser.check("display and print caches retain independent annotation appearances", (
+      #| (async () => {
+      #|   const bridge = await import('./pdf-client.js');
+      #|   const print = JSON.parse(await bridge.render_print_page(1, 1, 0));
+      #|   const screen = JSON.parse(await bridge.render_page(1, 1, 0));
+      #|   const marker = index => `data-pdf-annotation-index="${index}"`;
+      #|   return print.intent === 'print' && screen.intent === 'display' && print.svg.includes(marker(4)) && print.svg.includes(marker(5)) &&
+      #|     !print.svg.includes(marker(13)) && !print.svg.includes(marker(6)) && screen.svg.includes(marker(13)) && !screen.svg.includes(marker(5));
+      #| })()
+    ))
+    browser.check("whole-document printing uses Print appearances without interaction DOM", (
+      #| (async () => {
+      #|   const host = await import('./viewer.js'); const original = window.print;
+      #|   window.print = () => {}; try { await host.printDocument(); } finally { window.print = original; }
+      #|   const page = document.querySelector('#print-pages .page[data-page="1"]');
+      #|   const valid = document.querySelectorAll('#print-pages .page').length === 2 && page.querySelector('[data-pdf-annotation-index="5"]') &&
+      #|     !page.querySelector('[data-pdf-annotation-index="13"]') && !page.querySelector('.annotation-layer');
+      #|   window.dispatchEvent(new Event('afterprint')); return Boolean(valid) && document.getElementById('print-pages').children.length === 0;
+      #| })()
+    ))
+    browser.upload(cwd + "/" + annotations_path)
+    browser.ready(2)
+    ignore(browser.evaluate("document.getElementById('page-number').value='1'; document.getElementById('page-number').dispatchEvent(new Event('change')); true"))
+    browser.wait("location.hash === '#page=1' && document.querySelector('.annotation-link[data-annotation-index=\"11\"]') !== null")
+    ignore(browser.evaluate("document.querySelector('.annotation-link[data-annotation-index=\"11\"]').click(); true"))
+    browser.wait("location.hash === '#page=2'")
+    browser.check("named NextPage link uses local navigation", "document.getElementById('page-number').value === '2'")
+    browser.upload(cwd + "/" + annotations_path)
+    browser.ready(2)
+    ignore(browser.evaluate("document.getElementById('page-number').value='1'; document.getElementById('page-number').dispatchEvent(new Event('change')); true"))
+    browser.wait("document.querySelector('.annotation-comment[data-annotation-index=\"2\"]') !== null")
+    browser.click_annotation(2)
+    browser.check("closing the document releases popup content and annotation targets", (
+      #| (async () => { const host = await import('./viewer.js'); host.closeDocument(); return document.querySelector('.annotation-popup').hidden && document.querySelector('.annotation-popup').children.length === 0 && document.querySelector('.annotation-target') === null; })()
+    ))
     let pressure = output + "/host-pages.pdf"
     let images = output + "/host-images.pdf"
     @fs.write_file(pressure, host_test_document(200))
@@ -1121,6 +1317,12 @@ async fn main {
         "90ms_rksj_h_sample.pdf", "vertical.pdf", "tracemonkey.pdf", "Pages-tree-refs.pdf",
       ],
       "font_loading": font_loading,
+      "annotation_interactions": {
+        "authored_fixture": annotations_path,
+        "sha256": annotations_hash.stdout().split(" ").next().unwrap().to_owned(),
+        "real_fixtures": ["annotation-link-text-popup.pdf", "annotation-text-without-popup.pdf", "widget_hidden_print.pdf"],
+        "scope": "Read-only popup/link DOM, shared viewport geometry, native pointer/keyboard/selection, print intent and document cleanup; not appearance pixel parity",
+      },
       "host_runtime": {
         "long_document": {
           "pages": 200,

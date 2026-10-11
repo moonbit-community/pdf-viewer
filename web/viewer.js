@@ -2,6 +2,7 @@ import {
   open_pdf,
   open_pdf_with_password,
   render_page,
+  render_print_page,
   document_info,
   download_attachment,
   download_metadata,
@@ -12,6 +13,7 @@ import {
   pdf,
 } from "./pdf-client.js";
 import { PageScheduler } from "./page-scheduler.js";
+import { AnnotationLayer } from "./annotation-layer.js";
 
 const $ = (id) => document.getElementById(id);
 const viewer = $("viewer");
@@ -44,6 +46,12 @@ const state = {
 };
 const measure = document.createElement("canvas").getContext("2d");
 const widthCache = new Map();
+const annotationUI = new AnnotationLayer({
+  viewer,
+  navigate: link => navigateAnnotation(link).catch(showError),
+  sourceURL: () => state.filePath && state.filePath !== state.fileName
+    ? new URL(state.filePath, location.href).href : "",
+});
 const enabledControls = [
   "page-number",
   "next-page",
@@ -471,6 +479,74 @@ function goToPage(number, { pushHistory = false } = {}) {
   scheduler.update(number);
 }
 
+async function navigateAnnotation(link) {
+  if (link.kind === "named-action") {
+    const number = selectedPageNumber();
+    const pages = { FirstPage: 1, LastPage: state.count, NextPage: number + 1, PrevPage: number - 1 };
+    if (link.action in pages) goToPage(pages[link.action], { pushHistory: true });
+    else if (link.action === "GoBack") history.back();
+    else if (link.action === "GoForward") history.forward();
+    return;
+  }
+  const destination = link.destination;
+  if (!destination?.resolved || destination.remote || !Number.isInteger(destination.page) ||
+      destination.page < 1 || destination.page > state.count) return;
+  const generation = state.documentGeneration;
+  clearSelection();
+  goToPage(destination.page, { pushHistory: true });
+  let page = await scheduler.ensure(destination.page);
+  if (generation !== state.documentGeneration) return;
+  let viewport = JSON.parse(page.querySelector(".annotation-layer").dataset.viewport);
+  const map = (x, y) => new DOMMatrix(viewport.matrix).transformPoint({ x, y });
+  const rect = destination.kind === "FitR" &&
+    [destination.left, destination.bottom, destination.right, destination.top].every(Number.isFinite)
+    ? [map(destination.left, destination.bottom), map(destination.right, destination.top)] : null;
+  const layout = state.layouts[destination.page - 1];
+  const width = state.rotation % 180 ? layout.height : layout.width;
+  const height = state.rotation % 180 ? layout.width : layout.height;
+  const fitWidth = Math.max(1, viewer.clientWidth - 64);
+  const fitHeight = Math.max(1, viewer.clientHeight - 64);
+  let scale = state.scale;
+  if (destination.kind === "XYZ" && Number.isFinite(destination.zoom) && destination.zoom > 0) {
+    scale = destination.zoom;
+  } else if (["FitH", "FitBH"].includes(destination.kind)) scale = fitWidth / width;
+  else if (["FitV", "FitBV"].includes(destination.kind)) scale = fitHeight / height;
+  else if (["Fit", "FitB"].includes(destination.kind)) scale = Math.min(fitWidth / width, fitHeight / height);
+  else if (rect) {
+    const w = Math.abs(rect[1].x - rect[0].x);
+    const h = Math.abs(rect[1].y - rect[0].y);
+    if (w > 0 && h > 0) scale *= Math.min(fitWidth / w, fitHeight / h);
+  }
+  scale = Math.max(0.1, Math.min(4, scale));
+  if (scale !== state.scale) {
+    const zoom = $("zoom");
+    if (![...zoom.options].some(option => Number(option.value) === scale)) {
+      const option = new Option(`${Math.round(scale * 100)}%`, String(scale));
+      option.dataset.custom = "true";
+      zoom.append(option);
+    }
+    zoom.value = String(scale);
+    await repaint({ preserveSelection: false });
+    page = await scheduler.ensure(destination.page);
+    if (generation !== state.documentGeneration) return;
+    viewport = JSON.parse(page.querySelector(".annotation-layer").dataset.viewport);
+  }
+  const origin = new DOMMatrix(viewport.matrix).inverse().transformPoint({ x: 0, y: 0 });
+  let point = map(destination.left ?? origin.x, destination.top ?? origin.y);
+  if (destination.kind === "FitR") {
+    const points = [map(destination.left, destination.bottom), map(destination.right, destination.top)];
+    point = { x: Math.min(...points.map(p => p.x)), y: Math.min(...points.map(p => p.y)) };
+  }
+  if (["XYZ", "FitH", "FitBH", "FitV", "FitBV", "FitR"].includes(destination.kind) &&
+      Number.isFinite(point.x) && Number.isFinite(point.y)) {
+    const box = page.getBoundingClientRect();
+    const view = viewer.getBoundingClientRect();
+    const style = getComputedStyle(viewer);
+    viewer.scrollTop += box.top - view.top - parseFloat(style.paddingTop) + point.y;
+    viewer.scrollLeft += box.left - view.left - parseFloat(style.paddingLeft) + point.x;
+  }
+}
+
 function applyViewMode() {
   viewer.classList.toggle("page-mode", state.viewMode === "page");
   if (state.viewMode === "page") {
@@ -554,10 +630,11 @@ function mountPage(result) {
   const paint = document.createElement("div");
   paint.className = "paint-layer";
   paint.setAttribute("aria-hidden", "true");
+  paint.inert = true;
   // SVG strings come from the MoonBit serializer, whose text and attributes
   // are escaped; user input is never interpolated into this HTML boundary.
   paint.innerHTML = result.svg;
-  page.append(paint, makeTextLayer(result.layer));
+  page.append(paint, makeTextLayer(result.layer), annotationUI.create(result.annotations || [], result.layer.viewport));
   return page;
 }
 
@@ -571,7 +648,9 @@ const scheduler = new PageScheduler({
       .filter(number => number >= 1 && number <= state.count) : [],
   singlePage: () => state.viewMode === "page",
   onError: showError,
+  onUnload: page => annotationUI.unmount(page),
   onMount: async (page, current) => {
+    annotationUI.bind(page);
     await document.fonts.ready;
     if (!current()) return;
     widthCache.clear();
@@ -877,6 +956,7 @@ export function closeDocument() {
   state.fetchController?.abort();
   close_pdf();
   closeSidebar();
+  annotationUI.close();
   clearSelection();
   clearSearch();
   clearPrint();
@@ -911,7 +991,7 @@ export async function printDocument() {
   try {
     for (let number = 1; number <= state.count; number++) {
       $("status").textContent = `正在准备打印第 ${number} / ${state.count} 页`;
-      const result = checked(await render_page(number, 1, 0, {
+      const result = checked(await render_print_page(number, 1, 0, {
         signal: controller.signal, priority: -2,
       }));
       if (controller.signal.aborted || generation !== state.documentGeneration) return;

@@ -1,8 +1,8 @@
 // Keep cheap page boxes for navigation; retain paint/text DOM only near the
 // viewport and at selection endpoints. PDF decoding stays in the Worker.
 export class PageScheduler {
-  constructor({ viewer, pages, render, mount, onMount, onError, pinned, singlePage }) {
-    Object.assign(this, { viewer, pages, render, mount, onMount, onError, pinned, singlePage });
+  constructor({ viewer, pages, render, mount, onMount, onUnload, onError, pinned, singlePage }) {
+    Object.assign(this, { viewer, pages, render, mount, onMount, onUnload, onError, pinned, singlePage });
     this.layouts = [];
     this.near = new Set();
     this.tasks = new Map();
@@ -15,6 +15,7 @@ export class PageScheduler {
     this.observer?.disconnect();
     this.near.clear();
     this.layouts = [];
+    for (const page of this.pages.children) this.onUnload?.(page);
     this.pages.replaceChildren();
   }
 
@@ -69,6 +70,7 @@ export class PageScheduler {
   }
 
   unload(page) {
+    this.onUnload?.(page);
     page.replaceChildren();
     page.dataset.rendered = "false";
     page.setAttribute("aria-busy", "true");

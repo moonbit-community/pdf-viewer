@@ -176,6 +176,67 @@ main:focus-visible {
 .paint-layer svg {
   display: block;
 }
+.annotation-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.annotation-target {
+  position: absolute;
+  display: block;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+}
+.annotation-link {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.annotation-link:hover {
+  background: #365d9020;
+}
+.annotation-target:focus-visible {
+  outline: 2px solid #365d90;
+  outline-offset: -2px;
+}
+.annotation-popup {
+  position: fixed;
+  z-index: 10;
+  width: 300px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  padding: 14px;
+  color: #25344b;
+  background: #fff9df;
+  border: 1px solid #d4c58d;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px #1b294533;
+  font-size: 14px;
+}
+.annotation-popup header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  overflow-wrap: anywhere;
+}
+.annotation-popup header button {
+  padding: 0 5px;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.annotation-popup-subject {
+  margin-top: 8px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.annotation-popup-content {
+  margin-top: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 #print-pages {
   position: fixed;
   left: -100000px;
@@ -482,6 +543,10 @@ h1 {
   }
 }
 @media print {
+  .annotation-popup,
+  .annotation-layer {
+    display: none;
+  }
   body,
   #viewer {
     height: auto;

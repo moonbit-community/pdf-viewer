@@ -15,34 +15,34 @@
 
 ## 还差多少
 
-当前明确跟踪 **50 项，分为 14 个能力领域；完成 28 项，剩余 22 项**。
-按条目数量看是 **28/50（56%）**，但这只是清单进度，不是 PDF.js 的视觉兼容率。
-剩余项按优先级分为 P0 11 项、P1 9 项、P2 2 项；其中部分已有基础实现。
+当前明确跟踪 **50 项，分为 14 个能力领域；完成 29 项，剩余 21 项**。
+按条目数量看是 **29/50（58%）**，但这只是清单进度，不是 PDF.js 的视觉兼容率。
+剩余项按优先级分为 P0 11 项、P1 8 项、P2 2 项；其中部分已有基础实现。
 这些项大小不等，
 有的只是一个语义修正，有的需要接入解码器或合成器并补 PDF 适配，所以不能把
-56% 当成实际兼容率，也不能按 22 项全部从零开发估算工作量。
+58% 当成实际兼容率，也不能按 21 项全部从零开发估算工作量。
 
-按阶段看，P0 一共有 23 项，已经完成 12 项，仍有 11 项会直接影响通用文档的图像、描边、颜色、合成或图层可见性；P1 一共有 25 项，已经完成 16 项，仍有 9 项主要影响完整的只读工作流和真实文档覆盖；P2 的 2 项都未开始，分别是网络 range/增量读取和 XFA。完成剩余 P0 并重新跑扩大的 PDF.js 样本后，才能判断核心渲染是否达到可发布的高保真门槛；完成 P1 后，才接近完整的独立只读 viewer；P2 是大文件和特殊文档覆盖，不计入核心静态 PDF 门槛。
+按阶段看，P0 一共有 23 项，已经完成 12 项，仍有 11 项会直接影响通用文档的图像、描边、颜色、合成或图层可见性；P1 一共有 25 项，已经完成 17 项，仍有 8 项主要影响完整的只读工作流和真实文档覆盖；P2 的 2 项都未开始，分别是网络 range/增量读取和 XFA。完成剩余 P0 并重新跑扩大的 PDF.js 样本后，才能判断核心渲染是否达到可发布的高保真门槛；完成 P1 后，才接近完整的独立只读 viewer；P2 是大文件和特殊文档覆盖，不计入核心静态 PDF 门槛。
 
 按交付门槛展开，剩余功能可以这样看：
 
 | 交付门槛 | 必须完成的剩余项目 | 结论 |
 | --- | --- | --- |
 | 核心高保真渲染 | P0：G-01、G-03、I-01、I-02、C-01、M-01 至 M-03、H-01、H-03、A-02 | 完成前不能称为 PDF.js 级通用渲染器；这些项目会造成错位、漏图或明显颜色/合成错误 |
-| 可发布的独立只读 viewer | 上述 P0 + P1：G-02、I-04、C-03、H-02、A-01、A-03 至 A-04、X-01、V-03 | 完成后才覆盖主要真实文档和完整的浏览器只读工作流 |
+| 可发布的独立只读 viewer | 上述 P0 + P1：G-02、I-04、C-03、H-02、A-01、A-03、X-01、V-03 | 完成后才覆盖主要真实文档和完整的浏览器只读工作流 |
 | 大文件与特殊格式 | P2：R-03、X-02 | 解决 range/增量读取和 XFA；不影响当前静态 PDF 核心门槛 |
 
 计数边界：这 50 项统计的是当前核心对齐主路径。OCG 的 usage、RBGroups、Locked
 控制的 UI 语义和浏览器图层面板尚未完成，也没有单独的 UI 条目；它们属于
-浏览器产品扩展，因此暂不计入 22 项剩余。如果把图层面板也
-定义为必须的 PDF.js UI，需要另加一个 P1 条目，剩余数会变为 23 项。
+浏览器产品扩展，因此暂不计入 21 项剩余。如果把图层面板也
+定义为必须的 PDF.js UI，需要另加一个 P1 条目，剩余数会变为 22 项。
 
 已完成 F-01（水平外部 CMap）、F-02（Adobe 预定义 CMap）、F-04（CID 纵排）和 I-03（inline image 解码路径）
 和 T-03（编码相关字距），以及 U-01（独立浏览器）、U-02（cursor 选择层）
 和 U-03（跨页选择映射及重投影）、V-01（自动对照工具与首批像素基线）。
 R-01（密码文档载入）和 P-01（页面边界及 UserUnit）也已完成主路径和回归验证。
 已完成 D-01 的库/API 主路径：named/explicit destination、XYZ/Fit 族、当前文档页解析和
-远程 destination 标记均有结构化 API 与回归测试；浏览器目录点击和滚动定位已在 D-03 主路径接通，annotation link layer 仍由 A-04 跟踪。
+远程 destination 标记均有结构化 API 与回归测试；浏览器目录点击和滚动定位已在 D-03 主路径接通，批注链接已在 A-04 接入。
 已完成 D-03 的浏览器文档导航/信息主路径：outline、page labels、Info、XMP metadata
 和附件清单/下载均接入独立 viewer，并由真实 Chromium fixture 回归覆盖。
 本轮完成 A1 的全部 8 个主路径项目：R-02、F-03、F-05、F-06、F-07、T-01、T-02、T-04。
@@ -56,6 +56,11 @@ IntersectionObserver，接入异步解码、文档代次/取消、可见页与�
 缓存驱逐；缓存预算不等于进程内存上限。完整证据与取消/打印边界见
 [浏览器宿主验证](validation.md#browser-host-lifecycle-scheduling-and-pressure)。
 
+A-04 的只读交互主路径完成：批注 popup、URI/本地/named-action 链接、独立打印外观
+与页面卸载清理已接入。原生控件和 viewport 矩阵继续复用，markup 不妨碍正文拖选；
+真实 PDF、四个旋转方向和缩放回归通过。特殊图标/AP 的 NoZoom/NoRotate 等外观语义
+仍随 A-01 的真实外观覆盖跟踪。证据见 [批注验收](validation.md#readonly-annotation-interaction-and-print-intent)。
+
 这轮完成 C-02 的校准色彩转换主路径：CalGray、CalRGB、Lab 进入路径、文字、图片、
 渐变、pattern 路径和 Form mask 路径的共享转换。真实 CalGray/CalRGB/Lab 的 21 页中，
 1,432 个色块内部各抽样 16×16 像素，RGB 全部与固定 PDF.js 对照一致；整页仍有文字、
@@ -65,7 +70,7 @@ mask 处理；它们扩大 H-01/I-04 的覆盖，但这两项仍未完成。合�
 [validation.md](validation.md#calibrated-colours-and-original-image-samples)。
 
 现在有可运行的 native CLI、页面模型、SVG 输出和独立的浏览器 viewer。
-当前 376 个测试在四个后端通过，浏览器有 53 项交互与压力检查。原自动 PDF.js 对照已经测量
+当前 379 个测试在四个后端通过，浏览器有 78 项交互与压力检查。原自动 PDF.js 对照已经测量
 20 份 PDF 的 57 个页面/旋转组合：全部得到报告，55 个组合存在像素或文本差异。
 这些是按特性挑选的样本，**仍不能给出可信的视觉兼容率**。
 转换成功、没有占位、测试通过，都不能单独证明没有漏画或排版错误。
@@ -85,7 +90,7 @@ JPEG + SMask + Matte、color-key 边缘和复杂合成仍待完成，不能据�
 
 - **文字可靠性**：A1 主路径已验收；罕见字体格式仍使用有诊断的回退，未标记的歧义阅读结构由 X-01 跟踪，整页描边/栅格化和复制差异继续测量。
 - **像素渲染**：完整 CTM 描边、可验证的像素后端、JPX/JBIG2、ICC 色彩、透明组和 mesh shading（G-01、G-03、I-01 至 I-02、C-01、M-01 至 M-03、H-03）。
-- **可用工作流**：批注/链接交互、可访问的 DOM 和 CI（A-04、X-01、V-03）；Worker、虚拟化和缓存预算已经接通，复杂几何阅读顺序已由 T-01 验证，歧义结构仍需 PDF tags。
+- **可用工作流**：可访问的 DOM 和 CI（X-01、V-03）；批注/链接交互、Worker、虚拟化和缓存预算已经接通，复杂几何阅读顺序已由 T-01 验证，歧义结构仍需 PDF tags。
 
 因此目前可以稳定演示基础页面浏览、缩放、旋转和 cursor 文字选择，但还不能把结果描述为 PDF.js 级别的通用渲染器。完成 P0 后，才适合重新评估真实的视觉兼容率；P1/P2 则决定文档覆盖面和产品完整度。
 
@@ -100,9 +105,9 @@ JPEG + SMask + Matte、color-key 边缘和复杂合成仍待完成，不能据�
 | 色彩 | 设备色彩、SWOP 拟合、CalGray/CalRGB/Lab、Indexed、Separation/DeviceN tint | ICC、专色特殊分支与 overprint | 2 | C-01、C-03 |
 | 透明合成 | alpha、部分 blend、组标记、常见 soft mask | backdrop、knockout、精确 mask/blend | 3 | M-01 至 M-03 |
 | pattern/shading | 彩色路径 tiling、路径型 uncolored pattern 的基础色、shading 1–7 的部分输出 | pattern 的视觉精确度、复杂 tiling、逐像素插值 | 3 | H-01 至 H-03 |
-| 批注/只读表单 | AP 外观、基本几何、字段元数据、简单 widget | 无 AP 的完整排版、交互层和子类型覆盖 | 4 | A-01 至 A-04 |
-| 导航/图层 | outline、labels、attachments、metadata 读取；destination 结构化解析；OCG 实际过滤；浏览器目录/信息/附件面板 | OCG usage/RBGroups/Locked 面板语义另计扩展；批注链接由 A-04 跟踪 | 0（核心） | - |
-| 浏览器体验 | 独立应用、Worker 解码与取消、可见页/缩略图、缩放/旋转、来源选择及复制、全文搜索与结果高亮、目录/Info、完整打印、分页模式、页码历史 | 批注/链接 DOM 由 A-04 跟踪；打印使用工具栏或 Ctrl/Cmd+P | 0（主路径） | - |
+| 批注/只读表单 | AP 外观、基本几何、字段元数据、简单 widget、popup/链接交互和屏幕/打印切换 | 无 AP 的完整排版、特殊外观标志和子类型/字段覆盖 | 3 | A-01 至 A-03 |
+| 导航/图层 | outline、labels、attachments、metadata 读取；destination 结构化解析；OCG 实际过滤；浏览器目录/信息/附件面板和批注链接 | OCG usage/RBGroups/Locked 面板语义另计扩展 | 0（核心） | - |
+| 浏览器体验 | 独立应用、Worker 解码与取消、可见页/缩略图、缩放/旋转、来源选择及复制、全文搜索与结果高亮、目录/Info、popup/链接 DOM、完整打印、分页模式、页码历史 | 打印使用工具栏或 Ctrl/Cmd+P；特殊外观与编辑仍另行跟踪 | 0（主路径） | - |
 | 可访问性/XFA | structure tree 读取 | 可访问的 DOM、只读 XFA 页面 | 2 | X-01、X-02 |
 | 验证/性能 | 四后端测试、CLI corpus、Chromium 交互与压力检查、PDF.js 像素/viewport/文本对照、缓存预算和主线程/Worker 堆采样 | CI；继续扩大自然大文件基线，解码峰值仍受文档复杂度影响 | 1 | V-03 |
 
@@ -112,7 +117,7 @@ JPEG + SMask + Matte、color-key 边缘和复杂合成仍待完成，不能据�
 
 每项先检查已有依赖、Mooncakes 和成熟底层库，做最小接入验证，再安排实现。
 候选版本、源码/API 核查、已知限制见 [生态复用候选](codec-candidates.md)。
-以下覆盖全部 22 个剩余 ID，并保留已完成 A1 与宿主的复用记录；“有候选”不代表已经接入或满足验收。
+以下覆盖全部 21 个剩余 ID，并保留已完成 A1 与宿主的复用记录；“有候选”不代表已经接入或满足验收。
 
 | TODO 范围（含复用记录） | 优先复用的能力 | 本项目保留的工作 |
 | --- | --- | --- |
@@ -201,18 +206,18 @@ JPEG + SMask + Matte、color-key 边缘和复杂合成仍待完成，不能据�
 - [ ] A-01 / P1：扩大 annotation 子类型、缺失 AP 的外观、line ending、图标、边框和 markup 的真实样本覆盖。
 - [ ] A-02 / P0：按 DA/DR 和字段 metrics 排版无 AP 的 FreeText/文本 widget，覆盖多行、对齐、comb 和 password 外观。
 - [ ] A-03 / P1：补 choice 的 export/display 值、列表选中、按钮/radio 状态与只读显示；无需提供编辑能力。
-- [ ] A-04 / P1：实现批注命中、popup、链接层与屏幕/打印外观切换；图层坐标须与页面旋转一致。
-- [x] D-01 / P1：viewer API 已解析旧式 `/Dests` 字典和 `/Names` `/Dests` name tree，覆盖 named/explicit destination、`XYZ`、`Fit`、`FitH`、`FitV`、`FitR`、`FitB`、`FitBH`、`FitBV`；`destination_for_page`、`named_destination`、`named_destinations_json` 和 `outline_navigation_json` 提供一基页码及结构化视图。当前文档页会标记为 `resolved`，远程页保留 `remote_page` 并不会误跳到本地；本地目录点击和滚动定位已由 D-03 接入，annotation link layer 仍由 A-04 跟踪。destination 回归见 [validation.md](validation.md#destinations-and-document-navigation)。
+- [x] A-04 / P1：轻量交互数据保留原 `/Annots` 索引、PDF-space bounds/quads、内容与 URI/本地/远程/named-action 目标；不解码 AP，循环名字有界解析且保持未解析状态。原生 DOM 链接与 popup 支持鼠标/键盘、Escape 返回焦点、XYZ/Fit 和页码/历史；markup 拖选仍进入来源映射，未知/远程/action 保持禁用。打印按 Print 标志选择 AP，与显示缓存分开，NoView/Print 可仅打印，Hidden 同时抑制。真实批注/隐藏 widget、四旋转/缩放、重绘/关闭回归通过；NoZoom/NoRotate 等特殊图标/AP 外观随 A-01 跟踪，编辑与保存仍在扩展路线。见 [批注验收](validation.md#readonly-annotation-interaction-and-print-intent)。
+- [x] D-01 / P1：viewer API 已解析旧式 `/Dests` 字典和 `/Names` `/Dests` name tree，覆盖 named/explicit destination、`XYZ`、`Fit`、`FitH`、`FitV`、`FitR`、`FitB`、`FitBH`、`FitBV`；`destination_for_page`、`named_destination`、`named_destinations_json` 和 `outline_navigation_json` 提供一基页码及结构化视图。当前文档页会标记为 `resolved`，远程页保留 `remote_page` 并不会误跳到本地；本地目录点击和滚动定位已由 D-03 接入，批注链接已由 A-04 接入。destination 回归见 [validation.md](validation.md#destinations-and-document-navigation)。
 - [x] D-02 / P0：viewer 读取 pdflite 的 `/OCProperties`、默认/备用配置和 `/ON`/`/OFF`，在 display-list 收集阶段过滤文字、路径、图片、inline image、shading 及带 `/OC` 的嵌套 Form；`PdfOptionalContentState` 按 OCG 对象号选择配置并覆盖状态，隐藏文字不会进入 text clipping、text content、operator list 或 selection。回归 fixture 覆盖默认关闭、显式打开和选择结果，当前四后端 209/209 通过，见 [validation.md](validation.md#optional-content-visibility)。OCMD 的常见 `/P` 与 `/VE` 表达式已支持；usage、RBGroups、Locked 的 UI 语义和浏览器图层面板仍是后续图层工作。
-- [x] D-03 / P1：独立浏览器已接入 outline 目录树、page label 状态、Info/XMP 面板和附件清单；本地 destination 点击可滚动到目标页，远程或未解析目标保持禁用；附件和 XMP 通过 bridge 按需下载，不把字节放进打开文档的状态 JSON。`nested_outline.pdf`、`labelled_pages.pdf` 和 `attachment.pdf` 的 Chromium 回归覆盖目录、缩略图/信息入口、页标签、metadata 和附件字节，仍不声称已实现 OCG usage/RBGroups/Locked 的图层 UI 或批注链接层。
+- [x] D-03 / P1：独立浏览器已接入 outline 目录树、page label 状态、Info/XMP 面板和附件清单；本地 destination 点击可滚动到目标页，远程或未解析目标保持禁用；附件和 XMP 通过 bridge 按需下载，不把字节放进打开文档的状态 JSON。`nested_outline.pdf`、`labelled_pages.pdf` 和 `attachment.pdf` 的 Chromium 回归覆盖目录、缩略图/信息入口、页标签、metadata 和附件字节；批注链接由 A-04 接入，OCG usage/RBGroups/Locked 的图层 UI 仍待完成。
 
 ## 独立浏览器体验、可访问性与验证
 
 - [x] U-01 / P0：独立静态浏览器 viewer 和 MoonBit JS 入口已贯通，本地文件/拖放、错误恢复、页码、缩放/旋转和下载可用。`moon run tools/dev.mbtx 4312` 可独立调试；`tools/build_web.mbtx` 生成可部署的 `web/`。真实文件输入与错误恢复经过 Chromium 验证，见 [validation.md](validation.md#standalone-browser-and-native-cursor-selection)。
-- [x] U-02 / P0：`PdfPageModel::text_layer()` 把 glyph 四边形转换为 DOM 几何，覆盖轮廓和字体绘制；原生鼠标拖选、复制、Shift＋方向键和文档全选经过 Chromium 检查，包括旋转和纵排。浏览器层使用正常字号与归一化 affine，避免 1px 字体放大时拖选失效；批注/表单的 DOM 交互层继续由 A-04 跟踪。
+- [x] U-02 / P0：`PdfPageModel::text_layer()` 把 glyph 四边形转换为 DOM 几何，覆盖轮廓和字体绘制；原生鼠标拖选、复制、Shift＋方向键和文档全选经过 Chromium 检查，包括旋转和纵排。浏览器层使用正常字号与归一化 affine，避免 1px 字体放大时拖选失效；批注/链接交互由 A-04 接入，特殊批注外观及只读字段布局仍由 A-01 至 A-03 跟踪。
 - [x] U-03 / P1：`select_text()` 用 item index 和 UTF-16 offset 返回文字、源 glyph 索引和 PDF-space quads；支持反向端点及部分 ligature，拒绝拆开 surrogate pair。跨行/跨页选区包含文件信息，缩放/旋转后按相同来源端点恢复原生高亮；浏览器回归覆盖旋转、纵排和 14 页文档全选。原始 PDF byte span 仍由 T-02 跟踪，阅读顺序/bidi 由 T-01 跟踪。
 - [x] U-04 / P1：库层 `PdfViewerDocument::search()` 返回页码、源 UTF-16 offset/length、原文、bounds 和 item indices；支持大小写、Unicode 分类的整词与 NFKD 归一化/变音符号折叠，并以源字符区间映射展开折叠后的长度。浏览器桥接暴露 `search_pdf`，搜索栏支持选项、结果计数、上下结果、滚动定位和 item 级高亮；空查询、重新打开文件和缩放/旋转后的重绘都会清理或重投影状态。209 个四后端测试和 33 项 Chromium 检查通过，变音符号映射回归见 [validation.md](validation.md#text-search)。A1 已接入 Unicode 16 NFKD，7 项新增搜索回归覆盖连字、兼容字符、canonical mark 重排、supplementary offset 和独立组合符号；复杂阅读顺序/bidi 主路径由 T-01 验证。宿主搜索现在异步运行于 Worker；完整 locale/case-fold 策略和跨 item 的精确字符高亮仍未完成。
-- [x] U-05 / P1：缩略图、连续/单页模式和 `#page=N` 历史保留；轻量页面尺寸不解释内容，正文与缩略图只挂载可见邻近项，缩放/旋转取消旧任务。跨页/全选复制通过来源 API 读取未挂载页，仅保留选区端点附近 DOM。工具栏和 Ctrl/Cmd+P 按原始尺寸准备全部页面、等待字体/图片并在 afterprint 释放；真实导出验证 200 页及 Rotate/UserUnit，重复打印与文档替换无旧结果覆盖。浏览器菜单的直接打印需先走该入口；annotation/link DOM 和屏幕/打印 AP 切换仍由 A-04 跟踪。见 [浏览器宿主验证](validation.md#browser-host-lifecycle-scheduling-and-pressure)。
+- [x] U-05 / P1：缩略图、连续/单页模式和 `#page=N` 历史保留；轻量页面尺寸不解释内容，正文与缩略图只挂载可见邻近项，缩放/旋转取消旧任务。跨页/全选复制通过来源 API 读取未挂载页，仅保留选区端点附近 DOM。工具栏和 Ctrl/Cmd+P 按原始尺寸准备全部页面、等待字体/图片并在 afterprint 释放；真实导出验证 200 页及 Rotate/UserUnit，重复打印与文档替换无旧结果覆盖。浏览器菜单的直接打印需先走该入口；批注/链接 DOM 和屏幕/打印切换已由 A-04 接通。见 [浏览器宿主验证](validation.md#browser-host-lifecycle-scheduling-and-pressure)。
 - [ ] X-01 / P1：把 tagged structure tree 和阅读顺序落实到可访问的 DOM/ARIA，而不仅是 JSON。
 - [ ] X-02 / P2：支持 XFA 文档的只读页面布局与文本展示，编辑与脚本不在范围内。
 - [x] V-01 / P0：`tools/visual_test.mbtx` 使用固定 PDF.js 版本和同一 Chromium，测量清单内全部页面/旋转；最新基线在 `_build/visual-test-1791598324155/` 完成 57/57 个组合测量，0 个失败，55 个存在像素或文本差异，2 个在记录的容差内；包含 `/UserUnit 72` 的 `issue19176.pdf` 与 PDF.js 得到 0 像素差异。`standard_fonts.pdf` 14 页以及 CalGray/CalRGB/Lab、DeviceN 和 color-key mask 均已测量；色块的定向抽样保留为额外诊断，整页差异照常计数。`--strict` 会拒绝差异，输入或渲染失败计入失败数。7 个分类器测试和独立 runner 合约检查覆盖正确匹配、明显错位、漏画及缺失输入。具体结果和限制见 [validation.md](validation.md#automated-pdfjs-visual-baseline)。后续每个渲染功能都要扩大这份基线。
@@ -225,7 +230,7 @@ JPEG + SMask + Matte、color-key 边缘和复杂合成仍待完成，不能据�
 2. A2 用 Canvas 2D 与现有 MoonBit 绘图库验证完整 CTM/clip/blend 的代表样本，确定绘制/合成共用后端；宿主调度已经使用原生 Worker/观察器接通。
 3. 验证/扩展 JPX 的多组件 API；检索 JBIG2 和 ICC 引擎的目标适配，记录不能直接复用的具体原因。
 4. PDF group/mask/pattern/shading：依赖复用结论补 PDF 语义，沿用 V-01 做真实对照；A1 字体/CMap 样本保留为回归基线。
-5. A-01 至 A-04、reader、可访问性和 CI；后期 range/XFA 先复用传输/XML 解析，再补 PDF 读取/布局。
+5. A-01 至 A-03、可访问性和 CI；后期 range/XFA 先复用传输/XML 解析，再补 PDF 读取/布局。
 
 ## 完整阅读器的后续接入
 

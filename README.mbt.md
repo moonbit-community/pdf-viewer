@@ -9,6 +9,7 @@ page APIs, and SVG output for native applications.
 
 - Open local PDF files through the file picker or drag and drop.
 - Navigate documents with page controls, thumbnails, outlines, and page labels.
+- Follow PDF links and open readonly annotation comments with mouse or keyboard.
 - Zoom, rotate, select and copy text, and search across pages.
 - Decode in a browser Worker, mount nearby pages/thumbnails, and retain bounded page/render caches.
 - Print the complete document at its original page sizes using the toolbar or Ctrl/Cmd+P.

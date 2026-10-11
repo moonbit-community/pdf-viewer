@@ -96,7 +96,7 @@ moon run tools/dev.mbtx 4312
 
 打开 `http://127.0.0.1:4312/`，选择或拖入本地 PDF；文件读取和 PDF 解码在浏览器中进行。
 解码、搜索和页面渲染运行在 module Worker，正文与缩略图按可见范围挂载。
-部署时提供完整 `web/` 目录，包括 `pdf-client.js`、`pdf-worker.js`、`page-scheduler.js`
+部署时提供完整 `web/` 目录，包括 `pdf-client.js`、`pdf-worker.js`、`page-scheduler.js`、`annotation-layer.js`
 和生成的 `_generated/pdf.js`，通过 HTTP 服务加载这些 ES modules。
 宿主诊断可在浏览器控制台读取：
 
@@ -233,6 +233,8 @@ moon run tools/corpus.mbtx reference/pdf.js/test/pdfs vertical 1,2,3
 | named/explicit destination | `named_destinations()` / `named_destination(name)` / `destination_for_page(page_number)` |
 | outline entries with navigation | `outline_navigation_json()` |
 | document outline/info/attachments in browser | `document_info()` / `download_attachment(index)` / `download_metadata()` |
+| readonly annotation interactions | `PdfViewerDocument::annotation_layer_json(n)`；PDF-space 坐标、原 `/Annots` 索引、popup 内容和链接目标 |
+| annotation print intent | `PdfPageModel::with_print_annotations()`；bridge `render_print_page`，与屏幕缓存分开 |
 
 文档读取补充 API：`outline_json()`、`page_labels_json()`、`page_labels()`、
 `attachments_json()`、`optional_content_json()`、`struct_tree_json()`、`info_json()`、
@@ -280,8 +282,8 @@ CMap 坏 token、未闭合段、继承环和不可取得的 stream，并保留�
 destination API 把 PDF 内部跳转转换为 viewer 自有的 `PdfDestination`。它保留
 `XYZ`/`Fit` 族的视图参数、当前文档的一基页码和 `resolved` 状态；指向其他文件的
 destination 保留 `remote_page` 并设置 `remote`，宿主可以据此决定是否打开外部文件。
-这些 API 目前提供解析和结构化数据，独立浏览器已把本地目录目标接到滚动定位；annotation
-link layer 和远程 destination 的宿主策略仍待后续工作。
+独立浏览器已把本地目录和批注链接接到页码/历史；批注链接还会应用 XYZ/Fit 视图参数。
+URI 使用原生锚点；远程、未解析或不支持的 action 保持禁用。
 
 加密文档在没有密码或密码错误时不会进入页面树；调用
 `open_document_with_passwords` 可传入用户密码或所有者密码。当前回归覆盖 40-bit
@@ -311,7 +313,12 @@ MoonBit 宿主可用 `reinterpret_as_uint()` 取得无符号值。原始 byte sp
 虚拟化后原生 `getSelection().toString()` 只覆盖当前挂载的 DOM，宿主应读取事件中的完整文字。
 这只是独立 viewer 的来源信息，未接入 OpenSeek。搜索结果通过 `pdf-search-change` 事件提供
 查询词和几何丰富的结果；当前浏览器按 source item 高亮并滚动到活动结果。
-歧义布局/tagged PDF、完整 locale/case-fold 策略、批注与表单的 DOM 层继续由 TODO 跟踪；
+批注 popup 通过点击或键盘 Enter 打开，Escape/关闭会返回控件焦点；markup 的文字拖选继续保留。
+`pdf-annotation-activate` 事件包含 `page`、原始 `index`、`subtype` 和 `link`，便于宿主定位来源。
+页面卸载、重绘或关闭文档会清空 popup 内容。打印按独立 Print 标志选择外观，
+NoView/Print 批注可以仅出现在打印里，Hidden 会同时抑制两种用途。
+交互与剩余外观限制见 [批注验收](validation.md#readonly-annotation-interaction-and-print-intent)。
+歧义布局/tagged PDF、完整 locale/case-fold 策略、批注外观和表单控件继续由 TODO 跟踪；
 Worker/取消、虚拟化和缓存预算的边界与压力数据见
 [浏览器宿主验证](validation.md#browser-host-lifecycle-scheduling-and-pressure)。
 

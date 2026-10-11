@@ -13,8 +13,8 @@ function clearRenders() {
   bytes = hits = misses = evictions = 0;
 }
 
-function render(args) {
-  const key = args.join(":");
+function render(method, args) {
+  const key = `${method}:${args.join(":")}`;
   if (renders.has(key)) {
     const entry = renders.get(key);
     renders.delete(key);
@@ -23,7 +23,7 @@ function render(args) {
     return entry.result;
   }
   misses++;
-  const result = bridge.render_page(...args);
+  const result = bridge[method](...args);
   const size = result.length * 2;
   if (size <= budget && JSON.parse(result).ok) {
     while (renders.size >= maxEntries || bytes + size > budget) {
@@ -47,7 +47,8 @@ self.addEventListener("message", event => {
     if (["open_pdf", "open_pdf_with_password", "close_pdf", "set_font_fallbacks"].includes(method)) {
       clearRenders();
     }
-    let result = method === "render_page" ? render(args) : bridge[method](...args);
+    let result = ["render_page", "render_print_page"].includes(method)
+      ? render(method, args) : bridge[method](...args);
     if (method === "cache_info") {
       result = JSON.stringify({ ...JSON.parse(result), render: {
         entries: renders.size, bytes, budget_bytes: budget,

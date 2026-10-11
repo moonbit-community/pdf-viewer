@@ -16,6 +16,7 @@ options(
         "open_pdf_with_password",
         "set_font_fallbacks",
         "render_page",
+        "render_print_page",
         "page_layouts",
         "cache_info",
         "select_text",

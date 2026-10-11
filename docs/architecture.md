@@ -253,7 +253,7 @@ The standalone browser shell lives in `web/`, with a MoonBit JS bridge in
 the JavaScript shell handles file input, DOM mounting and native browser
 selection. `web/pdf-client.js` sends asynchronous operations to the native
 module Worker in `web/pdf-worker.js`; the generated MoonBit bridge runs there.
-The bridge includes `open_pdf`, `render_page`, `select_text`, `select_page_text`,
+The bridge includes `open_pdf`, `render_page`, `render_print_page`, `select_text`, `select_page_text`,
 `search_pdf`, `document_info`, `page_layouts`, `cache_info`, downloads and close.
 Page models use an LRU budget of eight pages/estimated 32 MiB; serialized render
 responses use twelve entries/24 MiB. These bounds exclude parsed input and
@@ -362,8 +362,15 @@ pages at their physical point sizes, waits for fonts/images, and clears that
 temporary DOM after printing. Use the toolbar or Ctrl/Cmd+P for this asynchronous
 preparation. Cache and sampled heap evidence is in
 [validation.md](validation.md#browser-host-lifecycle-scheduling-and-pressure).
-The body text layer does not reconstruct annotation appearance
-streams or readonly widgets as DOM; those belong to the annotation layer.
+The body text layer does not reconstruct annotation appearance streams or
+readonly widgets as DOM. `web/annotation-layer.js` independently mounts links
+and comment controls over viewport-transformed rectangles/quads. Collapsed
+clicks open markup comments while native drag-selection passes through.
+Its popup lives outside clipped page boxes and is cleared on unmount, repaint,
+scrolling or document close. Native anchors handle URI links; local destinations
+and named page/history actions use the viewer navigation state. Unknown/remote
+targets stay disabled. The visual SVG is inert to avoid duplicate interactive
+links. Widget editing remains outside the readonly layer.
 
 The validation renderer is separate from the standalone viewer. A temporary
 loopback server in `tools/visual_test.mbtx` serves the pinned PDF.js build and
@@ -404,6 +411,16 @@ children and malformed annotations are skipped without renumbering valid source
 indices. PDFDocEncoding/UTF-16 strings, normalized `/C` components, quads, lines,
 vertices, ink paths, and display/print flags are retained independently of the
 fallback drawing.
+
+`annotation_layer.mbt` provides lightweight `annotation_layer_json(n)` without
+interpreting AP streams; original annotation indices join interaction data to
+paint. It reuses the document's pdflite objects and destination model, bounds
+named/dictionary resolution to 32 steps and preserves unresolved/remote targets.
+`PdfPageModel::with_print_annotations()` clones only the annotation visibility
+decisions, selecting Print independently of screen NoView. Browser print uses
+`render_print_page` with a separate render-cache key; body paint stays shared.
+Interaction/intent evidence and retained AP/icon limits are recorded in
+[validation.md](validation.md#readonly-annotation-interaction-and-print-intent).
 
 Normal appearance streams reuse the content collector with their own resource
 dictionary and BBox. The fragment is clipped to its source box, then mapped

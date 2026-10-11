@@ -217,6 +217,16 @@ fn browser_page(number : Int) -> @pdf.PdfPageModel? raise {
 
 ///|
 pub fn render_page(number : Int, scale : Double, rotation : Int) -> String {
+  browser_render_page(number, scale, rotation, false)
+}
+
+///|
+fn browser_render_page(
+  number : Int,
+  scale : Double,
+  rotation : Int,
+  printing : Bool,
+) -> String {
   if scale <= 0.0 || scale.is_nan() || scale.is_inf() {
     return browser_error_with_code(
       "invalid-scale", "Scale must be finite and positive",
@@ -233,6 +243,7 @@ pub fn render_page(number : Int, scale : Double, rotation : Int) -> String {
         "page-missing", "No document or page does not exist",
       )
     }
+    let page = if printing { page.with_print_annotations() } else { page }
     let rotation = page.rotation + rotation
     let svg = page.render_svg(rotation~, scale~)
     let result : Json = {
@@ -240,6 +251,20 @@ pub fn render_page(number : Int, scale : Double, rotation : Int) -> String {
       "page": number,
       "svg": svg,
       "layer": page.text_layer(scale~, rotation~),
+      "annotations": if printing {
+        Json::array([])
+      } else {
+        match current_document.val {
+          Some(document) =>
+            document.annotation_layer_json(number).unwrap_or(Json::array([]))
+          None => Json::array([])
+        }
+      },
+      "intent": if printing {
+        "print"
+      } else {
+        "display"
+      },
     }
     result.stringify()
   } catch {
