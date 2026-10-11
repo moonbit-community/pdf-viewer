@@ -143,16 +143,30 @@ try{
     await page.goto(base);
     await page.evaluate(()=>{
       const times=window.renderTicks=[];window.renderTimer=setInterval(()=>times.push(performance.now()),25);
+      // Keep an actual Canvas task pending until scrolling has changed its
+      // lifetime. Fast hosts may finish Worker parsing before we can scroll;
+      // their Worker cancellation count cannot prove paint cancellation.
+      const host=globalThis.pdfViewerHost,paint=host.paintCanvas;
+      host.paintCanvas=async(...args)=>{
+        const first=args[1].page===1&&!window.firstPaintPaused;
+        if(first){
+          window.firstPaintPaused=true;
+          await new Promise(resolve=>window.resumeFirstPaint=resolve);
+        }
+        try{return await paint(...args);}
+        catch(error){if(first&&error.name==='AbortError')window.firstPaintCancelled=true;throw error;}
+      };
     });
     await page.locator('#file-input').setInputFiles({name:'reading.pdf',mimeType:'application/pdf',
       buffer:readingFixture(await readFile(resolve('assets/icc/rgb-gamma22.icc')))});
-    await page.waitForFunction(()=>document.querySelector('#page-count').textContent==='/ 6'&&document.querySelector('.page[data-page="6"]')?.offsetHeight>0);
+    await page.waitForFunction(()=>typeof window.resumeFirstPaint==='function'&&document.querySelector('#page-count').textContent==='/ 6'&&document.querySelector('.page[data-page="6"]')?.offsetHeight>0);
     await page.locator('.page[data-page="6"]').evaluate(page=>page.scrollIntoView({block:'start'}));
+    await page.waitForFunction(()=>document.querySelector('#page-number').value==='6');
+    await page.evaluate(()=>window.resumeFirstPaint());
     await waitForUI(page,()=>document.querySelector('#page-number').value==='6'&&document.querySelector('.page[data-page="6"]')?.dataset.rendered==='true'&&document.querySelector('#viewer').getAttribute('aria-busy')==='false');
     assert.equal(await page.locator('#error').isVisible(),false);
     assert.match(await page.locator('#status').textContent(),/^6 页 · /,'Cancelled first-page work must not leave a permanent loading status');
-    const runtime=await page.evaluate(async()=> (await import('./viewer.js')).runtimeDiagnostics());
-    assert.ok(runtime.worker.cancelled>0,'Work for the initial page is cancelled after scrolling');
+    assert.equal(await page.evaluate(()=>window.firstPaintCancelled),true,'The actual renderer rejects the obsolete first-page paint after scrolling');
     const tick=await page.evaluate(()=>{
       clearInterval(window.renderTimer);const times=window.renderTicks;
       return {count:times.length,maxGap:Math.max(0,...times.slice(1).map((time,i)=>time-times[i]))};
