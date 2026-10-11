@@ -1,0 +1,12 @@
+// Tier-1 coefficient decoding (code-block level)
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/core",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/a8",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/geometry",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/ht",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/mq",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/profile",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/quant",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/t1",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/math",
+}

@@ -1,0 +1,837 @@
+{
+  "scope": "Original Altona item 6520: all 16 remaining flat-reference residual pixels",
+  "pdf_sha256": "06b980fa09cd45f35a1fc9a2b907911201e91c0fcc2ee5a67820f6bb7818e630",
+  "plan_sha256": "8f9318a68b63c29eadcb90d9e6b9e2b381748df55647db4985631be5fae2fd15",
+  "actual_png_sha256": "70f35b190105c02ee4377a8f6d1a2f7efd0e61bdca9bed0606a305aa31c01cb3",
+  "gs_cmyk_sha256": "1436daeb36a9c94b75b1a9fa369f994929ec16b61eb5a59ca6b12ceb8a855513",
+  "source": {
+    "object": 201,
+    "width": 947,
+    "height": 301,
+    "bits": 8,
+    "space": "DeviceGray",
+    "filter": "/FlateDecode",
+    "decode": null,
+    "interpolate": false,
+    "decoded_bytes": 285047,
+    "decoded_sha256": "91445ce03b220b6ef078e467c2e839b3e94acd2f4a398f39ab27f4f6bb4d7775",
+    "all_retained_samples_match": true,
+    "all_retained_alpha_255": true
+  },
+  "output_profile_sha256": "b58db54cc4df6ea2d4b8f9452cab4e881e8cc8e9f27b6c6bc026d7c400bbc571",
+  "system_lcms_version": 2160,
+  "cmm": {
+    "intent": 1,
+    "flags": 0,
+    "ordering": "source Gray to group K; minification; output ICC to sRGB"
+  },
+  "pdfjs_version": "6.4.299",
+  "canvas_version": "1.0.10",
+  "ghostscript_version": "10.05.1",
+  "original_device_matrix": [
+    245.27549999999997,
+    0,
+    0,
+    78.56151,
+    591.54287,
+    13.170000000000073
+  ],
+  "adapter_device_matrix": [
+    245,
+    0,
+    0,
+    79,
+    592,
+    13
+  ],
+  "minification_steps": [
+    {
+      "width": 474,
+      "height": 151
+    }
+  ],
+  "crop_adapter_vs_pdfjs": {
+    "pixels": 27000,
+    "maximum": 1,
+    "nonidentical_pixels": 24
+  },
+  "samples": [
+    {
+      "point": [
+        828,
+        13
+      ],
+      "isolated_a2_rgb8": [
+        207,
+        209,
+        210
+      ],
+      "a2_cmyka": [
+        0,
+        0,
+        0,
+        0.250980406999588,
+        1
+      ],
+      "adapter_gray8": 191,
+      "pdfjs_gray8": 191,
+      "independent_bilinear_gray8": 191,
+      "nearest_source_pixel": [
+        914,
+        1
+      ],
+      "nearest_source_gray8": 255,
+      "actual_rgb8": [
+        207,
+        209,
+        210
+      ],
+      "independent_lcms_rgb8": [
+        207,
+        209,
+        210
+      ],
+      "original_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "isolated_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "point": [
+        829,
+        13
+      ],
+      "isolated_a2_rgb8": [
+        207,
+        209,
+        210
+      ],
+      "a2_cmyka": [
+        0,
+        0,
+        0,
+        0.250980406999588,
+        1
+      ],
+      "adapter_gray8": 191,
+      "pdfjs_gray8": 191,
+      "independent_bilinear_gray8": 191,
+      "nearest_source_pixel": [
+        918,
+        1
+      ],
+      "nearest_source_gray8": 255,
+      "actual_rgb8": [
+        207,
+        209,
+        210
+      ],
+      "independent_lcms_rgb8": [
+        207,
+        209,
+        210
+      ],
+      "original_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "isolated_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "point": [
+        833,
+        13
+      ],
+      "isolated_a2_rgb8": [
+        207,
+        209,
+        210
+      ],
+      "a2_cmyka": [
+        0,
+        0,
+        0,
+        0.250980406999588,
+        1
+      ],
+      "adapter_gray8": 191,
+      "pdfjs_gray8": 191,
+      "independent_bilinear_gray8": 191,
+      "nearest_source_pixel": [
+        934,
+        1
+      ],
+      "nearest_source_gray8": 255,
+      "actual_rgb8": [
+        207,
+        209,
+        210
+      ],
+      "independent_lcms_rgb8": [
+        207,
+        209,
+        210
+      ],
+      "original_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "isolated_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "point": [
+        834,
+        13
+      ],
+      "isolated_a2_rgb8": [
+        207,
+        209,
+        210
+      ],
+      "a2_cmyka": [
+        0,
+        0,
+        0,
+        0.250980406999588,
+        1
+      ],
+      "adapter_gray8": 191,
+      "pdfjs_gray8": 191,
+      "independent_bilinear_gray8": 191,
+      "nearest_source_pixel": [
+        938,
+        1
+      ],
+      "nearest_source_gray8": 255,
+      "actual_rgb8": [
+        207,
+        209,
+        210
+      ],
+      "independent_lcms_rgb8": [
+        207,
+        209,
+        210
+      ],
+      "original_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "isolated_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "point": [
+        830,
+        16
+      ],
+      "isolated_a2_rgb8": [
+        177,
+        179,
+        180
+      ],
+      "a2_cmyka": [
+        0,
+        0,
+        0,
+        0.40784314274787903,
+        1
+      ],
+      "adapter_gray8": 151,
+      "pdfjs_gray8": 151,
+      "independent_bilinear_gray8": 151,
+      "nearest_source_pixel": [
+        922,
+        12
+      ],
+      "nearest_source_gray8": 11,
+      "actual_rgb8": [
+        177,
+        179,
+        180
+      ],
+      "independent_lcms_rgb8": [
+        177,
+        179,
+        180
+      ],
+      "original_gs_cmyk8": [
+        0,
+        0,
+        0,
+        244
+      ],
+      "isolated_gs_cmyk8": [
+        0,
+        0,
+        0,
+        244
+      ]
+    },
+    {
+      "point": [
+        742,
+        76
+      ],
+      "isolated_a2_rgb8": [
+        225,
+        226,
+        227
+      ],
+      "a2_cmyka": [
+        0,
+        0,
+        0,
+        0.1568627506494522,
+        1
+      ],
+      "adapter_gray8": 215,
+      "pdfjs_gray8": 215,
+      "independent_bilinear_gray8": 215,
+      "nearest_source_pixel": [
+        582,
+        242
+      ],
+      "nearest_source_gray8": 255,
+      "actual_rgb8": [
+        225,
+        226,
+        227
+      ],
+      "independent_lcms_rgb8": [
+        225,
+        226,
+        227
+      ],
+      "original_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "isolated_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "point": [
+        743,
+        76
+      ],
+      "isolated_a2_rgb8": [
+        205,
+        206,
+        208
+      ],
+      "a2_cmyka": [
+        0,
+        0,
+        0,
+        0.26274511218070984,
+        1
+      ],
+      "adapter_gray8": 188,
+      "pdfjs_gray8": 188,
+      "independent_bilinear_gray8": 188,
+      "nearest_source_pixel": [
+        586,
+        242
+      ],
+      "nearest_source_gray8": 255,
+      "actual_rgb8": [
+        205,
+        206,
+        208
+      ],
+      "independent_lcms_rgb8": [
+        205,
+        206,
+        208
+      ],
+      "original_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "isolated_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "point": [
+        629,
+        78
+      ],
+      "isolated_a2_rgb8": [
+        246,
+        246,
+        247
+      ],
+      "a2_cmyka": [
+        0,
+        0,
+        0,
+        0.0470588244497776,
+        1
+      ],
+      "adapter_gray8": 243,
+      "pdfjs_gray8": 243,
+      "independent_bilinear_gray8": 243,
+      "nearest_source_pixel": [
+        146,
+        250
+      ],
+      "nearest_source_gray8": 255,
+      "actual_rgb8": [
+        246,
+        246,
+        247
+      ],
+      "independent_lcms_rgb8": [
+        246,
+        246,
+        247
+      ],
+      "original_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "isolated_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "point": [
+        765,
+        79
+      ],
+      "isolated_a2_rgb8": [
+        239,
+        239,
+        240
+      ],
+      "a2_cmyka": [
+        0,
+        0,
+        0,
+        0.08627451211214066,
+        1
+      ],
+      "adapter_gray8": 233,
+      "pdfjs_gray8": 233,
+      "independent_bilinear_gray8": 233,
+      "nearest_source_pixel": [
+        671,
+        254
+      ],
+      "nearest_source_gray8": 255,
+      "actual_rgb8": [
+        239,
+        239,
+        240
+      ],
+      "independent_lcms_rgb8": [
+        239,
+        239,
+        240
+      ],
+      "original_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "isolated_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "point": [
+        803,
+        80
+      ],
+      "isolated_a2_rgb8": [
+        238,
+        238,
+        239
+      ],
+      "a2_cmyka": [
+        0,
+        0,
+        0,
+        0.09019608050584793,
+        1
+      ],
+      "adapter_gray8": 232,
+      "pdfjs_gray8": 232,
+      "independent_bilinear_gray8": 232,
+      "nearest_source_pixel": [
+        818,
+        257
+      ],
+      "nearest_source_gray8": 255,
+      "actual_rgb8": [
+        238,
+        238,
+        239
+      ],
+      "independent_lcms_rgb8": [
+        238,
+        238,
+        239
+      ],
+      "original_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "isolated_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "point": [
+        804,
+        81
+      ],
+      "isolated_a2_rgb8": [
+        204,
+        206,
+        207
+      ],
+      "a2_cmyka": [
+        0,
+        0,
+        0,
+        0.2666666805744171,
+        1
+      ],
+      "adapter_gray8": 187,
+      "pdfjs_gray8": 187,
+      "independent_bilinear_gray8": 187,
+      "nearest_source_pixel": [
+        822,
+        261
+      ],
+      "nearest_source_gray8": 255,
+      "actual_rgb8": [
+        204,
+        206,
+        207
+      ],
+      "independent_lcms_rgb8": [
+        204,
+        206,
+        207
+      ],
+      "original_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "isolated_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "point": [
+        812,
+        83
+      ],
+      "isolated_a2_rgb8": [
+        112,
+        113,
+        114
+      ],
+      "a2_cmyka": [
+        0,
+        0,
+        0,
+        0.7098039388656616,
+        1
+      ],
+      "adapter_gray8": 74,
+      "pdfjs_gray8": 74,
+      "independent_bilinear_gray8": 74,
+      "nearest_source_pixel": [
+        853,
+        269
+      ],
+      "nearest_source_gray8": 255,
+      "actual_rgb8": [
+        112,
+        113,
+        114
+      ],
+      "independent_lcms_rgb8": [
+        112,
+        113,
+        114
+      ],
+      "original_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "isolated_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "point": [
+        813,
+        83
+      ],
+      "isolated_a2_rgb8": [
+        111,
+        112,
+        113
+      ],
+      "a2_cmyka": [
+        0,
+        0,
+        0,
+        0.7137255072593689,
+        1
+      ],
+      "adapter_gray8": 73,
+      "pdfjs_gray8": 73,
+      "independent_bilinear_gray8": 73,
+      "nearest_source_pixel": [
+        856,
+        269
+      ],
+      "nearest_source_gray8": 255,
+      "actual_rgb8": [
+        111,
+        112,
+        113
+      ],
+      "independent_lcms_rgb8": [
+        111,
+        112,
+        113
+      ],
+      "original_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "isolated_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "point": [
+        814,
+        83
+      ],
+      "isolated_a2_rgb8": [
+        111,
+        112,
+        113
+      ],
+      "a2_cmyka": [
+        0,
+        0,
+        0,
+        0.7137255072593689,
+        1
+      ],
+      "adapter_gray8": 73,
+      "pdfjs_gray8": 73,
+      "independent_bilinear_gray8": 73,
+      "nearest_source_pixel": [
+        860,
+        269
+      ],
+      "nearest_source_gray8": 255,
+      "actual_rgb8": [
+        111,
+        112,
+        113
+      ],
+      "independent_lcms_rgb8": [
+        111,
+        112,
+        113
+      ],
+      "original_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "isolated_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "point": [
+        687,
+        84
+      ],
+      "isolated_a2_rgb8": [
+        223,
+        224,
+        225
+      ],
+      "a2_cmyka": [
+        0,
+        0,
+        0,
+        0.16862745583057404,
+        1
+      ],
+      "adapter_gray8": 212,
+      "pdfjs_gray8": 212,
+      "independent_bilinear_gray8": 212,
+      "nearest_source_pixel": [
+        370,
+        273
+      ],
+      "nearest_source_gray8": 255,
+      "actual_rgb8": [
+        223,
+        224,
+        225
+      ],
+      "independent_lcms_rgb8": [
+        223,
+        224,
+        225
+      ],
+      "original_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "isolated_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "point": [
+        635,
+        90
+      ],
+      "isolated_a2_rgb8": [
+        242,
+        242,
+        242
+      ],
+      "a2_cmyka": [
+        0,
+        0,
+        0,
+        0.07058823853731155,
+        1
+      ],
+      "adapter_gray8": 237,
+      "pdfjs_gray8": 237,
+      "independent_bilinear_gray8": 237,
+      "nearest_source_pixel": [
+        169,
+        296
+      ],
+      "nearest_source_gray8": 255,
+      "actual_rgb8": [
+        242,
+        242,
+        242
+      ],
+      "independent_lcms_rgb8": [
+        242,
+        242,
+        242
+      ],
+      "original_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "isolated_gs_cmyk8": [
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "checks": {
+    "raw_source_exact": true,
+    "pdfjs_and_independent_bilinear_all_16_exact": true,
+    "independent_lcms_all_16_rgb_exact": true,
+    "isolated_a2_all_16_original_rgb_exact": true,
+    "isolated_gs_all_16_original_cmyk_exact": true,
+    "unrounded_nearest_all_16_gs_exact": true
+  },
+  "interpretation": "The original GS mismatches remain. All 16 are explained by PDF.js-compatible image sampling; no source/Decode/alpha/CMM defect established."
+}

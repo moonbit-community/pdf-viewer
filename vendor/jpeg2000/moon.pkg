@@ -1,0 +1,3 @@
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/orchestrate" @decoder,
+}

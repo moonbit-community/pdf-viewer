@@ -38,6 +38,9 @@ fn pdf_svg_text_can_join(previous : PdfTextItem, current : PdfTextItem) -> Bool 
   previous.font == current.font &&
   previous.font_size == current.font_size &&
   previous.fill_alpha == current.fill_alpha &&
+  previous.stroke == current.stroke &&
+  previous.text_object_id == current.text_object_id &&
+  previous.text_knockout == current.text_knockout &&
   previous.blend_mode == current.blend_mode &&
   same_transform &&
   previous.rendering_mode == current.rendering_mode &&
@@ -45,6 +48,7 @@ fn pdf_svg_text_can_join(previous : PdfTextItem, current : PdfTextItem) -> Bool 
   previous.stroke_color == current.stroke_color &&
   (previous_angle - current_angle).abs() <= 0.01 &&
   previous.clip_path == current.clip_path &&
+  previous.clips == current.clips &&
   previous.soft_mask == current.soft_mask
 }
 
@@ -54,6 +58,9 @@ fn pdf_svg_text_can_join(previous : PdfTextItem, current : PdfTextItem) -> Bool 
 /// those source codes in textContent while its canvas renderer does not paint
 /// arbitrary Unicode fallback glyphs for them.
 fn pdf_svg_display_text(page : PdfPageModel, item : PdfTextItem) -> String {
+  if item.type3_outline is Some(outline) && !outline.is_empty() {
+    return item.text
+  }
   for font in page.fonts {
     if font.name == item.font {
       let standard_font = match font.standard_font {
@@ -71,6 +78,29 @@ fn pdf_svg_display_text(page : PdfPageModel, item : PdfTextItem) -> String {
 }
 
 ///|
+/// XML labels retain copied text while omitting characters XML 1.0 cannot
+/// serialize. The extraction/source model still contains those characters.
+fn pdf_svg_xml_text(text : String) -> String {
+  let output = StringBuilder()
+  for char in text.iter() {
+    let code = char.to_int()
+    if code == 9 ||
+      code == 10 ||
+      code == 13 ||
+      (
+        code >= 32 &&
+        code <= 0x10FFFF &&
+        !(code >= 0xD800 && code <= 0xDFFF) &&
+        code != 0xFFFE &&
+        code != 0xFFFF
+      ) {
+      output.write_char(char)
+    }
+  }
+  output.to_string()
+}
+
+///|
 fn pdf_svg_text(
   output : StringBuilder,
   page : PdfPageModel,
@@ -85,12 +115,25 @@ fn pdf_svg_text(
     false
   }
   if has_outline {
+    let label = StringBuilder()
+    for item in items {
+      label.write_string(pdf_svg_xml_text(pdf_svg_display_text(page, item)))
+    }
+    output.write_string(
+      "<g><title>" + pdf_escape_xml(label.to_string()) + "</title>",
+    )
     for item in items {
       match item.type3_outline {
         Some(_) => pdf_svg_outline_text(output, page, item, scale)
         None => pdf_svg_text(output, page, [item], scale)
       }
     }
+    output.write_string("</g>")
+    return
+  }
+  // Runs have one rendering mode. Type 3 charprocs have already taken the
+  // outline branch above; invisible fallback text needs no SVG payload.
+  if items[0].rendering_mode == 3 {
     return
   }
   let first = items[0]
@@ -177,8 +220,18 @@ fn pdf_svg_text(
   } else {
     "none"
   }
-  let stroke_width = if stroke == "none" { 0.0 } else { font_size * 0.04 }
-  pdf_svg_clip_defs(output, first.index, first.clip_path, scale)
+  let pen = if stroke == "none" {
+    ""
+  } else {
+    pdf_svg_fallback_text_pen(first, scale)
+  }
+  pdf_svg_clip_defs(
+    output,
+    first.index,
+    first.clip_path,
+    scale,
+    clips=first.clips,
+  )
   pdf_svg_soft_mask_defs(output, first.index, page, first.soft_mask, scale)
   pdf_svg_soft_mask_open(output, first.index, first.soft_mask)
   pdf_svg_clip_open(output, first.index, first.clip_path)
@@ -201,9 +254,9 @@ fn pdf_svg_text(
     pdf_escape_xml(fill) +
     "\" stroke=\"" +
     pdf_escape_xml(stroke) +
-    "\" stroke-width=\"" +
-    stroke_width.to_string() +
-    "\" fill-opacity=\"" +
+    "\"" +
+    pen +
+    " fill-opacity=\"" +
     first.fill_alpha.to_string() +
     "\"" +
     pdf_svg_blend_style(first.blend_mode) +
@@ -227,7 +280,13 @@ fn pdf_svg_outline_text(
   match item.type3_outline {
     None => ()
     Some(outline) => {
-      pdf_svg_clip_defs(output, item.index, item.clip_path, scale)
+      pdf_svg_clip_defs(
+        output,
+        item.index,
+        item.clip_path,
+        scale,
+        clips=item.clips,
+      )
       pdf_svg_soft_mask_defs(output, item.index, page, item.soft_mask, scale)
       pdf_svg_soft_mask_open(output, item.index, item.soft_mask)
       pdf_svg_clip_open(output, item.index, item.clip_path)

@@ -3,8 +3,8 @@
 /// A text object contributes one nonzero path when ET is reached.
 priv struct PdfCollectedTextClipGlyph {
   font : @pdflite.PdfFont
-  resources : @syntax.PdfObject
-  font_name : String
+  font_object : @syntax.PdfObject?
+  use_standard14 : Bool
   charcode : Int
   matrix : @geometry.TransformMatrix
 }
@@ -20,8 +20,9 @@ priv struct PdfCollectedTextClipGroup {
 ///|
 fn pdf_collect_text_clip_glyphs(
   state : @pdflite.PdfContentOperatorState,
-  resources : @syntax.PdfObject,
+  font_object : @syntax.PdfObject?,
   glyphs : ArrayView[@pdflite.PdfContentTextGlyphPlacement],
+  use_standard14? : Bool = true,
 ) -> Array[PdfCollectedTextClipGlyph] {
   let text = state.text_state
   if text.rendering_mode < 4 || text.rendering_mode > 7 || text.font_size == 0.0 {
@@ -38,8 +39,8 @@ fn pdf_collect_text_clip_glyphs(
     for glyph in glyphs => {
       {
         font: text.current_font,
-        resources,
-        font_name: text.font,
+        font_object,
+        use_standard14,
         charcode: glyph.charcode,
         matrix: pdf_glyph_transform(state, glyph),
       }
@@ -91,13 +92,13 @@ fn pdf_text_clip_path_of_group(
           height,
         )
     }
-    let path = match type1_path {
+    let truetype_path = match type1_path {
       Some(path) => Some(path)
       None =>
         pdf_truetype_path_of_pdf_glyph(
           document,
-          glyph.resources,
-          glyph.font_name,
+          glyph.font,
+          glyph.font_object,
           glyph.charcode,
           Some(glyph.matrix),
           origin_x,
@@ -106,6 +107,19 @@ fn pdf_text_clip_path_of_group(
         ) catch {
           _ => None
         }
+    }
+    let path = match truetype_path {
+      Some(path) => Some(path)
+      None if glyph.use_standard14 =>
+        pdf_standard14_path_of_pdf_glyph(
+          glyph.font,
+          glyph.charcode,
+          Some(glyph.matrix),
+          origin_x,
+          origin_y,
+          height,
+        )
+      None => None
     }
     match path {
       Some(path) if path != "" => paths.push(path)

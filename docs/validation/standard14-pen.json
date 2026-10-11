@@ -1,0 +1,1161 @@
+{
+  "entry": "web/_generated/pdf.js public open_pdf/render_page + web/pdf-runtime.mjs",
+  "bridge": "web/_generated/pdf.js",
+  "bridgeSha256": "09a64b9bc4c0575b1cab462b6dabb4cc9d0a780fc99d6bd61e36faf4f765e215",
+  "fixtureBytes": 621,
+  "fixtureSha256": "faf86fff67b17f2d78afcf5353341c85b5949e560a11c5271166432e5193a538",
+  "embeddedControlSha256": "25fc97c8caa8fdd259fb0a610f92b8699b619da924482a7d06c69d81205fe079",
+  "fontSha256": "f8ace1f892b2bd9dc1792ba7f097fa7588f84fed48321480e04de5390828221f",
+  "referenceRevision": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+  "nativeCanvas": "1.0.10",
+  "pdfjs": "6.4.299",
+  "poppler": "pdftoppm version 26.05.0\nCopyright 2005-2026 The Poppler Developers - http://poppler.freedesktop.org\nCopyright 1996-2011, 2022 Glyph & Cog, LLC",
+  "ghostscript": "10.05.1",
+  "nativeOutlineResolver": false,
+  "hostFontRegistration": false,
+  "browserDOMExecuted": false,
+  "acceptance": "Strict replay, nonblank pixels and exact same-font embedded geometry/pixels; cross-renderer differences are reported without a widened tolerance",
+  "cases": [
+    {
+      "mode": 1,
+      "scale": 1,
+      "rotation": 0,
+      "width": 240,
+      "height": 160,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 910,
+        "referenceInkPixels": 910
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.2696614583333333,
+          "maximum": 79,
+          "changedAbove8": 385,
+          "inkPixels": 910,
+          "referenceInkPixels": 940
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.549921875,
+          "maximum": 95,
+          "changedAbove8": 524,
+          "inkPixels": 910,
+          "referenceInkPixels": 1015
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 2.1339322916666665,
+          "maximum": 255,
+          "changedAbove8": 793,
+          "inkPixels": 910,
+          "referenceInkPixels": 633
+        },
+        "poppler": {
+          "meanAbsoluteError": 6.1007291666666665,
+          "maximum": 255,
+          "changedAbove8": 1278,
+          "inkPixels": 910,
+          "referenceInkPixels": 749
+        }
+      }
+    },
+    {
+      "mode": 1,
+      "scale": 1,
+      "rotation": 90,
+      "width": 160,
+      "height": 240,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 904,
+        "referenceInkPixels": 904
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.27630208333333334,
+          "maximum": 89,
+          "changedAbove8": 419,
+          "inkPixels": 904,
+          "referenceInkPixels": 940
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.56859375,
+          "maximum": 106,
+          "changedAbove8": 586,
+          "inkPixels": 904,
+          "referenceInkPixels": 1015
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 2.047734375,
+          "maximum": 233,
+          "changedAbove8": 791,
+          "inkPixels": 904,
+          "referenceInkPixels": 640
+        },
+        "poppler": {
+          "meanAbsoluteError": 6.127005208333333,
+          "maximum": 255,
+          "changedAbove8": 1307,
+          "inkPixels": 904,
+          "referenceInkPixels": 749
+        }
+      }
+    },
+    {
+      "mode": 1,
+      "scale": 1,
+      "rotation": 180,
+      "width": 240,
+      "height": 160,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 907,
+        "referenceInkPixels": 907
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.26880208333333333,
+          "maximum": 79,
+          "changedAbove8": 386,
+          "inkPixels": 907,
+          "referenceInkPixels": 940
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.54984375,
+          "maximum": 92,
+          "changedAbove8": 526,
+          "inkPixels": 907,
+          "referenceInkPixels": 1015
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 2.1354166666666665,
+          "maximum": 255,
+          "changedAbove8": 793,
+          "inkPixels": 907,
+          "referenceInkPixels": 634
+        },
+        "poppler": {
+          "meanAbsoluteError": 6.100546875,
+          "maximum": 255,
+          "changedAbove8": 1278,
+          "inkPixels": 907,
+          "referenceInkPixels": 749
+        }
+      }
+    },
+    {
+      "mode": 1,
+      "scale": 1,
+      "rotation": 270,
+      "width": 160,
+      "height": 240,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 906,
+        "referenceInkPixels": 906
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.2766927083333333,
+          "maximum": 93,
+          "changedAbove8": 415,
+          "inkPixels": 906,
+          "referenceInkPixels": 940
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.570234375,
+          "maximum": 111,
+          "changedAbove8": 584,
+          "inkPixels": 906,
+          "referenceInkPixels": 1015
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 2.047682291666667,
+          "maximum": 233,
+          "changedAbove8": 795,
+          "inkPixels": 906,
+          "referenceInkPixels": 639
+        },
+        "poppler": {
+          "meanAbsoluteError": 6.1296875,
+          "maximum": 255,
+          "changedAbove8": 1309,
+          "inkPixels": 906,
+          "referenceInkPixels": 749
+        }
+      }
+    },
+    {
+      "mode": 1,
+      "scale": 2,
+      "rotation": 0,
+      "width": 480,
+      "height": 320,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 3225,
+        "referenceInkPixels": 3225
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.19103515625,
+          "maximum": 96,
+          "changedAbove8": 946,
+          "inkPixels": 3225,
+          "referenceInkPixels": 3309
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.34039713541666666,
+          "maximum": 116,
+          "changedAbove8": 1213,
+          "inkPixels": 3225,
+          "referenceInkPixels": 3450
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 2.0131184895833334,
+          "maximum": 255,
+          "changedAbove8": 2253,
+          "inkPixels": 3225,
+          "referenceInkPixels": 2082
+        },
+        "poppler": {
+          "meanAbsoluteError": 6.11751953125,
+          "maximum": 255,
+          "changedAbove8": 4510,
+          "inkPixels": 3225,
+          "referenceInkPixels": 2611
+        }
+      }
+    },
+    {
+      "mode": 1,
+      "scale": 2,
+      "rotation": 90,
+      "width": 320,
+      "height": 480,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 3233,
+        "referenceInkPixels": 3233
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.13942708333333334,
+          "maximum": 89,
+          "changedAbove8": 823,
+          "inkPixels": 3233,
+          "referenceInkPixels": 3309
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.2870182291666667,
+          "maximum": 111,
+          "changedAbove8": 1175,
+          "inkPixels": 3233,
+          "referenceInkPixels": 3450
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 2.0421549479166665,
+          "maximum": 255,
+          "changedAbove8": 2251,
+          "inkPixels": 3233,
+          "referenceInkPixels": 2080
+        },
+        "poppler": {
+          "meanAbsoluteError": 6.1178515625,
+          "maximum": 255,
+          "changedAbove8": 4508,
+          "inkPixels": 3233,
+          "referenceInkPixels": 2611
+        }
+      }
+    },
+    {
+      "mode": 1,
+      "scale": 2,
+      "rotation": 180,
+      "width": 480,
+      "height": 320,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 3221,
+        "referenceInkPixels": 3221
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.19156901041666666,
+          "maximum": 97,
+          "changedAbove8": 938,
+          "inkPixels": 3221,
+          "referenceInkPixels": 3309
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.33992838541666665,
+          "maximum": 119,
+          "changedAbove8": 1211,
+          "inkPixels": 3221,
+          "referenceInkPixels": 3450
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 2.0146549479166667,
+          "maximum": 255,
+          "changedAbove8": 2257,
+          "inkPixels": 3221,
+          "referenceInkPixels": 2079
+        },
+        "poppler": {
+          "meanAbsoluteError": 6.1194075520833335,
+          "maximum": 255,
+          "changedAbove8": 4512,
+          "inkPixels": 3221,
+          "referenceInkPixels": 2611
+        }
+      }
+    },
+    {
+      "mode": 1,
+      "scale": 2,
+      "rotation": 270,
+      "width": 320,
+      "height": 480,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 3234,
+        "referenceInkPixels": 3234
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.13947916666666665,
+          "maximum": 94,
+          "changedAbove8": 810,
+          "inkPixels": 3234,
+          "referenceInkPixels": 3309
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.2870052083333333,
+          "maximum": 116,
+          "changedAbove8": 1171,
+          "inkPixels": 3234,
+          "referenceInkPixels": 3450
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 2.038782552083333,
+          "maximum": 255,
+          "changedAbove8": 2244,
+          "inkPixels": 3234,
+          "referenceInkPixels": 2082
+        },
+        "poppler": {
+          "meanAbsoluteError": 6.1183854166666665,
+          "maximum": 255,
+          "changedAbove8": 4505,
+          "inkPixels": 3234,
+          "referenceInkPixels": 2611
+        }
+      }
+    },
+    {
+      "mode": 0,
+      "scale": 1,
+      "rotation": 0,
+      "width": 240,
+      "height": 160,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 798,
+        "referenceInkPixels": 798
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.1625,
+          "maximum": 66,
+          "changedAbove8": 241,
+          "inkPixels": 798,
+          "referenceInkPixels": 820
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.34544270833333335,
+          "maximum": 86,
+          "changedAbove8": 325,
+          "inkPixels": 798,
+          "referenceInkPixels": 861
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 0,
+          "maximum": 0,
+          "changedAbove8": 0,
+          "inkPixels": 798,
+          "referenceInkPixels": 798
+        },
+        "poppler": {
+          "meanAbsoluteError": 5.1515885416666665,
+          "maximum": 255,
+          "changedAbove8": 1028,
+          "inkPixels": 798,
+          "referenceInkPixels": 558
+        }
+      }
+    },
+    {
+      "mode": 0,
+      "scale": 1,
+      "rotation": 90,
+      "width": 160,
+      "height": 240,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 799,
+        "referenceInkPixels": 799
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.149375,
+          "maximum": 67,
+          "changedAbove8": 210,
+          "inkPixels": 799,
+          "referenceInkPixels": 820
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.333203125,
+          "maximum": 94,
+          "changedAbove8": 325,
+          "inkPixels": 799,
+          "referenceInkPixels": 861
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 0,
+          "maximum": 0,
+          "changedAbove8": 0,
+          "inkPixels": 799,
+          "referenceInkPixels": 799
+        },
+        "poppler": {
+          "meanAbsoluteError": 5.115338541666667,
+          "maximum": 255,
+          "changedAbove8": 1016,
+          "inkPixels": 799,
+          "referenceInkPixels": 558
+        }
+      }
+    },
+    {
+      "mode": 0,
+      "scale": 1,
+      "rotation": 180,
+      "width": 240,
+      "height": 160,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 797,
+        "referenceInkPixels": 797
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.164453125,
+          "maximum": 70,
+          "changedAbove8": 239,
+          "inkPixels": 797,
+          "referenceInkPixels": 820
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.34546875,
+          "maximum": 92,
+          "changedAbove8": 324,
+          "inkPixels": 797,
+          "referenceInkPixels": 861
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 0,
+          "maximum": 0,
+          "changedAbove8": 0,
+          "inkPixels": 797,
+          "referenceInkPixels": 797
+        },
+        "poppler": {
+          "meanAbsoluteError": 5.156302083333333,
+          "maximum": 255,
+          "changedAbove8": 1026,
+          "inkPixels": 797,
+          "referenceInkPixels": 558
+        }
+      }
+    },
+    {
+      "mode": 0,
+      "scale": 1,
+      "rotation": 270,
+      "width": 160,
+      "height": 240,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 798,
+        "referenceInkPixels": 798
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.15018229166666666,
+          "maximum": 67,
+          "changedAbove8": 206,
+          "inkPixels": 798,
+          "referenceInkPixels": 820
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.3340625,
+          "maximum": 94,
+          "changedAbove8": 325,
+          "inkPixels": 798,
+          "referenceInkPixels": 861
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 0,
+          "maximum": 0,
+          "changedAbove8": 0,
+          "inkPixels": 798,
+          "referenceInkPixels": 798
+        },
+        "poppler": {
+          "meanAbsoluteError": 5.117760416666667,
+          "maximum": 255,
+          "changedAbove8": 1017,
+          "inkPixels": 798,
+          "referenceInkPixels": 558
+        }
+      }
+    },
+    {
+      "mode": 0,
+      "scale": 2,
+      "rotation": 0,
+      "width": 480,
+      "height": 320,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 2942,
+        "referenceInkPixels": 2942
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.0990234375,
+          "maximum": 89,
+          "changedAbove8": 514,
+          "inkPixels": 2942,
+          "referenceInkPixels": 2999
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.18619791666666666,
+          "maximum": 111,
+          "changedAbove8": 663,
+          "inkPixels": 2942,
+          "referenceInkPixels": 3078
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 0,
+          "maximum": 0,
+          "changedAbove8": 0,
+          "inkPixels": 2942,
+          "referenceInkPixels": 2942
+        },
+        "poppler": {
+          "meanAbsoluteError": 5.1197721354166665,
+          "maximum": 255,
+          "changedAbove8": 3602,
+          "inkPixels": 2942,
+          "referenceInkPixels": 2041
+        }
+      }
+    },
+    {
+      "mode": 0,
+      "scale": 2,
+      "rotation": 90,
+      "width": 320,
+      "height": 480,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 2944,
+        "referenceInkPixels": 2944
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.0754296875,
+          "maximum": 82,
+          "changedAbove8": 437,
+          "inkPixels": 2944,
+          "referenceInkPixels": 2999
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.16747395833333334,
+          "maximum": 100,
+          "changedAbove8": 653,
+          "inkPixels": 2944,
+          "referenceInkPixels": 3078
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 0,
+          "maximum": 0,
+          "changedAbove8": 0,
+          "inkPixels": 2944,
+          "referenceInkPixels": 2944
+        },
+        "poppler": {
+          "meanAbsoluteError": 5.13248046875,
+          "maximum": 255,
+          "changedAbove8": 3591,
+          "inkPixels": 2944,
+          "referenceInkPixels": 2041
+        }
+      }
+    },
+    {
+      "mode": 0,
+      "scale": 2,
+      "rotation": 180,
+      "width": 480,
+      "height": 320,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 2941,
+        "referenceInkPixels": 2941
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.09800130208333334,
+          "maximum": 82,
+          "changedAbove8": 518,
+          "inkPixels": 2941,
+          "referenceInkPixels": 2999
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.18602213541666668,
+          "maximum": 104,
+          "changedAbove8": 666,
+          "inkPixels": 2941,
+          "referenceInkPixels": 3078
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 0,
+          "maximum": 0,
+          "changedAbove8": 0,
+          "inkPixels": 2941,
+          "referenceInkPixels": 2941
+        },
+        "poppler": {
+          "meanAbsoluteError": 5.121041666666667,
+          "maximum": 255,
+          "changedAbove8": 3602,
+          "inkPixels": 2941,
+          "referenceInkPixels": 2041
+        }
+      }
+    },
+    {
+      "mode": 0,
+      "scale": 2,
+      "rotation": 270,
+      "width": 320,
+      "height": 480,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 2947,
+        "referenceInkPixels": 2947
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.07383463541666667,
+          "maximum": 82,
+          "changedAbove8": 426,
+          "inkPixels": 2947,
+          "referenceInkPixels": 2999
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.16564453125,
+          "maximum": 100,
+          "changedAbove8": 649,
+          "inkPixels": 2947,
+          "referenceInkPixels": 3078
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 0,
+          "maximum": 0,
+          "changedAbove8": 0,
+          "inkPixels": 2947,
+          "referenceInkPixels": 2947
+        },
+        "poppler": {
+          "meanAbsoluteError": 5.133307291666667,
+          "maximum": 255,
+          "changedAbove8": 3593,
+          "inkPixels": 2947,
+          "referenceInkPixels": 2041
+        }
+      }
+    },
+    {
+      "mode": 2,
+      "scale": 1,
+      "rotation": 0,
+      "width": 240,
+      "height": 160,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 1173,
+        "referenceInkPixels": 1173
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.16260416666666666,
+          "maximum": 79,
+          "changedAbove8": 244,
+          "inkPixels": 1173,
+          "referenceInkPixels": 1192
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.348828125,
+          "maximum": 95,
+          "changedAbove8": 335,
+          "inkPixels": 1173,
+          "referenceInkPixels": 1238
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 1.1119791666666667,
+          "maximum": 240,
+          "changedAbove8": 510,
+          "inkPixels": 1173,
+          "referenceInkPixels": 1002
+        },
+        "poppler": {
+          "meanAbsoluteError": 6.682421875,
+          "maximum": 255,
+          "changedAbove8": 1257,
+          "inkPixels": 1173,
+          "referenceInkPixels": 883
+        }
+      }
+    },
+    {
+      "mode": 2,
+      "scale": 1,
+      "rotation": 90,
+      "width": 160,
+      "height": 240,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 1168,
+        "referenceInkPixels": 1168
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.14692708333333335,
+          "maximum": 61,
+          "changedAbove8": 227,
+          "inkPixels": 1168,
+          "referenceInkPixels": 1192
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.340546875,
+          "maximum": 86,
+          "changedAbove8": 342,
+          "inkPixels": 1168,
+          "referenceInkPixels": 1238
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 1.0941145833333332,
+          "maximum": 220,
+          "changedAbove8": 500,
+          "inkPixels": 1168,
+          "referenceInkPixels": 1003
+        },
+        "poppler": {
+          "meanAbsoluteError": 6.715703125,
+          "maximum": 255,
+          "changedAbove8": 1258,
+          "inkPixels": 1168,
+          "referenceInkPixels": 883
+        }
+      }
+    },
+    {
+      "mode": 2,
+      "scale": 1,
+      "rotation": 180,
+      "width": 240,
+      "height": 160,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 1170,
+        "referenceInkPixels": 1170
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.16140625,
+          "maximum": 79,
+          "changedAbove8": 244,
+          "inkPixels": 1170,
+          "referenceInkPixels": 1192
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.3480989583333333,
+          "maximum": 92,
+          "changedAbove8": 337,
+          "inkPixels": 1170,
+          "referenceInkPixels": 1238
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 1.1149739583333333,
+          "maximum": 240,
+          "changedAbove8": 511,
+          "inkPixels": 1170,
+          "referenceInkPixels": 1002
+        },
+        "poppler": {
+          "meanAbsoluteError": 6.682369791666667,
+          "maximum": 255,
+          "changedAbove8": 1258,
+          "inkPixels": 1170,
+          "referenceInkPixels": 883
+        }
+      }
+    },
+    {
+      "mode": 2,
+      "scale": 1,
+      "rotation": 270,
+      "width": 160,
+      "height": 240,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 1169,
+        "referenceInkPixels": 1169
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.14830729166666667,
+          "maximum": 59,
+          "changedAbove8": 225,
+          "inkPixels": 1169,
+          "referenceInkPixels": 1192
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.34307291666666667,
+          "maximum": 87,
+          "changedAbove8": 342,
+          "inkPixels": 1169,
+          "referenceInkPixels": 1238
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 1.0919791666666667,
+          "maximum": 214,
+          "changedAbove8": 504,
+          "inkPixels": 1169,
+          "referenceInkPixels": 1002
+        },
+        "poppler": {
+          "meanAbsoluteError": 6.716666666666667,
+          "maximum": 255,
+          "changedAbove8": 1260,
+          "inkPixels": 1169,
+          "referenceInkPixels": 883
+        }
+      }
+    },
+    {
+      "mode": 2,
+      "scale": 2,
+      "rotation": 0,
+      "width": 480,
+      "height": 320,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 4406,
+        "referenceInkPixels": 4406
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.09626302083333334,
+          "maximum": 68,
+          "changedAbove8": 550,
+          "inkPixels": 4406,
+          "referenceInkPixels": 4466
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.19478515625,
+          "maximum": 97,
+          "changedAbove8": 706,
+          "inkPixels": 4406,
+          "referenceInkPixels": 4554
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 1.0542317708333333,
+          "maximum": 255,
+          "changedAbove8": 1226,
+          "inkPixels": 4406,
+          "referenceInkPixels": 3771
+        },
+        "poppler": {
+          "meanAbsoluteError": 6.668352864583333,
+          "maximum": 255,
+          "changedAbove8": 4527,
+          "inkPixels": 4406,
+          "referenceInkPixels": 3277
+        }
+      }
+    },
+    {
+      "mode": 2,
+      "scale": 2,
+      "rotation": 90,
+      "width": 320,
+      "height": 480,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 4422,
+        "referenceInkPixels": 4422
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.06901041666666667,
+          "maximum": 61,
+          "changedAbove8": 437,
+          "inkPixels": 4422,
+          "referenceInkPixels": 4466
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.16574869791666666,
+          "maximum": 89,
+          "changedAbove8": 681,
+          "inkPixels": 4422,
+          "referenceInkPixels": 4554
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 1.0762044270833333,
+          "maximum": 255,
+          "changedAbove8": 1224,
+          "inkPixels": 4422,
+          "referenceInkPixels": 3767
+        },
+        "poppler": {
+          "meanAbsoluteError": 6.6721809895833335,
+          "maximum": 255,
+          "changedAbove8": 4532,
+          "inkPixels": 4422,
+          "referenceInkPixels": 3277
+        }
+      }
+    },
+    {
+      "mode": 2,
+      "scale": 2,
+      "rotation": 180,
+      "width": 480,
+      "height": 320,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 4404,
+        "referenceInkPixels": 4404
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.09659505208333333,
+          "maximum": 69,
+          "changedAbove8": 544,
+          "inkPixels": 4404,
+          "referenceInkPixels": 4466
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.19481770833333334,
+          "maximum": 99,
+          "changedAbove8": 705,
+          "inkPixels": 4404,
+          "referenceInkPixels": 4554
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 1.0552473958333333,
+          "maximum": 255,
+          "changedAbove8": 1227,
+          "inkPixels": 4404,
+          "referenceInkPixels": 3769
+        },
+        "poppler": {
+          "meanAbsoluteError": 6.6690234375,
+          "maximum": 255,
+          "changedAbove8": 4528,
+          "inkPixels": 4404,
+          "referenceInkPixels": 3277
+        }
+      }
+    },
+    {
+      "mode": 2,
+      "scale": 2,
+      "rotation": 270,
+      "width": 320,
+      "height": 480,
+      "diagnostics": [],
+      "sameFontEmbeddedA1": {
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "changedAbove8": 0,
+        "inkPixels": 4422,
+        "referenceInkPixels": 4422
+      },
+      "sameGeometryExplicitPath": {
+        "poppler": {
+          "meanAbsoluteError": 0.06919270833333334,
+          "maximum": 63,
+          "changedAbove8": 426,
+          "inkPixels": 4422,
+          "referenceInkPixels": 4466
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.16600911458333334,
+          "maximum": 89,
+          "changedAbove8": 677,
+          "inkPixels": 4422,
+          "referenceInkPixels": 4554
+        }
+      },
+      "unmatchedOriginalText": {
+        "pdfjs": {
+          "meanAbsoluteError": 1.07544921875,
+          "maximum": 255,
+          "changedAbove8": 1218,
+          "inkPixels": 4422,
+          "referenceInkPixels": 3768
+        },
+        "poppler": {
+          "meanAbsoluteError": 6.671946614583334,
+          "maximum": 255,
+          "changedAbove8": 4528,
+          "inkPixels": 4422,
+          "referenceInkPixels": 3277
+        }
+      }
+    }
+  ],
+  "explicitOverride": {
+    "hostSelected": true,
+    "strictRejected": true,
+    "resetRestoresBundled": true
+  },
+  "nativePublicEntry": {
+    "entry": "cmd/main + tools/render_canvas.mjs",
+    "width": 240,
+    "height": 160,
+    "exactRgbaEquality": true,
+    "geometryResolvedBeforeHostReplay": true,
+    "diagnostics": []
+  }
+}

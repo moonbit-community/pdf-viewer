@@ -1,0 +1,41 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/codecs/jpx"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn decode(Bytes, smask_in_data? : Int, use_embedded_colour? : Bool, limits? : Limits) -> Result[Samples, String]
+
+pub fn default_limits() -> Limits
+
+// Errors
+
+// Types and methods
+pub(all) struct Limits {
+  max_input_bytes : Int
+  max_pixels : Int
+  max_samples : Int
+  max_tiles : Int
+  max_layers : Int
+}
+
+pub(all) struct Samples {
+  bytes : Bytes
+  width : Int
+  height : Int
+  bits : Int
+  components : Int
+  row_bytes : Int
+  embedded_alpha : Bytes?
+  embedded_alpha_bits : Int
+  embedded_alpha_row_bytes : Int
+  embedded_alpha_associated : Bool
+  embedded_icc_profile : Bytes?
+  colour_hint : String
+} derive(@debug.Debug)
+
+// Type aliases
+
+// Traits

@@ -1,0 +1,12 @@
+// T.800-2015 B.10 multi-layer accumulation and DWT bridge
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/core",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/a8",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/codeblock",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/dwt",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/packet",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/precinct",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/quant",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/subband",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/math",
+}

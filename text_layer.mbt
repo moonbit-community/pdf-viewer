@@ -28,6 +28,10 @@ pub(all) struct PdfTextLayer {
 /// test {
 ///   let page : @pdf-viewer.PdfPageModel = {
 ///     number: 1,
+///     blend_space: "DeviceRGB",
+///     blend_profile_id: None,
+///     blend_calibration: None,
+///     icc_profiles: [],
 ///     origin_x: 0.0,
 ///     origin_y: 0.0,
 ///     width: 200.0,
@@ -51,9 +55,8 @@ pub fn PdfPageModel::text_layer(
 ) -> PdfTextLayer {
   let viewport = self.viewport(scale~, rotation~)
   let output : Array[PdfTextLayerItem] = []
-  let mut previous : PdfTextItem? = None
   let text_items = pdf_text_reading_order_of_page_items(self.items[:])
-  for text in text_items {
+  for index, text in text_items {
     guard !text.text.is_empty() else { continue }
     let quad = text.quad
     let top_left = viewport.convert_to_viewport_point(quad.p1)
@@ -62,10 +65,7 @@ pub fn PdfPageModel::text_layer(
     output.push({
       item_index: text.index,
       text: text.text,
-      separator: match previous {
-        Some(last) => pdf_text_separator(last, text)
-        None => ""
-      },
+      separator: pdf_text_separator_at(text_items[:], index),
       matrix: [
         top_right.x - top_left.x,
         top_right.y - top_left.y,
@@ -79,7 +79,6 @@ pub fn PdfPageModel::text_layer(
       font_style: pdf_svg_font_style_for_page(self, text.font),
       vertical: text.vertical,
     })
-    previous = Some(text)
   }
   { page: self.number, viewport, items: output, }
 }
@@ -107,6 +106,10 @@ pub(all) struct PdfTextRangeSelection {
 /// test {
 ///   let page : @pdf-viewer.PdfPageModel = {
 ///     number: 1,
+///     blend_space: "DeviceRGB",
+///     blend_profile_id: None,
+///     blend_calibration: None,
+///     icc_profiles: [],
 ///     origin_x: 0.0,
 ///     origin_y: 0.0,
 ///     width: 200.0,
@@ -155,7 +158,7 @@ pub fn PdfPageModel::select_text(
       return None
     }
     if position > first {
-      output.write_string(pdf_text_separator(items[position - 1], item))
+      output.write_string(pdf_text_separator_at(items[:], position))
     }
     output.write_string(slice.to_owned())
     if !slice.is_empty() {

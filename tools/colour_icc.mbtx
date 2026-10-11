@@ -1,0 +1,18 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/shell",
+}
+
+///|
+/// Run from the repository root. The native checks require the normal
+/// platform LittleCMS2 runtime. Browser checks use the bundled Wasm engine.
+async fn main {
+  @shell.Cmd("node", ["tools/icc_engine_test.mjs", "--bench"]).run()
+  @shell.Cmd("node", ["tools/colour_planes_test.mjs"]).run()
+  for target in ["native", "js", "wasm", "wasm-gc"] {
+    @shell.Cmd("moon", [
+      "test", "--target", target, "colour_wbtest.mbt", "colour_icc_wbtest.mbt", "colour_spot_wbtest.mbt",
+    ]).run()
+  }
+}

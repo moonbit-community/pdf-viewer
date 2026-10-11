@@ -197,6 +197,10 @@ test "colour-key masks become transparent RGBA PNG pixels" {
 test "soft mask SVG keeps transfer-function backdrop pixels" {
   let page : PdfPageModel = {
     number: 1,
+    blend_space: "DeviceRGB",
+    blend_profile_id: None,
+    blend_calibration: None,
+    icc_profiles: [],
     origin_x: 0.0,
     origin_y: 0.0,
     width: 100.0,
@@ -213,6 +217,11 @@ test "soft mask SVG keeps transfer-function backdrop pixels" {
     bounds: { min_x: 10.0, min_y: 10.0, max_x: 20.0, max_y: 20.0, },
     luminosity: false,
     background: "#808080",
+    page: None,
+    matrix: [1, 0, 0, 1, 0, 0],
+    backdrop: [],
+    backdrop_components: [],
+    transfer_map: None,
   }
   let output = StringBuilder()
   pdf_svg_soft_mask_defs(output, 4, page, Some(mask), 1.0)
@@ -238,9 +247,17 @@ test "adjacent soft-masked paint items share one compositor group" {
     bounds: { min_x: 0.0, min_y: 0.0, max_x: 100.0, max_y: 100.0, },
     luminosity: false,
     background: "#000000",
+    page: None,
+    matrix: [1, 0, 0, 1, 0, 0],
+    backdrop: [],
+    backdrop_components: [],
+    transfer_map: None,
   }
   let text_a : PdfTextItem = {
     glyph_transform: None,
+    text_object_id: None,
+    text_knockout: true,
+    stroke: None,
     index: 0,
     text: "A",
     charcode: 65,
@@ -261,11 +278,29 @@ test "adjacent soft-masked paint items share one compositor group" {
     stroke_color: "#000000",
     fill_alpha: 1.0,
     blend_mode: "normal",
+    alpha_is_shape: false,
+    fill_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    stroke_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    fill_overprint: false,
+    stroke_overprint: false,
+    overprint_mode: 0,
     clip_path: None,
+    clips: [],
     soft_mask: Some(mask),
     group: None,
     group_path: [],
     type3_outline: None,
+    type3_scene: None,
+    type3_scene_unresolved: None,
+    fill_path: None,
+    pattern: None,
+    stroke_pattern: None,
   }
   let text_b : PdfTextItem = {
     ..text_a,
@@ -281,6 +316,10 @@ test "adjacent soft-masked paint items share one compositor group" {
   }
   let page : PdfPageModel = {
     number: 1,
+    blend_space: "DeviceRGB",
+    blend_profile_id: None,
+    blend_calibration: None,
+    icc_profiles: [],
     origin_x: 0.0,
     origin_y: 0.0,
     width: 100.0,
@@ -301,11 +340,23 @@ test "adjacent soft-masked paint items share one compositor group" {
 test "svg preserves transparency group metadata and isolation" {
   let group : PdfTransparencyGroup = {
     id: "/Fm0",
+    alpha: 1,
+    blend_mode: "Normal",
+    alpha_is_shape: false,
+    bounds: None,
+    color_space: "DeviceRGB",
+    rendering_intent: "/RelativeColorimetric",
+    icc_profile_id: None,
+    calibration: None,
+    soft_mask: None,
     isolated: true,
     knockout: false,
   }
   let item : PdfTextItem = {
     glyph_transform: None,
+    text_object_id: None,
+    text_knockout: true,
+    stroke: None,
     index: 0,
     text: "A",
     charcode: 65,
@@ -326,14 +377,36 @@ test "svg preserves transparency group metadata and isolation" {
     stroke_color: "#000000",
     fill_alpha: 1.0,
     blend_mode: "normal",
+    alpha_is_shape: false,
+    fill_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    stroke_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    fill_overprint: false,
+    stroke_overprint: false,
+    overprint_mode: 0,
     clip_path: None,
+    clips: [],
     soft_mask: None,
     group: Some(group),
     group_path: [group],
     type3_outline: None,
+    type3_scene: None,
+    type3_scene_unresolved: None,
+    fill_path: None,
+    pattern: None,
+    stroke_pattern: None,
   }
   let page : PdfPageModel = {
     number: 1,
+    blend_space: "DeviceRGB",
+    blend_profile_id: None,
+    blend_calibration: None,
+    icc_profiles: [],
     origin_x: 0.0,
     origin_y: 0.0,
     width: 100.0,
@@ -356,6 +429,9 @@ test "svg preserves transparency group metadata and isolation" {
 test "rotated text uses its source quadrilateral" {
   let item : PdfTextItem = {
     glyph_transform: None,
+    text_object_id: None,
+    text_knockout: true,
+    stroke: None,
     index: 0,
     text: "A",
     charcode: 65,
@@ -376,14 +452,36 @@ test "rotated text uses its source quadrilateral" {
     stroke_color: "#000000",
     fill_alpha: 1.0,
     blend_mode: "normal",
+    alpha_is_shape: false,
+    fill_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    stroke_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    fill_overprint: false,
+    stroke_overprint: false,
+    overprint_mode: 0,
     clip_path: None,
+    clips: [],
     soft_mask: None,
     group: None,
     group_path: [],
     type3_outline: None,
+    type3_scene: None,
+    type3_scene_unresolved: None,
+    fill_path: None,
+    pattern: None,
+    stroke_pattern: None,
   }
   let page : PdfPageModel = {
     number: 1,
+    blend_space: "DeviceRGB",
+    blend_profile_id: None,
+    blend_calibration: None,
+    icc_profiles: [],
     origin_x: 0.0,
     origin_y: 0.0,
     width: 100.0,
@@ -404,6 +502,10 @@ test "rotated text uses its source quadrilateral" {
 test "visual quads become affine SVG image transforms" {
   let page : PdfPageModel = {
     number: 1,
+    blend_space: "DeviceRGB",
+    blend_profile_id: None,
+    blend_calibration: None,
+    icc_profiles: [],
     origin_x: 10.0,
     origin_y: 20.0,
     width: 100.0,
@@ -425,8 +527,13 @@ test "visual quads become affine SVG image transforms" {
       p3: { x: 30.0, y: 20.0, },
     },
     name: "Im0",
+    pattern: None,
     resource: Some({
       name: "Im0",
+      error: None,
+      ink_samples: None,
+      has_local_mask: false,
+      alpha_is_explicit_shape: false,
       mime_type: "image/png",
       data_uri: Some("data:image/png;base64,AA=="),
       mask_data_uri: None,
@@ -442,7 +549,20 @@ test "visual quads become affine SVG image transforms" {
     fill_alpha: 1.0,
     stroke_alpha: 1.0,
     blend_mode: "normal",
+    alpha_is_shape: false,
+    fill_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    stroke_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    fill_overprint: false,
+    stroke_overprint: false,
+    overprint_mode: 0,
     clip_path: None,
+    clips: [],
     soft_mask: None,
     group: None,
     group_path: [],
@@ -458,6 +578,10 @@ test "visual quads become affine SVG image transforms" {
 test "viewport matrix follows pdfjs for a nonzero media box" {
   let page : PdfPageModel = {
     number: 1,
+    blend_space: "DeviceRGB",
+    blend_profile_id: None,
+    blend_calibration: None,
+    icc_profiles: [],
     origin_x: 10.0,
     origin_y: 20.0,
     width: 200.0,
@@ -484,6 +608,10 @@ test "viewport matrix follows pdfjs for a nonzero media box" {
 test "svg rotation uses the unrotated page dimensions" {
   let page : PdfPageModel = {
     number: 1,
+    blend_space: "DeviceRGB",
+    blend_profile_id: None,
+    blend_calibration: None,
+    icc_profiles: [],
     origin_x: 0.0,
     origin_y: 0.0,
     width: 200.0,
@@ -516,6 +644,9 @@ test "path serialization preserves a rotated target quad" {
 test "svg preserves paint opacity and blend mode" {
   let item : PdfTextItem = {
     glyph_transform: None,
+    text_object_id: None,
+    text_knockout: true,
+    stroke: None,
     index: 0,
     text: "A",
     charcode: 65,
@@ -536,14 +667,36 @@ test "svg preserves paint opacity and blend mode" {
     stroke_color: "#000000",
     fill_alpha: 0.5,
     blend_mode: "multiply",
+    alpha_is_shape: false,
+    fill_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    stroke_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    fill_overprint: false,
+    stroke_overprint: false,
+    overprint_mode: 0,
     clip_path: None,
+    clips: [],
     soft_mask: None,
     group: None,
     group_path: [],
     type3_outline: None,
+    type3_scene: None,
+    type3_scene_unresolved: None,
+    fill_path: None,
+    pattern: None,
+    stroke_pattern: None,
   }
   let page : PdfPageModel = {
     number: 1,
+    blend_space: "DeviceRGB",
+    blend_profile_id: None,
+    blend_calibration: None,
+    icc_profiles: [],
     origin_x: 0.0,
     origin_y: 0.0,
     width: 100.0,
@@ -566,6 +719,9 @@ test "svg preserves paint opacity and blend mode" {
 test "svg maps stroked PDF text rendering mode" {
   let item : PdfTextItem = {
     glyph_transform: None,
+    text_object_id: None,
+    text_knockout: true,
+    stroke: None,
     index: 0,
     text: "A",
     charcode: 65,
@@ -586,14 +742,36 @@ test "svg maps stroked PDF text rendering mode" {
     stroke_color: "#ABCDEF",
     fill_alpha: 1.0,
     blend_mode: "normal",
+    alpha_is_shape: false,
+    fill_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    stroke_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    fill_overprint: false,
+    stroke_overprint: false,
+    overprint_mode: 0,
     clip_path: None,
+    clips: [],
     soft_mask: None,
     group: None,
     group_path: [],
     type3_outline: None,
+    type3_scene: None,
+    type3_scene_unresolved: None,
+    fill_path: None,
+    pattern: None,
+    stroke_pattern: None,
   }
   let page : PdfPageModel = {
     number: 1,
+    blend_space: "DeviceRGB",
+    blend_profile_id: None,
+    blend_calibration: None,
+    icc_profiles: [],
     origin_x: 0.0,
     origin_y: 0.0,
     width: 100.0,
@@ -632,6 +810,7 @@ test "svg paints a path pattern through a reusable definition" {
     bounds: { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, },
     svg_path: "M 0 0 L 10 0 L 10 10 L 0 10 Z",
     filled: true,
+    fill_even_odd: false,
     stroked: false,
     fill_color: "#000000",
     stroke_color: "none",
@@ -649,6 +828,7 @@ test "svg paints a path pattern through a reusable definition" {
       x_step: 2.0,
       y_step: 2.0,
       matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+      tile_page: None,
       tile_svg: "<path d=\"M 0 0 L 1 1\" fill=\"none\"/>",
       tile_parts: [],
       shading: None,
@@ -656,13 +836,30 @@ test "svg paints a path pattern through a reusable definition" {
     shading_pattern: None,
     stroke_pattern: None,
     blend_mode: "normal",
+    alpha_is_shape: false,
+    fill_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    stroke_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    fill_overprint: false,
+    stroke_overprint: false,
+    overprint_mode: 0,
     clip_path: None,
+    clips: [],
     soft_mask: None,
     group: None,
     group_path: [],
   }
   let page : PdfPageModel = {
     number: 1,
+    blend_space: "DeviceRGB",
+    blend_profile_id: None,
+    blend_calibration: None,
+    icc_profiles: [],
     origin_x: 0.0,
     origin_y: 0.0,
     width: 100.0,
@@ -683,7 +880,7 @@ test "svg paints a path pattern through a reusable definition" {
 }
 
 ///|
-test "shading pattern keeps its own matrix outside the path CTM" {
+test "shading pattern composes the content stream base matrix" {
   let shading : PdfShadingResource = {
     name: "S0",
     kind: "mesh",
@@ -691,6 +888,8 @@ test "shading pattern keeps its own matrix outside the path CTM" {
     matrix: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
     stops: [],
     mesh: [],
+    raster: None,
+    pattern_state: None,
     extend_start: true,
     extend_end: true,
   }
@@ -700,6 +899,7 @@ test "shading pattern keeps its own matrix outside the path CTM" {
     x_step: 1.0,
     y_step: 1.0,
     matrix: [2.0, 0.0, 0.0, 2.0, 150.0, 300.0],
+    tile_page: None,
     tile_svg: "",
     tile_parts: [],
     shading: Some(shading),
@@ -712,11 +912,11 @@ test "shading pattern keeps its own matrix outside the path CTM" {
     e: 0.0,
     f: 0.0,
   })
-  assert_eq(transformed.matrix, [2.0, 0.0, 0.0, 2.0, 150.0, 300.0])
+  assert_eq(transformed.matrix, [0.48, 0.0, 0.0, 0.48, 36.0, 72.0])
   guard transformed.shading is Some(shading) else {
     fail("shading pattern should retain its shading resource")
   }
-  assert_eq(shading.matrix, [2.0, 0.0, 0.0, 2.0, 150.0, 300.0])
+  assert_eq(shading.matrix, [0.48, 0.0, 0.0, 0.48, 36.0, 72.0])
 }
 
 ///|
@@ -731,6 +931,7 @@ test "svg lowers a mesh shading triangle" {
       p3: { x: 20.0, y: 0.0, },
     },
     name: "Mesh0",
+    pattern: None,
     resource: None,
     shading: Some({
       name: "Mesh0",
@@ -748,6 +949,8 @@ test "svg lowers a mesh shading triangle" {
           c2: "#0000FF",
         },
       ],
+      raster: None,
+      pattern_state: None,
       extend_start: true,
       extend_end: true,
     }),
@@ -755,13 +958,30 @@ test "svg lowers a mesh shading triangle" {
     fill_alpha: 1.0,
     stroke_alpha: 1.0,
     blend_mode: "normal",
+    alpha_is_shape: false,
+    fill_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    stroke_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    fill_overprint: false,
+    stroke_overprint: false,
+    overprint_mode: 0,
     clip_path: None,
+    clips: [],
     soft_mask: None,
     group: None,
     group_path: [],
   }
   let page : PdfPageModel = {
     number: 1,
+    blend_space: "DeviceRGB",
+    blend_profile_id: None,
+    blend_calibration: None,
+    icc_profiles: [],
     origin_x: 0.0,
     origin_y: 0.0,
     width: 20.0,
@@ -793,6 +1013,9 @@ test "mesh SVG expansion stays bounded for large sources" {
 test "svg places clipping definitions before painted elements" {
   let item : PdfTextItem = {
     glyph_transform: None,
+    text_object_id: None,
+    text_knockout: true,
+    stroke: None,
     index: 7,
     text: "A",
     charcode: 65,
@@ -813,14 +1036,36 @@ test "svg places clipping definitions before painted elements" {
     stroke_color: "#000000",
     fill_alpha: 1.0,
     blend_mode: "normal",
+    alpha_is_shape: false,
+    fill_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    stroke_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    fill_overprint: false,
+    stroke_overprint: false,
+    overprint_mode: 0,
     clip_path: Some("M 0 0 L 10 0 L 10 10 L 0 10 Z"),
+    clips: [],
     soft_mask: None,
     group: None,
     group_path: [],
     type3_outline: None,
+    type3_scene: None,
+    type3_scene_unresolved: None,
+    fill_path: None,
+    pattern: None,
+    stroke_pattern: None,
   }
   let page : PdfPageModel = {
     number: 1,
+    blend_space: "DeviceRGB",
+    blend_profile_id: None,
+    blend_calibration: None,
+    icc_profiles: [],
     origin_x: 0.0,
     origin_y: 0.0,
     width: 100.0,
@@ -925,19 +1170,37 @@ test "inline ImageMask keeps a browser mask resource" {
       p3: { x: 8.0, y: 0.0, },
     },
     name: "inline-mask",
+    pattern: None,
     resource: Some(resource),
     shading: None,
     fill_color: "#0033CC",
     fill_alpha: 1.0,
     stroke_alpha: 1.0,
     blend_mode: "normal",
+    alpha_is_shape: false,
+    fill_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    stroke_source: pdf_colour_source(
+      @pdflite.PdfDeviceGray,
+      @pdflite.PdfContentColourFloats([0]),
+    ),
+    fill_overprint: false,
+    stroke_overprint: false,
+    overprint_mode: 0,
     clip_path: None,
+    clips: [],
     soft_mask: None,
     group: None,
     group_path: [],
   }
   let page : PdfPageModel = {
     number: 1,
+    blend_space: "DeviceRGB",
+    blend_profile_id: None,
+    blend_calibration: None,
+    icc_profiles: [],
     origin_x: 0.0,
     origin_y: 0.0,
     width: 20.0,

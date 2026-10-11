@@ -40,10 +40,16 @@ fn pdf_annotation_font_name(
   resources : @syntax.PdfObject,
   name : String,
   scope : PdfAppearanceFontScope,
+  active_font? : (@pdflite.PdfFont, @syntax.PdfObject?),
+  font_fallbacks? : ArrayView[PdfFontFallback] = [],
 ) -> String {
-  let object = pdf_viewer_ttf_font_object(document, resources, name).unwrap_or(
-    @syntax.PdfNull,
-  )
+  let object = match active_font {
+    Some((_, object)) => object.unwrap_or(@syntax.PdfNull)
+    None =>
+      pdf_viewer_ttf_font_object(document, resources, name).unwrap_or(
+        @syntax.PdfNull,
+      )
+  }
   for i, source in scope.sources {
     if source.0 == name && source.1 == object {
       return scope.fonts[i].name
@@ -56,14 +62,24 @@ fn pdf_annotation_font_name(
   }
   let bytes = pdf_viewer_ttf_embedded_bytes(
     document,
-    document.read_font(object),
+    match active_font {
+      Some((font, _)) => font
+      None => pdf_read_font_for_viewer(document, object)
+    },
   ) catch {
     _ => None
   }
   let scoped_name = scope.id + "-f\{scope.fonts.length()}"
+  let fallback = pdf_font_fallback_for(font_fallbacks, name, base_name)
   scope.sources.push((name, object))
   scope.fonts.push(
-    pdf_font_resource_from_bytes(scoped_name, base_name, bytes, scoped_name),
+    pdf_font_resource_from_bytes(
+      scoped_name,
+      base_name,
+      bytes,
+      scoped_name,
+      fallback~,
+    ),
   )
   scoped_name
 }
@@ -81,6 +97,15 @@ fn pdf_annotation_appearance_group(
           pdf_name_key("/Transparency") =>
           Some({
             id,
+            alpha: 1.0,
+            blend_mode: "Normal",
+            alpha_is_shape: false,
+            bounds: None,
+            color_space: "DeviceRGB",
+            rendering_intent: "/RelativeColorimetric",
+            icc_profile_id: None,
+            calibration: None,
+            soft_mask: None,
             isolated: pdf_bool_entry(document, pdf_name_key("/I"), group, false),
             knockout: pdf_bool_entry(document, pdf_name_key("/K"), group, false),
           })
@@ -477,6 +502,10 @@ fn pdf_annotation_appearance_of(
   }
   let page : PdfPageModel = {
     number: page_number,
+    blend_space: "DeviceRGB",
+    blend_profile_id: None,
+    blend_calibration: None,
+    icc_profiles: [],
     origin_x: bbox.min_x,
     origin_y: bbox.min_y,
     width,

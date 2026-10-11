@@ -1,0 +1,15 @@
+{
+  "reference_revision": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+  "scale": 2,
+  "cases": [
+    { "file": "issue14462_reduced.pdf", "pages": [1], "rotations": [0], "features": ["type1", "font-recovery"] },
+    { "file": "tracemonkey.pdf", "pages": [1], "rotations": [0], "features": ["type1", "multi-column"] },
+    { "file": "ArabicCIDTrueType.pdf", "pages": [1], "rotations": [0], "features": ["cid-truetype", "rtl"] },
+    { "file": "TrueType_without_cmap.pdf", "pages": [1], "rotations": [0], "features": ["truetype", "missing-cmap"] },
+    { "file": "complex_ttf_font.pdf", "pages": [1], "rotations": [0], "features": ["truetype", "subset-font"] },
+    { "file": "Embedded_font.pdf", "pages": [1], "rotations": [0], "features": ["opentype-cff", "cid-font"] },
+    { "file": "mixedfonts.pdf", "pages": [1], "rotations": [0], "features": ["truetype", "font-cmap"] },
+    { "file": "issue4800.pdf", "pages": [1], "rotations": [0], "features": ["simple-truetype", "unicode-platform-cmap"] },
+    { "file": "pattern_text_embedded_font.pdf", "pages": [1], "rotations": [0], "features": ["cff", "pattern-text"] }
+  ]
+}

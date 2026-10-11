@@ -15,9 +15,8 @@ test "PDF text matrix preserves the baseline, rise, shear and horizontal scale" 
   assert_eq([a, b, c, d], [10.0, 7.5, 5.0, 30.0])
   assert_true(text[0].advance_x > text[1].advance_x)
   let svg = pdf_render_page_svg(page, 1.0, 0)
-  assert_true(svg.contains("transform=\"matrix(10 -7.5 -5 30 46 97)\""))
-  assert_true(svg.contains("font-size=\"1\""))
-  assert_true(svg.contains("dominant-baseline=\"alphabetic\""))
+  assert_true(svg.contains(text[0].type3_outline.unwrap()))
+  assert_true(svg.contains("data-pdf-font-outline=\"standard14:Helvetica\""))
 }
 
 ///|
@@ -34,9 +33,11 @@ test "FreeText appearance baseline remains inside the clipped BBox" {
   guard page.annotations[0].appearance is Some(appearance) else {
     fail("AP missing")
   }
-  assert_true(appearance.svg.contains("transform=\"matrix(9 0 0 9 1 8)\""))
+  assert_true(
+    appearance.svg.contains("data-pdf-font-outline=\"standard14:Helvetica\""),
+  )
   assert_true(appearance.svg.contains("fill=\"#0000FF\""))
-  assert_true(appearance.svg.contains("dominant-baseline=\"alphabetic\""))
+  assert_true(appearance.svg.contains("<title>FreeText</title>"))
   assert_true(!appearance.svg.contains("dominant-baseline=\"hanging\""))
 }
 

@@ -1,0 +1,506 @@
+{
+  "pdfjs_dist": "6.4.299",
+  "wasm_sha256": "466f45c2a61a698152fb5400c27e56ff2ceb73dcb71fde3fc366a502308eaab0",
+  "pdfium_repository": "https://pdfium.googlesource.com/pdfium",
+  "pdfium_revision": "bb1f9f71e7b15afdd5937adf8cfe5807522b882f",
+  "mozilla_repository": "https://github.com/mozilla/pdf.js.jbig2",
+  "mozilla_revision": "15f6f9357c5e5e30285eb83aa08e5fe1a16ab77a",
+  "patch": "Only quoted core/ and build/ include paths are rewritten relative to each source file so consuming modules need no include-root compiler flags. Codec algorithms unchanged.",
+  "files": [
+    {
+      "path": "pdfium/LICENSE",
+      "upstream_sha256": "1fe9dea718fbd75cf149adaf4d8a22a4335604d964ddb76d1b45383dec8668c9",
+      "vendored_sha256": "1fe9dea718fbd75cf149adaf4d8a22a4335604d964ddb76d1b45383dec8668c9"
+    },
+    {
+      "path": "pdfium/core/fxge/calculate_pitch.h",
+      "upstream_sha256": "02435bef385c3e71703d33b13a3a820933086e35437edf6458418e4a9d7f1f76",
+      "vendored_sha256": "02435bef385c3e71703d33b13a3a820933086e35437edf6458418e4a9d7f1f76"
+    },
+    {
+      "path": "pdfium/core/fxge/calculate_pitch.cpp",
+      "upstream_sha256": "f1d03d2ab6d3dae43d497597095bcbe127cc7e33ccceeb6417fa4de2e31f2541",
+      "vendored_sha256": "2bd9bcba3cffc5a8c2b26a7e7170587a57ab09ab280cd998fb241817df8f5537"
+    },
+    {
+      "path": "pdfium/core/fxcrt/binary_buffer.h",
+      "upstream_sha256": "9d4ff9c24e289e85d05dac4d4cf9f25564571b539d593b1de2ec3a4a5f694e61",
+      "vendored_sha256": "dd62b8c77b28705e5ccd0650b1ac58d6bce27e2c2ecd3735897c1d16ea64f44c"
+    },
+    {
+      "path": "pdfium/core/fxcrt/check_op.h",
+      "upstream_sha256": "621223998695c5d6cffec3d62337d6a5a0d74fdb269dab0b57c3560b4efd7462",
+      "vendored_sha256": "c6b9fcfec3bab95326cdcee8224d84c4e493141d8977929eb381a87ce716f2b0"
+    },
+    {
+      "path": "pdfium/core/fxcrt/fx_types.h",
+      "upstream_sha256": "d2fce13f056487a48ba0249facd716f0bb03cecbbfe095623cd473a67d6af728",
+      "vendored_sha256": "d5497e37c940e829efc67209cba547a6669cd18debf501fe6a074ac20f4a1f14"
+    },
+    {
+      "path": "pdfium/core/fxcrt/span_util.h",
+      "upstream_sha256": "a7a0b808bde55afd552f891b885b99e268ca6f12fc3784895c3bc6d1969fe699",
+      "vendored_sha256": "9bb7ce0a3eb6f5f5eaaf0012da1c7a7c4524fc2cdf006a790b03faeaaef56b8d"
+    },
+    {
+      "path": "pdfium/core/fxcrt/notreached.h",
+      "upstream_sha256": "5310b6d911baf5c45407cf38807bc3f688177998ea9c11c5a734e47a7ea0ad43",
+      "vendored_sha256": "1430a89776e2c44a89d3b2adec4771f9ef099786cf7bb88485e8b081cc2ed66d"
+    },
+    {
+      "path": "pdfium/core/fxcrt/span.h",
+      "upstream_sha256": "98a34192c186cbfb1524b61e0f9ed213e14f8d1d011e7834d240baa7e87bf394",
+      "vendored_sha256": "a0aca0853d57df080694bba6e470d65cbdf54962981bacb5df763207856e5394"
+    },
+    {
+      "path": "pdfium/core/fxcrt/fx_system.h",
+      "upstream_sha256": "3a3deb8c623b39f735bf9547a2a84e9942cf67479f29d9e6b29c6736c4162d0d",
+      "vendored_sha256": "2e31d36c62f6f3bebdc8fc55776c71c3b9fab51255d5b6f3b595c08933ff6f57"
+    },
+    {
+      "path": "pdfium/core/fxcrt/raw_span.h",
+      "upstream_sha256": "234c645a0fa33ef72bfb31b532296c3b706cbb75c2b27510b58721e1a8e3b89a",
+      "vendored_sha256": "c7fc498ed315e396ac09206aae4ccfca3b46b6156e3b833e3c89d0b20269b9bb"
+    },
+    {
+      "path": "pdfium/core/fxcrt/fx_memcpy_wrappers.h",
+      "upstream_sha256": "60a8611899381ef3c84ae2acfe706fb411aed41920eb29473d147ec09e3f3864",
+      "vendored_sha256": "a24fc70bdb6fa173389afb5305783447f68d3c82b12b6d6c671259147f68f7a7"
+    },
+    {
+      "path": "pdfium/core/fxcrt/fx_memory.cpp",
+      "upstream_sha256": "0fbb28761f34f0bed9974226c0a32cfccb1988eb159c2567f35ed64ee5663342",
+      "vendored_sha256": "6f8a5038a60488b0b27ca0eb2953c46f62e6aaf0824a450a5b050747be66de5e"
+    },
+    {
+      "path": "pdfium/core/fxcrt/ptr_util.h",
+      "upstream_sha256": "d5afbd028df1c9a10b2bafe1a9225cba0876704e5366649bbc2cb9baee091d7e",
+      "vendored_sha256": "d5afbd028df1c9a10b2bafe1a9225cba0876704e5366649bbc2cb9baee091d7e"
+    },
+    {
+      "path": "pdfium/core/fxcrt/fx_memory.h",
+      "upstream_sha256": "8d80169505cdb4def007a57da2eb189c2bd6f24e4cc8591822a2d47289594c18",
+      "vendored_sha256": "d9edbec2b346c8ed49d2e4044ccf2baf8cb88d7ed2a0d66be50b31a140643f18"
+    },
+    {
+      "path": "pdfium/core/fxcrt/immediate_crash.h",
+      "upstream_sha256": "e24ffc68fccac3642d5abc44c0a37d4e4810f494b99e972330c3be95108b02df",
+      "vendored_sha256": "a4bb9c84296ccbcd89f169732066f6a3321b59a1d3f07e2ad0578a4f83c501bb"
+    },
+    {
+      "path": "pdfium/core/fxcrt/maybe_owned.h",
+      "upstream_sha256": "0d577463983abe4c2dfce6995cedad2edf618fdf882d71c83ba54aededf16a19",
+      "vendored_sha256": "a76e348017407ed52a04d9330e659747e8b27fc3a32660c91ad1933b6b865f5d"
+    },
+    {
+      "path": "pdfium/core/fxcrt/pauseindicator_iface.h",
+      "upstream_sha256": "5f097cb43f85f9cff00077857f2f9bd34a5a4269fac6f152bb0f6bd7aebb53d2",
+      "vendored_sha256": "5f097cb43f85f9cff00077857f2f9bd34a5a4269fac6f152bb0f6bd7aebb53d2"
+    },
+    {
+      "path": "pdfium/core/fxcrt/bytestring.h",
+      "upstream_sha256": "d34f6924a94168859db5aa21d285405569dc3e80a8c5c2ef9e60aead17da849c",
+      "vendored_sha256": "7771665863714369b725bc8f41a56d16ee964bc3822986ea71d5c3c1294d07ce"
+    },
+    {
+      "path": "pdfium/core/fxcrt/retain_ptr.h",
+      "upstream_sha256": "e6c5837b039f425fc74becb3567b2c18995469e55f0863ca92c4116f6018ea82",
+      "vendored_sha256": "d1eb3a98091db49e45b62b53e68a1ecc324edec21cd7e3d1393ec2d7a3653478"
+    },
+    {
+      "path": "pdfium/core/fxcrt/fx_safe_types.h",
+      "upstream_sha256": "d3399f49d62b0c3ed21cbc2b22a3e7925759cb83327482e89d5f87368109a7e3",
+      "vendored_sha256": "804cdd138221ca17561419b34e8682ba0696f49cb9583f487fbb632996deb050"
+    },
+    {
+      "path": "pdfium/core/fxcrt/unowned_ptr_exclusion.h",
+      "upstream_sha256": "216f8bb62421b33de4a8975bb249d9575fdbe17c4e891b0933906bec9b3d9561",
+      "vendored_sha256": "1e9c3769a33d8dc7dd2f9f61049df2b6ad9bb116f642e5aeb8bc7ab16484f90a"
+    },
+    {
+      "path": "pdfium/core/fxcrt/fx_memory_malloc.cpp",
+      "upstream_sha256": "48de7ace3783013fff206ea418135fc5d4f29ee6f72761e94a4355fde5521e3f",
+      "vendored_sha256": "18b9d4cba6c2232a234eb5337f4c3f6a1ae3a7869bc2bf0a58fd720e10f256b8"
+    },
+    {
+      "path": "pdfium/core/fxcrt/fx_ceil_log2.h",
+      "upstream_sha256": "22328771ff2c6208e34e1679153fd6fe44fc71177fd454f441674790860076c2",
+      "vendored_sha256": "22328771ff2c6208e34e1679153fd6fe44fc71177fd454f441674790860076c2"
+    },
+    {
+      "path": "pdfium/core/fxcrt/string_template.h",
+      "upstream_sha256": "055c4e135dd02f323b026854ddd2078b4f1a29bc828c68c059df1ad0ae5945aa",
+      "vendored_sha256": "90953dd2cf872a287a89ce05812f2a56cce9f346d435944f17a46c4c25bb3fae"
+    },
+    {
+      "path": "pdfium/core/fxcrt/data_vector.h",
+      "upstream_sha256": "cc3d45397556549ead63eea3e6a053588f756568a1036b62709745ca0cfc3d92",
+      "vendored_sha256": "e238b40e9bab58159014e34a6e7947ea2a45938260871f70f4a48ea8b9ee6d36"
+    },
+    {
+      "path": "pdfium/core/fxcrt/string_data_template.h",
+      "upstream_sha256": "210a40b01f01ade8bb94377acde513847ff5c8cc9f4673dfd0a51d65ff5bd52a",
+      "vendored_sha256": "c57fd4e79e5a6dec76ba17bb6629a6c546f56e552196296d595311c13276fbae"
+    },
+    {
+      "path": "pdfium/core/fxcrt/compiler_specific.h",
+      "upstream_sha256": "d81b3d60fafc596cbece4f2f8d6307d71419e4bd3310f51f519c65cb725f8bff",
+      "vendored_sha256": "325f40c729249a9aa3d9605fdbe26c8f2a5e06e127145842f76cd8fea6bedffa"
+    },
+    {
+      "path": "pdfium/core/fxcrt/stl_util.h",
+      "upstream_sha256": "86f68416839957046736d7ff378c00fb79bad084cd12ca1e9f73d2ac86543695",
+      "vendored_sha256": "53278ffe83434a86d88fe4e435f4cd8a70af980c960941be611306588b266057"
+    },
+    {
+      "path": "pdfium/core/fxcrt/byteorder.h",
+      "upstream_sha256": "234071bbe9a9075581617cff8f2eb06581416e709b55d0555ff91e5756ff96d8",
+      "vendored_sha256": "c1ed479b44f531cdd8c29a8b0e41be9ac7c7b92c486928dbed6f9b8a45c28da8"
+    },
+    {
+      "path": "pdfium/core/fxcrt/fx_coordinates.h",
+      "upstream_sha256": "1e69197f3d7855e4614e829d3846fd2dc213f897960ae3e915f131d6fa6bc164",
+      "vendored_sha256": "b3015ec4d54fa5e0053841f408276c1c321a9f188a591b1cf1f065dd6b84e48a"
+    },
+    {
+      "path": "pdfium/core/fxcrt/fixed_size_data_vector.h",
+      "upstream_sha256": "694c59e4b74b6725d90ed30c1f5b6029d579a697a7810f6bdc444e32427bb5d6",
+      "vendored_sha256": "e1805b441679463b29bf25f49bc2c7255fc5427b976c940c24f2d773b53af89f"
+    },
+    {
+      "path": "pdfium/core/fxcrt/string_view_template.h",
+      "upstream_sha256": "59cc7ad103676f01cdd4698dac7cc5b2fc5df5f5dffc4ff76327bf1a9e85f17d",
+      "vendored_sha256": "668ac8d47b70fccf89b1ed6b1466451f5a7b75251a1e30775adbc6c892bdb749"
+    },
+    {
+      "path": "pdfium/core/fxcrt/fx_2d_size.h",
+      "upstream_sha256": "77f8e8ae9e6338dff18996b0e2a0af9e83c5db2df81685370ab0b68704f04f7b",
+      "vendored_sha256": "21ee4aa7db15b87cda62adb45357a156f74d82420308d540f4202a133402cdf0"
+    },
+    {
+      "path": "pdfium/core/fxcrt/zip.h",
+      "upstream_sha256": "7e1c936a0ddbd916f48118e59834a92670be20eff593859a8c11922bdcdd4397",
+      "vendored_sha256": "705dca7510bbc11bc31e524ac043cddf4233da0dc80b6cee4e18f0e1448e012e"
+    },
+    {
+      "path": "pdfium/core/fxcrt/check.h",
+      "upstream_sha256": "5d657efdf4f40a1c27024140ba9f7f27c5e5dc82fa4409fbeef5bbeaf436017a",
+      "vendored_sha256": "17cc1e9372f977b83ad9aab6562092c7d194b451fe992995b56541c6996e9d71"
+    },
+    {
+      "path": "pdfium/core/fxcrt/fx_memory_wrappers.h",
+      "upstream_sha256": "755b7af980cb5777d03930fb9550395fb206225f3c9c3f754d403cd10437aa62",
+      "vendored_sha256": "b214e2829e5f3dea8ac84d2a57d756b9c880a0fecd6a8fb08df1a58228677544"
+    },
+    {
+      "path": "pdfium/core/fxcrt/fx_string_wrappers.h",
+      "upstream_sha256": "2239eb41342c0934ecdf92da94057f05c7cf5dbbe0f710c1896b975691211513",
+      "vendored_sha256": "b4dca972ec2202394f132ad144c6af0c2bfb2729a75878988f97571da43d8ad0"
+    },
+    {
+      "path": "pdfium/core/fxcrt/unowned_ptr.h",
+      "upstream_sha256": "170bb1eced5a3051eb0e40ea26e72adbdc2ef480c28c4b1a29975394655bdb33",
+      "vendored_sha256": "c58059b9a1b5448c0ba3a337e9218ae6ad2565a0b5f53387fef7facb4ebf07b1"
+    },
+    {
+      "path": "pdfium/core/fxcrt/maybe_owned_data_vector.h",
+      "upstream_sha256": "6a7396fea86cd03f968c7393f5d9caa46a82398a6851fd6b9d70cf3ca47a2e42",
+      "vendored_sha256": "879f8ad84295c62de6e76b96bdf0221b954a3bd247b748bb1eff16fc1f65cece"
+    },
+    {
+      "path": "pdfium/core/fxcodec/scanlinedecoder.h",
+      "upstream_sha256": "041bc8e9099f9a13343913a0ea907b62f12d94d21ea20231d8659eab5715e32b",
+      "vendored_sha256": "72552dde0ef6569eed3f44aa4a17de7fc863ec759e68cdad0bad2aef80cc63da"
+    },
+    {
+      "path": "pdfium/core/fxcodec/fx_codec_def.h",
+      "upstream_sha256": "c6ffb20f20196949a3e4d1669f19e791e81b37d8393a2f88fd3d2fab173860e7",
+      "vendored_sha256": "c6ffb20f20196949a3e4d1669f19e791e81b37d8393a2f88fd3d2fab173860e7"
+    },
+    {
+      "path": "pdfium/core/fxcodec/scanlinedecoder.cpp",
+      "upstream_sha256": "c53a5ee9a2dd6d6cbe1f20960354bd157bec21cb8732018372ee4dc14f278f2a",
+      "vendored_sha256": "f6a59f8d8e4a0f93d5553b869a2a73e7cb4b3bc540be5ba2e43be42dadb33d00"
+    },
+    {
+      "path": "pdfium/core/fxge/dib/fx_dib.h",
+      "upstream_sha256": "6865f2620e59f4975532b495285eb21ac7d58c54d0b53606dd4b7c593c5d9fd7",
+      "vendored_sha256": "959d4aea8bbdd3f8ac8c0a54d51f8eeb711c36e9e5e8640dbb842abc6e9d2640"
+    },
+    {
+      "path": "pdfium/core/fxcrt/debug/alias.cc",
+      "upstream_sha256": "d71ac16ea6459a9c1decddfb293c696475f0a7e280c038783e12e432f86d7ac5",
+      "vendored_sha256": "d0af27fe4ea4060774bd42c01da97c5c60d8bb3f4b51fdf36ea7e4e520dccab5"
+    },
+    {
+      "path": "pdfium/core/fxcrt/debug/alias.h",
+      "upstream_sha256": "3edce4933a0f4b81faa48a063250c44dd24f2523187c9e78b01e21d8521804f9",
+      "vendored_sha256": "3edce4933a0f4b81faa48a063250c44dd24f2523187c9e78b01e21d8521804f9"
+    },
+    {
+      "path": "pdfium/core/fxcrt/numerics/safe_math_shared_impl.h",
+      "upstream_sha256": "21bbe553078b33805ea2096735e7ebd859cab956c6f1121d27c8c89055d0cf69",
+      "vendored_sha256": "e4b2efbc741d240e05a708845dfbf3e07a6eb44058f7028b9b49f482a88f9e3c"
+    },
+    {
+      "path": "pdfium/core/fxcrt/numerics/safe_math_clang_gcc_impl.h",
+      "upstream_sha256": "8cb70ac59e892e31188ab0ef8e589f6b580d22e39b666edadc2f0bd50419d784",
+      "vendored_sha256": "060f9a7fd7826587713b878a02b865121e3afe75bab099987eb9559b2be19edf"
+    },
+    {
+      "path": "pdfium/core/fxcrt/numerics/clamped_math_impl.h",
+      "upstream_sha256": "c442483849c263713cef44323055a6f19b1be90fcea47a52a028a32a5722c969",
+      "vendored_sha256": "464cd98a3fd08a708c8c39fda264619aff9e15f3cc8b0995624580d114711a9c"
+    },
+    {
+      "path": "pdfium/core/fxcrt/numerics/safe_conversions_impl.h",
+      "upstream_sha256": "065cd72ea5a4e67f66064e2787118ae85762823be08acbca9a10ad77f233adfe",
+      "vendored_sha256": "20526d5b646ab5b1ddc92e1c827bef72acb6e6463cec89389cd252f362f037e4"
+    },
+    {
+      "path": "pdfium/core/fxcrt/numerics/checked_math.h",
+      "upstream_sha256": "9c3e78e901fa21910720248e5866520be44bec0af6262677995524d4667bd24d",
+      "vendored_sha256": "ad735959d2bbe4137a8f0edb07fed3705def4e5b478c7fd63a0e7b3d4c21a592"
+    },
+    {
+      "path": "pdfium/core/fxcrt/numerics/integral_constant_like.h",
+      "upstream_sha256": "9e522c0ee17ceeab43bb744652d825338fc26d615876b7ee576916bcef24207e",
+      "vendored_sha256": "9e522c0ee17ceeab43bb744652d825338fc26d615876b7ee576916bcef24207e"
+    },
+    {
+      "path": "pdfium/core/fxcrt/numerics/safe_conversions.h",
+      "upstream_sha256": "00e36b23bb5ee447c112d451f28b086b66f21667bf3f43c8a2d3c61f3f3726f0",
+      "vendored_sha256": "eb321ec5142918f78ed27e523a0eb435980d920fb8ed30a8407c017f5b085513"
+    },
+    {
+      "path": "pdfium/core/fxcrt/numerics/clamped_math.h",
+      "upstream_sha256": "0ccac35c6634120216e05e22f561b0d3c8c6cbd44d88b188b6d5b91519c5de7c",
+      "vendored_sha256": "deea07a260d42af4817922fd66d7cd28a9d6a54d3df956b598e8207f2783521a"
+    },
+    {
+      "path": "pdfium/core/fxcrt/numerics/safe_math.h",
+      "upstream_sha256": "cb4a5cf4b8585d4884c3e4268eb3bf7b42f6b0c1296891741102c434fa927e8d",
+      "vendored_sha256": "97f4a4b33ac690b58a74763b251b81f9bab9d628510c8ff99c0a804d1d7bd51d"
+    },
+    {
+      "path": "pdfium/core/fxcrt/numerics/checked_math_impl.h",
+      "upstream_sha256": "e515eaf0496b935ca4e4fdbbb7acad8999bab9aed6b2ce7e252b7e72cc0de5c8",
+      "vendored_sha256": "a8bd13db38791e10e9d0a18749f651024aeaa699ecbf1a65f720f15a496a635e"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_huffman_table.cpp",
+      "upstream_sha256": "6b7a6b8140aa3d57c0d84c3315b679b5ae7e23b7e84682e93a45b9b0f8cf924d",
+      "vendored_sha256": "3e6aa296c85b8787915c36fa6e67022ed14d74763fc0a4a9e98a06927c9b1c8f"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_grd_proc.cpp",
+      "upstream_sha256": "2c931a91273fa936f0c0be90221fab32c1e2cc7bb02560748f60105eeba1231e",
+      "vendored_sha256": "b8cd76057a313de7082c06b26e09a1158dc801f9b03ca50951237bf43ff51967"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_arith_decoder.h",
+      "upstream_sha256": "cd04ce50e4e6d4e1f558d50cf9b6cce950efb965431ab88f0250dc6f6f2381e4",
+      "vendored_sha256": "42f36fc5332556e778cbb71afb75accbaecba1fd776f4df4e89a582f2fff3d6b"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_decoder.h",
+      "upstream_sha256": "038d149858fc3362df546ce6af1b9ab1c854eeaa6a0d99bb201a70e7dc918a6a",
+      "vendored_sha256": "90895ab9ac2ffcce31350237f3e3e1b814beae36b0ee8d90bcd2de9b6dd23464"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_context.h",
+      "upstream_sha256": "7154a81fc6084a1c59700e604e7464d596fc3fe1d4736785df2be4235480d642",
+      "vendored_sha256": "292875cd16948a4e481cab256a4a0861874c1da7c0956c080f9a44175fe3770a"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_bit_stream.cpp",
+      "upstream_sha256": "94fa01e836c3085b401502023e5ec00b1aa5a80ebad4f3842fd2412a4b4c456d",
+      "vendored_sha256": "49dcccaace248a832859edc63aa5692022f716853d9d28069739a3b453c5aaf6"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_document_context.cpp",
+      "upstream_sha256": "515e060ff755dbf47859bc426b3d23e1a2cca8403ca27d12195f9d3470f865e9",
+      "vendored_sha256": "12d651f69bce86f76c5454d2883583d6897e2702455855bd37cb1c7ed5d2aa5e"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_pdd_proc.cpp",
+      "upstream_sha256": "9edd9505100a09720cea52ef70f1e5b5f75fb60ebcf73df31a1ce6b8ef2a1560",
+      "vendored_sha256": "518012d56ea4bf4d6e60af1356ba99674290fb72daad11ffdb26039e3d4fbed3"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_htrd_proc.cpp",
+      "upstream_sha256": "cea66448c3b380e209ae3ba7fce0ee430f738a055167e9a7eef2b8551b09abf8",
+      "vendored_sha256": "456ccd4deb1e41f6b1c0f3f091edb48488390bb76b3aa0ef6f6fc3ea87c6979c"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_pattern_dict.h",
+      "upstream_sha256": "3c467b94d089c50e8144170877e425944e470604a86908b6e620b898e3d7f359",
+      "vendored_sha256": "d1dfc32bc9cb11eea8298d5060d962f1a04c060dac13c2d6f51209018bd6e683"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_grd_proc.h",
+      "upstream_sha256": "8f51a6141c84384dba64725ef7495a8265c37dfbff3e189e6c3fac049445340b",
+      "vendored_sha256": "b2ea9c9720f07d956bccef3af1ab65f7951ebc183806581f22d0f536935f858e"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_huffman_decoder.h",
+      "upstream_sha256": "64f3f0a333a6502d7e07e136210b26c7bf988187ce961672a2ad509ce6d51622",
+      "vendored_sha256": "82cd584e50e67c18a7425737c7294807107e54d1c49fd13a23689e4659c2f381"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_symbol_dict.cpp",
+      "upstream_sha256": "b56575e2a4351ff7eeaf7b155bbac17c47c91c3e3e1fdd26f80c6ec6f83e3ead",
+      "vendored_sha256": "4d2e3a49c1188f5081c3da89e1d9b4b2b74890ec7b0d91ddb4ff02ad81362e1a"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_pattern_dict.cpp",
+      "upstream_sha256": "a34f3e7760d2b777ab93a52281b95698f407fea33b0d10cadb5197327e215187",
+      "vendored_sha256": "2dc395f8ca14f5a3df57660e2609e0a21d81437f834731d8c9cc1afda9af2496"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_image.h",
+      "upstream_sha256": "735d2772fb6579b2d0f4421cac365db7cc0b92ceacd059f8ab91d694f5ab9817",
+      "vendored_sha256": "deeb56cab1fcaa070396da4fe93085ffde37b7aef30923d2f6273c7fb02a52ec"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_decoder.cpp",
+      "upstream_sha256": "f047b6c2ae9fd59f270e88ee547799d6c93bcc0496802ab7a79635c5ce676fb5",
+      "vendored_sha256": "f70dfacf5873ec0c4e44e65721e8af99cef9520c648f4b661454bbe57b89af9c"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_pdd_proc.h",
+      "upstream_sha256": "a61c1bcfee4bb7a4c574f9432368b92cab7db36991a002394f0249f792aa1dc1",
+      "vendored_sha256": "1a42422099233247c647312d94ff32b66801b90a0718489514975336bb39b013"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_sdd_proc.h",
+      "upstream_sha256": "82b10f31ec2a465678a90a42461bdad214ffed9fb4c4f3169bc23a524c35cf50",
+      "vendored_sha256": "2f42bdec908fa636a7d1fe92df5492f2dae8849eeafae4dc97caca12375d8398"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_trd_proc.cpp",
+      "upstream_sha256": "0d0c9ba12ec764cc02fe26a64dea83eecaa2dc5d2f56dbe29fe758b956850e12",
+      "vendored_sha256": "9d778144a4b933c637de21694b5312893c40136aac4d57cb79c47885f6ddd53f"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_segment.cpp",
+      "upstream_sha256": "85c54790c9b3dc2b22d916a68766f593c4febdc5ac8b6a9ef98226ad82d16bbb",
+      "vendored_sha256": "a0f28584004aa8bb5fde4dbb0b647f3c4c3d9bbb0eb423b93855f048c0637b41"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_sdd_proc.cpp",
+      "upstream_sha256": "d90a7834c76c13036a3d4fc9afe6ffa1b3f47704cc9d3edbd925495774127e2c",
+      "vendored_sha256": "036ff0a5e1333e1575c221a21d5fa67a4424f02c39bb49954f618d42c39abe36"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_arith_int_decoder.h",
+      "upstream_sha256": "ff21603d6322088156be28e0e1bc6e392a30b55cdf79baac96143199f0757812",
+      "vendored_sha256": "6f091f6d0c289f639cdd9894014d15cea981de627f22bfa5be02ba457a464564"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_arith_int_decoder.cpp",
+      "upstream_sha256": "c5fbde1e642d476d116b1e3d0ee06a54622f3fb8ba8f33308c0fe52fb49c0d27",
+      "vendored_sha256": "bdb123cf0642881e7cf05a84236c48f5ce3f9a18750da2334ed50307010f44c3"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_trd_proc.h",
+      "upstream_sha256": "cf859b167c8591c99226f89a737c8d66ca3206414b57d0299065e8a01208b3c3",
+      "vendored_sha256": "1312a38b586f313fdf537baebc4983623a5e79623818ff7831a55c547acd5196"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_context.cpp",
+      "upstream_sha256": "8d7199858d747b7e9adff0e7db1e3bd9b1f37c75a77d4ba270b1ead7cabe23cf",
+      "vendored_sha256": "d2e900a4c4eb29df6f2311ba3494b2072d4a6e77912ffafb5c55c7f0e2e3d335"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_define.h",
+      "upstream_sha256": "6ba160d55ea7025829eed1a34a63c078ed6e84434022c3543b31631907bdf9a5",
+      "vendored_sha256": "6ba160d55ea7025829eed1a34a63c078ed6e84434022c3543b31631907bdf9a5"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_huffman_table.h",
+      "upstream_sha256": "87486d3dca2c681174b91f449de9ab31c1929fcc809948502f16f2312c866539",
+      "vendored_sha256": "a8b7c7a92a01991c7d76d9917d49117b54407d7e65d85032f4992c8e1343b431"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_htrd_proc.h",
+      "upstream_sha256": "a74af3b6ca89902fb06f061367f6d28a3c05dbe6a2ebe954d471e0b1f29d1789",
+      "vendored_sha256": "47bf68fd581810c120109757933847fcf32a59b3a7b3273a36c77f7f46719ba6"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_grrd_proc.h",
+      "upstream_sha256": "8ea7b6252d06f37e034548f8733cd0a30b91385675e05a78edbd734a8938e55c",
+      "vendored_sha256": "a4e1a89bdfb541777e3f0ffe39d35107de18c987eb0247fda2a63e4e3f9c0086"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_grrd_proc.cpp",
+      "upstream_sha256": "404bd568aa6310d526d17a30b5b96b3982098f2076b41efb2ed55ecaf0f669de",
+      "vendored_sha256": "a58c19b4b42ca7f5bccf16929ae801cbc55ef5125f9744e5cd592e2411cb77f5"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_huffman_decoder.cpp",
+      "upstream_sha256": "286f360afbb6fa43a626f6ffe3c78bc30a2602bc7e36435107f433520ee47230",
+      "vendored_sha256": "87c8ba497c99a17b89e186805b3cea7883f6362868bdf21a377abd844ad116e2"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_document_context.h",
+      "upstream_sha256": "c63bf738e2cf22d1965cc503db6cea857c187cf66b98cef43f741b14cdd6fec9",
+      "vendored_sha256": "c63bf738e2cf22d1965cc503db6cea857c187cf66b98cef43f741b14cdd6fec9"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_symbol_dict.h",
+      "upstream_sha256": "f302e1d4bf54a7bc445e82a4ee352577ed83d584d4e745ca65b103e4d2bc7195",
+      "vendored_sha256": "21b41a620e2be8e017702c765c47acb698d395a0dfc145cadcee9d670b461d98"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_arith_decoder.cpp",
+      "upstream_sha256": "03cd8988de56c920f8aec42157b7779b2c3b42034ab9854e05bb425a91c7334d",
+      "vendored_sha256": "0864e416df4ae836a1dcd289f795c68b3171d5bbcf581a978a58554d6a0c559f"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_segment.h",
+      "upstream_sha256": "520056d10e1df28eecbac6a3d389c3502ebc2086778dae85c2fad71241ab5cf7",
+      "vendored_sha256": "0ee16edaff04e4cd24332847c97a72ccedeece7a84cec13f0855a7416796b7de"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_bit_stream.h",
+      "upstream_sha256": "9fcd70ea1660aa919732c45035b0a17dc57dbf77b279207f94586de456e63809",
+      "vendored_sha256": "5dc0d8efd5cda10443b1a19fc790df0d22e9ef5b84cbc7de2b92d07971b5bab2"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_image.cpp",
+      "upstream_sha256": "afa8bb1ac1c32ca27cb71548016d1949b348b3f2bb408433076aa7d3bc046f60",
+      "vendored_sha256": "3cc45e2d35cd5ad83c577e370b7b5d7bca7d8e7d2aa45e7e58cc2f2888f7c2c8"
+    },
+    {
+      "path": "pdfium/core/fxcodec/jbig2/jbig2_page.h",
+      "upstream_sha256": "4bb0cc6c6a82171e260deae44b61447310ae461c1bf9e2bcbec6eaf1e03a2ecb",
+      "vendored_sha256": "4bb0cc6c6a82171e260deae44b61447310ae461c1bf9e2bcbec6eaf1e03a2ecb"
+    },
+    {
+      "path": "pdfium/core/fxcodec/fax/faxmodule.cpp",
+      "upstream_sha256": "550468d3e49b0ad4458e5ace29eb0aede37ec4201983fc89119f3f17a79a1080",
+      "vendored_sha256": "590e116a660951c4460500fa2fa90f7c7f544cd2489ab16c9477e88e846b7e98"
+    },
+    {
+      "path": "pdfium/core/fxcodec/fax/faxmodule.h",
+      "upstream_sha256": "aa3b29ec220c04569deab193b5d8f17af362cd92a124dcdfa60f3af09cfe59ca",
+      "vendored_sha256": "bc443dd65d6df53dab4e9ca07ed31bb0f721ae9e303a6a320d948ccf7611c3ff"
+    },
+    {
+      "path": "mozilla/LICENSE",
+      "upstream_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "vendored_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "mozilla/build/buildflag.h",
+      "upstream_sha256": "40538acaa9b39d0f68e895503752bde340f8ea1cdb67a87bfaee865dba54c5cd",
+      "vendored_sha256": "40538acaa9b39d0f68e895503752bde340f8ea1cdb67a87bfaee865dba54c5cd"
+    },
+    {
+      "path": "mozilla/build/build_config.h",
+      "upstream_sha256": "14ce6d5c00c6fc7f6a167d627a38f7be672a37e1a1f552869532de88390bdc41",
+      "vendored_sha256": "39dfa6d9e8849e11249ea9a93303686f8eff914da8942d8dbacb8c8db5e0c633"
+    }
+  ]
+}

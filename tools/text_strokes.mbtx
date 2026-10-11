@@ -1,0 +1,121 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+struct TextStrokeCase {
+  name : String
+  content : String
+} derive(ToJson)
+
+///|
+fn cases() -> Array[TextStrokeCase] {
+  [
+    {
+      name: "nonuniform-ctm",
+      content: "q 2 0 0 .55 15 40 cm 3 w BT /F1 70 Tf 1 Tr 1 0 0 1 10 30 Tm (AB) Tj ET Q",
+    },
+    {
+      name: "sheared-ctm-dashed",
+      content: "q 1.5 .2 .45 .85 15 20 cm 3 w [7 4] 2 d 1 J 1 j 4 M BT /F1 65 Tf 1 Tr 1 0 0 1 10 25 Tm (AB) Tj ET Q",
+    },
+    {
+      name: "independent-text-matrix",
+      content: "q 1.4 .15 .25 .85 15 25 cm 2 w [8 3] 4 d 2 J 2 j BT /F1 55 Tf 1 Tr 1.3 .25 .55 1 5 20 Tm (AB) Tj ET Q",
+    },
+    {
+      name: "reflection-fill-stroke-alpha",
+      content: "q -1.45 .2 .3 .8 200 25 cm /G gs 3 w 1 J 0 j 3 M 0.1 0.6 0.9 rg .7 .1 .2 RG BT /F1 65 Tf 2 Tr 1 .1 .25 1 10 20 Tm (AB) Tj ET Q",
+    },
+    {
+      name: "miter-limit-text",
+      content: "q 1.4 .2 .35 .9 15 20 cm 6 w 0 j 2 M BT /F1 60 Tf 1 Tr 1 0 0 1 10 20 Tm (A) Tj ET 10 M BT /F1 60 Tf 1 Tr 1 0 0 1 75 20 Tm (A) Tj ET Q",
+    },
+    {
+      name: "q-restore-text-pen",
+      content: "2 w [5 3] 1 d q 1.5 .1 .2 .8 5 70 cm 4 w [] 0 d BT /F1 45 Tf 1 Tr 1 0 0 1 10 10 Tm (AB) Tj ET Q BT /F1 45 Tf 1 Tr 1 0 0 1 20 20 Tm (AB) Tj ET",
+    },
+    {
+      name: "text-stroke-clip",
+      content: "20 20 140 85 re W n q 1.6 .15 .4 .8 0 0 cm 5 w 1 J BT /F1 80 Tf 1 Tr 1 .2 .3 1 5 20 Tm (AB) Tj ET Q",
+    },
+  ]
+}
+
+///|
+fn stream(dictionary : String, content : String) -> String {
+  "<< /Length \{content.length()} \{dictionary} >>\nstream\n\{content}\nendstream"
+}
+
+///|
+fn fixture_pdf(font : Bytes, samples : Array[TextStrokeCase]) -> Bytes {
+  let font_id = 3 + samples.length() * 2
+  let kids = [ for i in 0..<samples.length() => "\{3 + i * 2} 0 R" ].join(" ")
+  let objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Count \{samples.length()} /Kids [\{kids}] >>",
+  ]
+  for i, sample in samples {
+    objects.push(
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 240 160] /Contents \{4 + i * 2} 0 R /Resources << /Font << /F1 \{font_id} 0 R >> /ExtGState << /G << /ca .75 /CA .4 >> >> >> >>",
+    )
+    objects.push(stream("", sample.content))
+  }
+  objects.push(
+    "<< /Type /Font /Subtype /TrueType /BaseFont /AffinePenFixture-Regular /FirstChar 65 /LastChar 66 /Widths [650 650] /Encoding /WinAnsiEncoding /FontDescriptor \{font_id + 1} 0 R >>",
+  )
+  objects.push(
+    "<< /Type /FontDescriptor /FontName /AffinePenFixture-Regular /Flags 32 /FontBBox [0 0 680 740] /Ascent 800 /Descent -200 /CapHeight 740 /ItalicAngle 0 /StemV 80 /FontFile2 \{font_id + 2} 0 R >>",
+  )
+  let hex = StringBuilder()
+  for byte in font {
+    hex.write_string(byte.to_int().to_string(radix=16).pad_start(2, '0'))
+  }
+  hex.write_char('>')
+  objects.push(
+    stream("/Length1 \{font.length()} /Filter /ASCIIHexDecode", hex.to_string()),
+  )
+  let output = StringBuilder()
+  output.write_string("%PDF-1.7\n")
+  let offsets : Array[Int] = []
+  for i, object in objects {
+    offsets.push(output.to_string().length())
+    output.write_string("\{i + 1} 0 obj\n\{object}\nendobj\n")
+  }
+  let xref = output.to_string().length()
+  output.write_string("xref\n0 \{objects.length() + 1}\n0000000000 65535 f \n")
+  for offset in offsets {
+    output.write_string(offset.to_string().pad_start(10, '0') + " 00000 n \n")
+  }
+  output.write_string(
+    "trailer\n<< /Size \{objects.length() + 1} /Root 1 0 R >>\nstartxref\n\{xref}\n%%EOF\n",
+  )
+  @utf8.encode(output.to_string())
+}
+
+///|
+/// Run from the repository root: moon run tools/text_strokes.mbtx [directory]
+async fn main {
+  let args = @env.args()
+  let directory = if args.length() > 2 {
+    args[2]
+  } else {
+    "_build/text-strokes"
+  }
+  if !@fs.exists(directory) {
+    @fs.mkdir(directory, recursive=true)
+  }
+  let font = @fs.read_file("tools/fixtures/text-stroke/affine-pen.ttf").binary()
+  @fs.write_file(directory + "/text-strokes.pdf", fixture_pdf(font, cases()))
+  let manifest : Json = {
+    "license": "Apache-2.0",
+    "font": "Original two-glyph TrueType fixture; see tools/fixtures/text-stroke/README.md",
+    "cases": cases(),
+  }
+  @fs.write_file(directory + "/manifest.json", manifest.stringify(indent=2))
+  println(directory)
+}

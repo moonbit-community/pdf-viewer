@@ -13,10 +13,15 @@ options(
     "js": {
       "exports": [
         "open_pdf",
+        "process_cmyk_to_rgb",
         "open_pdf_with_password",
         "set_font_fallbacks",
         "render_page",
+        "render_print_page",
+        "page_layouts",
+        "cache_info",
         "select_text",
+        "select_page_text",
         "search_pdf",
         "document_info",
         "download_attachment",

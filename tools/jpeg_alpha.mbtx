@@ -1,0 +1,72 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/env",
+}
+
+///|
+/// Exact source-image acceptance for a page with one XObject RGBA image.
+/// Usage: moon run tools/jpeg_alpha.mbtx input.pdf output-dir node_modules-dir
+/// node_modules must contain the pinned pdfjs-dist, @napi-rs/canvas and resvg
+/// oracle dependencies. This tool never installs them or changes the viewer.
+async fn main {
+  let args = @env.args()
+  guard args.length() == 4 else {
+    fail("usage: jpeg_alpha.mbtx input.pdf output-dir node_modules-dir")
+  }
+  let directory = args[2]
+  if !@fs.exists(directory) {
+    @fs.mkdir(directory, recursive=true)
+  }
+  @fs.write_file(directory + "/fixture.pdf", @fs.read_file(args[1]).binary())
+  @shell.Cmd("moon", ["build", "--target", "js", "--release", "cmd/browser"]).run()
+  @fs.write_file(
+    directory + "/viewer.mjs",
+    @fs.read_file("_build/js/release/build/cmd/browser/browser.js").binary(),
+  )
+  @fs.write_file(directory + "/measure.mjs", script())
+  @shell.Cmd("node", [directory + "/measure.mjs", args[3]]).run()
+}
+
+///|
+fn script() -> String {
+  (
+    #|import {readFileSync,writeFileSync} from 'node:fs';
+    #|import {resolve} from 'node:path';
+    #|import {pathToFileURL} from 'node:url';
+    #|import {createHash} from 'node:crypto';
+    #|import * as viewer from './viewer.mjs';
+    #|const modules=resolve(process.argv[2]);
+    #|const {getDocument,OPS,version}=await import(pathToFileURL(modules+'/pdfjs-dist/legacy/build/pdf.mjs'));
+    #|const {createCanvas,loadImage}=await import(pathToFileURL(modules+'/@napi-rs/canvas/index.js'));
+    #|const {Resvg}=await import(pathToFileURL(modules+'/@resvg/resvg-js/index.js'));
+    #|const root=new URL('.',import.meta.url), bytes=readFileSync(new URL('fixture.pdf',root));
+    #|const task=getDocument({data:new Uint8Array(bytes),useSystemFonts:false,isEvalSupported:false});
+    #|const doc=await task.promise,page=await doc.getPage(1),ops=await page.getOperatorList();
+    #|const images=[];
+    #|for(let i=0;i<ops.fnArray.length;i++) if(ops.fnArray[i]===OPS.paintImageXObject) images.push(await new Promise(r=>page.objs.get(ops.argsArray[i][0],r)));
+    #|if(images.length!==1 || images[0].kind!==3) throw Error('Expected exactly one RGBA XObject; this fixture needs a different comparator');
+    #|const image=images[0];
+    #|let t=performance.now();const opened=JSON.parse(viewer.open_pdf(new Uint8Array(bytes)));if(!opened.ok)throw Error(JSON.stringify(opened));
+    #|const rendered=JSON.parse(viewer.render_page(1,1,0));if(!rendered.ok)throw Error(JSON.stringify(rendered));
+    #|const viewerMilliseconds=performance.now()-t;
+    #|writeFileSync(new URL('viewer.svg',root),rendered.svg);
+    #|const embedded=[...rendered.svg.matchAll(/<image[^>]+href="data:image\/png;base64,([^"]+)"/g)];
+    #|if(embedded.length!==1)throw Error('Expected one integrated PNG, rather than an encoded image plus separate mask');
+    #|const png=Buffer.from(embedded[0][1],'base64');writeFileSync(new URL('image.png',root),png);
+    #|const bitmap=await loadImage(png),c=createCanvas(bitmap.width,bitmap.height),cx=c.getContext('2d');cx.drawImage(bitmap,0,0);
+    #|if(bitmap.width!==image.width||bitmap.height!==image.height)throw Error('Source image dimensions differ');
+    #|const actual=cx.getImageData(0,0,bitmap.width,bitmap.height).data,reference=image.data;
+    #|let alphaMismatches=0,visibleAbove8=0,visibleAbsolute=0;
+    #|for(let i=0;i<actual.length;i+=4){if(actual[i+3]!==reference[i+3])alphaMismatches++;let error=0;
+    #| for(let k=0;k<3;k++){const a=actual[i+k]*actual[i+3]/255+255-actual[i+3],b=reference[i+k]*reference[i+3]/255+255-reference[i+3],d=Math.abs(a-b);error=Math.max(error,d);visibleAbsolute+=d;}if(error>8)visibleAbove8++;}
+    #|const vp=page.getViewport({scale:1}),w=Math.ceil(vp.width),h=Math.ceil(vp.height),pc=createCanvas(w,h),px=pc.getContext('2d');
+    #|await page.render({canvasContext:px,viewport:vp,background:'rgb(255,255,255)'}).promise;
+    #|writeFileSync(new URL('reference.png',root),pc.toBuffer('image/png'));
+    #|const raster=new Resvg(rendered.svg,{background:'#fff',font:{loadSystemFonts:false}}).render();writeFileSync(new URL('viewer.png',root),raster.asPng());
+    #|const report={fixtureSha256:createHash('sha256').update(bytes).digest('hex'),pdfjsVersion:version,fixtureRevision:'89b500f5e1d98ed89bb90211e45b28730b2d99ac',viewerMilliseconds,image:{width:image.width,height:image.height,pixels:image.width*image.height,alphaMismatches,visibleAbove8,visibleMeanAbsoluteError:visibleAbsolute/(image.width*image.height*3)},notes:['Image comparison composites both planes on white; Canvas readback can round unassociated low-alpha RGB.','Page PNGs are diagnostic only; source-image acceptance is independent of text/layout/rasterizer differences.']};
+    #|writeFileSync(new URL('report.json',root),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));viewer.close_pdf();await task.destroy();
+  )
+}

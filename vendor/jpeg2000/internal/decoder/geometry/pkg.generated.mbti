@@ -1,0 +1,64 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/geometry"
+
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/core",
+}
+
+// Values
+pub fn collect_per_component_codec_metadata(@core.Codestream, Int, @core.CodMetadata, Int) -> PerComponentCodecMetadata
+
+pub fn collect_per_component_tile_dimensions(@core.Codestream, Int, Int, Int, Int, Int, Int) -> PerComponentTileDimensions
+
+pub fn collect_tile_part_poc_by_tile(@core.Codestream, Int) -> Map[Int, Array[@core.PocMetadata]]
+
+pub fn fill_remaining_component_dimensions(PerComponentTileDimensions, @core.Codestream, Int, Int, Int, Int, Int) -> Unit
+
+pub fn find_tile_index_by_component0_origin(@core.SizMetadata, Int, Int, Int, Int) -> (Int, Int)?
+
+pub fn get_component_code_block_style(@core.Codestream, Int, fallback_cod? : @core.CodMetadata?, tile_index? : Int) -> Int
+
+pub fn get_component_codeblock_height(@core.Codestream, Int, fallback_cod? : @core.CodMetadata?, tile_index? : Int) -> Int
+
+pub fn get_component_codeblock_width(@core.Codestream, Int, fallback_cod? : @core.CodMetadata?, tile_index? : Int) -> Int
+
+pub fn get_component_decode_context(@core.Codestream, Int, @core.CodMetadata, fallback_qcd? : @core.QcdMetadata?, tile_index? : Int) -> (Int, Int, Int, Int, Int, @core.QcdMetadata?)
+
+pub fn get_component_decomposition_levels(@core.Codestream, Int, fallback_cod? : @core.CodMetadata?, tile_index? : Int) -> Int
+
+pub fn get_component_precinct_size_bytes(@core.Codestream, Int, fallback_cod? : @core.CodMetadata?, tile_index? : Int) -> Array[Int]
+
+pub fn get_component_qcd_with_fallback(@core.Codestream, Int, @core.QcdMetadata, tile_index? : Int) -> @core.QcdMetadata
+
+pub fn get_component_transformation(@core.Codestream, Int, fallback_cod? : @core.CodMetadata?, tile_index? : Int) -> Int
+
+pub fn get_tile_cod(@core.Codestream, Int) -> @core.CodMetadata?
+
+pub fn get_tile_qcd(@core.Codestream, Int) -> @core.QcdMetadata?
+
+pub fn tile_component_dims_and_origin_from_siz(@core.SizMetadata, Int, Int, Int) -> (Int, Int, Int, Int, Int, Int)
+
+// Errors
+
+// Types and methods
+pub struct PerComponentCodecMetadata {
+  per_comp_decomp : Array[Int]
+  per_comp_cbw : Array[Int]
+  per_comp_cbh : Array[Int]
+  per_comp_cblk_style : Array[Int]
+  per_comp_precinct_size_bytes : Array[Array[Int]]
+}
+
+pub struct PerComponentTileDimensions {
+  per_comp_w : Array[Int]
+  per_comp_h : Array[Int]
+  per_comp_xrsiz : Array[Int]
+  per_comp_yrsiz : Array[Int]
+  per_comp_tcx0 : Array[Int]
+  per_comp_tcy0 : Array[Int]
+  effective_tile_index : Int
+}
+
+// Type aliases
+
+// Traits

@@ -1,47 +1,4 @@
 ///|
-fn pdf_font_resources_of_items(
-  document : @pdflite.PdfDocument,
-  page_number : Int,
-  items : ArrayView[PdfPageItem],
-  fallbacks : ArrayView[PdfFontFallback],
-) -> Array[PdfFontResource] {
-  let fonts : Array[PdfFontResource] = []
-  let names : Array[String] = []
-  for item in items {
-    match item {
-      PdfPageItem::Text(text) if !names.contains(text.font) => {
-        names.push(text.font)
-        fonts.push(
-          pdf_font_resource_of(document, page_number, text.font, fallbacks),
-        )
-      }
-      _ => ()
-    }
-  }
-  fonts
-}
-
-///|
-fn pdf_font_base_name_of(
-  document : @pdflite.PdfDocument,
-  page_number : Int,
-  name : String,
-) -> String {
-  try document.list_fonts([page_number]) catch {
-    _ => []
-  } noraise {
-    entries => {
-      for entry in entries {
-        if entry.name == name && entry.basefont != "" {
-          return entry.basefont
-        }
-      }
-      name
-    }
-  }
-}
-
-///|
 /// Resolve a PDF base-font name to the canonical Standard 14 face. Subset
 /// prefixes are accepted because malformed producers sometimes add one even
 /// though the standard face is not embedded.
@@ -112,9 +69,8 @@ fn pdf_standard14_host_family(font : @pdflite.PdfStandardFont) -> String {
 
 ///|
 /// PDF.js uses an empty mapping for undefined simple-font codes. WinAnsi's
-/// five undefined C1 slots are represented by the bullet fallback in its
-/// encoding table; preserving that mapping avoids leaking raw control bytes
-/// into SVG while retaining the same visible marker.
+/// undefined slots use the viewer's bullet encoding fallback. This legacy
+/// host path also avoids leaking their raw control bytes into SVG.
 fn pdf_standard14_display_text(
   font : @pdflite.PdfStandardFont?,
   charcode : Int,
@@ -142,21 +98,6 @@ fn pdf_standard14_display_text(
 }
 
 ///|
-fn pdf_font_resource_of(
-  document : @pdflite.PdfDocument,
-  page_number : Int,
-  name : String,
-  fallbacks : ArrayView[PdfFontFallback],
-) -> PdfFontResource {
-  let base_name = pdf_font_base_name_of(document, page_number, name)
-  let bytes = document.extract_fontfile_bytes(page_number, name) catch {
-    _ => None
-  }
-  let fallback = pdf_font_fallback_for(fallbacks, name, base_name)
-  pdf_font_resource_from_bytes(name, base_name, bytes, name, fallback~)
-}
-
-///|
 fn pdf_font_fallback_for(
   fallbacks : ArrayView[PdfFontFallback],
   resource_name : String,
@@ -179,6 +120,11 @@ fn pdf_font_resource_from_bytes(
   fallback? : PdfFontFallback? = None,
 ) -> PdfFontResource {
   let standard_font = pdf_standard_font_of_base_name(base_name)
+  let bytes = match bytes {
+    Some(bytes) => Some(bytes)
+    None if fallback is None => standard_font.bind(pdf_standard14_program_bytes)
+    None => None
+  }
   let (mime_type, format, data_uri) = match bytes {
     Some(data) => {
       let (mime_type, format) = pdf_font_format_of_bytes(data)

@@ -7,7 +7,9 @@ fn main {
 fn run() -> Int {
   let args = @env.args()
   if args.length() < 2 || args.length() > 4 {
-    println("usage: pdf-viewer <input.pdf> [output.svg] [page]")
+    println(
+      "usage: pdf-viewer <input.pdf> [output.svg|output.canvas.json] [page]",
+    )
     return 2
   }
   let input = args[1]
@@ -33,25 +35,30 @@ fn run() -> Int {
   try {
     let bytes = @fs.read_file_to_bytes(input)
     let viewer = @pdf.open_document(bytes)
-    let svg = viewer.render_svg(page_number, scale=1.0) catch {
-      err => {
-        println("pdf-viewer: failed to render page: \{@debug.to_string(err)}")
+    let page = match viewer.page(page_number) {
+      Some(page) => page
+      None => {
+        println("pdf-viewer: page \{page_number} does not exist")
         return 1
       }
     }
-    match svg {
-      Some(svg) => {
-        @fs.write_string_to_file(output, svg)
-        println(
-          "wrote page \{page_number} of \{viewer.page_count()} to \{output}",
-        )
-        0
-      }
-      None => {
-        println("pdf-viewer: page \{page_number} does not exist")
-        1
-      }
+    let canvas = output.has_suffix(".canvas.json")
+    for
+      diagnostic in page.graphics_diagnostics(
+        renderer=if canvas { "canvas" } else { "svg" },
+      ) {
+      println(
+        "pdf-viewer: \{diagnostic.code} (item \{diagnostic.item}): \{diagnostic.message}",
+      )
     }
+    let rendered = if canvas {
+      page.canvas_plan().stringify()
+    } else {
+      page.render_svg(scale=1.0)
+    }
+    @fs.write_string_to_file(output, rendered)
+    println("wrote page \{page_number} of \{viewer.page_count()} to \{output}")
+    0
   } catch {
     err => {
       println("pdf-viewer: \{@debug.to_string(err)}")

@@ -291,3 +291,171 @@ pub extend PdfTextRangeSelection with Eq::{not_equal, equal}
 ///|
 #deprecated
 pub extend PdfTextRangeSelection with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextSourceRange with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextSourceRange with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextSourceRange with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextDiagnosticKind with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextDiagnosticKind with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextDiagnosticKind with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextDiagnostic with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextDiagnostic with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextDiagnostic with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextFormInvocation with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextFormInvocation with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextFormInvocation with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextStringSource with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextStringSource with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextStringSource with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextProvenance with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextProvenance with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextProvenance with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfByteSpan with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfByteSpan with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfByteSpan with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextByteSpan with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextByteSpan with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextByteSpan with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextLexicalSource with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextLexicalSource with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextLexicalSource with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextRun with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextRun with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextRun with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextParagraph with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextParagraph with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextParagraph with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextStructure with Eq::{not_equal, equal}
+
+///|
+#deprecated
+pub extend PdfTextStructure with @debug.Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextStructure with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfTextRecoveryDiagnostic with Eq::{equal, not_equal}
+
+///|
+#deprecated
+pub extend PdfTextRecoveryDiagnostic with Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfTextRecoveryDiagnostic with ToJson::{to_json}
+
+///|
+#deprecated
+pub extend PdfReaderDiagnostic with Eq::{equal, not_equal}
+
+///|
+#deprecated
+pub extend PdfReaderDiagnostic with Debug::{to_repr}
+
+///|
+#deprecated
+pub extend PdfReaderDiagnostic with ToJson::{to_json}

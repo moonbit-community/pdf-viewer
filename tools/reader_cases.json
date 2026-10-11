@@ -1,0 +1,12 @@
+{
+  "reference_revision": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+  "scale": 2,
+  "use_system_fonts": false,
+  "cases": [
+    { "file": "Pages-tree-refs.pdf", "pages": [1], "rotations": [0], "features": ["cyclic-page-tree", "retained-first-page", "known-page-count-difference"] },
+    { "file": "calgray.pdf", "pages": [1], "rotations": [0], "features": ["stream-comment-recovery"] },
+    { "file": "calrgb.pdf", "pages": [1], "rotations": [0], "features": ["stream-comment-recovery"] },
+    { "file": "issue13316_reduced.pdf", "pages": [1], "rotations": [0], "features": ["font-stream-checksum-recovery", "text-recovery"] },
+    { "file": "bug1770750.pdf", "pages": [1], "rotations": [0], "features": ["xref-stream", "object-stream", "inherited-page-resources"] }
+  ]
+}

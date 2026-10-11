@@ -1,0 +1,13 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/codecs/jbig2"
+
+// Values
+pub fn decode(Bytes, Bytes?, Int, Int) -> Bytes?
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

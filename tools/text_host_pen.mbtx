@@ -1,0 +1,79 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+fn stream(content : String) -> String {
+  "<< /Length \{content.length()} >>\nstream\n\{content}\nendstream"
+}
+
+///|
+fn fixture(font? : Bytes? = None, glyph? : String = "H") -> Bytes {
+  let content = "q 1.1 .15 .2 .85 15 20 cm 3 w 0 J 0 j 4 M BT /F1 60 Tf 1 Tr 2 .2 .4 .7 10 30 Tm (\{glyph}) Tj ET Q"
+  let objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 240 160] /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> >> >> /Contents 4 0 R >>",
+    stream(content),
+  ]
+  if font is Some(bytes) {
+    objects[2] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 240 160] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>"
+    objects.push(
+      "<< /Type /Font /Subtype /TrueType /BaseFont /G01Sans /FirstChar 72 /LastChar 72 /Widths [722] /Encoding /WinAnsiEncoding /FontDescriptor 6 0 R >>",
+    )
+    objects.push(
+      "<< /Type /FontDescriptor /FontName /G01Sans /Flags 32 /FontBBox [-2000 -2000 4000 4000] /Ascent 1000 /Descent -300 /CapHeight 1000 /ItalicAngle 0 /StemV 80 /FontFile2 7 0 R >>",
+    )
+    let hex = StringBuilder()
+    for byte in bytes {
+      hex.write_string(byte.to_int().to_string(radix=16).pad_start(2, '0'))
+    }
+    hex.write_char('>')
+    let encoded = hex.to_string()
+    objects.push(
+      "<< /Length \{encoded.length()} /Length1 \{bytes.length()} /Filter /ASCIIHexDecode >>\nstream\n\{encoded}\nendstream",
+    )
+  }
+  let output = StringBuilder()
+  output.write_string("%PDF-1.7\n")
+  let offsets : Array[Int] = []
+  for i, object in objects {
+    offsets.push(output.to_string().length())
+    output.write_string("\{i + 1} 0 obj\n\{object}\nendobj\n")
+  }
+  let xref = output.to_string().length()
+  output.write_string("xref\n0 \{objects.length() + 1}\n0000000000 65535 f \n")
+  for offset in offsets {
+    output.write_string(offset.to_string().pad_start(10, '0') + " 00000 n \n")
+  }
+  output.write_string(
+    "trailer\n<< /Size \{objects.length() + 1} /Root 1 0 R >>\nstartxref\n\{xref}\n%%EOF\n",
+  )
+  @utf8.encode(output.to_string())
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  let directory = if args.length() > 1 {
+    args[1]
+  } else {
+    "_build/text-host-pen"
+  }
+  if !@fs.exists(directory) {
+    @fs.mkdir(directory, recursive=true)
+  }
+  @fs.write_file(directory + "/text-host-pen.pdf", fixture())
+  @fs.write_file(directory + "/text-host-space.pdf", fixture(glyph=" "))
+  if args.length() > 2 {
+    @fs.write_file(
+      directory + "/text-host-pen-embedded-control.pdf",
+      fixture(font=Some(@fs.read_file(args[2]).binary())),
+    )
+  }
+  println(directory)
+}

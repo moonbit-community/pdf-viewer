@@ -1,0 +1,1510 @@
+{
+  "scope": "cmd/browser --release + web/pdf-runtime.mjs with native Canvas API host, not a browser DOM test",
+  "fixtureSha256": "d4f4383051c12e02ddc3d61a7fe292c6dff16e1687cf0dbfb35ee713dc030e5f",
+  "pdfjsVersion": "6.4.299",
+  "scale": 1,
+  "results": [
+    {
+      "page": 1,
+      "pdfjsSolidMaskOperation": true,
+      "name": "coloured-full",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 255,
+        "above8": 400,
+        "meanAbsoluteError": 63.75
+      },
+      "actualPixels": [
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ],
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ]
+      ],
+      "equivalentTwoPixelControl": {
+        "page": 14,
+        "maximum": 0,
+        "above8": 0,
+        "meanAbsoluteError": 0
+      }
+    },
+    {
+      "page": 2,
+      "pdfjsSolidMaskOperation": false,
+      "name": "coloured-half",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 0,
+        "above8": 0,
+        "meanAbsoluteError": 0
+      },
+      "actualPixels": [
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ]
+      ]
+    },
+    {
+      "page": 3,
+      "pdfjsSolidMaskOperation": false,
+      "name": "reversed-half",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 0,
+        "above8": 0,
+        "meanAbsoluteError": 0
+      },
+      "actualPixels": [
+        [
+          255,
+          255,
+          255,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ],
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          255,
+          255,
+          255,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ],
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ]
+      ]
+    },
+    {
+      "page": 4,
+      "pdfjsSolidMaskOperation": true,
+      "name": "inline-coloured",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 255,
+        "above8": 400,
+        "meanAbsoluteError": 63.75
+      },
+      "actualPixels": [
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ],
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ]
+      ],
+      "equivalentTwoPixelControl": {
+        "page": 15,
+        "maximum": 0,
+        "above8": 0,
+        "meanAbsoluteError": 0
+      }
+    },
+    {
+      "page": 5,
+      "pdfjsSolidMaskOperation": true,
+      "name": "uncoloured-green",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 255,
+        "above8": 400,
+        "meanAbsoluteError": 127.5
+      },
+      "actualPixels": [
+        [
+          0,
+          255,
+          0,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ],
+        [
+          0,
+          255,
+          0,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ]
+      ],
+      "equivalentTwoPixelControl": {
+        "page": 16,
+        "maximum": 26,
+        "above8": 160,
+        "meanAbsoluteError": 4.85
+      },
+      "transparentCellEdgeResidual": {
+        "interiorAbove8": 0,
+        "edgeColumns": [
+          0,
+          4,
+          5,
+          9,
+          10,
+          14,
+          15,
+          19
+        ]
+      }
+    },
+    {
+      "page": 6,
+      "pdfjsSolidMaskOperation": true,
+      "name": "shading-gradient",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 249,
+        "above8": 400,
+        "meanAbsoluteError": 63.75
+      },
+      "actualPixels": [
+        [
+          223,
+          0,
+          32,
+          255
+        ],
+        [
+          159,
+          0,
+          96,
+          255
+        ],
+        [
+          96,
+          0,
+          159,
+          255
+        ],
+        [
+          32,
+          0,
+          223,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ]
+      ],
+      "equivalentTwoPixelControl": {
+        "page": 17,
+        "maximum": 0,
+        "above8": 0,
+        "meanAbsoluteError": 0
+      }
+    },
+    {
+      "page": 7,
+      "pdfjsSolidMaskOperation": true,
+      "name": "translated-cell",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 255,
+        "above8": 400,
+        "meanAbsoluteError": 63.75
+      },
+      "actualPixels": [
+        [
+          241,
+          0,
+          14,
+          255
+        ],
+        [
+          26,
+          0,
+          229,
+          255
+        ],
+        [
+          241,
+          0,
+          14,
+          255
+        ],
+        [
+          26,
+          0,
+          229,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ]
+      ],
+      "equivalentTwoPixelControl": {
+        "page": 18,
+        "maximum": 0,
+        "above8": 0,
+        "meanAbsoluteError": 0
+      }
+    },
+    {
+      "page": 8,
+      "pdfjsSolidMaskOperation": true,
+      "name": "constant-alpha",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 127,
+        "above8": 400,
+        "meanAbsoluteError": 31.95
+      },
+      "actualPixels": [
+        [
+          255,
+          127,
+          127,
+          255
+        ],
+        [
+          127,
+          127,
+          255,
+          255
+        ],
+        [
+          255,
+          127,
+          127,
+          255
+        ],
+        [
+          127,
+          127,
+          255,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          128,
+          128,
+          128,
+          255
+        ],
+        [
+          128,
+          128,
+          128,
+          255
+        ],
+        [
+          128,
+          128,
+          128,
+          255
+        ],
+        [
+          128,
+          128,
+          128,
+          255
+        ]
+      ],
+      "equivalentTwoPixelControl": {
+        "page": 19,
+        "maximum": 0,
+        "above8": 0,
+        "meanAbsoluteError": 0
+      }
+    },
+    {
+      "page": 9,
+      "pdfjsSolidMaskOperation": true,
+      "name": "clipped",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 255,
+        "above8": 160,
+        "meanAbsoluteError": 25.5
+      },
+      "actualPixels": [
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ]
+      ],
+      "equivalentTwoPixelControl": {
+        "page": 20,
+        "maximum": 0,
+        "above8": 0,
+        "meanAbsoluteError": 0
+      }
+    },
+    {
+      "page": 10,
+      "pdfjsSolidMaskOperation": false,
+      "name": "ordinary-colour-image",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 0,
+        "above8": 0,
+        "meanAbsoluteError": 0
+      },
+      "actualPixels": [
+        [
+          0,
+          255,
+          0,
+          255
+        ],
+        [
+          0,
+          255,
+          0,
+          255
+        ],
+        [
+          0,
+          255,
+          0,
+          255
+        ],
+        [
+          0,
+          255,
+          0,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          0,
+          255,
+          0,
+          255
+        ],
+        [
+          0,
+          255,
+          0,
+          255
+        ],
+        [
+          0,
+          255,
+          0,
+          255
+        ],
+        [
+          0,
+          255,
+          0,
+          255
+        ]
+      ]
+    },
+    {
+      "page": 11,
+      "pdfjsSolidMaskOperation": true,
+      "name": "selected-after-cm-stencil",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 255,
+        "above8": 400,
+        "meanAbsoluteError": 63.75
+      },
+      "actualPixels": [
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ],
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ]
+      ],
+      "equivalentTwoPixelControl": {
+        "page": 21,
+        "maximum": 0,
+        "above8": 0,
+        "meanAbsoluteError": 0
+      }
+    },
+    {
+      "page": 12,
+      "pdfjsSolidMaskOperation": false,
+      "name": "uncoloured-green-path",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 26,
+        "above8": 160,
+        "meanAbsoluteError": 4.8
+      },
+      "actualPixels": [
+        [
+          0,
+          255,
+          0,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ],
+        [
+          0,
+          255,
+          0,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          0,
+          255,
+          0,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ],
+        [
+          0,
+          255,
+          0,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ]
+      ],
+      "transparentCellEdgeResidual": {
+        "interiorAbove8": 0,
+        "edgeColumns": [
+          0,
+          4,
+          5,
+          9,
+          10,
+          14,
+          15,
+          19
+        ]
+      }
+    },
+    {
+      "page": 13,
+      "pdfjsSolidMaskOperation": false,
+      "name": "selected-after-cm-path",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 0,
+        "above8": 0,
+        "meanAbsoluteError": 0
+      },
+      "actualPixels": [
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ],
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ],
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ]
+      ]
+    },
+    {
+      "page": 14,
+      "pdfjsSolidMaskOperation": false,
+      "name": "coloured-full-two-pixel-control",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 0,
+        "above8": 0,
+        "meanAbsoluteError": 0
+      },
+      "actualPixels": [
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ],
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ],
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ]
+      ]
+    },
+    {
+      "page": 15,
+      "pdfjsSolidMaskOperation": false,
+      "name": "inline-coloured-two-pixel-control",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 0,
+        "above8": 0,
+        "meanAbsoluteError": 0
+      },
+      "actualPixels": [
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ],
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ],
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ]
+      ]
+    },
+    {
+      "page": 16,
+      "pdfjsSolidMaskOperation": false,
+      "name": "uncoloured-green-two-pixel-control",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 26,
+        "above8": 160,
+        "meanAbsoluteError": 4.85
+      },
+      "actualPixels": [
+        [
+          0,
+          255,
+          0,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ],
+        [
+          0,
+          255,
+          0,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          0,
+          255,
+          0,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ],
+        [
+          0,
+          255,
+          0,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ]
+      ],
+      "transparentCellEdgeResidual": {
+        "interiorAbove8": 0,
+        "edgeColumns": [
+          0,
+          4,
+          5,
+          9,
+          10,
+          14,
+          15,
+          19
+        ]
+      }
+    },
+    {
+      "page": 17,
+      "pdfjsSolidMaskOperation": false,
+      "name": "shading-gradient-two-pixel-control",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 0,
+        "above8": 0,
+        "meanAbsoluteError": 0
+      },
+      "actualPixels": [
+        [
+          223,
+          0,
+          32,
+          255
+        ],
+        [
+          159,
+          0,
+          96,
+          255
+        ],
+        [
+          96,
+          0,
+          159,
+          255
+        ],
+        [
+          32,
+          0,
+          223,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          223,
+          0,
+          32,
+          255
+        ],
+        [
+          159,
+          0,
+          96,
+          255
+        ],
+        [
+          96,
+          0,
+          159,
+          255
+        ],
+        [
+          32,
+          0,
+          223,
+          255
+        ]
+      ]
+    },
+    {
+      "page": 18,
+      "pdfjsSolidMaskOperation": false,
+      "name": "translated-cell-two-pixel-control",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 0,
+        "above8": 0,
+        "meanAbsoluteError": 0
+      },
+      "actualPixels": [
+        [
+          241,
+          0,
+          14,
+          255
+        ],
+        [
+          26,
+          0,
+          229,
+          255
+        ],
+        [
+          241,
+          0,
+          14,
+          255
+        ],
+        [
+          26,
+          0,
+          229,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          241,
+          0,
+          14,
+          255
+        ],
+        [
+          26,
+          0,
+          229,
+          255
+        ],
+        [
+          241,
+          0,
+          14,
+          255
+        ],
+        [
+          26,
+          0,
+          229,
+          255
+        ]
+      ]
+    },
+    {
+      "page": 19,
+      "pdfjsSolidMaskOperation": false,
+      "name": "constant-alpha-two-pixel-control",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 0,
+        "above8": 0,
+        "meanAbsoluteError": 0
+      },
+      "actualPixels": [
+        [
+          255,
+          127,
+          127,
+          255
+        ],
+        [
+          127,
+          127,
+          255,
+          255
+        ],
+        [
+          255,
+          127,
+          127,
+          255
+        ],
+        [
+          127,
+          127,
+          255,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          255,
+          127,
+          127,
+          255
+        ],
+        [
+          127,
+          127,
+          255,
+          255
+        ],
+        [
+          255,
+          127,
+          127,
+          255
+        ],
+        [
+          127,
+          127,
+          255,
+          255
+        ]
+      ]
+    },
+    {
+      "page": 20,
+      "pdfjsSolidMaskOperation": false,
+      "name": "clipped-two-pixel-control",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 0,
+        "above8": 0,
+        "meanAbsoluteError": 0
+      },
+      "actualPixels": [
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ]
+      ]
+    },
+    {
+      "page": 21,
+      "pdfjsSolidMaskOperation": false,
+      "name": "selected-after-cm-stencil-two-pixel-control",
+      "width": 20,
+      "height": 20,
+      "diagnostics": [],
+      "comparison": {
+        "maximum": 0,
+        "above8": 0,
+        "meanAbsoluteError": 0
+      },
+      "actualPixels": [
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ],
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ]
+      ],
+      "referencePixels": [
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ],
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          0,
+          255,
+          255
+        ]
+      ]
+    }
+  ],
+  "producerCommit": "c948669f663e7f33d6cbce49e60d65361bad1988",
+  "runtimeSource": "Integrated root web runtime with the compositor stencil replay change; native Canvas 1.0.10",
+  "bridgeSha256": "1d502e88cce4cb70e8e6d212ab9195a1e328eba2a9d5c119828aafcf7dc36043",
+  "canvasBackendSha256": "2ab5b244ff92078ad28741f065a46cdaffe1598483409db65d4ae1bc91e001a6",
+  "before": {
+    "backendCommit": "8757009",
+    "fixturePage": 1,
+    "pixels": [
+      [
+        0,
+        0,
+        0,
+        255
+      ],
+      [
+        0,
+        0,
+        0,
+        255
+      ],
+      [
+        0,
+        0,
+        0,
+        255
+      ],
+      [
+        0,
+        0,
+        0,
+        255
+      ]
+    ],
+    "diagnostics": [],
+    "outcome": "Opaque stencil silently black despite retained Pattern source"
+  },
+  "summary": {
+    "pages": 21,
+    "effectiveReferenceByteExact": 18,
+    "zeroDiagnostics": true,
+    "beforeAfterPatternSelectionMatchesPath": true,
+    "oneVsTwoOpaqueSamplesByteExact": true,
+    "uncolouredStencilMatchesPath": true,
+    "pdfjsOnePixelShortcutCases": 8
+  },
+  "referenceCaveats": [
+    "PDF.js 6.4.299 paintSolidColorImageMask fills with its scalar Canvas fillStyle and omits Pattern materialization. Equivalent fully opaque two-pixel masks use the general pattern path; all eight one-/two-pixel actual output pairs are byte-identical.",
+    "The existing transparent-cell pattern policy evaluates coverage in device space. Uncoloured path and both stencil variants are byte-identical, with PDF.js differences greater than8 only in columns0,4,5,9,10,14,15,19 and maximum26. No tolerance is applied to other cases.",
+    "Poppler72dpi independently confirms red/blue/red/blue at audit points x2,7,12,17 y10. Its cell-edge/shading sampling is not used as a byte-exact acceptance oracle."
+  ]
+}

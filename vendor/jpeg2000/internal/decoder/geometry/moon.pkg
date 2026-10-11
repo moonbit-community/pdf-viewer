@@ -1,0 +1,5 @@
+// Tile/component geometry and codec context resolution
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/core",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/input",
+}

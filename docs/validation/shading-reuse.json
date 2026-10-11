@@ -1,0 +1,80 @@
+{
+  "date": "2026-10-11",
+  "sourceLocalCommit": "f51e6ba74f4abe29f1efe0d79e90758a22a5357b",
+  "fixture": {
+    "name": "tracemonkey.pdf",
+    "page": 11,
+    "revision": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+    "sha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113"
+  },
+  "samplerCache": {
+    "limitEntries": 16,
+    "limitAccountedBytes": 8388608,
+    "before": {
+      "ms": 15205.624093,
+      "rawBytes": 38296184,
+      "canvasBytes": 30728188,
+      "canvasExactlyEqualsBaseline": true,
+      "rawSha256": "7124a76f3abd94096ae3d1b8140b555ad9ff1f2638a59b84c5fcb7ccd8b44669",
+      "canvasSha256": "4e5976e11deb6adab9312c2a5994a4690bf0cba56c339b604a4d329e4fc3a210"
+    },
+    "after": {
+      "ms": 4217.1061549999995,
+      "rawBytes": 38296184,
+      "canvasBytes": 30728188,
+      "canvasExactlyEqualsBaseline": true,
+      "rawSha256": "7124a76f3abd94096ae3d1b8140b555ad9ff1f2638a59b84c5fcb7ccd8b44669",
+      "canvasSha256": "4e5976e11deb6adab9312c2a5994a4690bf0cba56c339b604a4d329e4fc3a210"
+    },
+    "exactWholeBridgeEquality": true,
+    "exactCanvasJsonEquality": true
+  },
+  "shadingLoop": {
+    "full": {
+      "milliseconds": 11242.535727,
+      "rssStart": 232792064,
+      "rssEnd": 1035128832,
+      "visits": 78522048,
+      "calls": 162,
+      "sha256": "916ba5484db4eeb94ab670327920da5a0f995229478d532095b808877f2d3e09"
+    },
+    "cropped": {
+      "milliseconds": 2790.3402490000008,
+      "rssStart": 1035128832,
+      "rssEnd": 1067163648,
+      "visits": 34446,
+      "calls": 162,
+      "sha256": "916ba5484db4eeb94ab670327920da5a0f995229478d532095b808877f2d3e09"
+    }
+  },
+  "limits": [
+    "Single-machine timing observations, not latency guarantees.",
+    "Replay timing excludes parsing and uses the identical saved Canvas plan.",
+    "Full-sized surfaces remain; observed standalone replay RSS is roughly 1.15 GB. The two same-process RSS endpoints do not establish a peak-memory reduction.",
+    "Unknown SVG clip syntax, meshes, path-painted shading and retained PatternType2 scenes keep the existing full shading route.",
+    "These optimizations preserve existing pixels; they do not make reference-renderer residuals disappear."
+  ],
+  "finalWorkerMergedReplay": {
+    "sourceLocalCommit": "84079e01e7c9f73d3e37037df712292c2e416a3a",
+    "testsPassed": 8,
+    "testsSkipped": 0,
+    "measurements": {
+      "full": {
+        "milliseconds": 10937.8824,
+        "rssStart": 243138560,
+        "rssEnd": 1038729216,
+        "visits": 78522048,
+        "calls": 162,
+        "sha256": "916ba5484db4eeb94ab670327920da5a0f995229478d532095b808877f2d3e09"
+      },
+      "cropped": {
+        "milliseconds": 2762.4618840000003,
+        "rssStart": 1038729216,
+        "rssEnd": 1071263744,
+        "visits": 34446,
+        "calls": 162,
+        "sha256": "916ba5484db4eeb94ab670327920da5a0f995229478d532095b808877f2d3e09"
+      }
+    }
+  }
+}

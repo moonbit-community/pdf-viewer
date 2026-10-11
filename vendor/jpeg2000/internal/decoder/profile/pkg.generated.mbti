@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/profile"
+
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/core",
+}
+
+// Values
+pub fn htj2k_cleanup_only_subset_enabled(@core.Codestream) -> Bool
+
+pub fn htj2k_not_supported_reason(@core.Codestream) -> String
+
+pub fn htj2k_signalled(@core.Codestream) -> Bool
+
+pub fn non_simple_profile_reason(@core.Codestream, @core.SizMetadata) -> String
+
+pub fn tier1_minimal_reversible_subset_enabled(@core.Codestream) -> Bool
+
+pub fn tier1_minimal_reversible_subset_reason(@core.Codestream) -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

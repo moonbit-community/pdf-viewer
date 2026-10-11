@@ -1,0 +1,81 @@
+{
+  "planSha256": "8f9318a68b63c29eadcb90d9e6b9e2b381748df55647db4985631be5fae2fd15",
+  "pixelSha256": "715c557b5b11c435033e458e5ac41497ce919ffe5f4ed944ff119904b472278d",
+  "rgbaBytes": 4017440,
+  "pixelChanges": 0,
+  "timingScope": "fresh-process saved-plan replay, excludes PDF parsing; no forced GC",
+  "before": {
+    "milliseconds": 36190.48771,
+    "peakRss": 3562938368,
+    "initial": {
+      "painted": 0,
+      "created": 0,
+      "pixels": 0,
+      "maxPixels": 0,
+      "images": 0,
+      "rss": 227717120,
+      "heapTotal": 124063744,
+      "heapUsed": 55773080,
+      "external": 70649442,
+      "arrayBuffers": 21801567
+    },
+    "final": {
+      "painted": 6723,
+      "created": 980,
+      "pixels": 416120,
+      "maxPixels": 7438061,
+      "images": 3,
+      "rss": 3456159744,
+      "heapTotal": 166268928,
+      "heapUsed": 115986392,
+      "external": 174824738,
+      "arrayBuffers": 105626361
+    }
+  },
+  "after": {
+    "milliseconds": 9942.102171,
+    "peakRss": 791789568,
+    "initial": {
+      "painted": 0,
+      "created": 0,
+      "pixels": 0,
+      "maxPixels": 0,
+      "images": 0,
+      "rss": 220205056,
+      "heapTotal": 123539456,
+      "heapUsed": 55594248,
+      "external": 70649500,
+      "arrayBuffers": 21801567
+    },
+    "final": {
+      "painted": 6723,
+      "created": 953,
+      "pixels": 11645,
+      "maxPixels": 2374304,
+      "images": 3,
+      "rss": 770424832,
+      "heapTotal": 234688512,
+      "heapUsed": 112523832,
+      "external": 247143902,
+      "arrayBuffers": 177940281
+    }
+  },
+  "processRssIsNotOwnedWorkingBytes": true,
+  "publicRunner": {
+    "command": "node tools/render_canvas.mjs input.canvas.json output.png",
+    "exitCode": 0,
+    "wallSeconds": 10.623476072003541,
+    "maxRssKiB": 783416,
+    "userSeconds": 10.823624,
+    "systemSeconds": 0.458261,
+    "measurement": "Uninstrumented public runner, fresh child process; POSIX getrusage(RUSAGE_CHILDREN), no forced GC.",
+    "pixelSha256": "715c557b5b11c435033e458e5ac41497ce919ffe5f4ed944ff119904b472278d",
+    "pixelChanges": 0
+  },
+  "type3ViewportRegression": {
+    "cases": 112,
+    "allCanvasPngsByteIdentical": true,
+    "allThreeOracleComparisonRecordsIdentical": true,
+    "thresholdsOrCasesChanged": false
+  }
+}

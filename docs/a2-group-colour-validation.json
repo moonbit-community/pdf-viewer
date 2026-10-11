@@ -1,0 +1,125 @@
+{
+  "ghostscript": "10.05.1",
+  "cases": [
+    {
+      "name": "icc-rgb-multiply",
+      "sha256": "157be2e1730b5945a4e98b9a5abec204390183f88f0dc7f4d4240e9a75769cce",
+      "pixels": 400,
+      "maximum": 1,
+      "meanAbsoluteError": 0.3333333333333333,
+      "changedAbove2": 0
+    },
+    {
+      "name": "icc-image",
+      "sha256": "d1b02dfd8e5aa1290aa57def1c0bbb6923fd40657ca7c91fec7572c31997c0b2",
+      "pixels": 400,
+      "maximum": 1,
+      "meanAbsoluteError": 0.3333333333333333,
+      "changedAbove2": 0
+    },
+    {
+      "name": "icc-stencil",
+      "sha256": "f0de4093d8fe2211cc7ae8154fb194d84631eb90307821ebf18a2f1d7a8cd865",
+      "pixels": 400,
+      "maximum": 1,
+      "meanAbsoluteError": 0.3333333333333333,
+      "changedAbove2": 0
+    },
+    {
+      "name": "icc-pattern",
+      "sha256": "8d088531983f4f33e1619df8747cfcdd5dd02d60f2dcea0e1c2305611a13576d",
+      "pixels": 400,
+      "maximum": 1,
+      "meanAbsoluteError": 0.3333333333333333,
+      "changedAbove2": 0
+    },
+    {
+      "name": "icc-shading",
+      "sha256": "3e95998e2d00ca79d4f72bac29a2851979d764bcc46184cf3f6fc6950805e2ad",
+      "pixels": 400,
+      "maximum": 1,
+      "meanAbsoluteError": 0.3333333333333333,
+      "changedAbove2": 0
+    },
+    {
+      "name": "icc-mask-bc",
+      "sha256": "50d26a252ef8745471d371ce96e2fe81ff31d271098f1b66f1423b359819cc7b",
+      "pixels": 400,
+      "maximum": 1,
+      "meanAbsoluteError": 1,
+      "changedAbove2": 0
+    },
+    {
+      "name": "icc-isolated-form",
+      "sha256": "1746333c687fe6e2620598279f96cfc6f8a3fabbe5c802bf8e228de516ca638f",
+      "pixels": 400,
+      "maximum": 1,
+      "meanAbsoluteError": 0.3333333333333333,
+      "changedAbove2": 0
+    },
+    {
+      "name": "cal-rgb",
+      "sha256": "69c30ae2bcf447f230f50d478d42bd9bf76574824b34f904c28bf09a68c279e1",
+      "pixels": 400,
+      "maximum": 1,
+      "meanAbsoluteError": 0.3333333333333333,
+      "changedAbove2": 0
+    },
+    {
+      "name": "cal-gray",
+      "sha256": "f100a00c7d3cbd1b01303351d1af1222a0347017886b27692a2508a5a4e6d5fd",
+      "pixels": 400,
+      "maximum": 0,
+      "meanAbsoluteError": 0,
+      "changedAbove2": 0
+    },
+    {
+      "name": "cal-rgb-image",
+      "sha256": "be42124e59d21b40a4ec4c25004fcec77e7efce6efc554cd172c404afbea7221",
+      "pixels": 400,
+      "maximum": 1,
+      "meanAbsoluteError": 0.3333333333333333,
+      "changedAbove2": 0
+    },
+    {
+      "name": "cal-rgb-pattern",
+      "sha256": "f57205843e6f15f8816960c79addccb9d849a2182b67855dfd5c842728bf7faf",
+      "pixels": 400,
+      "maximum": 1,
+      "meanAbsoluteError": 0.3333333333333333,
+      "changedAbove2": 0
+    },
+    {
+      "name": "cal-gray-image",
+      "sha256": "301f70385f08cbbf281462cd1c51a4c616da95f342762ab412d9e5b8e60c7591",
+      "pixels": 400,
+      "maximum": 0,
+      "meanAbsoluteError": 0,
+      "changedAbove2": 0
+    },
+    {
+      "name": "cal-gray-pattern",
+      "sha256": "d2c3e1e21f40501ad68363e6c425fd4ac84b40d29036767831aad9e05e2fad50",
+      "pixels": 400,
+      "maximum": 0,
+      "meanAbsoluteError": 0,
+      "changedAbove2": 0
+    },
+    {
+      "name": "cal-rgb-stencil",
+      "sha256": "7ffdafc940613793526327e53029a55992607481b995bd2deef94dfb3def9586",
+      "pixels": 400,
+      "maximum": 1,
+      "meanAbsoluteError": 0.3333333333333333,
+      "changedAbove2": 0
+    },
+    {
+      "name": "cal-gray-stencil",
+      "sha256": "7a1349d0f3139c9480e9eb8d8399d48b45533a4bff032c86e191e8f81e30a6d1",
+      "pixels": 400,
+      "maximum": 0,
+      "meanAbsoluteError": 0,
+      "changedAbove2": 0
+    }
+  ]
+}

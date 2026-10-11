@@ -1,0 +1,41 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/dwt"
+
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/core",
+}
+
+// Values
+pub fn apply_inverse_dwt(Array[Int], Int, Int, Int, @core.QcdMetadata, Int, transformation? : Int, tcx0? : Int, tcy0? : Int) -> Result[Array[Int], String]
+
+pub fn apply_inverse_dwt_53(Array[Int], Int, Int, Int, tcx0? : Int, tcy0? : Int) -> Result[Array[Int], String]
+
+pub fn apply_inverse_dwt_float(Array[Int], Int, Int, Int, @core.QcdMetadata, Int, transformation? : Int, tcx0? : Int, tcy0? : Int, packet_audit? : Bool, audit_label? : String, audit_comp? : Int) -> Result[Array[Double], String]
+
+pub fn extend_signal(Array[Int], Int, Int, Int) -> Int
+
+pub fn extend_signal_double(Array[Double], Int, Int, Int) -> Double
+
+pub fn idwt_53_1d(Array[Int], Array[Int], cas? : Int) -> Array[Int]
+
+pub fn idwt_53_1d_float(Array[Double], Array[Double], cas? : Int) -> Array[Double]
+
+pub fn idwt_53_1d_spec(Array[Int], Array[Int], Int) -> Array[Int]
+
+pub fn ileft_53(Int) -> Int
+
+pub fn ileft_97(Int) -> Int
+
+pub fn iright_53(Int) -> Int
+
+pub fn iright_97(Int) -> Int
+
+pub fn pseo(Int, Int, Int) -> Int
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

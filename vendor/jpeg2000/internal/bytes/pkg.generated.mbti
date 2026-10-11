@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/bytes"
+
+// Values
+pub fn bytes_to_hex(Array[Int]) -> String
+
+pub fn bytes_to_int_array(Bytes) -> Array[Int]
+
+pub fn hex_to_bytes(String) -> Result[Array[Int], String]
+
+pub fn int_array_to_bytes(Array[Int]) -> Bytes
+
+pub fn read_u16_be(Bytes, Int) -> Int
+
+pub fn read_u16_be_arr(Array[Int], Int) -> Result[Int, String]
+
+pub fn read_u32_be(Bytes, Int) -> Int
+
+pub fn read_u32_be_arr(Array[Int], Int) -> Result[Int, String]
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

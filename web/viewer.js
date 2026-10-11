@@ -1,15 +1,42 @@
 import {
   open_pdf,
   open_pdf_with_password,
-  set_font_fallbacks,
   render_page,
-  select_text,
-  search_pdf,
+  render_print_page,
   document_info,
   download_attachment,
   download_metadata,
   close_pdf,
-} from "./_generated/pdf.js";
+  cache_info,
+  page_layouts,
+  select_page_text,
+  pdf,
+} from "./pdf-client.js";
+import { PageScheduler } from "./page-scheduler.js";
+import { AnnotationLayer } from "./annotation-layer.js";
+// This pure synchronous colour helper is shared with Canvas replay. Document
+// parsing, decoded page ownership and navigation operations stay in the Worker.
+import { process_cmyk_to_rgb } from "./_generated/pdf.js";
+import { installPdfIccEngine } from "./pdf-icc.mjs";
+import { renderPdfPage } from "./pdf-runtime.mjs";
+
+const graphicsOptions = {
+  unsupported: "warn",
+  convertProcess: values => process_cmyk_to_rgb(...values),
+};
+let graphicsInitialization;
+function initializeCanvasGraphics() {
+  return graphicsInitialization ||= installPdfIccEngine().then(
+    () => [],
+    error => [{ code: "icc-engine-unavailable",
+      message: `ICC profiles use their PDF Alternate colour space: ${error.message}` }],
+  );
+}
+function showGraphicsDiagnostics(diagnostics = []) {
+  if (!diagnostics.length) return;
+  $("error").textContent = diagnostics.map(value => value.message || value.reason || value.code).join("; ");
+  $("error").hidden = false;
+}
 
 const $ = (id) => document.getElementById(id);
 const viewer = $("viewer");
@@ -26,13 +53,28 @@ const state = {
   scale: 1,
   rotation: 0,
   generation: 0,
+  documentGeneration: 0,
+  layouts: [],
   selection: null,
   selectionRange: null,
   search: { query: "", results: [], active: -1 },
   pending: false,
+  searchController: null,
+  selectionController: null,
+  selectionPromise: null,
+  thumbnailController: null,
+  thumbnailObserver: null,
+  printController: null,
+  fetchController: null,
 };
 const measure = document.createElement("canvas").getContext("2d");
 const widthCache = new Map();
+const annotationUI = new AnnotationLayer({
+  viewer,
+  navigate: link => navigateAnnotation(link).catch(showError),
+  sourceURL: () => state.filePath && state.filePath !== state.fileName
+    ? new URL(state.filePath, location.href).href : "",
+});
 const enabledControls = [
   "page-number",
   "next-page",
@@ -66,6 +108,7 @@ function checked(serialized) {
 }
 
 function showError(error) {
+  if (error.name === "AbortError") return;
   $("error").textContent = error.message || String(error);
   $("error").hidden = false;
   $("status").textContent = "未能完成操作";
@@ -73,7 +116,6 @@ function showError(error) {
 
 function setBusy(busy) {
   viewer.setAttribute("aria-busy", String(busy));
-  $("open-file").disabled = busy;
 }
 
 function selectedPageNumber() {
@@ -113,6 +155,9 @@ function locationPage() {
 }
 
 function closeSidebar() {
+  state.thumbnailController?.abort();
+  state.thumbnailObserver?.disconnect();
+  $("sidebar-content").replaceChildren();
   state.sidebarMode = null;
   $("sidebar").hidden = true;
 }
@@ -223,39 +268,76 @@ function renderInfoPanel() {
 }
 
 function renderThumbnails() {
+  state.thumbnailController?.abort();
+  state.thumbnailObserver?.disconnect();
+  const controller = new AbortController();
+  state.thumbnailController = controller;
   const content = $("sidebar-content");
   content.replaceChildren();
   const limit = Math.min(state.count, 200);
+  const tasks = new Map();
+  controller.signal.addEventListener("abort", () => {
+    for (const task of tasks.values()) task.abort();
+  }, { once: true });
+  const observer = new IntersectionObserver(entries => {
+    if (controller.signal.aborted) return;
+    for (const entry of entries) {
+      const button = entry.target;
+      const number = Number(button.dataset.page);
+      const preview = button.querySelector(".thumbnail-preview");
+      if (!entry.isIntersecting) {
+        tasks.get(number)?.abort();
+        tasks.delete(number);
+        preview.replaceChildren();
+        continue;
+      }
+      if (preview.children.length || tasks.has(number)) continue;
+      const task = new AbortController();
+      tasks.set(number, task);
+      (async () => {
+        try {
+          const result = checked(await render_page(number, 0.12, 0, {
+            signal: task.signal, priority: -5,
+          }));
+          if (task.signal.aborted || controller.signal.aborted) return;
+          const canvas = document.createElement("canvas");
+          const rendered = await renderPdfPage(canvas, result.canvas, graphicsOptions);
+          if (task.signal.aborted || controller.signal.aborted) return;
+          preview.replaceChildren(canvas);
+          showGraphicsDiagnostics(rendered.diagnostics);
+        } catch (error) {
+          if (!task.signal.aborted && !controller.signal.aborted) showError(error);
+        } finally {
+          if (tasks.get(number) === task) tasks.delete(number);
+        }
+      })();
+    }
+  }, { root: $("sidebar"), rootMargin: "150px 0px" });
+  state.thumbnailObserver = observer;
   for (let number = 1; number <= limit; number++) {
     const button = sidebarButton("");
     button.classList.add("thumbnail-item");
     button.dataset.page = number;
     button.setAttribute("aria-label", `第 ${pageLabel(number)} 页`);
     button.addEventListener("click", () => goToPage(number, { pushHistory: true }));
-    try {
-      const result = checked(render_page(number, 0.12, 0));
-      const preview = document.createElement("div");
-      preview.className = "thumbnail-preview";
-      preview.innerHTML = result.svg;
-      button.append(preview, Object.assign(document.createElement("span"), {
-        className: "thumbnail-label",
-        textContent: pageLabel(number),
-      }));
-    } catch (error) {
-      button.textContent = `第 ${pageLabel(number)} 页`;
-      showError(error);
-    }
+    const preview = document.createElement("div");
+    preview.className = "thumbnail-preview";
+    button.append(preview, Object.assign(document.createElement("span"), {
+      className: "thumbnail-label", textContent: pageLabel(number),
+    }));
     content.append(button);
+    observer.observe(button);
   }
   if (state.count > limit) {
     content.append(Object.assign(document.createElement("p"), {
-      className: "sidebar-empty",
-      textContent: `仅显示前 ${limit} 页缩略图`,
+      className: "sidebar-empty", textContent: `仅显示前 ${limit} 页缩略图`,
     }));
   }
 }
 
 function showSidebar(mode) {
+  state.thumbnailController?.abort();
+  state.thumbnailObserver?.disconnect();
   state.sidebarMode = mode;
   $("sidebar").hidden = false;
   $("sidebar-title").textContent =
@@ -279,25 +361,30 @@ function downloadBytes(data, filename, type = "application/octet-stream") {
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
-function downloadAttachment(attachment) {
+async function downloadAttachment(attachment) {
+  const generation = state.documentGeneration;
   try {
-    const result = checked(download_attachment(attachment.index));
+    const result = checked(await download_attachment(attachment.index));
+    if (generation !== state.documentGeneration) return;
     downloadBytes(result.data, attachment.name || "attachment.bin");
   } catch (error) {
-    showError(error);
+    if (generation === state.documentGeneration) showError(error);
   }
 }
 
-function downloadMetadata() {
+async function downloadMetadata() {
+  const generation = state.documentGeneration;
   try {
-    const result = checked(download_metadata());
+    const result = checked(await download_metadata());
+    if (generation !== state.documentGeneration) return;
     downloadBytes(result.data, "metadata.xmp", "application/rdf+xml");
   } catch (error) {
-    showError(error);
+    if (generation === state.documentGeneration) showError(error);
   }
 }
 
 function clearSearch() {
+  state.searchController?.abort();
   state.search = { query: "", results: [], active: -1 };
   $("search-query").value = "";
   $("search-status").textContent = "";
@@ -331,9 +418,17 @@ function highlightSearchResults() {
   }
 }
 
-function scrollToSearchResult() {
+async function scrollToSearchResult() {
   const result = state.search.results[state.search.active];
   if (!result) return;
+  goToPage(result.page);
+  try {
+    await scheduler.ensure(result.page);
+  } catch (error) {
+    if (result === state.search.results[state.search.active]) showError(error);
+    return;
+  }
+  if (result !== state.search.results[state.search.active]) return;
   const page = pageElement(result.page);
   const item = page?.querySelector(`[data-item="${result.item_indices[0]}"]`);
   item?.scrollIntoView({ block: "center", inline: "nearest" });
@@ -359,7 +454,11 @@ function jumpSearch(delta) {
   scrollToSearchResult();
 }
 
-function performSearch() {
+async function performSearch() {
+  state.searchController?.abort();
+  const controller = new AbortController();
+  state.searchController = controller;
+  const generation = state.documentGeneration;
   const query = $("search-query").value;
   if (!query) {
     clearSearch();
@@ -367,13 +466,12 @@ function performSearch() {
   }
   try {
     const response = checked(
-      search_pdf(
-        query,
-        $("search-case").checked,
-        $("search-whole").checked,
-        !$("search-diacritic").checked,
-      ),
+      await pdf.call("search_pdf", [query, $("search-case").checked,
+        $("search-whole").checked, !$("search-diacritic").checked], {
+        signal: controller.signal, priority: 20,
+      }),
     );
+    if (controller.signal.aborted || generation !== state.documentGeneration) return;
     state.search = {
       query,
       results: response.results || [],
@@ -381,14 +479,15 @@ function performSearch() {
     };
     highlightSearchResults();
     updateSearchStatus();
-    scrollToSearchResult();
+    await scrollToSearchResult();
+    if (controller.signal.aborted || generation !== state.documentGeneration) return;
     viewer.dispatchEvent(
       new CustomEvent("pdf-search-change", {
         detail: { query, results: state.search.results },
       }),
     );
   } catch (error) {
-    showError(error);
+    if (!controller.signal.aborted && generation === state.documentGeneration) showError(error);
   }
 }
 
@@ -405,6 +504,75 @@ function goToPage(number, { pushHistory = false } = {}) {
     pageElement(number)?.scrollIntoView({ block: "start" });
   }
   updatePageButtons(number);
+  scheduler.update(number);
+}
+
+async function navigateAnnotation(link) {
+  if (link.kind === "named-action") {
+    const number = selectedPageNumber();
+    const pages = { FirstPage: 1, LastPage: state.count, NextPage: number + 1, PrevPage: number - 1 };
+    if (link.action in pages) goToPage(pages[link.action], { pushHistory: true });
+    else if (link.action === "GoBack") history.back();
+    else if (link.action === "GoForward") history.forward();
+    return;
+  }
+  const destination = link.destination;
+  if (!destination?.resolved || destination.remote || !Number.isInteger(destination.page) ||
+      destination.page < 1 || destination.page > state.count) return;
+  const generation = state.documentGeneration;
+  clearSelection();
+  goToPage(destination.page, { pushHistory: true });
+  let page = await scheduler.ensure(destination.page);
+  if (generation !== state.documentGeneration) return;
+  let viewport = JSON.parse(page.querySelector(".annotation-layer").dataset.viewport);
+  const map = (x, y) => new DOMMatrix(viewport.matrix).transformPoint({ x, y });
+  const rect = destination.kind === "FitR" &&
+    [destination.left, destination.bottom, destination.right, destination.top].every(Number.isFinite)
+    ? [map(destination.left, destination.bottom), map(destination.right, destination.top)] : null;
+  const layout = state.layouts[destination.page - 1];
+  const width = state.rotation % 180 ? layout.height : layout.width;
+  const height = state.rotation % 180 ? layout.width : layout.height;
+  const fitWidth = Math.max(1, viewer.clientWidth - 64);
+  const fitHeight = Math.max(1, viewer.clientHeight - 64);
+  let scale = state.scale;
+  if (destination.kind === "XYZ" && Number.isFinite(destination.zoom) && destination.zoom > 0) {
+    scale = destination.zoom;
+  } else if (["FitH", "FitBH"].includes(destination.kind)) scale = fitWidth / width;
+  else if (["FitV", "FitBV"].includes(destination.kind)) scale = fitHeight / height;
+  else if (["Fit", "FitB"].includes(destination.kind)) scale = Math.min(fitWidth / width, fitHeight / height);
+  else if (rect) {
+    const w = Math.abs(rect[1].x - rect[0].x);
+    const h = Math.abs(rect[1].y - rect[0].y);
+    if (w > 0 && h > 0) scale *= Math.min(fitWidth / w, fitHeight / h);
+  }
+  scale = Math.max(0.1, Math.min(4, scale));
+  if (scale !== state.scale) {
+    const zoom = $("zoom");
+    if (![...zoom.options].some(option => Number(option.value) === scale)) {
+      const option = new Option(`${Math.round(scale * 100)}%`, String(scale));
+      option.dataset.custom = "true";
+      zoom.append(option);
+    }
+    zoom.value = String(scale);
+    await repaint({ preserveSelection: false });
+    page = await scheduler.ensure(destination.page);
+    if (generation !== state.documentGeneration) return;
+    viewport = JSON.parse(page.querySelector(".annotation-layer").dataset.viewport);
+  }
+  const origin = new DOMMatrix(viewport.matrix).inverse().transformPoint({ x: 0, y: 0 });
+  let point = map(destination.left ?? origin.x, destination.top ?? origin.y);
+  if (destination.kind === "FitR") {
+    const points = [map(destination.left, destination.bottom), map(destination.right, destination.top)];
+    point = { x: Math.min(...points.map(p => p.x)), y: Math.min(...points.map(p => p.y)) };
+  }
+  if (["XYZ", "FitH", "FitBH", "FitV", "FitBV", "FitR"].includes(destination.kind) &&
+      Number.isFinite(point.x) && Number.isFinite(point.y)) {
+    const box = page.getBoundingClientRect();
+    const view = viewer.getBoundingClientRect();
+    const style = getComputedStyle(viewer);
+    viewer.scrollTop += box.top - view.top - parseFloat(style.paddingTop) + point.y;
+    viewer.scrollLeft += box.left - view.left - parseFloat(style.paddingLeft) + point.x;
+  }
 }
 
 function applyViewMode() {
@@ -426,6 +594,7 @@ function measureWidth(text, item) {
   measure.font = font;
   const width = Math.max(0.001, measure.measureText(text).width / 100);
   widthCache.set(key, width);
+  if (widthCache.size > 4096) widthCache.delete(widthCache.keys().next().value);
   return width;
 }
 
@@ -468,7 +637,7 @@ function makeTextLayer(layer) {
     span.style.fontStyle = item.font_style;
     const text = document.createElement("span");
     text.className = "glyph-text";
-    text.textContent = item.text;
+    text.append(document.createTextNode(item.text));
     text.style.height = `${height}px`;
     text.style.lineHeight = `${height}px`;
     text.style.width = `${measureWidth(item.text, item) * height}px`;
@@ -479,7 +648,7 @@ function makeTextLayer(layer) {
   return element;
 }
 
-function mountPage(result) {
+async function mountPage(result, current = () => true) {
   const page = document.createElement("section");
   page.className = "page";
   page.dataset.page = result.page;
@@ -489,12 +658,46 @@ function mountPage(result) {
   const paint = document.createElement("div");
   paint.className = "paint-layer";
   paint.setAttribute("aria-hidden", "true");
-  // SVG strings come from the MoonBit serializer, whose text and attributes
-  // are escaped; user input is never interpolated into this HTML boundary.
-  paint.innerHTML = result.svg;
-  page.append(paint, makeTextLayer(result.layer));
+  paint.inert = true;
+  // Paint off-DOM: an obsolete zoom/navigation/document cannot publish a
+  // partially replayed Canvas while image or glyph resources are still loading.
+  const canvas = document.createElement("canvas");
+  const rendered = await renderPdfPage(canvas, result.canvas, graphicsOptions);
+  if (current()) showGraphicsDiagnostics(rendered.diagnostics);
+  paint.append(canvas);
+  page.append(paint, makeTextLayer(result.layer), annotationUI.create(result.annotations || [], result.layer.viewport));
   return page;
 }
+
+const scheduler = new PageScheduler({
+  viewer, pages,
+  render: async (...args) => checked(await render_page(...args)),
+  mount: mountPage,
+  pinned: () => state.selectionRange
+    ? [state.selectionRange.start.page, state.selectionRange.end.page]
+      .flatMap(number => [number - 1, number, number + 1])
+      .filter(number => number >= 1 && number <= state.count) : [],
+  singlePage: () => state.viewMode === "page",
+  onError: showError,
+  onUnload: page => annotationUI.unmount(page),
+  onMount: async (page, current) => {
+    annotationUI.bind(page);
+    await document.fonts.ready;
+    if (!current()) return;
+    widthCache.clear();
+    for (const glyph of page.querySelectorAll(".glyph")) {
+      const style = glyph.style;
+      const actualWidth = measureWidth(glyph.textContent, {
+        font_family: style.fontFamily, font_weight: style.fontWeight,
+        font_style: style.fontStyle,
+      }) * parseFloat(style.fontSize);
+      glyph.firstChild.style.width = `${actualWidth}px`;
+      glyph.firstChild.style.transform = `scaleX(${parseFloat(style.width) / actualWidth})`;
+    }
+    highlightSearchResults();
+    if (state.selectionRange) restoreSelection(state.selectionRange);
+  },
+});
 
 async function repaint({ preserveSelection = true } = {}) {
   if (!state.count) return;
@@ -513,40 +716,19 @@ async function repaint({ preserveSelection = true } = {}) {
   try {
     let scale = Number($("zoom").value);
     if ($("zoom").value === "fit") {
-      const base = checked(render_page(currentPage, 1, state.rotation));
+      const layout = state.layouts[currentPage - 1];
+      const width = state.rotation % 180 ? layout.height : layout.width;
       scale = Math.max(
         0.1,
-        Math.min(4, (viewer.clientWidth - 64) / base.layer.viewport.width),
+        Math.min(4, (viewer.clientWidth - 64) / width),
       );
     }
     state.scale = scale;
-    const newPages = document.createDocumentFragment();
-    for (let number = 1; number <= state.count; number++) {
-      if (generation !== state.generation) return;
-      $("status").textContent = `正在渲染第 ${number} / ${state.count} 页`;
-      const result = checked(render_page(number, state.scale, state.rotation));
-      newPages.append(mountPage(result));
-      // Yield between pages. Worker-backed scheduling and page virtualization
-      // are tracked separately; this version caches the MoonBit page models.
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-    }
-    if (generation !== state.generation) return;
-    pages.replaceChildren(newPages);
+    scheduler.current = currentPage;
+    scheduler.layout(scale, state.rotation);
     $("empty-state").hidden = true;
-    await document.fonts.ready;
-    widthCache.clear();
-    // Embedded fonts may finish loading after the initial width measurement.
-    for (const glyph of pages.querySelectorAll(".glyph")) {
-      const style = glyph.style;
-      const actualWidth =
-        measureWidth(glyph.textContent, {
-          font_family: style.fontFamily,
-          font_weight: style.fontWeight,
-          font_style: style.fontStyle,
-        }) * parseFloat(style.fontSize);
-      glyph.firstChild.style.width = `${actualWidth}px`;
-      glyph.firstChild.style.transform = `scaleX(${parseFloat(style.width) / actualWidth})`;
-    }
+    applyViewMode();
+    $("status").textContent = `正在渲染第 ${currentPage} / ${state.count} 页`;
     const newPage = pageElement(currentPage);
     const pageTop =
       newPage.getBoundingClientRect().top -
@@ -556,6 +738,10 @@ async function repaint({ preserveSelection = true } = {}) {
       0,
       pageTop - padding + offset * newPage.offsetHeight,
     );
+    scheduler.update(currentPage);
+    await Promise.all([...new Set([currentPage, ...(savedRange
+      ? [savedRange.start.page, savedRange.end.page] : [])])].map(number => scheduler.ensure(number)));
+    if (generation !== state.generation) return;
     if (savedRange) {
       restoreSelection(savedRange);
       pageElement(savedRange.start.page)
@@ -569,29 +755,34 @@ async function repaint({ preserveSelection = true } = {}) {
     updatePageButtons(currentPage);
     updateLocation(currentPage);
   } catch (error) {
-    showError(error);
+    if (generation === state.generation) showError(error);
   } finally {
     if (generation === state.generation) setBusy(false);
   }
 }
 
 async function loadFile(file, path = "") {
-  const generation = ++state.generation;
+  closeDocument();
+  const generation = ++state.documentGeneration;
   setBusy(true);
   $("error").hidden = true;
   $("status").textContent = "正在读取文档";
   try {
-    const data = new Uint8Array(await file.arrayBuffer());
-    if (generation !== state.generation) return;
+    pdf.reset();
+    const canvasDiagnostics = await initializeCanvasGraphics();
+    if (generation !== state.documentGeneration) return;
     let info;
     let passwordAttempt = null;
     while (true) {
+      const data = new Uint8Array(await file.arrayBuffer());
+      if (generation !== state.documentGeneration) return;
       try {
         info = checked(
           passwordAttempt !== null
-            ? open_pdf_with_password(data, new TextEncoder().encode(passwordAttempt))
-            : open_pdf(data),
+            ? await open_pdf_with_password(data, new TextEncoder().encode(passwordAttempt))
+            : await open_pdf(data),
         );
+        if (generation !== state.documentGeneration) return;
         break;
       } catch (error) {
         if (error.code !== "password-required" && error.code !== "password-invalid")
@@ -605,12 +796,20 @@ async function loadFile(file, path = "") {
         passwordAttempt = password;
       }
     }
+    showGraphicsDiagnostics([
+      ...canvasDiagnostics, ...(pdf.diagnostics().graphics?.diagnostics || []),
+    ]);
     state.file = file;
     state.fileName = file.name || "document.pdf";
     state.filePath = path || file.name || "document.pdf";
     state.count = info.pages;
     state.labels = info.labels;
-    state.documentInfo = checked(document_info());
+    const documentInfo = checked(await document_info());
+    const layouts = checked(await page_layouts()).layouts;
+    if (generation !== state.documentGeneration) return;
+    state.documentInfo = documentInfo;
+    state.layouts = layouts;
+    scheduler.setDocument(layouts);
     state.rotation = 0;
     state.selectionRange = null;
     state.selection = null;
@@ -624,9 +823,12 @@ async function loadFile(file, path = "") {
     closeSidebar();
     await repaint({ preserveSelection: false });
   } catch (error) {
-    showError(error);
+    if (generation === state.documentGeneration) {
+      closeDocument();
+      showError(error);
+    }
   } finally {
-    if (generation === state.generation) setBusy(false);
+    if (generation === state.documentGeneration) setBusy(false);
   }
 }
 
@@ -672,6 +874,8 @@ function boundary(node, offset, end = false) {
 }
 
 function clearSelection() {
+  state.selectionController?.abort();
+  state.selectionPromise = null;
   state.selection = null;
   state.selectionRange = null;
   $("selection-status").textContent = "";
@@ -681,7 +885,7 @@ function clearSelection() {
   );
 }
 
-function readSelection() {
+async function readSelection() {
   if (viewer.getAttribute("aria-busy") === "true") return;
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed || !selection.rangeCount) {
@@ -695,31 +899,62 @@ function readSelection() {
     clearSelection();
     return;
   }
+  if (JSON.stringify({ start, end }) === JSON.stringify(state.selectionRange)) {
+    if (state.selection) {
+      viewer.dispatchEvent(new CustomEvent("pdf-selection-change", { detail: state.selection }));
+      return;
+    }
+    if (state.selectionController && !state.selectionController.signal.aborted) {
+      await state.selectionPromise;
+      return;
+    }
+  }
+  state.selectionPromise = collectSelection(start, end);
+  await state.selectionPromise;
+}
+
+async function collectSelection(start, end, restore = false) {
+  state.selectionController?.abort();
+  const controller = new AbortController();
+  state.selectionController = controller;
+  const generation = state.documentGeneration;
+  state.selectionRange = { start, end };
+  state.selection = null;
+  $("selection-status").textContent = "正在准备选中文字";
+  $("copy-selection").disabled = true;
+  scheduler.update(selectedPageNumber());
   const ranges = [];
+  let actualStart;
+  let actualEnd;
   try {
     for (let number = start.page; number <= end.page; number++) {
-      const layer = pageElement(number).querySelector(".text-layer");
-      const glyphs = layer.querySelectorAll(".glyph");
-      if (!glyphs.length) continue;
       const first =
         number === start.page
           ? start
-          : { item: Number(glyphs[0].dataset.item), offset: 0 };
-      const lastGlyph = glyphs[glyphs.length - 1];
+          : { item: -1, offset: -1 };
       const last =
         number === end.page
           ? end
-          : {
-              item: Number(lastGlyph.dataset.item),
-              offset: lastGlyph.textContent.length,
-            };
-      ranges.push(
-        checked(
-          select_text(number, first.item, first.offset, last.item, last.offset),
-        ).selection,
-      );
+          : { item: -1, offset: -1 };
+      const result = checked(await select_page_text([
+        number, first.item, first.offset, last.item, last.offset,
+      ], { signal: controller.signal, priority: 20 }));
+      if (controller.signal.aborted || generation !== state.documentGeneration) return;
+      if (!result.selection) continue;
+      actualStart ||= result.start;
+      actualEnd = result.end;
+      ranges.push(result.selection);
     }
-    state.selectionRange = { start, end };
+    if (!ranges.length) {
+      clearSelection();
+      return;
+    }
+    state.selectionRange = { start: actualStart, end: actualEnd };
+    if (restore) {
+      await Promise.all([scheduler.ensure(actualStart.page), scheduler.ensure(actualEnd.page)]);
+      if (controller.signal.aborted || generation !== state.documentGeneration) return;
+      restoreSelection(state.selectionRange);
+    }
     state.selection = {
       file: { name: state.fileName, path: state.filePath },
       text: ranges.map((range) => range.text).join("\n"),
@@ -732,9 +967,114 @@ function readSelection() {
       new CustomEvent("pdf-selection-change", { detail: state.selection }),
     );
   } catch (error) {
-    showError(error);
+    if (!controller.signal.aborted && generation === state.documentGeneration) showError(error);
   }
 }
+
+async function selectAllText() {
+  if (!state.count) return;
+  state.selectionPromise = collectSelection({ page: 1, item: -1, offset: -1 }, {
+    page: state.count, item: -1, offset: -1,
+  }, true);
+  await state.selectionPromise;
+}
+
+function clearPrint() {
+  state.printController?.abort();
+  $("print-pages").replaceChildren();
+  document.body.classList.remove("pdf-print-ready");
+  $("print").disabled = !state.count;
+}
+
+export function closeDocument() {
+  state.documentGeneration++;
+  state.generation++;
+  state.fetchController?.abort();
+  close_pdf();
+  closeSidebar();
+  annotationUI.close();
+  clearSelection();
+  clearSearch();
+  clearPrint();
+  scheduler.clear();
+  widthCache.clear();
+  Object.assign(state, { count: 0, file: null, fileName: "", filePath: "",
+    documentInfo: null, labels: [], layouts: [] });
+  $("page-count").textContent = "/ 0";
+  $("page-number").value = 1;
+  $("file-name").textContent = "未打开文档";
+  $("file-name").title = "";
+  $("error").hidden = true;
+  $("empty-state").hidden = false;
+  for (const id of enabledControls) $(id).disabled = true;
+  viewer.scrollTop = 0;
+  viewer.dataset.mountedPages = "0";
+  setBusy(false);
+  $("status").textContent = "就绪";
+}
+
+export async function printDocument() {
+  if (!state.count) return;
+  clearPrint();
+  const generation = state.documentGeneration;
+  const controller = new AbortController();
+  state.printController = controller;
+  $("print").disabled = true;
+  const root = $("print-pages");
+  const style = document.createElement("style");
+  const rules = [];
+  root.append(style);
+  try {
+    for (let number = 1; number <= state.count; number++) {
+      $("status").textContent = `正在准备打印第 ${number} / ${state.count} 页`;
+      const result = checked(await render_print_page(number, 1, 0, {
+        signal: controller.signal, priority: -2,
+      }));
+      if (controller.signal.aborted || generation !== state.documentGeneration) return;
+      const page = document.createElement("section");
+      page.className = "page";
+      page.dataset.page = number;
+      const { width, height } = result.layer.viewport;
+      const name = `pdf-print-${number}`;
+      page.style.width = `${width}pt`;
+      page.style.height = `${height}pt`;
+      page.style.page = name;
+      rules.push(`@page ${name} { size: ${width}pt ${height}pt; margin: 0; }`);
+      const canvas = document.createElement("canvas");
+      const rendered = await renderPdfPage(canvas, result.canvas, graphicsOptions);
+      if (controller.signal.aborted || generation !== state.documentGeneration) return;
+      page.append(canvas);
+      root.append(page);
+      showGraphicsDiagnostics(rendered.diagnostics);
+    }
+    style.textContent = `@media print { ${rules.join("\n")} }`;
+    await document.fonts.ready;
+    if (controller.signal.aborted || generation !== state.documentGeneration) return;
+    document.body.classList.add("pdf-print-ready");
+    window.print();
+  } catch (error) {
+    if (generation === state.documentGeneration && state.printController === controller) {
+      if (!controller.signal.aborted) {
+        clearPrint();
+        showError(error);
+      }
+    }
+  } finally {
+    if (generation === state.documentGeneration && state.printController === controller) {
+      $("print").disabled = false;
+      $("status").textContent = `${state.count} 页 · ${Math.round(state.scale * 100)}%`;
+    }
+  }
+}
+
+export async function runtimeDiagnostics() {
+  const cache = checked(await cache_info());
+  return { pages: state.count, documentGeneration: state.documentGeneration,
+    mounted: [...pages.querySelectorAll('[data-rendered="true"]')].map(page => Number(page.dataset.page)),
+    source_bytes: state.file?.size || 0, worker: pdf.diagnostics(), cache };
+}
+
+export { loadFile, performSearch, readSelection, selectAllText };
 
 function restoreSelection({ start, end }) {
   const startGlyph = pageElement(start.page)?.querySelector(
@@ -744,7 +1084,6 @@ function restoreSelection({ start, end }) {
     `[data-item="${end.item}"]`,
   );
   if (!startGlyph || !endGlyph) {
-    clearSelection();
     return;
   }
   const range = new Range();
@@ -808,6 +1147,7 @@ $("view-mode").addEventListener("change", (event) => {
   state.viewMode = event.currentTarget.value;
   applyViewMode();
   if (state.viewMode === "page") pageElement(selectedPageNumber())?.scrollIntoView({ block: "start" });
+  scheduler.update(selectedPageNumber());
 });
 $("outline-toggle").addEventListener("click", () =>
   state.sidebarMode === "outline" ? closeSidebar() : showSidebar("outline"),
@@ -819,7 +1159,7 @@ $("info-toggle").addEventListener("click", () =>
   state.sidebarMode === "info" ? closeSidebar() : showSidebar("info"),
 );
 $("sidebar-close").addEventListener("click", closeSidebar);
-$("print").addEventListener("click", () => window.print());
+$("print").addEventListener("click", () => printDocument());
 $("download").addEventListener("click", () => {
   const link = document.createElement("a");
   const url = URL.createObjectURL(state.file);
@@ -865,6 +1205,21 @@ document.addEventListener("copy", (event) => {
   if (state.selection && !window.getSelection().isCollapsed) {
     event.clipboardData.setData("text/plain", state.selection.text);
     event.preventDefault();
+  } else if (state.selectionRange && state.selectionPromise) {
+    event.preventDefault();
+    const generation = state.documentGeneration;
+    const pending = state.selectionPromise;
+    const text = pending.then(() => {
+      if (generation !== state.documentGeneration || pending !== state.selectionPromise || !state.selection) {
+        throw new DOMException("Selection cancelled", "AbortError");
+      }
+      return state.selection.text;
+    });
+    if (navigator.clipboard.write && window.ClipboardItem) {
+      navigator.clipboard.write([new ClipboardItem({
+        "text/plain": text.then(value => new Blob([value], { type: "text/plain" })),
+      })]).catch(showError);
+    } else text.then(value => navigator.clipboard.writeText(value)).catch(showError);
   }
 });
 viewer.addEventListener("keydown", (event) => {
@@ -872,16 +1227,8 @@ viewer.addEventListener("keydown", (event) => {
   const selection = getSelection();
   if (!selection || !selection.modify) return;
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
-    const glyphs = pages.querySelectorAll(".glyph-text");
-    if (!glyphs.length) return;
     event.preventDefault();
-    const range = new Range();
-    range.setStart(glyphs[0].firstChild, 0);
-    const last = glyphs[glyphs.length - 1].firstChild;
-    range.setEnd(last, last.length);
-    selection.removeAllRanges();
-    selection.addRange(range);
-    readSelection();
+    selectAllText();
     return;
   }
   const direction = {
@@ -904,6 +1251,11 @@ viewer.addEventListener("keydown", (event) => {
     selection.removeAllRanges();
     selection.addRange(range);
   }
+  // Normalize native drag affinity before extending across positioned glyphs.
+  selection.setBaseAndExtent(
+    selection.anchorNode, selection.anchorOffset,
+    selection.focusNode, selection.focusOffset,
+  );
   selection.modify(
     "extend",
     direction,
@@ -925,6 +1277,7 @@ viewer.addEventListener("scroll", () => {
     let best = 1;
     let distance = Infinity;
     for (const page of pages.children) {
+      if (state.viewMode === "page" && !page.classList.contains("current-page")) continue;
       const delta = Math.abs(page.getBoundingClientRect().top - top - 24);
       if (delta < distance) {
         distance = delta;
@@ -934,6 +1287,7 @@ viewer.addEventListener("scroll", () => {
     $("page-number").value = best;
     updatePageButtons(best);
     updateLocation(best);
+    scheduler.update(best);
   });
 });
 window.addEventListener("popstate", () => {
@@ -951,24 +1305,45 @@ window.addEventListener("resize", () => {
     if ($("zoom").value === "fit") repaint();
   }, 150);
 });
-window.addEventListener("pagehide", () => close_pdf());
+window.addEventListener("afterprint", clearPrint);
+document.addEventListener("keydown", event => {
+  if (state.count && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "p") {
+    event.preventDefault();
+    printDocument();
+  }
+});
+window.addEventListener("pagehide", () => {
+  scheduler.cancel();
+  state.searchController?.abort();
+  state.selectionController?.abort();
+  state.thumbnailController?.abort();
+  state.printController?.abort();
+  close_pdf();
+});
+window.addEventListener("pageshow", event => {
+  if (event.persisted && state.file) loadFile(state.file, state.filePath);
+});
 
 // Optional local/deployment-relative file URL; arbitrary documents remain
 // browser-only and are not uploaded to the development server.
 const initialFile = new URL(location.href).searchParams.get("file");
 if (initialFile) {
+  const controller = new AbortController();
+  state.fetchController = controller;
   try {
-    const response = await fetch(initialFile);
+    const response = await fetch(initialFile, { signal: controller.signal });
     if (!response.ok) throw new Error(`无法打开文档 (${response.status})`);
     const name =
       decodeURIComponent(
         new URL(initialFile, location.href).pathname.split("/").pop(),
       ) || "document.pdf";
+    const blob = await response.blob();
+    if (controller.signal.aborted) throw new DOMException("File load cancelled", "AbortError");
     await loadFile(
-      new File([await response.blob()], name, { type: "application/pdf" }),
+      new File([blob], name, { type: "application/pdf" }),
       initialFile,
     );
   } catch (error) {
-    showError(error);
+    if (!controller.signal.aborted) showError(error);
   }
 }

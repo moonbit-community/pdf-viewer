@@ -1,0 +1,93 @@
+[
+  {
+    "name": "axial-rgb-malformed-target3",
+    "pixels": 1024,
+    "maximumRgbError": 0,
+    "aboveOneByte": 0,
+    "distinctColours": 32,
+    "pdfSha256": [
+      "3479e2c3a20b6b3544df058d440171a7353313828ced2b89ec9d76d94c3fed74",
+      "a37992ecbb3e5fe56b6e33b8b391c58ecd05b0bf4924cd15ce6cf4e3af7bce5a"
+    ]
+  },
+  {
+    "name": "axial-cal-malformed-target3",
+    "pixels": 1024,
+    "maximumRgbError": 1,
+    "aboveOneByte": 0,
+    "distinctColours": 32,
+    "pdfSha256": [
+      "51286c48069bd669043bf217df9a333fd17ac7ed18c2f43d301eab3c8fc5b693",
+      "1a664997edce3e91784ef42ecbcffea83b66d99e21b790c51a17c9776c3b0efd"
+    ]
+  },
+  {
+    "name": "mesh-cal-malformed-target3",
+    "pixels": 1024,
+    "maximumRgbError": 0,
+    "aboveOneByte": 0,
+    "distinctColours": 626,
+    "pdfSha256": [
+      "c36fa807055e81798d7a95f833265cb067a3b49835af7953e289fa37e03d5093",
+      "13b4f87d53feb74ddf438f3177f4d3f4567ff79c725233be5e580d9f5dafb16e"
+    ]
+  },
+  {
+    "name": "mesh-cal-unusable-target3",
+    "pixels": 1024,
+    "maximumRgbError": 0,
+    "aboveOneByte": 0,
+    "distinctColours": 626,
+    "pdfSha256": [
+      "09c86ebaa7005f09958d840b02b9307ba96c37500b141cbdfa61e98b2c0a2847",
+      "da2a4f7849f4942a50d93a065a6d0c9587b420bbb3fe39763e009e955068ff20"
+    ]
+  },
+  {
+    "name": "image-cal-malformed-target3",
+    "pixels": 1024,
+    "maximumRgbError": 0,
+    "aboveOneByte": 0,
+    "distinctColours": 4,
+    "pdfSha256": [
+      "7833685d72664c95067b2bf30270bd4d10b30db5690fb0757718cff266b9a521",
+      "b8a6043a8e7357e35afaaad6fd390d1077f8e874f8f145a3a9abc63c84d712ae"
+    ]
+  },
+  {
+    "name": "image-cal-unusable-target3",
+    "pixels": 1024,
+    "maximumRgbError": 0,
+    "aboveOneByte": 0,
+    "distinctColours": 4,
+    "pdfSha256": [
+      "7bc23410619aef65b6277170d0da04f138915b6bcf1a5cf4bab115de08908fd6",
+      "68d7173fd92ed811715929a013c8d9a77df350eca2aaa0e5d2bd8365daa60b76"
+    ]
+  },
+  {
+    "name": "mesh-cal-malformed-target4",
+    "pixels": 1024,
+    "maximumRgbError": 0,
+    "aboveOneByte": 0,
+    "distinctColours": 816,
+    "pdfSha256": [
+      "9e1935cceb3159adb9431ced07ea64f79d39c90cc76d64e8d12cd4972a97cd53",
+      "9b8f8a5622ed47da31f85cf1d6de9622e677fc38e35f8ef7999c860f5af7f690"
+    ]
+  },
+  {
+    "name": "valid-icc-raw-mesh-scoped-display-rgb",
+    "pixels": 1024,
+    "maximumRgbError": 0,
+    "channelsDifferentFromDeviceRgbAlternate": 576,
+    "pdfSha256": "16b56c9322a0633eca3f52c6ccbbbc564a2d540a32fdbb9b8155c71a9e38743a"
+  },
+  {
+    "name": "valid-icc-raw-mesh-scoped-display-gray",
+    "pixels": 1024,
+    "maximumRgbError": 0,
+    "channelsDifferentFromDeviceRgbAlternate": 2953,
+    "pdfSha256": "715e4bdb7e042da1feb41ae1fd9ede113c98c278eec91bafc7b1afd4311652c4"
+  }
+]

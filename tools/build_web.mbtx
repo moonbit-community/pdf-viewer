@@ -7,6 +7,7 @@ import {
 
 ///|
 async fn main {
+  @shell.Cmd("node", ["tools/prepare_web_assets.mjs"]).run()
   @shell.Cmd("moon", ["build", "--target", "js", "--release", "cmd/browser"]).run()
   if !@fs.exists("web/_generated") {
     @fs.mkdir("web/_generated", recursive=true)
@@ -15,5 +16,20 @@ async fn main {
     "web/_generated/pdf.js",
     @fs.read_file("_build/js/release/build/cmd/browser/browser.js").binary(),
   )
+  if !@fs.exists("web/vendor/jbig2") {
+    @fs.mkdir("web/vendor/jbig2", recursive=true)
+  }
+  for
+    (source, target) in [
+      ("codecs/jbig2/decoder.mjs", "web/vendor/jbig2/decoder.mjs"),
+      ("vendor/jbig2/jbig2.wasm", "web/vendor/jbig2/jbig2.wasm"),
+      ("vendor/jbig2/LICENSE_CHROMIUM", "web/vendor/jbig2/LICENSE_CHROMIUM"),
+      ("vendor/jbig2/LICENSE_JBIG2", "web/vendor/jbig2/LICENSE_JBIG2"),
+      (
+        "vendor/jbig2/LICENSE_PDFJS_JBIG2", "web/vendor/jbig2/LICENSE_PDFJS_JBIG2",
+      ),
+    ] {
+    @fs.write_file(target, @fs.read_file(source).binary())
+  }
   println("Browser build: web/ (serve this directory as a static site)")
 }

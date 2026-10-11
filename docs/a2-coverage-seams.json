@@ -1,0 +1,38 @@
+{
+  "sha256": "dea3878acd6210f48fd640d7c65316fb38244f182048036a3c6fe003ce726388",
+  "ghostscript": "10.05.1",
+  "point": [
+    30,
+    20
+  ],
+  "coverage": [
+    0.2196078431372549,
+    0.7764705882352941
+  ],
+  "combinedAlpha": 0.8255594002306805,
+  "canvas": [
+    175,
+    177,
+    178,
+    255
+  ],
+  "directHost": [
+    175,
+    176,
+    177,
+    255
+  ],
+  "oneCompoundPath": [
+    158,
+    160,
+    161,
+    255
+  ],
+  "ghostscriptPixel": [
+    158,
+    160,
+    161,
+    255
+  ],
+  "maximumBackendVersusHost": 1
+}

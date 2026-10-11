@@ -1,9 +1,18 @@
 import {
+  "moonbit-community/pdf-viewer/codecs/jbig2",
+  "moonbit-community/pdf-viewer/codecs/jpx",
   "moonbitlang/core/encoding/base64",
   "moonbitlang/core/debug",
   "moonbitlang/core/string",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/math",
+  "moonbitlang/core/buffer",
+  "moonbit-community/bidi",
+  "moonbit-community/normalization",
+  "moonbit-community/ucd",
+  "moonbit-community/flate" @raw_flate,
+  "moonbit-community/flate/zlib" @font_zlib,
+  "mizchi/font",
   "moonbitlang/pdflite",
   "moonbitlang/pdflite/content",
   "moonbitlang/pdflite/annotation",
@@ -25,3 +34,8 @@ import {
 import {
   "moonbitlang/core/test",
 } for "test"
+
+options(
+  "native-stub": [ "colour_icc_native.c" ],
+  link: { "native": { "cc-link-flags": "-lstdc++" } },
+)

@@ -1,0 +1,158 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+struct TextPaintCase {
+  name : String
+  content : String
+} derive(ToJson)
+
+///|
+fn cases() -> Array[TextPaintCase] {
+  [
+    {
+      name: "tiling-fill",
+      content: "/Pattern cs /PF scn BT /F1 105 Tf 20 35 Td (AB) Tj ET",
+    },
+    {
+      name: "tiling-stroke",
+      content: "/Pattern CS /PS SCN 5 w BT /F1 105 Tf 1 Tr 20 35 Td (AB) Tj ET",
+    },
+    {
+      name: "independent-fill-stroke",
+      content: "/Pattern cs /PF scn /Pattern CS /PS SCN 5 w BT /F1 105 Tf 2 Tr 20 35 Td (AB) Tj ET",
+    },
+    {
+      name: "shading-fill",
+      content: "/Pattern cs /PG scn BT /F1 105 Tf 20 35 Td (AB) Tj ET",
+    },
+    {
+      name: "shading-stroke",
+      content: "/Pattern CS /PG SCN 5 w BT /F1 105 Tf 1 Tr 20 35 Td (AB) Tj ET",
+    },
+    {
+      name: "uncolored-fill",
+      content: "/PCS cs .1 .7 .2 /PU scn BT /F1 105 Tf 20 35 Td (AB) Tj ET",
+    },
+    {
+      name: "pattern-alpha-fill-stroke",
+      content: "/G gs /Pattern cs /PF scn /Pattern CS /PS SCN 8 w BT /F1 105 Tf 2 Tr 20 35 Td (AB) Tj ET",
+    },
+    {
+      name: "affine-reflected-pattern",
+      content: "q -1.3 .2 .3 .7 220 15 cm /Pattern cs /PF scn /Pattern CS /PS SCN 4 w [5 3] 1 d BT /F1 100 Tf 2 Tr 1 .1 .2 1 15 25 Tm (AB) Tj ET Q",
+    },
+    {
+      name: "fallback-tiling-fill",
+      content: "/Pattern cs /PF scn BT /F2 105 Tf 20 35 Td (AB) Tj ET",
+    },
+    {
+      name: "fallback-two-patterns",
+      content: "/Pattern cs /PF scn /Pattern CS /PS SCN 4 w BT /F2 105 Tf 2 Tr 20 35 Td (AB) Tj ET",
+    },
+    {
+      name: "fallback-shading-fill-stroke",
+      content: "/G gs /Pattern cs /PG scn /Pattern CS /PS SCN 4 w BT /F2 105 Tf 2 Tr 20 35 Td (AB) Tj ET",
+    },
+    {
+      name: "fill-pattern-text-clip",
+      content: "/Pattern cs /PF scn BT /F1 105 Tf 4 Tr 20 35 Td (AB) Tj ET .1 .5 .8 rg 60 50 35 90 re f",
+    },
+  ]
+}
+
+///|
+fn stream(dictionary : String, content : String) -> String {
+  "<< /Length \{content.length()} \{dictionary} >>\nstream\n\{content}\nendstream"
+}
+
+///|
+fn fixture_pdf(font : Bytes, samples : Array[TextPaintCase]) -> Bytes {
+  let font_id = 3 + samples.length() * 2
+  let kids = [ for i in 0..<samples.length() => "\{3 + i * 2} 0 R" ].join(" ")
+  let objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Count \{samples.length()} /Kids [\{kids}] >>",
+  ]
+  for i, sample in samples {
+    objects.push(
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 240 160] /Contents \{4 + i * 2} 0 R /Resources << /Font << /F1 \{font_id} 0 R /F2 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> /ColorSpace << /PCS [/Pattern /DeviceRGB] >> /Pattern << /PF \{font_id + 3} 0 R /PS \{font_id + 4} 0 R /PG \{font_id + 5} 0 R /PU \{font_id + 6} 0 R >> /ExtGState << /G << /ca .75 /CA .4 >> >> >> >>",
+    )
+    objects.push(stream("", ".9 .9 .9 rg 0 0 240 160 re f " + sample.content))
+  }
+  objects.push(
+    "<< /Type /Font /Subtype /TrueType /BaseFont /AffinePenFixture-Regular /FirstChar 65 /LastChar 66 /Widths [650 650] /Encoding /WinAnsiEncoding /FontDescriptor \{font_id + 1} 0 R >>",
+  )
+  objects.push(
+    "<< /Type /FontDescriptor /FontName /AffinePenFixture-Regular /Flags 32 /FontBBox [0 0 680 740] /Ascent 800 /Descent -200 /CapHeight 740 /ItalicAngle 0 /StemV 80 /FontFile2 \{font_id + 2} 0 R >>",
+  )
+  let hex = StringBuilder()
+  for byte in font {
+    hex.write_string(byte.to_int().to_string(radix=16).pad_start(2, '0'))
+  }
+  hex.write_char('>')
+  objects.push(
+    stream("/Length1 \{font.length()} /Filter /ASCIIHexDecode", hex.to_string()),
+  )
+  objects.push(
+    stream(
+      "/Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 12 12] /XStep 12 /YStep 12 /Resources << >>",
+      "1 .1 .2 rg 0 0 6 12 re f 1 .8 .2 rg 6 0 6 12 re f",
+    ),
+  )
+  objects.push(
+    stream(
+      "/Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 10 10] /XStep 10 /YStep 10 /Resources << >>",
+      "0 .2 .9 rg 0 0 10 5 re f .1 .9 .8 rg 0 5 10 5 re f",
+    ),
+  )
+  objects.push(
+    "<< /Type /Pattern /PatternType 2 /Shading << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 220 0] /Function << /FunctionType 2 /Domain [0 1] /C0 [1 .1 .2] /C1 [.1 .2 1] /N 1 >> /Extend [true true] >> >>",
+  )
+  objects.push(
+    stream(
+      "/Type /Pattern /PatternType 1 /PaintType 2 /TilingType 1 /BBox [0 0 12 12] /XStep 12 /YStep 12 /Resources << >>",
+      "0 0 6 12 re f",
+    ),
+  )
+  let output = StringBuilder()
+  output.write_string("%PDF-1.7\n")
+  let offsets : Array[Int] = []
+  for i, object in objects {
+    offsets.push(output.to_string().length())
+    output.write_string("\{i + 1} 0 obj\n\{object}\nendobj\n")
+  }
+  let xref = output.to_string().length()
+  output.write_string("xref\n0 \{objects.length() + 1}\n0000000000 65535 f \n")
+  for offset in offsets {
+    output.write_string(offset.to_string().pad_start(10, '0') + " 00000 n \n")
+  }
+  output.write_string(
+    "trailer\n<< /Size \{objects.length() + 1} /Root 1 0 R >>\nstartxref\n\{xref}\n%%EOF\n",
+  )
+  @utf8.encode(output.to_string())
+}
+
+///|
+/// Run from the repository root: moon run tools/text_paints.mbtx [directory]
+async fn main {
+  let args = @env.args()
+  let directory = if args.length() > 2 { args[2] } else { "_build/text-paints" }
+  if !@fs.exists(directory) {
+    @fs.mkdir(directory, recursive=true)
+  }
+  let font = @fs.read_file("tools/fixtures/text-stroke/affine-pen.ttf").binary()
+  @fs.write_file(directory + "/text-paints.pdf", fixture_pdf(font, cases()))
+  let manifest : Json = {
+    "license": "Apache-2.0",
+    "font": "Original two-glyph TrueType fixture; see tools/fixtures/text-stroke/README.md",
+    "cases": cases(),
+  }
+  @fs.write_file(directory + "/manifest.json", manifest.stringify(indent=2))
+  println(directory)
+}

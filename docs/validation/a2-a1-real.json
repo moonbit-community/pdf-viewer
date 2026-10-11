@@ -1,0 +1,333 @@
+{
+  "fixtureRevision": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+  "cases": [
+    {
+      "file": "jpx_smaskindata.pdf",
+      "page": 1,
+      "width": 140,
+      "height": 40,
+      "pdfjs": "6.4.299",
+      "sha256": "a82813559c74f074b0caf92c80875fc018acb737269a2af5508c7e083b2a5fd3",
+      "canvas": {
+        "changedAbove8": 0,
+        "meanAbsoluteError": 0,
+        "maximum": 0
+      },
+      "svg": {
+        "skipped": true,
+        "reason": "Explicit PDF_PIXEL_SVG=0 Canvas-only measurement"
+      },
+      "milliseconds": 122.08779900000002,
+      "rssDelta": 31940608
+    },
+    {
+      "file": "tracemonkey.pdf",
+      "page": 1,
+      "width": 612,
+      "height": 792,
+      "pdfjs": "6.4.299",
+      "sha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+      "canvas": {
+        "changedAbove8": 342,
+        "meanAbsoluteError": 0.03744347065425497,
+        "maximum": 64
+      },
+      "svg": {
+        "skipped": true,
+        "reason": "Explicit PDF_PIXEL_SVG=0 Canvas-only measurement"
+      },
+      "milliseconds": 4119.672466,
+      "rssDelta": 622567424
+    },
+    {
+      "file": "tracemonkey.pdf",
+      "page": 2,
+      "width": 612,
+      "height": 792,
+      "pdfjs": "6.4.299",
+      "sha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+      "canvas": {
+        "changedAbove8": 5214,
+        "meanAbsoluteError": 0.6501782531194296,
+        "maximum": 146
+      },
+      "svg": {
+        "skipped": true,
+        "reason": "Explicit PDF_PIXEL_SVG=0 Canvas-only measurement"
+      },
+      "milliseconds": 5526.671061,
+      "rssDelta": 154546176
+    },
+    {
+      "file": "tracemonkey.pdf",
+      "page": 3,
+      "width": 612,
+      "height": 792,
+      "pdfjs": "6.4.299",
+      "sha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+      "canvas": {
+        "changedAbove8": 2422,
+        "meanAbsoluteError": 0.39238174225919326,
+        "maximum": 158
+      },
+      "svg": {
+        "skipped": true,
+        "reason": "Explicit PDF_PIXEL_SVG=0 Canvas-only measurement"
+      },
+      "milliseconds": 2826.466097999999,
+      "rssDelta": 30593024
+    },
+    {
+      "file": "tracemonkey.pdf",
+      "page": 4,
+      "width": 612,
+      "height": 792,
+      "pdfjs": "6.4.299",
+      "sha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+      "canvas": {
+        "changedAbove8": 466,
+        "meanAbsoluteError": 0.05518213177526903,
+        "maximum": 64
+      },
+      "svg": {
+        "skipped": true,
+        "reason": "Explicit PDF_PIXEL_SVG=0 Canvas-only measurement"
+      },
+      "milliseconds": 4950.3749210000005,
+      "rssDelta": 139628544
+    },
+    {
+      "file": "tracemonkey.pdf",
+      "page": 5,
+      "width": 612,
+      "height": 792,
+      "pdfjs": "6.4.299",
+      "sha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+      "canvas": {
+        "changedAbove8": 662,
+        "meanAbsoluteError": 0.10321969696969698,
+        "maximum": 170
+      },
+      "svg": {
+        "skipped": true,
+        "reason": "Explicit PDF_PIXEL_SVG=0 Canvas-only measurement"
+      },
+      "milliseconds": 5054.980923000003,
+      "rssDelta": 30253056
+    },
+    {
+      "file": "tracemonkey.pdf",
+      "page": 6,
+      "width": 612,
+      "height": 792,
+      "pdfjs": "6.4.299",
+      "sha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+      "canvas": {
+        "changedAbove8": 5728,
+        "meanAbsoluteError": 0.4640034605312383,
+        "maximum": 140
+      },
+      "svg": {
+        "skipped": true,
+        "reason": "Explicit PDF_PIXEL_SVG=0 Canvas-only measurement"
+      },
+      "milliseconds": 4642.417906000002,
+      "rssDelta": -4849664
+    },
+    {
+      "file": "tracemonkey.pdf",
+      "page": 7,
+      "width": 612,
+      "height": 792,
+      "pdfjs": "6.4.299",
+      "sha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+      "canvas": {
+        "changedAbove8": 4098,
+        "meanAbsoluteError": 0.40418894830659535,
+        "maximum": 169
+      },
+      "svg": {
+        "skipped": true,
+        "reason": "Explicit PDF_PIXEL_SVG=0 Canvas-only measurement"
+      },
+      "milliseconds": 4193.465115000003,
+      "rssDelta": 3538944
+    },
+    {
+      "file": "tracemonkey.pdf",
+      "page": 8,
+      "width": 612,
+      "height": 792,
+      "pdfjs": "6.4.299",
+      "sha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+      "canvas": {
+        "changedAbove8": 1681,
+        "meanAbsoluteError": 0.25724359609163533,
+        "maximum": 127
+      },
+      "svg": {
+        "skipped": true,
+        "reason": "Explicit PDF_PIXEL_SVG=0 Canvas-only measurement"
+      },
+      "milliseconds": 4396.738508000002,
+      "rssDelta": 17518592
+    },
+    {
+      "file": "tracemonkey.pdf",
+      "page": 9,
+      "width": 612,
+      "height": 792,
+      "pdfjs": "6.4.299",
+      "sha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+      "canvas": {
+        "changedAbove8": 429,
+        "meanAbsoluteError": 0.05336865385884994,
+        "maximum": 68
+      },
+      "svg": {
+        "skipped": true,
+        "reason": "Explicit PDF_PIXEL_SVG=0 Canvas-only measurement"
+      },
+      "milliseconds": 5043.817374000006,
+      "rssDelta": 10190848
+    },
+    {
+      "file": "tracemonkey.pdf",
+      "page": 10,
+      "width": 612,
+      "height": 792,
+      "pdfjs": "6.4.299",
+      "sha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+      "canvas": {
+        "changedAbove8": 28446,
+        "meanAbsoluteError": 2.450295438040536,
+        "maximum": 139
+      },
+      "svg": {
+        "skipped": true,
+        "reason": "Explicit PDF_PIXEL_SVG=0 Canvas-only measurement"
+      },
+      "milliseconds": 6414.949198000002,
+      "rssDelta": -6823936
+    },
+    {
+      "file": "tracemonkey.pdf",
+      "page": 11,
+      "width": 612,
+      "height": 792,
+      "pdfjs": "6.4.299",
+      "sha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+      "canvas": {
+        "changedAbove8": 24917,
+        "meanAbsoluteError": 1.0367956526044761,
+        "maximum": 145
+      },
+      "svg": {
+        "skipped": true,
+        "reason": "Explicit PDF_PIXEL_SVG=0 Canvas-only measurement"
+      },
+      "milliseconds": 7147.609618000002,
+      "rssDelta": 700796928
+    },
+    {
+      "file": "tracemonkey.pdf",
+      "page": 12,
+      "width": 612,
+      "height": 792,
+      "pdfjs": "6.4.299",
+      "sha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+      "canvas": {
+        "changedAbove8": 1855,
+        "meanAbsoluteError": 0.3722849409123919,
+        "maximum": 172
+      },
+      "svg": {
+        "skipped": true,
+        "reason": "Explicit PDF_PIXEL_SVG=0 Canvas-only measurement"
+      },
+      "milliseconds": 3188.560136,
+      "rssDelta": -598589440
+    },
+    {
+      "file": "tracemonkey.pdf",
+      "page": 13,
+      "width": 612,
+      "height": 792,
+      "pdfjs": "6.4.299",
+      "sha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+      "canvas": {
+        "changedAbove8": 18379,
+        "meanAbsoluteError": 2.252878045157457,
+        "maximum": 151
+      },
+      "svg": {
+        "skipped": true,
+        "reason": "Explicit PDF_PIXEL_SVG=0 Canvas-only measurement"
+      },
+      "milliseconds": 7626.314328,
+      "rssDelta": 111685632
+    },
+    {
+      "file": "tracemonkey.pdf",
+      "page": 14,
+      "width": 612,
+      "height": 792,
+      "pdfjs": "6.4.299",
+      "sha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+      "canvas": {
+        "changedAbove8": 198,
+        "meanAbsoluteError": 0.02235178583217799,
+        "maximum": 64
+      },
+      "svg": {
+        "skipped": true,
+        "reason": "Explicit PDF_PIXEL_SVG=0 Canvas-only measurement"
+      },
+      "milliseconds": 2145.7058560000005,
+      "rssDelta": 9510912
+    }
+  ],
+  "sourceLocalCommit": "84079e01e7c9f73d3e37037df712292c2e416a3a",
+  "browserDOMExecuted": false,
+  "scope": "15 actual Canvas page measurements, not 15 fidelity passes; SVG explicitly skipped after Resvg failed to finish Tracemonkey page 13.",
+  "command": "PDF_PIXEL_SVG=0 PDF_PIXEL_OUTPUT=_build/real-corpus node tools/pixels/compare_canvas.mjs _build/pixel-plan.mjs /path/to/jpx_smaskindata.pdf /path/to/tracemonkey.pdf",
+  "publicEntries": {
+    "bridgeSha256": "5e8939e101fed29d56f24bb985dab08ff99afe2bba76ecc8247deac66d2ef7b9",
+    "referenceRevision": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+    "pdfjs": "6.4.299",
+    "browserDOMExecuted": false,
+    "cases": [
+      {
+        "file": "jpx_smaskindata.pdf",
+        "page": 1,
+        "fixtureSha256": "a82813559c74f074b0caf92c80875fc018acb737269a2af5508c7e083b2a5fd3",
+        "width": 140,
+        "height": 40,
+        "diagnostics": [],
+        "nativeExactRgba": true,
+        "pdfjs": {
+          "maximum": 0,
+          "changedAbove8": 0,
+          "meanAbsoluteRgbError": 0
+        },
+        "totalCheckMilliseconds": 1115.4140209999998
+      },
+      {
+        "file": "tracemonkey.pdf",
+        "page": 1,
+        "fixtureSha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+        "width": 612,
+        "height": 792,
+        "diagnostics": [],
+        "nativeExactRgba": true,
+        "pdfjs": {
+          "maximum": 64,
+          "changedAbove8": 342,
+          "meanAbsoluteRgbError": 0.03744347065425497
+        },
+        "totalCheckMilliseconds": 4976.610145
+      }
+    ],
+    "scope": "Fresh direct shipped web open_pdf/render_page/runtime and native cmd/main -> tools/render_canvas.mjs on page 1 of each real file; exact native/web RGBA, independent PDF.js differences retained."
+  }
+}

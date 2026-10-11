@@ -1,0 +1,17 @@
+// Decode orchestration: single-component and all-components paths
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/core",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/a8",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/codeblock",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/dwt",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/geometry",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/input",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/layer",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/mct",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/mq",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/profile",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/quant",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/roi",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/t1",
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/math",
+}

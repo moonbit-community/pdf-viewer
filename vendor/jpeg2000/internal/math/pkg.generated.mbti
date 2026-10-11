@@ -1,0 +1,29 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/math"
+
+// Values
+pub fn ceil_div(Int, Int) -> Int
+
+pub fn ceil_div_checked(Int, Int) -> Result[Int, String]
+
+pub fn f32bits_hex(Double) -> String
+
+pub fn floor_log2(Int) -> Int
+
+pub fn grid_index_2d(Int, Int, Int) -> Int
+
+pub fn pow2_double(Int) -> Double
+
+pub fn round_ties_even_f32(Double) -> Int
+
+pub fn round_to_f32(Double) -> Double
+
+pub fn sum_ints(Array[Int]) -> Int
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

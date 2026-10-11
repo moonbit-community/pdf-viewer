@@ -1,0 +1,5 @@
+# Keep upstream copyright whitespace and pinned source hashes unchanged.
+90ms-RKSJ-H whitespace=-blank-at-eol
+90ms-RKSJ-V whitespace=-blank-at-eol
+UniJIS-UTF32-H whitespace=-blank-at-eol
+UniJIS-UTF32-V whitespace=-blank-at-eol

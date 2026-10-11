@@ -1,0 +1,212 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+}
+
+///|
+struct Type3Case {
+  name : String
+  content : String
+} derive(ToJson)
+
+///|
+fn cases() -> Array[Type3Case] {
+  [
+    {
+      name: "two-internal-colors",
+      content: "0 1 0 rg BT /F1 90 Tf 30 40 Td (A) Tj ET",
+    },
+    { name: "colored-glyph-in-CMYK-group", content: "0 1 0 rg /CMYK Do", },
+    { name: "colored-glyph-in-ICC-group", content: "0 1 0 rg /ICC Do", },
+    {
+      name: "inherited-alpha-and-internal-override",
+      content: "/Outer gs BT /F3 90 Tf 30 40 Td (A) Tj ET",
+    },
+    {
+      name: "internal-soft-mask-and-clear",
+      content: "BT /F4 90 Tf 30 40 Td (A) Tj ET",
+    },
+    {
+      name: "Tr1-does-not-restroke-Type3",
+      content: "8 w 0 1 0 RG BT /F1 90 Tf 1 Tr 30 40 Td (A) Tj ET",
+    },
+    {
+      name: "Tr3-is-invisible",
+      content: "BT /F1 90 Tf 3 Tr 30 40 Td (A) Tj ET",
+    },
+    {
+      name: "d1-stencil-inherits-fill",
+      content: "0 .6 .2 rg BT /F2 90 Tf 2 Tr 30 40 Td (A) Tj ET",
+    },
+    {
+      name: "internal-CMYK-transparency-group",
+      content: "BT /F5 90 Tf 30 40 Td (A) Tj ET",
+    },
+    {
+      name: "inherited-soft-mask",
+      content: "/OuterMask gs BT /F1 90 Tf 30 40 Td (A) Tj ET",
+    },
+    {
+      name: "affine-reflected-Type3",
+      content: "q -1 .2 .3 .9 190 5 cm BT /F1 75 Tf 15 35 Td (A) Tj ET Q",
+    },
+    { name: "CMYK-equivalent-direct-paths", content: "/CMYKDirect Do", },
+    {
+      name: "internal-CMYK-equivalent-direct-Form",
+      content: "q .09 0 0 .09 30 40 cm /InnerDirect Do Q",
+    },
+    { name: "ICC-equivalent-direct-paths", content: "/ICCDirect Do", },
+  ]
+}
+
+///|
+fn stream(dict : String, content : String) -> String {
+  "<< /Length \{content.length()} \{dict} >>\nstream\n\{content}\nendstream"
+}
+
+///|
+fn font(charproc : Int, resources : String) -> String {
+  "<< /Type /Font /Subtype /Type3 /FontBBox [0 0 1000 1000] /FontMatrix [.001 0 0 .001 0 0] /FirstChar 65 /LastChar 65 /Widths [1000] /Encoding << /Type /Encoding /Differences [65 /A] >> /CharProcs << /A \{charproc} 0 R >> /Resources \{resources} >>"
+}
+
+///|
+fn fixture(profile : Bytes) -> Bytes {
+  let samples = cases()
+  let id = 3 + samples.length() * 2
+  let kids = [ for i in 0..<samples.length() => "\{3 + i * 2} 0 R" ].join(" ")
+  let objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Count \{samples.length()} /Kids [\{kids}] >>",
+  ]
+  let fonts = "/Font << /F1 \{id} 0 R /F2 \{id + 2} 0 R /F3 \{id + 4} 0 R /F4 \{id + 6} 0 R /F5 \{id + 13} 0 R >>"
+  for i, sample in samples {
+    objects.push(
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 240 180] /Contents \{4 + i * 2} 0 R /Resources << \{fonts} /XObject << /CMYK \{id + 10} 0 R /ICC \{id + 11} 0 R /CMYKDirect \{id + 16} 0 R /InnerDirect \{id + 15} 0 R /ICCDirect \{id + 17} 0 R >> /ExtGState << /Outer << /ca .4 /BM /Multiply >> /OuterMask << /SMask << /S /Alpha /G \{id + 9} 0 R >> >> >> >> >>",
+    )
+    objects.push(stream("", ".9 .9 .9 rg 0 0 240 180 re f " + sample.content))
+  }
+  objects.push(font(id + 1, "<< >>"))
+  objects.push(
+    stream(
+      "", "1000 0 d0 1 0 0 rg 0 0 500 1000 re f 0 0 1 rg 500 0 500 1000 re f",
+    ),
+  )
+  objects.push(font(id + 3, "<< >>"))
+  objects.push(
+    stream(
+      "", "1000 0 0 0 1000 1000 d1 1 0 0 rg 0 0 500 1000 re f 0 0 1 rg 500 0 500 1000 re f",
+    ),
+  )
+  objects.push(
+    font(id + 5, "<< /ExtGState << /Inner << /ca .8 /BM /Screen >> >> >>"),
+  )
+  objects.push(
+    stream(
+      "", "1000 0 d0 1 0 0 rg 0 0 500 1000 re f /Inner gs 0 0 1 rg 500 0 500 1000 re f",
+    ),
+  )
+  objects.push(
+    font(
+      id + 7,
+      "<< /ExtGState << /Mask << /SMask << /S /Alpha /G \{id + 8} 0 R >> >> /Clear << /SMask /None >> >> >>",
+    ),
+  )
+  objects.push(
+    stream(
+      "", "1000 0 d0 /Mask gs 1 0 0 rg 0 0 500 1000 re f /Clear gs 0 0 1 rg 500 0 500 1000 re f",
+    ),
+  )
+  objects.push(
+    stream(
+      "/Type /XObject /Subtype /Form /BBox [0 0 1000 1000] /Group << /S /Transparency /I true >> /Resources << /ExtGState << /Half << /ca .5 >> >> >>",
+      "/Half gs 0 g 0 0 1000 1000 re f",
+    ),
+  )
+  objects.push(
+    stream(
+      "/Type /XObject /Subtype /Form /BBox [0 0 240 180] /Group << /S /Transparency /I true >> /Resources << /ExtGState << /Half << /ca .5 >> >> >>",
+      "/Half gs 0 g 0 0 240 180 re f",
+    ),
+  )
+  objects.push(
+    stream(
+      "/Type /XObject /Subtype /Form /BBox [0 0 240 180] /Group << /S /Transparency /I true /CS /DeviceCMYK >> /Resources << \{fonts} >>",
+      "BT /F1 90 Tf 30 40 Td (A) Tj ET",
+    ),
+  )
+  objects.push(
+    stream(
+      "/Type /XObject /Subtype /Form /BBox [0 0 240 180] /Group << /S /Transparency /I true /CS [/ICCBased \{id + 12} 0 R] >> /Resources << \{fonts} >>",
+      "BT /F1 90 Tf 30 40 Td (A) Tj ET",
+    ),
+  )
+  let hex = StringBuilder()
+  for byte in profile {
+    hex.write_string(byte.to_int().to_string(radix=16).pad_start(2, '0'))
+  }
+  hex.write_char('>')
+  objects.push(stream("/N 3 /Filter /ASCIIHexDecode", hex.to_string()))
+  objects.push(font(id + 14, "<< /XObject << /Inner \{id + 15} 0 R >> >>"))
+  objects.push(stream("", "1000 0 d0 /Inner Do"))
+  objects.push(
+    stream(
+      "/Type /XObject /Subtype /Form /BBox [0 0 1000 1000] /Group << /S /Transparency /I true /CS /DeviceCMYK >> /Resources << /ExtGState << /A << /ca .75 >> >> >>",
+      "/A gs 0 1 1 0 k 0 0 500 1000 re f 1 1 0 0 k 500 0 500 1000 re f",
+    ),
+  )
+  objects.push(
+    stream(
+      "/Type /XObject /Subtype /Form /BBox [0 0 240 180] /Group << /S /Transparency /I true /CS /DeviceCMYK >> /Resources << >>",
+      ".09 0 0 .09 30 40 cm 1 0 0 rg 0 0 500 1000 re f 0 0 1 rg 500 0 500 1000 re f",
+    ),
+  )
+  objects.push(
+    stream(
+      "/Type /XObject /Subtype /Form /BBox [0 0 240 180] /Group << /S /Transparency /I true /CS [/ICCBased \{id + 12} 0 R] >> /Resources << >>",
+      ".09 0 0 .09 30 40 cm 1 0 0 rg 0 0 500 1000 re f 0 0 1 rg 500 0 500 1000 re f",
+    ),
+  )
+  let output = StringBuilder()
+  output.write_string("%PDF-1.7\n")
+  let offsets : Array[Int] = []
+  for i, object in objects {
+    offsets.push(output.to_string().length())
+    output.write_string("\{i + 1} 0 obj\n\{object}\nendobj\n")
+  }
+  let xref = output.to_string().length()
+  output.write_string("xref\n0 \{objects.length() + 1}\n0000000000 65535 f \n")
+  for offset in offsets {
+    output.write_string(offset.to_string().pad_start(10, '0') + " 00000 n \n")
+  }
+  output.write_string(
+    "trailer\n<< /Size \{objects.length() + 1} /Root 1 0 R >>\nstartxref\n\{xref}\n%%EOF\n",
+  )
+  @utf8.encode(output.to_string())
+}
+
+///|
+async fn main {
+  let args = @env.args()
+  let directory = if args.length() > 2 {
+    args[2]
+  } else {
+    "_build/type3-scenes"
+  }
+  if !@fs.exists(directory) {
+    @fs.mkdir(directory, recursive=true)
+  }
+  @fs.write_file(
+    directory + "/type3-scenes.pdf",
+    fixture(@fs.read_file("assets/icc/rgb-gamma22.icc").binary()),
+  )
+  let manifest : Json = {
+    "license": "Apache-2.0",
+    "profile": "Original LittleCMS RGB profile; see assets/icc/README.md",
+    "cases": cases(),
+  }
+  @fs.write_file(directory + "/manifest.json", manifest.stringify(indent=2))
+  println(directory)
+}

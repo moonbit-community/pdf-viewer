@@ -1,0 +1,235 @@
+{
+  "pdfjsVersion": "6.4.299",
+  "referenceRevision": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+  "scale": 2,
+  "notes": [
+    "Node/resvg diagnostic comparison; Chromium blocked by socket policy.",
+    "Nearest column changes only resvg sampling attribute, not product output.",
+    "smaskdim includes annotation differences.",
+    "These are SVG/resvg page diagnostics, not a claim of Canvas/Chromium acceptance.",
+    "The colour-key image is inside a tiling pattern; its final source alpha is exact.",
+    "The native/JS JBIG2 source planes match independently; hidden OCR timing is tracked separately."
+  ],
+  "results": [
+    {
+      "file": "issue10339_reduced.pdf",
+      "page": 1,
+      "rotation": 0,
+      "width": 560,
+      "height": 300,
+      "elapsedMs": 117.84764900000005,
+      "resvg": {
+        "pixelsAbove8": 6610,
+        "meanAbsoluteError": 0.7585753968253969
+      },
+      "resvgNearest": {
+        "pixelsAbove8": 0,
+        "meanAbsoluteError": 0
+      },
+      "fixture_sha256": "7d2e9133129d33f5ba17c7701a3a98e3ba37777bf5dee593a4bc0ab1dd8a4926"
+    },
+    {
+      "file": "issue10339_reduced.pdf",
+      "page": 1,
+      "rotation": 90,
+      "width": 300,
+      "height": 560,
+      "elapsedMs": 31.05063199999995,
+      "resvg": {
+        "pixelsAbove8": 6610,
+        "meanAbsoluteError": 0.7585753968253969
+      },
+      "resvgNearest": {
+        "pixelsAbove8": 0,
+        "meanAbsoluteError": 0
+      },
+      "fixture_sha256": "7d2e9133129d33f5ba17c7701a3a98e3ba37777bf5dee593a4bc0ab1dd8a4926"
+    },
+    {
+      "file": "colorkeymask.pdf",
+      "page": 1,
+      "rotation": 0,
+      "width": 1191,
+      "height": 1684,
+      "elapsedMs": 255.02033999999992,
+      "resvg": {
+        "pixelsAbove8": 4011,
+        "meanAbsoluteError": 0.05472406867819015
+      },
+      "resvgNearest": {
+        "pixelsAbove8": 1878,
+        "meanAbsoluteError": 0.018363012910898778
+      },
+      "fixture_sha256": "655a470881a3bc4fac682abe88522c86c11ff41d08ecf94fae2f53ecd0c2d27c"
+    },
+    {
+      "file": "colorkeymask.pdf",
+      "page": 1,
+      "rotation": 90,
+      "width": 1684,
+      "height": 1191,
+      "elapsedMs": 139.51906099999997,
+      "resvg": {
+        "pixelsAbove8": 4286,
+        "meanAbsoluteError": 0.06110639109765575
+      },
+      "resvgNearest": {
+        "pixelsAbove8": 2157,
+        "meanAbsoluteError": 0.024770929769523737
+      },
+      "fixture_sha256": "655a470881a3bc4fac682abe88522c86c11ff41d08ecf94fae2f53ecd0c2d27c"
+    },
+    {
+      "file": "colorkeymask.pdf",
+      "page": 1,
+      "rotation": 180,
+      "width": 1191,
+      "height": 1684,
+      "elapsedMs": 139.45951400000013,
+      "resvg": {
+        "pixelsAbove8": 4286,
+        "meanAbsoluteError": 0.06175090561103233
+      },
+      "resvgNearest": {
+        "pixelsAbove8": 2157,
+        "meanAbsoluteError": 0.025422424584489237
+      },
+      "fixture_sha256": "655a470881a3bc4fac682abe88522c86c11ff41d08ecf94fae2f53ecd0c2d27c"
+    },
+    {
+      "file": "colorkeymask.pdf",
+      "page": 1,
+      "rotation": 270,
+      "width": 1684,
+      "height": 1191,
+      "elapsedMs": 145.44621699999993,
+      "resvg": {
+        "pixelsAbove8": 4011,
+        "meanAbsoluteError": 0.05417362203860705
+      },
+      "resvgNearest": {
+        "pixelsAbove8": 1879,
+        "meanAbsoluteError": 0.017810571899433133
+      },
+      "fixture_sha256": "655a470881a3bc4fac682abe88522c86c11ff41d08ecf94fae2f53ecd0c2d27c"
+    },
+    {
+      "file": "smaskdim.pdf",
+      "page": 1,
+      "rotation": 0,
+      "width": 1224,
+      "height": 1584,
+      "elapsedMs": 393.6384979999998,
+      "resvg": {
+        "pixelsAbove8": 4833,
+        "meanAbsoluteError": 0.15193602693602692
+      },
+      "resvgNearest": {
+        "pixelsAbove8": 4833,
+        "meanAbsoluteError": 0.15193602693602692
+      },
+      "fixture_sha256": "e03b8359f8b64e1a18a795aa9376bc98d98dca89a828ec20c49a4ac2f36a3d82"
+    },
+    {
+      "file": "issue4246.pdf",
+      "page": 1,
+      "rotation": 0,
+      "width": 1190,
+      "height": 1684,
+      "elapsedMs": 352.39075600000024,
+      "resvg": {
+        "pixelsAbove8": 0,
+        "meanAbsoluteError": 0
+      },
+      "resvgNearest": {
+        "pixelsAbove8": 0,
+        "meanAbsoluteError": 0
+      },
+      "fixture_sha256": "eb4b7f8cc7ae323aae080311c8afd639ae1cbefdd5cde3444f87a90ec2b3e11d"
+    },
+    {
+      "file": "issue17147.pdf",
+      "page": 1,
+      "rotation": 0,
+      "width": 1191,
+      "height": 1684,
+      "elapsedMs": 157.53628300000037,
+      "resvg": {
+        "pixelsAbove8": 1246,
+        "meanAbsoluteError": 0.045617268069507846
+      },
+      "resvgNearest": {
+        "pixelsAbove8": 1246,
+        "meanAbsoluteError": 0.045617268069507846
+      },
+      "fixture_sha256": "03dc20f6e920cb6c192175b52bf3ad1577838cbbc30dfd01e9edbfd43abe36b3"
+    },
+    {
+      "file": "issue13931.pdf",
+      "page": 1,
+      "rotation": 0,
+      "width": 1191,
+      "height": 1684,
+      "elapsedMs": 8396.696608999999,
+      "resvg": {
+        "pixelsAbove8": 24081,
+        "meanAbsoluteError": 0.45947319996303765
+      },
+      "resvgNearest": {
+        "pixelsAbove8": 24081,
+        "meanAbsoluteError": 0.45947319996303765
+      },
+      "fixture_sha256": "c8548f91ccb744c81c00778ca6b93912756c5b70c5324acbcc198ccdfc198298"
+    }
+  ],
+  "node_version": "24.19.0",
+  "resvg_version": "2.6.2",
+  "image_branch_revision": "e7230ab",
+  "source_planes": [
+    {
+      "file": "colorkeymask.pdf",
+      "referenceImages": 1,
+      "pngImages": 1,
+      "images": [
+        {
+          "width": 200,
+          "height": 267,
+          "alphaMismatch": 0,
+          "visibleAbove8": 0
+        }
+      ]
+    },
+    {
+      "file": "smaskdim.pdf",
+      "referenceImages": 2,
+      "pngImages": 2,
+      "images": [
+        {
+          "width": 76,
+          "height": 102,
+          "alphaMismatch": 0,
+          "visibleAbove8": 0
+        },
+        {
+          "width": 76,
+          "height": 102,
+          "alphaMismatch": 0,
+          "visibleAbove8": 0
+        }
+      ]
+    },
+    {
+      "file": "issue4246.pdf",
+      "referenceImages": 1,
+      "pngImages": 1,
+      "images": [
+        {
+          "width": 1000,
+          "height": 800,
+          "alphaMismatch": 0,
+          "visibleAbove8": 0
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,180 @@
+{
+  "referenceRevision": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+  "pdfjsVersion": "6.4.299",
+  "scale": 2,
+  "results": [
+    {
+      "file": "issue10339_reduced.pdf",
+      "sha256": "7d2e9133129d33f5ba17c7701a3a98e3ba37777bf5dee593a4bc0ab1dd8a4926",
+      "page": 1,
+      "rotation": 0,
+      "width": 560,
+      "height": 300,
+      "diagnostics": [],
+      "comparison": {
+        "above8": 0,
+        "maximum": 0,
+        "meanAbsoluteError": 0
+      },
+      "milliseconds": 124.442588
+    },
+    {
+      "file": "issue10339_reduced.pdf",
+      "sha256": "7d2e9133129d33f5ba17c7701a3a98e3ba37777bf5dee593a4bc0ab1dd8a4926",
+      "page": 1,
+      "rotation": 90,
+      "width": 300,
+      "height": 560,
+      "diagnostics": [],
+      "comparison": {
+        "above8": 0,
+        "maximum": 0,
+        "meanAbsoluteError": 0
+      },
+      "milliseconds": 52.89561399999991
+    },
+    {
+      "file": "colorkeymask.pdf",
+      "sha256": "655a470881a3bc4fac682abe88522c86c11ff41d08ecf94fae2f53ecd0c2d27c",
+      "page": 1,
+      "rotation": 0,
+      "width": 1191,
+      "height": 1684,
+      "diagnostics": [],
+      "comparison": {
+        "above8": 0,
+        "maximum": 0,
+        "meanAbsoluteError": 0
+      },
+      "milliseconds": 751.019878
+    },
+    {
+      "file": "colorkeymask.pdf",
+      "sha256": "655a470881a3bc4fac682abe88522c86c11ff41d08ecf94fae2f53ecd0c2d27c",
+      "page": 1,
+      "rotation": 90,
+      "width": 1684,
+      "height": 1191,
+      "diagnostics": [],
+      "comparison": {
+        "above8": 0,
+        "maximum": 0,
+        "meanAbsoluteError": 0
+      },
+      "milliseconds": 680.3535459999998
+    },
+    {
+      "file": "colorkeymask.pdf",
+      "sha256": "655a470881a3bc4fac682abe88522c86c11ff41d08ecf94fae2f53ecd0c2d27c",
+      "page": 1,
+      "rotation": 180,
+      "width": 1191,
+      "height": 1684,
+      "diagnostics": [],
+      "comparison": {
+        "above8": 0,
+        "maximum": 0,
+        "meanAbsoluteError": 0
+      },
+      "milliseconds": 607.7785999999996
+    },
+    {
+      "file": "colorkeymask.pdf",
+      "sha256": "655a470881a3bc4fac682abe88522c86c11ff41d08ecf94fae2f53ecd0c2d27c",
+      "page": 1,
+      "rotation": 270,
+      "width": 1684,
+      "height": 1191,
+      "diagnostics": [],
+      "comparison": {
+        "above8": 0,
+        "maximum": 0,
+        "meanAbsoluteError": 0
+      },
+      "milliseconds": 603.862306
+    },
+    {
+      "file": "smaskdim.pdf",
+      "sha256": "e03b8359f8b64e1a18a795aa9376bc98d98dca89a828ec20c49a4ac2f36a3d82",
+      "page": 1,
+      "rotation": 0,
+      "width": 1224,
+      "height": 1584,
+      "diagnostics": [],
+      "comparison": {
+        "above8": 14144,
+        "maximum": 194,
+        "meanAbsoluteError": 0.38360318875024757
+      },
+      "milliseconds": 3347.5351149999997
+    },
+    {
+      "file": "issue4246.pdf",
+      "sha256": "eb4b7f8cc7ae323aae080311c8afd639ae1cbefdd5cde3444f87a90ec2b3e11d",
+      "page": 1,
+      "rotation": 0,
+      "width": 1190,
+      "height": 1684,
+      "diagnostics": [],
+      "comparison": {
+        "above8": 0,
+        "maximum": 0,
+        "meanAbsoluteError": 0
+      },
+      "milliseconds": 722.3199480000003
+    },
+    {
+      "file": "issue17147.pdf",
+      "sha256": "03dc20f6e920cb6c192175b52bf3ad1577838cbbc30dfd01e9edbfd43abe36b3",
+      "page": 1,
+      "rotation": 0,
+      "width": 1191,
+      "height": 1684,
+      "diagnostics": [],
+      "comparison": {
+        "above8": 1246,
+        "maximum": 64,
+        "meanAbsoluteError": 0.021992935934792016
+      },
+      "milliseconds": 656.2542489999996,
+      "uniformInteriorAbove8": 0
+    },
+    {
+      "file": "issue13931.pdf",
+      "sha256": "c8548f91ccb744c81c00778ca6b93912756c5b70c5324acbcc198ccdfc198298",
+      "page": 1,
+      "rotation": 0,
+      "width": 1191,
+      "height": 1684,
+      "diagnostics": [],
+      "comparison": {
+        "above8": 58479,
+        "maximum": 228,
+        "meanAbsoluteError": 2.1764179817887257
+      },
+      "milliseconds": 28671.408836000002,
+      "imageCrop": {
+        "rect": [
+          880,
+          145,
+          1110,
+          285
+        ],
+        "meanAbsoluteError": 0.024492753623188406,
+        "above8": 0,
+        "maximum": 2.0
+      }
+    }
+  ],
+  "backend": "Actual web/pdf-canvas + pattern/shading adapters on @napi-rs/canvas 1.0.10, not a DOM browser",
+  "bridge": "Colour worker release pixel-plan bridge, integrated before final all-workstream aggregate build",
+  "sourcePlaneEvidence": "tools/image-validation-results.json",
+  "notes": [
+    "All ten image-case manifest entries run at scale2; no pixels are excluded from whole-page metrics.",
+    "Seven complete pages are byte-exact.",
+    "smaskdim annotation rectangle differences are outside image-source acceptance; both decoded RGBA source images are exact.",
+    "issue17147 above8 differences lie only on the rotated stencil boundary: zero changed pixels in reference uniform3x3 black/white interiors.",
+    "issue13931 text is rendered differently; the isolated stamp crop is compared separately below.",
+    "This is Node Canvas API acceptance, not a Chromium/DOM browser test."
+  ]
+}

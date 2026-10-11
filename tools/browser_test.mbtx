@@ -3,16 +3,20 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/process",
+  "moonbitlang/async/shell",
   "moonbitlang/async/http",
   "moonbitlang/async/websocket",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/base64",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/pdflite",
 }
 
 ///|
 struct Browser {
   socket : @websocket.Conn
+  browser_url : String
   mut id : Int
   errors : Array[Json]
   checks : Array[String]
@@ -23,10 +27,19 @@ async fn Browser::command(
   self : Browser,
   operation : String,
   params? : Json = {},
+  session? : String,
 ) -> Json {
   self.id += 1
   let id = self.id
-  let request : Json = { "id": id, "method": operation, "params": params }
+  let request : Json = match session {
+    Some(session) => {
+      "id": id,
+      "method": operation,
+      "params": params,
+      "sessionId": session,
+    }
+    None => { "id": id, "method": operation, "params": params }
+  }
   self.socket.send_text(request.stringify())
   for ;; {
     let message = @async.with_timeout(30000, () => {
@@ -75,10 +88,27 @@ async fn Browser::check(
 }
 
 ///|
+async fn Browser::wait(self : Browser, condition : String) -> Unit {
+  for _ in 0..<1000 {
+    if self.evaluate(condition) == Json::boolean(true) {
+      return
+    }
+    @async.sleep(25)
+  }
+  fail("Browser condition did not complete: " + condition)
+}
+
+///|
 async fn Browser::ready(self : Browser, expected_pages : Int) -> Unit {
+  let page_condition = if expected_pages < 0 {
+    "document.querySelectorAll('.page').length > 0"
+  } else {
+    "document.querySelectorAll('.page').length === \{expected_pages}"
+  }
   for _ in 0..<400 {
     if self.evaluate(
-        "document.querySelectorAll('.page').length === \{expected_pages} && document.getElementById('viewer').getAttribute('aria-busy') === 'false'",
+        page_condition +
+        " && document.getElementById('viewer').getAttribute('aria-busy') === 'false'",
       ) ==
       Json::boolean(true) {
       return
@@ -140,9 +170,137 @@ async fn Browser::upload(self : Browser, filename : String) -> Unit {
 }
 
 ///|
+async fn Browser::heap(self : Browser, collect? : Bool = false) -> Json {
+  if collect {
+    ignore(self.command("HeapProfiler.collectGarbage"))
+  }
+  let main = self.command("Runtime.getHeapUsage")
+  // Flattened Worker sessions route through the browser endpoint. Sending
+  // their sessionId to a page endpoint silently stalls on Chromium.
+  let remote : Browser = {
+    socket: @websocket.connect(self.browser_url),
+    browser_url: self.browser_url,
+    id: 0,
+    errors: self.errors,
+    checks: self.checks,
+  }
+  defer remote.socket.close()
+  let targets = remote.command("Target.getTargets")
+  let mut worker : Json = Json::null()
+  match targets {
+    { "targetInfos": Array(targets), .. } =>
+      for target in targets {
+        if target
+          is {
+            "type": String("worker"),
+            "url": String(url),
+            "targetId": String(id),
+            ..
+          } &&
+          (url.is_empty() || url.has_suffix("/pdf-worker.js")) {
+          let attached = remote.command("Target.attachToTarget", params={
+            "targetId": id,
+            "flatten": true,
+          })
+          guard attached is { "sessionId": String(session), .. } else {
+            fail("Unable to measure Worker heap")
+          }
+          let location = remote.command("Runtime.evaluate", session~, params={
+            "expression": "location.href",
+            "returnByValue": true,
+          })
+          if collect {
+            ignore(remote.command("HeapProfiler.collectGarbage", session~))
+          }
+          worker = remote.command("Runtime.getHeapUsage", session~)
+          ignore(
+            remote.command("Target.detachFromTarget", params={ "sessionId": session }),
+          )
+          if location
+            is { "result": { "value": String(url), .. }, .. } &&
+            url.has_suffix("/pdf-worker.js") {
+            break
+          }
+          worker = Json::null()
+        }
+      }
+    _ => fail("Missing Worker targets")
+  }
+  guard worker != Json::null() else { fail("No PDF Worker to measure: " + targets.stringify()) }
+  { "main": main, "worker": worker }
+}
+
+///|
+/// Authored pressure fixtures: many cheap pages and independent raw images.
+/// ASCII samples make byte lengths exact, including the actual xref offsets.
+fn host_test_document(count : Int, images? : Bool = false) -> Bytes {
+  let font = 3 + count * 2
+  let objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Count \{count} /Kids [" +
+    [ for number in 0..<count => "\{number + 3} 0 R" ].join(" ") +
+    "] >>",
+  ]
+  for number in 1..<=count {
+    let extra = if number % 10 == 0 { "/Rotate 90 /UserUnit 1.5" } else { "" }
+    let resource = if images { "/XObject << /Im \{font + number} 0 R >>" } else { "" }
+    objects.push(
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] " +
+      "\{extra} /Contents \{count + 2 + number} 0 R /Resources << /Font << /F1 \{font} 0 R >> \{resource} >> >>",
+    )
+  }
+  for number in 1..<=count {
+    let image = if images { "q 512 0 0 512 40 160 cm /Im Do Q\n" } else { "" }
+    let contents = image +
+      "BT /F1 20 Tf 40 720 Td (Host page " +
+      number.to_string().pad_start(3, '0') +
+      ") Tj ET"
+    objects.push(
+      "<< /Length \{contents.length()} >>\nstream\n\{contents}\nendstream",
+    )
+  }
+  objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+  if images {
+    for number in 1..<=count {
+      let samples = StringBuilder()
+      let mut seed = number * 97
+      for _ in 0..<(512 * 512 * 3) {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff
+        samples.write_char(Char::from_int(32 + (seed >> 16) % 95))
+      }
+      objects.push(
+        "<< /Type /XObject /Subtype /Image /Width 512 /Height 512 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length 786432 >>\nstream\n" +
+        samples.to_string() +
+        "\nendstream",
+      )
+    }
+  }
+  let output = StringBuilder()
+  output.write_string("%PDF-1.7\n")
+  let offsets : Array[Int] = []
+  let mut length = 9
+  for index, object in objects {
+    offsets.push(length)
+    let chunk = "\{index + 1} 0 obj\n\{object}\nendobj\n"
+    output.write_string(chunk)
+    length += chunk.length()
+  }
+  output.write_string("xref\n0 \{objects.length() + 1}\n0000000000 65535 f \n")
+  for offset in offsets {
+    output.write_string(offset.to_string().pad_start(10, '0') + " 00000 n \n")
+  }
+  output.write_string(
+    "trailer\n<< /Size \{objects.length() + 1} /Root 1 0 R >>\nstartxref\n\{length}\n%%EOF\n",
+  )
+  @utf8.encode(output.to_string())
+}
+
+///|
 async fn Browser::drag(self : Browser, first : String, last : String) -> Unit {
   let expression =
     #| ((firstText, lastText) => {
+    #|   // Start a new selection; dragging existing selected text starts native DnD.
+    #|   getSelection().removeAllRanges();
     #|   const glyphs = [...document.querySelectorAll('.glyph')];
     #|   const first = glyphs.find(g => g.textContent === firstText);
     #|   const last = glyphs.find(g => g.textContent === lastText);
@@ -179,6 +337,7 @@ async fn Browser::drag(self : Browser, first : String, last : String) -> Unit {
       "y": y0,
     }),
   )
+  @async.sleep(30)
   ignore(
     self.command("Input.dispatchMouseEvent", params={
       "type": "mousePressed",
@@ -200,6 +359,7 @@ async fn Browser::drag(self : Browser, first : String, last : String) -> Unit {
         "buttons": 1,
       }),
     )
+    @async.sleep(16)
   }
   ignore(
     self.command("Input.dispatchMouseEvent", params={
@@ -212,6 +372,87 @@ async fn Browser::drag(self : Browser, first : String, last : String) -> Unit {
     }),
   )
   @async.sleep(100)
+}
+
+///|
+/// Authored interaction fixture: two cropped/UserUnit pages, intrinsic rotation,
+/// links, popup text and independent screen/print flags. Not a fidelity sample.
+fn annotation_browser_fixture() -> Bytes {
+  let annotations = [
+    "<< /Subtype /Link /Rect [30 170 100 185] /Dest /chapter >>",
+    "<< /Subtype /Link /Rect [30 135 100 150] /QuadPoints [30 150 100 150 30 145 100 145 30 140 60 140 30 135 60 135] /A << /S /URI /URI (https://example.com/read) >> >>",
+    "<< /Subtype /Text /Rect [150 170 170 190] /T (Reviewer) /Subj (Note) /Contents (<b>Plain</b>\nSecond line) /Popup 19 0 R >>",
+    "<< /Subtype /Highlight /Rect [30 185 100 205] /QuadPoints [30 205 100 205 30 185 100 185] /Contents (Body comment) >>",
+    "<< /Subtype /Square /Rect [130 100 150 120] /F 4 /C [1 0 0] >>",
+    "<< /Subtype /Square /Rect [160 100 180 120] /F 36 /C [0 0 1] >>",
+    "<< /Subtype /Square /Rect [190 100 210 120] /F 2 >>",
+    "<< /Subtype /Link /Rect [30 80 100 95] /A << /S /GoToR /D [0 /Fit] >> >>",
+    "<< /Subtype /Link /Rect [30 60 100 75] /A << /S /JavaScript /JS (alert(1)) >> >>",
+    "<< /Subtype /Link /Rect [30 40 100 55] /A << /S /URI /URI (javascript:alert(1)) >> >>",
+    "<< /Subtype /Link /Rect [110 60 180 75] /Dest /missing >>",
+    "<< /Subtype /Link /Rect [110 40 180 55] /A << /S /Named /N /NextPage >> >>",
+    "<< /Subtype /Popup /Parent 9 0 R /Rect [170 170 230 220] >>",
+    "<< /Subtype /Square /Rect [190 130 210 150] /F 0 /C [0 1 0] >>",
+  ]
+  let content = "BT /F1 12 Tf 30 190 Td (Body text) Tj ET"
+  let references = [for index in 0..<annotations.length() => "\{index + 7} 0 R"].join(" ")
+  let objects = [
+    "<< /Type /Catalog /Pages 2 0 R /Dests << /chapter [4 0 R /XYZ 30 550 1.25] >> >>",
+    "<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 240 240] /CropBox [10 20 230 220] /Rotate 90 /UserUnit 1.5 /Contents 5 0 R /Resources << /Font << /F1 6 0 R >> >> /Annots [\{references}] >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 350 600] /CropBox [10 20 250 580] /UserUnit 1.25 /Contents 5 0 R /Resources << /Font << /F1 6 0 R >> >> >>",
+    "<< /Length \{content.length()} >>\nstream\n\{content}\nendstream",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ..annotations,
+  ]
+  let output = StringBuilder()
+  output.write_string("%PDF-1.7\n")
+  let offsets : Array[Int] = []
+  for index, object in objects {
+    offsets.push(output.to_string().length())
+    output.write_string("\{index + 1} 0 obj\n\{object}\nendobj\n")
+  }
+  let xref = output.to_string().length()
+  output.write_string("xref\n0 \{objects.length() + 1}\n0000000000 65535 f \n")
+  for offset in offsets {
+    output.write_string(offset.to_string().pad_start(10, '0') + " 00000 n \n")
+  }
+  output.write_string("trailer\n<< /Size \{objects.length() + 1} /Root 1 0 R >>\nstartxref\n\{xref}\n%%EOF\n")
+  @utf8.encode(output.to_string())
+}
+
+///|
+async fn Browser::click_annotation(self : Browser, index : Int) -> Unit {
+  let position = self.evaluate("(() => { const e = document.querySelector('.annotation-target[data-annotation-index=\"\{index}\"]'); e.scrollIntoView({block:'center'}); const r=e.getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}; })()")
+  guard position is { "x": Number(x, ..), "y": Number(y, ..), .. } else { fail("Missing annotation point") }
+  ignore(self.command("Input.dispatchMouseEvent", params={ "type": "mousePressed", "x": x, "y": y, "button": "left", "buttons": 1, "clickCount": 1 }))
+  ignore(self.command("Input.dispatchMouseEvent", params={ "type": "mouseReleased", "x": x, "y": y, "button": "left", "buttons": 0, "clickCount": 1 }))
+}
+
+///|
+/// Keep the independent serialized SVG geometry oracle without putting SVG
+/// into the viewer's paint layer. The real host surface must remain Canvas.
+async fn Browser::check_annotation_geometry(self : Browser, name : String) -> Unit {
+  self.check(name, (
+    #| (async () => {
+    #|   const page = document.querySelector('#pages .page[data-page="1"]');
+    #|   const viewport = JSON.parse(page.querySelector('.annotation-layer').dataset.viewport);
+    #|   const bridge = await import('./pdf-client.js');
+    #|   const result = JSON.parse(await bridge.render_page(1, viewport.scale, viewport.rotation - 90));
+    #|   const canvas = page.querySelector('.paint-layer canvas');
+    #|   if (!result.ok || !canvas || canvas.width !== Math.ceil(viewport.width) || canvas.height !== Math.ceil(viewport.height)) return false;
+    #|   const reference = document.createElement('div');
+    #|   reference.style.cssText = 'position:absolute;inset:0;visibility:hidden;pointer-events:none';
+    #|   reference.inert = true;
+    #|   reference.innerHTML = result.svg;
+    #|   page.append(reference);
+    #|   try {
+    #|     const control = page.querySelector('.annotation-target[data-annotation-index="0"]').getBoundingClientRect();
+    #|     const paint = reference.querySelector('[data-pdf-annotation-index="0"]').getBoundingClientRect();
+    #|     return ['left','top','width','height'].every(key => Math.abs(control[key] - paint[key]) < 1);
+    #|   } finally { reference.remove(); }
+    #| })()
+  ))
 }
 
 ///|
@@ -273,6 +514,9 @@ async fn main {
     }
     let browser : Browser = {
       socket: @websocket.connect(url),
+      browser_url: "ws://127.0.0.1:" +
+        port +
+        @fs.read_file(port_path).text().split("\n").to_array()[1].to_owned(),
       id: 0,
       errors: [],
       checks: [],
@@ -280,6 +524,13 @@ async fn main {
     defer browser.socket.close()
     ignore(browser.command("Page.enable"))
     ignore(browser.command("Runtime.enable"))
+    ignore(
+      browser.command("Target.setAutoAttach", params={
+        "autoAttach": true,
+        "waitForDebuggerOnStart": false,
+        "flatten": true,
+      }),
+    )
     ignore(
       browser.command("Emulation.setDeviceMetricsOverride", params={
         "width": 1280,
@@ -290,21 +541,20 @@ async fn main {
     )
     browser.navigate(base + "/?file=/fixtures/90ms_rksj_h_sample.pdf", 1)
     browser.check(
-      "predefined CMap paints and exposes native DOM text", "document.querySelector('.text-layer').textContent.includes('日本語テスト') && document.querySelector('.paint-layer').querySelector('svg') !== null && document.getElementById('error').hidden",
+      "predefined CMap paints and exposes native DOM text", "document.querySelector('.text-layer').textContent.includes('日本語テスト') && [...document.querySelectorAll('.paint-layer canvas')].some(c => c.width > 0 && c.getContext('2d').getImageData(0, 0, c.width, c.height).data.some((v, i) => i % 4 !== 3 && v < 240)) && document.getElementById('error').hidden",
     )
     browser.check(
       "font fallback bridge accepts host family mappings",
       (
         #| (async () => {
-        #|   const bridge = await import('./_generated/pdf.js');
-        #|   const result = JSON.parse(bridge.set_font_fallbacks(JSON.stringify([{pdf_name: 'Helvetica', family: 'Arial'}])));
+        #|   const bridge = await import('./pdf-client.js');
+        #|   const result = JSON.parse(await bridge.set_font_fallbacks(JSON.stringify([{pdf_name: 'Helvetica', family: 'Arial'}])));
         #|   return result.ok && result.count === 1;
         #| })()
       ),
     )
     browser.check(
-      "search toolbar is enabled with document options",
-      "!document.getElementById('search-query').disabled && document.getElementById('search-case') !== null && document.getElementById('search-whole') !== null && document.getElementById('search-diacritic') !== null",
+      "search toolbar is enabled with document options", "!document.getElementById('search-query').disabled && document.getElementById('search-case') !== null && document.getElementById('search-whole') !== null && document.getElementById('search-diacritic') !== null",
     )
     browser.check(
       "search returns and highlights a source match",
@@ -312,30 +562,32 @@ async fn main {
         #| (async () => {
         #|   const input = document.getElementById('search-query');
         #|   input.value = '日本語'; input.dispatchEvent(new Event('input', {bubbles: true}));
-        #|   await new Promise(r => requestAnimationFrame(r));
+        #|   await (await import('./viewer.js')).performSearch();
         #|   return document.getElementById('search-status').textContent === '1 / 1' && document.querySelectorAll('.pdf-search-hit').length >= 1 && document.querySelector('.pdf-search-active') !== null;
         #| })()
       ),
     )
     browser.check(
-      "search result navigation keeps the active match",
-      "document.getElementById('search-next').disabled === false && document.getElementById('search-previous').disabled === false && document.getElementById('search-status').textContent === '1 / 1'",
+      "search result navigation keeps the active match", "document.getElementById('search-next').disabled === false && document.getElementById('search-previous').disabled === false && document.getElementById('search-status').textContent === '1 / 1'",
     )
     browser.navigate(base + "/?file=/fixtures/nested_outline.pdf", 9)
     browser.check(
       "document bridge exposes outline and info",
       (
         #| (async () => {
-        #|   const bridge = await import('./_generated/pdf.js');
-        #|   const info = JSON.parse(bridge.document_info());
+        #|   const bridge = await import('./pdf-client.js');
+        #|   const info = JSON.parse(await bridge.document_info());
         #|   return info.ok && info.outline.length > 0 && info.info.Pages === 9 && info.labels.length === 9;
         #| })()
       ),
     )
-    ignore(browser.evaluate("document.getElementById('outline-toggle').click(); true"))
+    ignore(
+      browser.evaluate(
+        "document.getElementById('outline-toggle').click(); true",
+      ),
+    )
     browser.check(
-      "outline panel renders local navigation entries",
-      "!document.getElementById('sidebar').hidden && document.getElementById('sidebar-title').textContent === '目录' && document.querySelectorAll('#sidebar-content .sidebar-item').length > 0",
+      "outline panel renders local navigation entries", "!document.getElementById('sidebar').hidden && document.getElementById('sidebar-title').textContent === '目录' && document.querySelectorAll('#sidebar-content .sidebar-item').length > 0",
     )
     browser.check(
       "outline entry navigates to its destination",
@@ -348,23 +600,48 @@ async fn main {
         #| })()
       ),
     )
-    ignore(browser.evaluate("document.getElementById('thumbnail-toggle').click(); true"))
+    ignore(
+      browser.evaluate(
+        "document.getElementById('thumbnail-toggle').click(); true",
+      ),
+    )
     browser.check(
       "thumbnail panel renders page previews",
-      "document.getElementById('sidebar-title').textContent === '缩略图' && document.querySelectorAll('.thumbnail-preview svg').length === 9",
+      (
+        #| (async () => {
+        #|   for (let i = 0; i < 400; i++) {
+        #|     if (document.querySelector('.thumbnail-preview canvas')) break;
+        #|     await new Promise(r => setTimeout(r, 25));
+        #|   }
+        #|   const count = document.querySelectorAll('.thumbnail-preview canvas').length;
+        #|   return document.getElementById('sidebar-title').textContent === '缩略图' && document.querySelectorAll('.thumbnail-item').length === 9 && count > 0 && count < 9;
+        #| })()
+      ),
     )
-    ignore(browser.evaluate("document.getElementById('info-toggle').click(); true"))
     browser.check(
-      "info panel exposes document fields and print control",
-      "document.getElementById('sidebar-title').textContent === '文档信息' && document.querySelector('.info-list') !== null && document.getElementById('print').disabled === false",
+      "thumbnail scrolling loads its destination and releases hidden previews",
+      (
+        #| (async () => {
+        #|   const last = document.querySelector('.thumbnail-item[data-page="9"]');
+        #|   last.scrollIntoView({block: 'end'});
+        #|   for (let i = 0; i < 400 && !last.querySelector('canvas'); i++) await new Promise(r => setTimeout(r, 25));
+        #|   return Boolean(last.querySelector('canvas')) && document.querySelectorAll('.thumbnail-preview canvas').length < 9;
+        #| })()
+      ),
+    )
+    ignore(
+      browser.evaluate("document.getElementById('info-toggle').click(); true"),
+    )
+    browser.check(
+      "info panel exposes document fields and print control", "document.getElementById('sidebar-title').textContent === '文档信息' && document.querySelector('.info-list') !== null && document.getElementById('print').disabled === false",
     )
     browser.navigate(base + "/?file=/fixtures/labelled_pages.pdf", 11)
     browser.check(
       "page labels remain available to the browser host",
       (
         #| (async () => {
-        #|   const bridge = await import('./_generated/pdf.js');
-        #|   const info = JSON.parse(bridge.document_info());
+        #|   const bridge = await import('./pdf-client.js');
+        #|   const info = JSON.parse(await bridge.document_info());
         #|   return info.ok && info.labels.length === 11 && info.labels[0] !== '1';
         #| })()
       ),
@@ -373,37 +650,45 @@ async fn main {
       "embedded XMP metadata can be downloaded",
       (
         #| (async () => {
-        #|   const bridge = await import('./_generated/pdf.js');
-        #|   const info = JSON.parse(bridge.document_info());
-        #|   const metadata = JSON.parse(bridge.download_metadata());
+        #|   const bridge = await import('./pdf-client.js');
+        #|   const info = JSON.parse(await bridge.document_info());
+        #|   const metadata = JSON.parse(await bridge.download_metadata());
         #|   return info.metadata.available && info.metadata.size > 0 && metadata.ok && metadata.data.length > 0;
         #| })()
       ),
     )
-    ignore(browser.evaluate("document.getElementById('view-mode').value = 'page'; document.getElementById('view-mode').dispatchEvent(new Event('change')); true"))
-    browser.check(
-      "page mode keeps one page visible",
-      "document.getElementById('viewer').classList.contains('page-mode') && [...document.querySelectorAll('.page')].filter(page => getComputedStyle(page).display !== 'none').length === 1",
+    ignore(
+      browser.evaluate(
+        "document.getElementById('view-mode').value = 'page'; document.getElementById('view-mode').dispatchEvent(new Event('change')); true",
+      ),
     )
-    ignore(browser.evaluate("document.getElementById('next-page').click(); true"))
     browser.check(
-      "page navigation writes browser history",
-      "location.hash === '#page=2' && document.getElementById('page-number').value === '2'",
+      "page mode keeps one page visible", "document.getElementById('viewer').classList.contains('page-mode') && [...document.querySelectorAll('.page')].filter(page => getComputedStyle(page).display !== 'none').length === 1",
+    )
+    ignore(
+      browser.evaluate("document.getElementById('next-page').click(); true"),
+    )
+    browser.check(
+      "page navigation writes browser history", "location.hash === '#page=2' && document.getElementById('page-number').value === '2'",
     )
     browser.navigate(base + "/?file=/fixtures/attachment.pdf", 1)
     browser.check(
       "attachment manifest and download bytes are available",
       (
         #| (async () => {
-        #|   const bridge = await import('./_generated/pdf.js');
-        #|   const info = JSON.parse(bridge.document_info());
-        #|   const data = info.attachments.length ? JSON.parse(bridge.download_attachment(0)) : {ok: false};
+        #|   const bridge = await import('./pdf-client.js');
+        #|   const info = JSON.parse(await bridge.document_info());
+        #|   const data = info.attachments.length ? JSON.parse(await bridge.download_attachment(0)) : {ok: false};
         #|   return info.ok && info.attachments.length > 0 && data.ok && data.data.length > 0;
         #| })()
       ),
     )
     browser.navigate(base + "/?file=/fixtures/90ms_rksj_h_sample.pdf", 1)
-    ignore(browser.evaluate("document.getElementById('search-query').value = ''; document.getElementById('search-query').dispatchEvent(new Event('input')); true"))
+    ignore(
+      browser.evaluate(
+        "document.getElementById('search-query').value = ''; document.getElementById('search-query').dispatchEvent(new Event('input')); true",
+      ),
+    )
     browser.screenshot(output + "/japanese-viewer.png")
     browser.check(
       "cursor text layer has PDF item indices and affine glyph boxes", "[...document.querySelectorAll('.glyph')].every(g => g.dataset.item !== undefined && getComputedStyle(g).cursor === 'text' && g.getBoundingClientRect().height > 0)",
@@ -504,11 +789,11 @@ async fn main {
       "MoonBit range selection matches DOM text",
       (
         #| (async () => {
-        #|   const bridge = await import('./_generated/pdf.js');
+        #|   const bridge = await import('./pdf-client.js');
         #|   const glyphs = [...document.querySelectorAll('.glyph')];
         #|   const first = glyphs.find(g => g.textContent === '日');
         #|   const last = glyphs.find(g => g.textContent === 'ト');
-        #|   const result = JSON.parse(bridge.select_text(1, +first.dataset.item, 0, +last.dataset.item, 1));
+        #|   const result = JSON.parse(await bridge.select_text(1, +first.dataset.item, 0, +last.dataset.item, 1));
         #|   return result.ok && result.selection.text === '日本語テスト' && result.selection.quads.length === 6;
         #| })()
       ),
@@ -526,7 +811,7 @@ async fn main {
         #|   range.setStart(first.firstChild.firstChild, 0);
         #|   range.setEnd(last.firstChild.firstChild, 1);
         #|   getSelection().removeAllRanges(); getSelection().addRange(range);
-        #|   await new Promise(r => setTimeout(r, 100));
+        #|   await (await import('./viewer.js')).readSelection();
         #|   return getSelection().toString() === '日本語テスト' && lastPdfSelection.text === '日本語テスト' && lastPdfSelection.file.path === '/fixtures/90ms_rksj_h_sample.pdf' && lastPdfSelection.ranges[0].item_indices.length === 6;
         #| })()
       ),
@@ -575,13 +860,17 @@ async fn main {
       "multi-page source range and normalized copied lines",
       (
         #| (async () => {
+        #|   const host = await import('./viewer.js');
+        #|   const schedulerPage = document.querySelector('.page[data-page="2"]');
+        #|   schedulerPage.scrollIntoView({block: 'start'});
+        #|   for (let i = 0; i < 400 && !schedulerPage.querySelector('.glyph-text'); i++) await new Promise(r => setTimeout(r, 25));
         #|   document.getElementById('viewer').addEventListener('pdf-selection-change', e => window.lastPdfSelection = e.detail);
         #|   const pages = document.querySelectorAll('.page');
         #|   const first = pages[0].querySelector('.glyph-text').firstChild;
         #|   const last = pages[1].querySelector('.glyph-text').firstChild;
         #|   const range = new Range(); range.setStart(first, 0); range.setEnd(last, last.length);
         #|   getSelection().removeAllRanges(); getSelection().addRange(range);
-        #|   await new Promise(r => setTimeout(r, 100));
+        #|   await (await import('./viewer.js')).readSelection();
         #|   return lastPdfSelection.ranges.length === 2 && lastPdfSelection.ranges[0].page === 1 && lastPdfSelection.ranges[1].page === 2 && lastPdfSelection.text.includes('\n');
         #| })()
       ),
@@ -592,8 +881,9 @@ async fn main {
       (
         #| (async () => {
         #|   document.getElementById('viewer').focus();
+        #|   const done = new Promise(resolve => document.getElementById('viewer').addEventListener('pdf-selection-change', function ready(e) { if (e.detail?.ranges.length === 14) { this.removeEventListener('pdf-selection-change', ready); resolve(); } }));
         #|   document.getElementById('viewer').dispatchEvent(new KeyboardEvent('keydown', {key: 'a', ctrlKey: true, bubbles: true, cancelable: true}));
-        #|   await new Promise(r => setTimeout(r, 100));
+        #|   await Promise.race([done, new Promise((_, reject) => setTimeout(() => reject(new Error('select all timed out')), 25000))]);
         #|   return (lastPdfSelection?.ranges.length === 14 && !getSelection().toString().includes('打开 PDF')) || {ranges: lastPdfSelection?.ranges.map(r => r.page), text: getSelection().toString().slice(0, 100), error: document.getElementById('error').textContent};
         #| })()
       ),
@@ -611,9 +901,9 @@ async fn main {
     let invalid = output + "/invalid.pdf"
     @fs.write_file(invalid, "invalid PDF data")
     browser.upload(cwd + "/" + invalid)
-    @async.sleep(100)
+    browser.wait("!document.getElementById('error').hidden")
     browser.check(
-      "invalid input reports an error and retains the previous preview", "!document.getElementById('error').hidden && document.querySelector('.text-layer').textContent.includes('日本語テスト')",
+      "invalid input reports an error and releases the previous document", "!document.getElementById('error').hidden && document.querySelectorAll('.page').length === 0 && document.getElementById('download').disabled",
     )
     browser.upload(cwd + "/reference/pdf.js/test/pdfs/90ms_rksj_h_sample.pdf")
     browser.ready(1)
@@ -631,6 +921,414 @@ async fn main {
         #| })()
       ),
     )
+    let font_loading : Array[Json] = []
+    for
+      file in [
+        "standard_fonts.pdf", "complex_ttf_font.pdf", "TrueType_without_cmap.pdf",
+        "issue4800.pdf", "issue14462_reduced.pdf",
+      ] {
+      browser.navigate(base + "/?file=/fixtures/" + file, -1)
+      browser.check(
+        "font loading retains painted and selectable glyphs: " + file,
+        "document.getElementById('error').hidden && document.querySelectorAll('.glyph-text').length > 0 && [...document.querySelectorAll('.paint-layer canvas')].some(c => c.width > 0 && c.getContext('2d').getImageData(0, 0, c.width, c.height).data.some((v, i) => i % 4 !== 3 && v < 240)) && [...document.querySelectorAll('.glyph')].every(g => Number.isFinite(parseFloat(g.style.width)) && parseFloat(g.style.width) > 0)",
+      )
+      let faces = browser.evaluate(
+        "(async () => { await Promise.allSettled([...document.fonts].map(f => f.load())); return {faces: [...document.fonts].map(f => ({family: f.family, status: f.status})), glyphs: document.querySelectorAll('.glyph-text').length, painted_canvases: [...document.querySelectorAll('.paint-layer canvas')].filter(c => c.width > 0 && c.getContext('2d').getImageData(0, 0, c.width, c.height).data.some((v, i) => i % 4 !== 3 && v < 240)).length}; })()",
+      )
+      println("FONT LOADING " + file + " " + faces.stringify())
+      font_loading.push({ "file": file, "observations": faces })
+    }
+    browser.navigate(base + "/?file=/fixtures/Pages-tree-refs.pdf", 1)
+    browser.check(
+      "cyclic page tree retains its readable page in the browser", "document.getElementById('error').hidden && document.querySelectorAll('.page').length === 1 && [...document.querySelectorAll('.glyph-text')].map(g => g.textContent).join('').includes('Testcase: ’Pages loop’')",
+    )
+    browser.navigate(base + "/?file=/fixtures/annotation-link-text-popup.pdf", -1)
+    browser.check(
+      "real link and popup annotations have usable DOM controls",
+      "document.querySelector('.annotation-link[href^=\"http\"]') !== null && document.querySelector('.annotation-comment[aria-haspopup=\"dialog\"]') !== null && document.getElementById('error').hidden",
+    )
+    browser.check("real popup content remains text and can be closed", (
+      #| (() => {
+      #|   const button = document.querySelector('.annotation-comment'); button.click();
+      #|   const popup = document.querySelector('.annotation-popup');
+      #|   const valid = !popup.hidden && popup.querySelector('.annotation-popup-content').textContent.length > 0 && button.getAttribute('aria-expanded') === 'true';
+      #|   popup.querySelector('button').click();
+      #|   return valid && popup.hidden && button.getAttribute('aria-expanded') === 'false';
+      #| })()
+    ))
+    browser.navigate(base + "/?file=/fixtures/annotation-text-without-popup.pdf", -1)
+    browser.check("real text annotations work without an explicit Popup child", (
+      #| (() => {
+      #|   const button = document.querySelector('.annotation-comment'); button.click();
+      #|   const popup = document.querySelector('.annotation-popup');
+      #|   const valid = !popup.hidden && popup.querySelector('.annotation-popup-content').textContent.length > 0;
+      #|   popup.querySelector('button').click(); return valid && popup.hidden;
+      #| })()
+    ))
+    browser.navigate(base + "/?file=/fixtures/widget_hidden_print.pdf", -1)
+    browser.check("Hidden cancels Print for a real widget in both intents", (
+      #| (async () => {
+      #|   const bridge = await import('./pdf-client.js');
+      #|   const screen = JSON.parse(await bridge.render_page(1, 1, 0));
+      #|   const print = JSON.parse(await bridge.render_print_page(1, 1, 0));
+      #|   const hidden = screen.annotations.filter(a => (a.flags & 6) === 6);
+      #|   return screen.ok && print.ok && hidden.length > 0 && hidden.every(a => !a.visible && !a.print &&
+      #|     !screen.svg.includes(`data-pdf-annotation-index="${a.index}"`) && !print.svg.includes(`data-pdf-annotation-index="${a.index}"`) &&
+      #|     !(screen.canvas.annotation_svg || '').includes(`data-pdf-annotation-index="${a.index}"`) && !(print.canvas.annotation_svg || '').includes(`data-pdf-annotation-index="${a.index}"`));
+      #| })()
+    ))
+    let annotations_path = output + "/annotation-interactions.pdf"
+    @fs.write_file(annotations_path, annotation_browser_fixture())
+    let annotations_hash = @shell.Cmd("sha256sum", [annotations_path]).output()
+    guard annotations_hash.exit_code() == 0 else { fail("Unable to hash annotation fixture") }
+    browser.navigate(base + "/", 0)
+    ignore(browser.evaluate("document.getElementById('zoom').value='1'; true"))
+    browser.upload(cwd + "/" + annotations_path)
+    browser.ready(2)
+    browser.check("annotation controls retain source indices and reject unusable actions", (
+      #| (async () => {
+      #|   const bridge = await import('./pdf-client.js');
+      #|   const result = JSON.parse(await bridge.render_page(1, 1, 0));
+      #|   return result.annotations.length === 13 && !result.annotations.some(a => a.index === 12) &&
+      #|     [7,8,9,10].every(index => document.querySelector(`.annotation-unavailable[data-annotation-index="${index}"][aria-disabled="true"]`)) &&
+      #|     !document.querySelector('.annotation-target[data-annotation-index="5"]') &&
+      #|     !document.querySelector('.annotation-target[data-annotation-index="6"]') && document.querySelector('.paint-layer').inert;
+      #| })()
+    ))
+    browser.click_annotation(2)
+    browser.check("native pointer hit opens a plain-text popup", "!document.querySelector('.annotation-popup').hidden && document.querySelector('#annotation-popup-title').textContent === 'Reviewer' && document.querySelector('.annotation-popup-content').textContent === '<b>Plain</b>\\nSecond line' && document.querySelector('.annotation-popup-content b') === null")
+    ignore(browser.command("Input.dispatchKeyEvent", params={ "type": "keyDown", "key": "Escape", "code": "Escape" }))
+    browser.check("Escape closes the popup and restores keyboard focus", "document.querySelector('.annotation-popup').hidden && document.activeElement.matches('.annotation-comment[data-annotation-index=\"2\"]')")
+    ignore(browser.command("Input.dispatchKeyEvent", params={ "type": "keyDown", "key": "Enter", "code": "Enter", "windowsVirtualKeyCode": 13, "nativeVirtualKeyCode": 13, "text": "\r", "unmodifiedText": "\r" }))
+    ignore(browser.command("Input.dispatchKeyEvent", params={ "type": "keyUp", "key": "Enter", "code": "Enter", "windowsVirtualKeyCode": 13, "nativeVirtualKeyCode": 13 }))
+    browser.check("keyboard activates the same annotation popup", "!document.querySelector('.annotation-popup').hidden && document.querySelector('.annotation-popup').dataset.annotationIndex === '2'")
+    ignore(browser.evaluate("document.querySelector('.annotation-popup button').click(); true"))
+    browser.check("URI quad regions and URL policy preserve browser link behavior", (
+      #| (async () => {
+      #|   const { annotationURL } = await import('./annotation-layer.js');
+      #|   const links = [...document.querySelectorAll('.annotation-link[data-annotation-index="1"]')];
+      #|   return links.length === 2 && links.every(a => a.href === 'https://example.com/read' && a.target === '_blank' && a.rel.includes('noopener') && a.rel.includes('noreferrer')) &&
+      #|     annotationURL('javascript:alert(1)') === null && annotationURL('data:text/html,x') === null &&
+      #|     annotationURL('file:///tmp/x.pdf') === null && annotationURL('next.pdf') === null &&
+      #|     annotationURL('next.pdf', 'https://example.com/files/book.pdf') === 'https://example.com/files/next.pdf';
+      #| })()
+    ))
+    for rotation in [0, 90, 180, 270] {
+      browser.ready(2)
+      browser.check_annotation_geometry("annotation hit boxes follow Canvas CropBox UserUnit and rotation " + rotation.to_string())
+      browser.click_annotation(2)
+      browser.check("rotated annotation pointer hit still opens its source popup " + rotation.to_string(), "!document.querySelector('.annotation-popup').hidden && document.querySelector('.annotation-popup').dataset.annotationIndex === '2'")
+      browser.screenshot(output + "/annotation-rotation-" + rotation.to_string() + ".png")
+      ignore(browser.evaluate("document.querySelector('.annotation-popup button').click(); document.getElementById('rotate').click(); true"))
+    }
+    browser.ready(2)
+    browser.drag("B", "y")
+    browser.check("markup hit regions preserve native text drag and source copy", (
+      #| (async () => { const host = await import('./viewer.js'); await host.readSelection(); return document.querySelector('.annotation-popup').hidden && getSelection().toString().includes('Body') && document.getElementById('selection-status').textContent.includes('4'); })()
+    ))
+    ignore(browser.evaluate("getSelection().removeAllRanges(); window.oldAnnotation = document.querySelector('.annotation-comment[data-annotation-index=\"2\"]'); oldAnnotation.click(); document.getElementById('zoom').value='2'; document.getElementById('zoom').dispatchEvent(new Event('change')); true"))
+    browser.ready(2)
+    browser.check("repaint releases popup content and its old annotation control", "!oldAnnotation.isConnected && document.querySelector('.annotation-popup').hidden && document.querySelector('.annotation-popup').children.length === 0")
+    ignore(browser.evaluate("delete window.oldAnnotation; true"))
+    ignore(browser.evaluate("getSelection().removeAllRanges(); document.querySelector('.annotation-link[data-annotation-index=\"0\"]').click(); true"))
+    browser.wait("location.hash === '#page=2' && document.getElementById('zoom').value === '1.25' && document.getElementById('viewer').getAttribute('aria-busy') === 'false'")
+    browser.check("named annotation destination navigates and applies XYZ zoom", "document.getElementById('page-number').value === '2' && document.querySelector('#pages .page[data-page=\"2\"] .paint-layer canvas') !== null && document.getElementById('error').hidden")
+    browser.wait("document.querySelector('#pages .page[data-page=\"1\"] .annotation-link[data-annotation-index=\"0\"]') !== null")
+    browser.check_annotation_geometry("annotation overlay rescales with the Canvas page")
+    browser.check("display and print caches retain independent annotation appearances", (
+      #| (async () => {
+      #|   const bridge = await import('./pdf-client.js');
+      #|   const print = JSON.parse(await bridge.render_print_page(1, 1, 0));
+      #|   const screen = JSON.parse(await bridge.render_page(1, 1, 0));
+      #|   const marker = index => `data-pdf-annotation-index="${index}"`;
+      #|   return print.intent === 'print' && screen.intent === 'display' && print.annotations.length === 0 &&
+      #|     [print.svg, print.canvas.annotation_svg].every(svg => svg.includes(marker(4)) && svg.includes(marker(5)) && !svg.includes(marker(13)) && !svg.includes(marker(6))) &&
+      #|     [screen.svg, screen.canvas.annotation_svg].every(svg => svg.includes(marker(13)) && !svg.includes(marker(5)));
+      #| })()
+    ))
+    browser.check("whole-document printing uses Print appearances without interaction DOM", (
+      #| (async () => {
+      #|   const host = await import('./viewer.js'); const original = window.print;
+      #|   window.print = () => {}; try { await host.printDocument(); } finally { window.print = original; }
+      #|   const page = document.querySelector('#print-pages .page[data-page="1"]');
+      #|   const canvas = page.querySelector('canvas');
+      #|   const bridge = await import('./pdf-client.js');
+      #|   const { renderPdfPage } = await import('./pdf-runtime.mjs');
+      #|   const expected = JSON.parse(await bridge.render_print_page(1, 1, 0));
+      #|   const reference = document.createElement('canvas');
+      #|   await renderPdfPage(reference, expected.canvas, { unsupported: 'warn' });
+      #|   const pixels = canvas?.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      #|   const referencePixels = reference.getContext('2d').getImageData(0, 0, reference.width, reference.height).data;
+      #|   const valid = document.querySelectorAll('#print-pages .page').length === 2 &&
+      #|     expected.canvas.annotation_svg.includes('data-pdf-annotation-index="5"') && !expected.canvas.annotation_svg.includes('data-pdf-annotation-index="13"') &&
+      #|     canvas?.width === reference.width && canvas?.height === reference.height && pixels.every((value, index) => value === referencePixels[index]) &&
+      #|     !page.querySelector('.annotation-layer') && !page.querySelector('svg') && document.getElementById('print-pages').inert;
+      #|   window.dispatchEvent(new Event('afterprint')); return Boolean(valid) && document.getElementById('print-pages').children.length === 0;
+      #| })()
+    ))
+    browser.upload(cwd + "/" + annotations_path)
+    browser.ready(2)
+    ignore(browser.evaluate("document.getElementById('page-number').value='1'; document.getElementById('page-number').dispatchEvent(new Event('change')); true"))
+    browser.wait("location.hash === '#page=1' && document.querySelector('.annotation-link[data-annotation-index=\"11\"]') !== null")
+    ignore(browser.evaluate("document.querySelector('.annotation-link[data-annotation-index=\"11\"]').click(); true"))
+    browser.wait("location.hash === '#page=2'")
+    browser.check("named NextPage link uses local navigation", "document.getElementById('page-number').value === '2'")
+    browser.upload(cwd + "/" + annotations_path)
+    browser.ready(2)
+    ignore(browser.evaluate("document.getElementById('page-number').value='1'; document.getElementById('page-number').dispatchEvent(new Event('change')); true"))
+    browser.wait("document.querySelector('.annotation-comment[data-annotation-index=\"2\"]') !== null")
+    browser.click_annotation(2)
+    browser.check("closing the document releases popup content and annotation targets", (
+      #| (async () => { const host = await import('./viewer.js'); host.closeDocument(); return document.querySelector('.annotation-popup').hidden && document.querySelector('.annotation-popup').children.length === 0 && document.querySelector('.annotation-target') === null; })()
+    ))
+    let pressure = output + "/host-pages.pdf"
+    let images = output + "/host-images.pdf"
+    @fs.write_file(pressure, host_test_document(200))
+    @fs.write_file(images, host_test_document(16, images=true))
+    let pressure_hash = @shell.Cmd("sha256sum", [pressure]).output()
+    let image_hash = @shell.Cmd("sha256sum", [images]).output()
+    guard pressure_hash.exit_code() == 0 && image_hash.exit_code() == 0 else {
+      fail("Unable to hash pressure fixtures")
+    }
+    browser.navigate(base + "/", 0)
+    ignore(
+      browser.evaluate(
+        "document.getElementById('zoom').value = '1'; document.getElementById('view-mode').value = 'scroll'; document.getElementById('view-mode').dispatchEvent(new Event('change')); window.hostStart = performance.now(); true",
+      ),
+    )
+    browser.upload(cwd + "/" + pressure)
+    browser.ready(200)
+    let cold_open = browser.evaluate("performance.now() - hostStart")
+    browser.check(
+      "long document opens in a Worker without mounting off-screen pages",
+      (
+        #| (async () => {
+        #|   const host = await import('./viewer.js');
+        #|   const data = await host.runtimeDiagnostics();
+        #|   return data.worker.worker && data.worker.ready && data.pages === 200 && data.mounted.length > 0 && data.mounted.length < 12 && document.querySelector('.page[data-page="150"]').dataset.rendered === 'false';
+        #| })()
+      ),
+    )
+    let memory : Array[Json] = [{ "phase": "long-document-open", "heap": browser.heap() }]
+    browser.check(
+      "select all copies every page while keeping off-screen DOM unloaded",
+      (
+        #| (async () => {
+        #|   const host = await import('./viewer.js');
+        #|   document.getElementById('viewer').addEventListener('pdf-selection-change', e => window.hostSelection = e.detail);
+        #|   await host.selectAllText();
+        #|   const data = new DataTransfer();
+        #|   document.dispatchEvent(new ClipboardEvent('copy', {clipboardData: data, bubbles: true, cancelable: true}));
+        #|   const text = data.getData('text/plain');
+        #|   const runtime = await host.runtimeDiagnostics();
+        #|   return hostSelection.ranges.length === 200 && text.includes('Host page 001') && text.includes('Host page 200') && runtime.mounted.length < 12;
+        #| })()
+      ),
+    )
+    browser.check(
+      "off-screen search keeps the main thread responsive and mounts its result",
+      (
+        #| (async () => {
+        #|   const host = await import('./viewer.js');
+        #|   getSelection().removeAllRanges(); await host.readSelection();
+        #|   document.getElementById('search-query').value = 'Host page 137';
+        #|   const start = performance.now();
+        #|   const pending = host.performSearch();
+        #|   await new Promise(r => setTimeout(r, 30));
+        #|   window.hostTimer = performance.now() - start;
+        #|   await pending;
+        #|   return hostTimer < 250 && document.getElementById('search-status').textContent === '1 / 1' && document.getElementById('page-number').value === '137' && document.querySelector('.page[data-page="137"] .pdf-search-active') !== null;
+        #| })()
+      ),
+    )
+    let cached_render = browser.evaluate(
+      (
+        #| (async () => {
+        #|   const bridge = await import('./pdf-client.js');
+        #|   const first = performance.now();
+        #|   const cold = await bridge.render_page(151, 1.37, 90);
+        #|   const second = performance.now();
+        #|   const hot = await bridge.render_page(151, 1.37, 90);
+        #|   return {cold_ms: second - first, hot_ms: performance.now() - second, identical: cold === hot, cache: JSON.parse(await bridge.cache_info())};
+        #| })()
+      ),
+    )
+    guard cached_render is { "identical": True, .. } else {
+      fail("Warm render changed its output")
+    }
+    browser.check(
+      "queued cancellation never dispatches the cancelled page",
+      (
+        #| (async () => {
+        #|   const {pdf} = await import('./pdf-client.js');
+        #|   const before = pdf.diagnostics().cancelled;
+        #|   const blocker = pdf.call('render_page', [152, 1, 0]);
+        #|   const controller = new AbortController();
+        #|   const pending = pdf.call('render_page', [153, 1, 0], {signal: controller.signal}).catch(error => error.name);
+        #|   controller.abort();
+        #|   await blocker;
+        #|   return await pending === 'AbortError' && pdf.diagnostics().cancelled === before + 1;
+        #| })()
+      ),
+    )
+    for number in [1, 20, 40, 60, 80, 100, 120, 160, 180, 200] {
+      ignore(
+        browser.evaluate(
+          "document.getElementById('page-number').value = \{number}; document.getElementById('page-number').dispatchEvent(new Event('change')); true",
+        ),
+      )
+      browser.wait(
+        "document.querySelector('.page[data-page=\"\{number}\"]').dataset.rendered === 'true'",
+      )
+      memory.push({ "phase": "scroll-\{number}", "heap": browser.heap() })
+    }
+    browser.check(
+      "scrolling evicts page models and render strings within both budgets",
+      (
+        #| (async () => {
+        #|   const data = await (await import('./viewer.js')).runtimeDiagnostics();
+        #|   return data.mounted.length < 12 && data.cache.pages <= data.cache.max_pages && data.cache.estimated_bytes <= data.cache.budget_bytes && data.cache.evictions > 0 && data.cache.render.entries <= data.cache.render.max_entries && data.cache.render.bytes <= data.cache.render.budget_bytes && data.cache.render.evictions > 0;
+        #| })()
+      ),
+    )
+    ignore(
+      browser.evaluate(
+        "for (const scale of ['2','0.75','1.25']) { document.getElementById('zoom').value = scale; document.getElementById('zoom').dispatchEvent(new Event('change')); } document.getElementById('rotate').click(); document.getElementById('rotate').click(); true",
+      ),
+    )
+    browser.ready(200)
+    browser.check(
+      "rapid scale and rotation publish only the latest viewport",
+      "document.getElementById('error').hidden && document.querySelector('.page[data-page=\"200\"]').style.width === '1485px' && document.querySelector('.page[data-page=\"200\"]').style.height === '1147.5px'",
+    )
+    browser.check(
+      "print prepares all pages and releases its temporary DOM afterwards",
+      (
+        #| (async () => {
+        #|   const host = await import('./viewer.js');
+        #|   const original = window.print;
+        #|   let printed = false;
+        #|   let calls = 0;
+        #|   window.print = () => {
+        #|     calls++;
+        #|     const pages = [...document.querySelectorAll('#print-pages .page')];
+        #|     printed = document.body.classList.contains('pdf-print-ready') && pages.length === 200 && pages.every(page => page.querySelector('canvas')?.width > 0 && page.style.width.endsWith('pt'));
+        #|   };
+        #|   try { await Promise.all([host.printDocument(), host.printDocument()]); } finally { window.print = original; }
+        #|   return printed && calls === 1 && !document.getElementById('print').disabled;
+        #| })()
+      ),
+    )
+    let printed = browser.command("Page.printToPDF", params={
+      "preferCSSPageSize": true,
+      "printBackground": true,
+    })
+    guard printed is { "data": String(data), .. } else {
+      fail("Chromium did not generate a print PDF")
+    }
+    let print_bytes = @base64.decode(data)
+    @fs.write_file(output + "/host-printed.pdf", print_bytes)
+    let print_document = @pdflite.pdf_read_document_from_bytes(print_bytes)
+    let print_pages = print_document.pages_of_pagetree()
+    guard print_pages.length() == 200 else {
+      fail("Printed PDF lost pages: \{print_pages.length()}")
+    }
+    let first_paper = print_document.parse_rectangle(print_pages[0].mediabox)
+    let tenth_paper = print_document.parse_rectangle(print_pages[9].mediabox)
+    guard (first_paper.max_x - first_paper.min_x - 612.0).abs() < 0.1 &&
+      (first_paper.max_y - first_paper.min_y - 792.0).abs() < 0.1 &&
+      (tenth_paper.max_x - tenth_paper.min_x - 1188.0).abs() < 0.1 &&
+      (tenth_paper.max_y - tenth_paper.min_y - 918.0).abs() < 0.1 else {
+      fail("Printed physical page dimensions changed")
+    }
+    ignore(browser.evaluate("window.dispatchEvent(new Event('afterprint')); true"))
+    browser.check(
+      "printed PDF retains all physical page sizes and temporary DOM is released",
+      "!document.querySelector('#print-pages .page') && !document.body.classList.contains('pdf-print-ready')",
+    )
+    browser.check(
+      "replacing a document terminates its running work and ignores stale results",
+      (
+        #| (async () => {
+        #|   const host = await import('./viewer.js');
+        #|   const {pdf} = await import('./pdf-client.js');
+        #|   const file = new File([await (await fetch('/fixtures/90ms_rksj_h_sample.pdf')).blob()], 'replacement.pdf');
+        #|   const pending = pdf.call('render_page', [180, 2, 90]).catch(error => error.name);
+        #|   await host.loadFile(file, '/local/replacement.pdf');
+        #|   const outcome = await pending;
+        #|   const data = await host.runtimeDiagnostics();
+        #|   return outcome === 'AbortError' && data.pages === 1 && document.querySelectorAll('#pages .page').length === 1 && document.querySelector('.text-layer').textContent.includes('日本語テスト') && document.getElementById('file-name').textContent === 'replacement.pdf' && document.getElementById('error').hidden;
+        #| })()
+      ),
+    )
+    browser.check(
+      "Worker startup failure rejects queued work and can be recovered",
+      (
+        #| (async () => {
+        #|   const {PdfWorkerClient} = await import('./pdf-client.js');
+        #|   const client = new PdfWorkerClient({workerURL: '/missing-pdf-worker.js'});
+        #|   client.reset();
+        #|   const error = await client.call('cache_info').catch(error => error.code);
+        #|   const released = !client.diagnostics().worker && client.diagnostics().queued === 0;
+        #|   client.workerURL = new URL('./pdf-worker.js', location.href);
+        #|   client.reset();
+        #|   const bytes = new Uint8Array(await (await fetch('/fixtures/90ms_rksj_h_sample.pdf')).arrayBuffer());
+        #|   const reopened = JSON.parse(await client.call('open_pdf', [bytes]));
+        #|   client.close();
+        #|   return error === 'worker-error' && released && reopened.ok && reopened.pages === 1;
+        #| })()
+      ),
+    )
+    browser.check(
+      "bridge errors distinguish invalid scale rotation and missing pages",
+      (
+        #| (async () => {
+        #|   const bridge = await import('./pdf-client.js');
+        #|   const scale = JSON.parse(await bridge.render_page(1, NaN, 0));
+        #|   const rotation = JSON.parse(await bridge.render_page(1, 1, 5));
+        #|   const page = JSON.parse(await bridge.render_page(2, 1, 0));
+        #|   return scale.code === 'invalid-scale' && rotation.code === 'invalid-rotation' && page.code === 'page-missing';
+        #| })()
+      ),
+    )
+    browser.check(
+      "close releases Worker queues and page DOM and rejects later operations",
+      (
+        #| (async () => {
+        #|   const host = await import('./viewer.js');
+        #|   const {pdf} = await import('./pdf-client.js');
+        #|   const pending = pdf.call('render_page', [1, 2, 90]).catch(error => error.name);
+        #|   host.closeDocument();
+        #|   const cancelled = await pending;
+        #|   const closed = await pdf.call('document_info').catch(error => error.code);
+        #|   return cancelled === 'AbortError' && closed === 'document-closed' && !pdf.diagnostics().worker && !pdf.diagnostics().queued && document.querySelectorAll('#pages .page').length === 0 && document.getElementById('download').disabled && !document.getElementById('empty-state').hidden;
+        #| })()
+      ),
+    )
+    ignore(browser.evaluate("document.getElementById('zoom').value = '1'; window.hostStart = performance.now(); true"))
+    browser.upload(cwd + "/" + images)
+    browser.ready(16)
+    let image_open = browser.evaluate("performance.now() - hostStart")
+    for number in 1..<=16 {
+      let rendered = browser.evaluate(
+        "(async () => { const bridge = await import('./pdf-client.js'); const page = JSON.parse(await bridge.render_page(\{number}, 1, 0)); return page.ok && page.canvas.items.some(item => item.kind === 'image'); })()",
+      )
+      guard rendered == Json::boolean(true) else {
+        fail("Pressure image page \{number} was not rendered")
+      }
+      memory.push({ "phase": "image-\{number}", "heap": browser.heap() })
+    }
+    browser.check(
+      "raw image pressure evicts retained assets without blanking the visible page",
+      (
+        #| (async () => {
+        #|   const data = await (await import('./viewer.js')).runtimeDiagnostics();
+        #|   return data.source_bytes > 12 * 1024 * 1024 && data.cache.estimated_bytes <= data.cache.budget_bytes && data.cache.pages <= 8 && data.cache.evictions > 0 && data.cache.render.bytes <= data.cache.render.budget_bytes && data.cache.render.entries <= 12 && data.cache.render.evictions > 0 && [...document.querySelectorAll('.paint-layer canvas')].some(c => c.width > 0 && c.getContext('2d').getImageData(0, 0, c.width, c.height).data.some((v, i) => i % 4 !== 3 && v < 240)) && document.getElementById('error').hidden;
+        #| })()
+      ),
+    )
+    let pressure_end = browser.evaluate("(async () => await (await import('./viewer.js')).runtimeDiagnostics())()")
+    let retained = browser.heap(collect=true)
     guard browser.errors.is_empty() else {
       fail("Browser errors: " + browser.errors.to_json().stringify())
     }
@@ -638,8 +1336,39 @@ async fn main {
       "status": "passed",
       "checks": browser.checks,
       "passed": browser.checks.length(),
-      "scope": "Browser DOM text, source ranges, zoom/rotation, copy and multi-page smoke tests; not pixel parity",
-      "fixtures": ["90ms_rksj_h_sample.pdf", "vertical.pdf", "tracemonkey.pdf"],
+      "scope": "Browser interaction, Worker lifecycle, virtual page selection/printing and cache pressure; not pixel parity",
+      "fixtures": [
+        "90ms_rksj_h_sample.pdf", "vertical.pdf", "tracemonkey.pdf", "Pages-tree-refs.pdf",
+      ],
+      "font_loading": font_loading,
+      "annotation_interactions": {
+        "authored_fixture": annotations_path,
+        "sha256": annotations_hash.stdout().split(" ").next().unwrap().to_owned(),
+        "real_fixtures": ["annotation-link-text-popup.pdf", "annotation-text-without-popup.pdf", "widget_hidden_print.pdf"],
+        "scope": "Read-only popup/link DOM over Canvas, independent SVG viewport geometry oracle, native pointer/keyboard/selection, print intent Canvas equivalence and document cleanup; not reference-renderer appearance pixel parity",
+      },
+      "host_runtime": {
+        "long_document": {
+          "pages": 200,
+          "source_bytes": @fs.read_file(pressure).binary().length(),
+          "sha256": pressure_hash.stdout().split(" ").next().unwrap().to_owned(),
+          "first_page_ms": cold_open,
+          "main_thread_timer_ms": browser.evaluate("hostTimer"),
+        },
+        "image_document": {
+          "pages": 16,
+          "source_bytes": @fs.read_file(images).binary().length(),
+          "sha256": image_hash.stdout().split(" ").next().unwrap().to_owned(),
+          "first_page_ms": image_open,
+          "samples": "Independent 512x512 raw RGB images; authored deterministic fixture",
+        },
+        "cold_hot_render": cached_render,
+        "memory_samples": memory,
+        "retained_after_gc": retained,
+        "printed_pages": print_pages.length(),
+        "final_runtime": pressure_end,
+        "memory_scope": "CDP main/Worker JS heap samples, not continuous process peak RSS; cache bytes are estimates and exclude parsed input and temporary decoding",
+      },
       "artifacts": output,
     }
     @fs.write_file(output + "/report.json", report.stringify(indent=2))

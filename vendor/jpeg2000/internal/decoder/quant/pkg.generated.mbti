@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/decoder/quant"
+
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/core",
+}
+
+// Values
+pub fn dequantize_coefficients(Array[Int], Int, Int, Int, @core.QcdMetadata, Int, tcx0? : Int, tcy0? : Int, use_53_filter? : Bool) -> Array[Double]
+
+pub fn qcd_subband_max_bit_planes(@core.QcdMetadata, Int, precision_bits? : Int, transformation? : Int, decomposition_levels? : Int) -> Int
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

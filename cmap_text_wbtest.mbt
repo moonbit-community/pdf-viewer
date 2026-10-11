@@ -172,7 +172,7 @@ test "recovered ToUnicode takes precedence over CID collection fallback" {
     document.document,
     state,
     font_without_reader_map,
-    page.resources,
+    Some(@syntax.PdfIndirect(5)),
     @content.Op_Tj(b"\xF0\x01\x02\x03"),
   )
   guard result.entries[0].object is @pdflite.PdfContentGlyphObject(_, _, text) else {
@@ -226,7 +226,7 @@ test "partial ToUnicode falls back to the Adobe CID collection map" {
     document.document,
     state,
     font_with_collection_fallback,
-    page.resources,
+    Some(@syntax.PdfIndirect(5)),
     @content.Op_Tj(b"\xF0\x01\x02\x03"),
   )
   guard result.entries[0].object is @pdflite.PdfContentGlyphObject(_, _, text) else {
@@ -261,8 +261,7 @@ test "named ToUnicode UseCMap recovers reader-dropped Adobe Unicode entries" {
   assert_true(to_unicode_source.contains("Adobe-Japan1-UCS2"))
   let unicode_recovery = pdf_viewer_tounicode_recovery_for_font(
     document.document,
-    page.resources,
-    "/F1",
+    Some(@syntax.PdfIndirect(5)),
   ).unwrap()
   assert_eq(unicode_recovery.usecmap, Some(pdf_name_key("/Adobe-Japan1-UCS2")))
   assert_eq(
@@ -299,7 +298,7 @@ test "named ToUnicode UseCMap recovers reader-dropped Adobe Unicode entries" {
     document.document,
     state,
     font_without_reader_map,
-    page.resources,
+    Some(@syntax.PdfIndirect(5)),
     @content.Op_Tj(b"\x03\x4B"),
   )
   guard result.entries[0].object is @pdflite.PdfContentGlyphObject(_, _, text) else {
@@ -368,7 +367,7 @@ test "reader-loss recovery composes indirect UseCMap streams locally first" {
     document.document,
     state,
     font_without_reader_tables,
-    page.resources,
+    Some(@syntax.PdfIndirect(5)),
     @content.Op_Tj(b"\xF0\x01\x02\x03"),
   )
   guard result.entries[0].object is @pdflite.PdfContentGlyphObject(_, _, text) else {
@@ -597,4 +596,41 @@ test "CMap recovery cuts indirect UseCMap cycles and records the reason" {
   assert_true(recovery.diagnostics.usecmap_cycle)
   assert_eq(pdf_viewer_cmap_lookup(recovery.cid_entries[:], 0x41), Some(1))
   assert_eq(pdf_viewer_cmap_lookup(recovery.cid_entries[:], 0x42), Some(2))
+}
+
+///|
+test "CMap Unicode byte strings allow long mappings, whitespace and empty destinations" {
+  let recovery = pdf_viewer_parse_cmap(
+    b"2 beginbfchar <F0010203> <0061 0062 D83DDE00> <41> <> endbfchar 1 beginbfrange <F0010204> <F0010205> <006100620063> endbfrange",
+  )
+  assert_eq(recovery.diagnostics.malformed_tokens, 0)
+  assert_eq(recovery.unicode_entries.length(), 3)
+  assert_eq(
+    pdf_viewer_unicode_lookup(
+      recovery.unicode_entries[:],
+      0xF0010203U.reinterpret_as_int(),
+    ),
+    Some(b"\x00\x61\x00\x62\xD8\x3D\xDE\x00"),
+  )
+  assert_eq(
+    pdf_viewer_unicode_lookup(recovery.unicode_entries[:], 65),
+    Some(b""),
+  )
+  assert_eq(
+    pdf_viewer_unicode_lookup(
+      recovery.unicode_entries[:],
+      0xF0010205U.reinterpret_as_int(),
+    ),
+    Some(b"\x00\x61\x00\x62\x00\x64"),
+  )
+}
+
+///|
+test "CMap long destinations do not expand the allowed source code width" {
+  let recovery = pdf_viewer_parse_cmap(
+    b"1 begincodespacerange <0100000000> <01FFFFFFFF> endcodespacerange 1 beginbfchar <01FFFFFFFF> <0041> endbfchar 1 begincidrange <0100000000> <01FFFFFFFF> 7 endcidrange 1 begincidchar <> 8 endcidchar",
+  )
+  assert_true(recovery.codespaces.is_empty())
+  assert_true(recovery.unicode_entries.is_empty())
+  assert_true(recovery.cid_entries.is_empty())
 }

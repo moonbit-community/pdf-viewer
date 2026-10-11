@@ -173,8 +173,77 @@ main:focus-visible {
   pointer-events: none;
   user-select: none;
 }
-.paint-layer svg {
+.paint-layer svg,
+.paint-layer canvas {
   display: block;
+}
+.annotation-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.annotation-target {
+  position: absolute;
+  display: block;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+}
+.annotation-link {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.annotation-link:hover {
+  background: #365d9020;
+}
+.annotation-target:focus-visible {
+  outline: 2px solid #365d90;
+  outline-offset: -2px;
+}
+.annotation-popup {
+  position: fixed;
+  z-index: 10;
+  width: 300px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  padding: 14px;
+  color: #25344b;
+  background: #fff9df;
+  border: 1px solid #d4c58d;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px #1b294533;
+  font-size: 14px;
+}
+.annotation-popup header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  overflow-wrap: anywhere;
+}
+.annotation-popup header button {
+  padding: 0 5px;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.annotation-popup-subject {
+  margin-top: 8px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.annotation-popup-content {
+  margin-top: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#print-pages {
+  position: fixed;
+  left: -100000px;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 .text-layer {
   position: absolute;
@@ -375,6 +444,7 @@ h1 {
 }
 .thumbnail-item {
   display: flex;
+  height: 122px;
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
@@ -389,7 +459,8 @@ h1 {
   background: #fff;
   border: 1px solid #d2d9e4;
 }
-.thumbnail-preview svg {
+.thumbnail-preview svg,
+.thumbnail-preview canvas {
   display: block;
   max-width: 100%;
   max-height: 100%;
@@ -474,6 +545,10 @@ h1 {
   }
 }
 @media print {
+  .annotation-popup,
+  .annotation-layer {
+    display: none;
+  }
   body,
   #viewer {
     height: auto;
@@ -495,5 +570,30 @@ h1 {
   }
   .text-layer {
     display: none;
+  }
+  #viewer {
+    display: none;
+  }
+  #print-pages {
+    display: none;
+    position: static;
+    visibility: visible;
+  }
+  body.pdf-print-ready #print-pages {
+    display: block;
+  }
+  #print-pages svg,
+  #print-pages canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  #print-pages .page:last-of-type {
+    break-after: auto;
+  }
+  body:not(.pdf-print-ready)::before {
+    content: "请使用阅读器工具栏的“打印”按钮，准备完整文档后再打印。";
+    display: block;
+    padding: 24px;
   }
 }

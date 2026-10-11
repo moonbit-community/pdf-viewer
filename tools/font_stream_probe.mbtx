@@ -1,0 +1,97 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/pdflite",
+  "moonbitlang/pdflite/core",
+  "moonbitlang/pdflite/syntax",
+  "moonbit-community/flate@0.8.1/zlib",
+}
+
+///|
+fn font_stream_probe_name(text : String) -> @core.PdfName {
+  @core.pdf_name_of_bytes(@utf8.encode(text))
+}
+
+///|
+/// Inspect each stream separately so one broken font does not hide the others.
+async fn main {
+  let args = @env.args()
+  guard args.length() == 3 else {
+    fail("usage: font_stream_probe.mbtx input.pdf output-directory")
+  }
+  let document = @pdflite.pdf_read_document_from_bytes(
+    @fs.read_file(args[1]).binary(),
+  )
+  if !@fs.exists(args[2]) {
+    @fs.mkdir(args[2], recursive=true)
+  }
+  let streams : Array[Json] = []
+  for number in document.object_numbers() {
+    let object = document.lookup_object_or_null(number)
+    guard object is @syntax.PdfStreamObject(stream) else { continue }
+    let bytes = @syntax.pdf_stream_data_bytes(stream.data)
+    let filter = document.lookup_direct(
+      font_stream_probe_name("/Filter"),
+      object,
+    )
+    let path = args[2] + "/" + number.to_string()
+    @fs.write_file(path + ".encoded", bytes)
+    let decoded : Json = try
+      document.pdf_decode_stream(object).stream_bytes()
+    catch {
+      error => { "error": @debug.to_string(error) }
+    } noraise {
+      decoded => {
+        @fs.write_file(path + ".decoded", decoded)
+        { "bytes": decoded.length() }
+      }
+    }
+    let zlib : Json = if filter ==
+      Some(@syntax.PdfNameObject(font_stream_probe_name("/FlateDecode"))) {
+      try @zlib.zlib_decompress(bytes) catch {
+        @zlib.ZlibError(kind, message) =>
+          { "kind": @debug.to_string(kind), "message": message }
+      } noraise {
+        decoded => { "bytes": decoded.length() }
+      }
+    } else {
+      Json::null()
+    }
+    streams.push({
+      "object": number,
+      "dictionary": ToJson::to_json(stream.dictionary),
+      "encoded_bytes": bytes.length(),
+      "decode": decoded,
+      "zlib": zlib,
+    })
+  }
+  let fonts : Array[Json] = []
+  for entry in document.list_fonts([1]) {
+    let font = document.read_font(entry.font)
+    let details : Json = match font {
+      @pdflite.PdfFontSimple(simple) =>
+        {
+          "encoding": ToJson::to_json(simple.encoding),
+          "flags": ToJson::to_json(
+            simple.fontdescriptor.map(descriptor => descriptor.flags),
+          ),
+          "fontfile": ToJson::to_json(font.embedded_fontfile_number()),
+          "tounicode": ToJson::to_json(
+            simple.fontdescriptor.map(descriptor => {
+              descriptor.tounicode.map(entries => entries.length())
+            }),
+          ),
+        }
+      _ => { "font": @debug.to_string(font) }
+    }
+    fonts.push({ "name": entry.name, "details": details })
+  }
+  let report : Json = { "file": args[1], "streams": streams, "fonts": fonts }
+  @fs.write_file(args[2] + "/report.json", report.stringify(indent=2))
+  println(report.stringify())
+}

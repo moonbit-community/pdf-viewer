@@ -1,0 +1,474 @@
+{
+  "references": {
+    "pdfjs": "6.4.299",
+    "poppler": "pdftoppm version 26.05.0",
+    "ghostscript": "10.05.1"
+  },
+  "criteria": {
+    "analyticalMaximumByteError": 1.51,
+    "expandedGhostscriptMaximumMeanByteError": 1.1,
+    "originalPatternReferenceDifferences": "Recorded, not asserted equal: these readers ignore PatternType 2 ExtGState; see ISO 32000-1 11.6.7 and the expanded gs+sh controls."
+  },
+  "results": [
+    {
+      "name": "multiply-inner-half-outer-half",
+      "pixels": 10000,
+      "maximumAnalyticalByteError": 0.5999999999999659,
+      "pdfjsMeanError": 44.333333333333336,
+      "originalReferenceMetrics": {
+        "poppler": {
+          "meanAbsoluteError": 44.666666666666664,
+          "maximum": 56,
+          "changedAbove8": 10000,
+          "changedAbove8BoundsInclusive": [
+            0,
+            0,
+            99,
+            99
+          ]
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 44.333333333333336,
+          "maximum": 56,
+          "changedAbove8": 10000,
+          "changedAbove8BoundsInclusive": [
+            0,
+            0,
+            99,
+            99
+          ]
+        }
+      },
+      "expandedReferenceMeanErrors": {
+        "poppler": 1,
+        "ghostscript": 0.3333333333333333
+      },
+      "expandedReferenceMetrics": {
+        "poppler": {
+          "meanAbsoluteError": 1,
+          "maximum": 1,
+          "changedAbove8": 0,
+          "changedAbove8BoundsInclusive": null
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.3333333333333333,
+          "maximum": 1,
+          "changedAbove8": 0,
+          "changedAbove8BoundsInclusive": null
+        }
+      },
+      "expandedSha256": "3cdcbad45f02f5eb32947f6dde3f4cbf213858f633b56db815b4b8e80f9cb84a",
+      "sha256": "98cdfc4c4d577a766a4c676466c21dcec906148e15e6a03928a5aa38277f5ef6"
+    },
+    {
+      "name": "indirect-pattern-extgstate",
+      "pixels": 10000,
+      "maximumAnalyticalByteError": 0.5999999999999659,
+      "pdfjsMeanError": 44.333333333333336,
+      "originalReferenceMetrics": {
+        "poppler": {
+          "meanAbsoluteError": 44.666666666666664,
+          "maximum": 56,
+          "changedAbove8": 10000,
+          "changedAbove8BoundsInclusive": [
+            0,
+            0,
+            99,
+            99
+          ]
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 44.333333333333336,
+          "maximum": 56,
+          "changedAbove8": 10000,
+          "changedAbove8BoundsInclusive": [
+            0,
+            0,
+            99,
+            99
+          ]
+        }
+      },
+      "expandedReferenceMeanErrors": {
+        "poppler": 1,
+        "ghostscript": 0.3333333333333333
+      },
+      "expandedReferenceMetrics": {
+        "poppler": {
+          "meanAbsoluteError": 1,
+          "maximum": 1,
+          "changedAbove8": 0,
+          "changedAbove8BoundsInclusive": null
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.3333333333333333,
+          "maximum": 1,
+          "changedAbove8": 0,
+          "changedAbove8BoundsInclusive": null
+        }
+      },
+      "expandedSha256": "3cdcbad45f02f5eb32947f6dde3f4cbf213858f633b56db815b4b8e80f9cb84a",
+      "sha256": "262dd0b3f020d782819123220cbcb6b0de78ac00933431732d42b1db0876587b"
+    },
+    {
+      "name": "inner-multiply-outer-screen",
+      "pixels": 10000,
+      "maximumAnalyticalByteError": 0.8799999999999883,
+      "pdfjsMeanError": 36,
+      "originalReferenceMetrics": {
+        "poppler": {
+          "meanAbsoluteError": 36,
+          "maximum": 54,
+          "changedAbove8": 10000,
+          "changedAbove8BoundsInclusive": [
+            0,
+            0,
+            99,
+            99
+          ]
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 36,
+          "maximum": 54,
+          "changedAbove8": 10000,
+          "changedAbove8BoundsInclusive": [
+            0,
+            0,
+            99,
+            99
+          ]
+        }
+      },
+      "expandedReferenceMeanErrors": {
+        "poppler": 0.6666666666666666,
+        "ghostscript": 0.6666666666666666
+      },
+      "expandedReferenceMetrics": {
+        "poppler": {
+          "meanAbsoluteError": 0.6666666666666666,
+          "maximum": 1,
+          "changedAbove8": 0,
+          "changedAbove8BoundsInclusive": null
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.6666666666666666,
+          "maximum": 1,
+          "changedAbove8": 0,
+          "changedAbove8BoundsInclusive": null
+        }
+      },
+      "expandedSha256": "95f602bf91c3912afe8206af8f7d881fab2a0c88d8a54a8ce283a15162cb1b51",
+      "sha256": "832391187aa533c31529b3007d1e6fbcb064164ffde90f017b8a15a3c3ff33e3"
+    },
+    {
+      "name": "default-inner-opacity-reset",
+      "pixels": 10000,
+      "maximumAnalyticalByteError": 2.842170943040401e-14,
+      "pdfjsMeanError": 0,
+      "originalReferenceMetrics": {
+        "poppler": {
+          "meanAbsoluteError": 0.3333333333333333,
+          "maximum": 1,
+          "changedAbove8": 0,
+          "changedAbove8BoundsInclusive": null
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0,
+          "maximum": 0,
+          "changedAbove8": 0,
+          "changedAbove8BoundsInclusive": null
+        }
+      },
+      "expandedReferenceMeanErrors": {
+        "poppler": 0.3333333333333333,
+        "ghostscript": 0
+      },
+      "expandedReferenceMetrics": {
+        "poppler": {
+          "meanAbsoluteError": 0.3333333333333333,
+          "maximum": 1,
+          "changedAbove8": 0,
+          "changedAbove8BoundsInclusive": null
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0,
+          "maximum": 0,
+          "changedAbove8": 0,
+          "changedAbove8BoundsInclusive": null
+        }
+      },
+      "expandedSha256": "c66014edd782e3918fdf0183afbb1cf518d288b46505543638f9cd364c90a8d5",
+      "sha256": "562cfe13437bdb7bc4eb618f3c3ca1ef2bfef2f705dc38c8db6367ce5cb868eb"
+    },
+    {
+      "name": "knockout-background-before-sh",
+      "pixels": 10000,
+      "maximumAnalyticalByteError": 1,
+      "pdfjsMeanError": 22.489066666666666,
+      "originalReferenceMetrics": {
+        "poppler": {
+          "meanAbsoluteError": 35.74333333333333,
+          "maximum": 87,
+          "changedAbove8": 5100,
+          "changedAbove8BoundsInclusive": [
+            25,
+            0,
+            75,
+            99
+          ]
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 22.83,
+          "maximum": 56,
+          "changedAbove8": 5100,
+          "changedAbove8BoundsInclusive": [
+            24,
+            0,
+            74,
+            99
+          ]
+        }
+      },
+      "expandedReferenceMeanErrors": {
+        "poppler": 9.6,
+        "ghostscript": 0.9366666666666666
+      },
+      "expandedReferenceMetrics": {
+        "poppler": {
+          "meanAbsoluteError": 9.6,
+          "maximum": 39,
+          "changedAbove8": 5100,
+          "changedAbove8BoundsInclusive": [
+            25,
+            0,
+            75,
+            99
+          ]
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.9366666666666666,
+          "maximum": 69,
+          "changedAbove8": 100,
+          "changedAbove8BoundsInclusive": [
+            24,
+            0,
+            24,
+            99
+          ]
+        }
+      },
+      "expandedSha256": "752d9ce1e53254e9bf9ec90bf60ad701872ed005c924e7386ae3510b35308bce",
+      "sha256": "619e3dd43c74608f930250da69293763fbbd9dea7291f90c4ff636af87ac01e2"
+    },
+    {
+      "name": "pattern-luminosity-mask",
+      "pixels": 10000,
+      "maximumAnalyticalByteError": 0.9499999999999886,
+      "pdfjsMeanError": 47.666666666666664,
+      "originalReferenceMetrics": {
+        "poppler": {
+          "meanAbsoluteError": 48,
+          "maximum": 55,
+          "changedAbove8": 10000,
+          "changedAbove8BoundsInclusive": [
+            0,
+            0,
+            99,
+            99
+          ]
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 47.666666666666664,
+          "maximum": 55,
+          "changedAbove8": 10000,
+          "changedAbove8BoundsInclusive": [
+            0,
+            0,
+            99,
+            99
+          ]
+        }
+      },
+      "expandedReferenceMeanErrors": {
+        "poppler": 0.6666666666666666,
+        "ghostscript": 0.5
+      },
+      "expandedReferenceMetrics": {
+        "poppler": {
+          "meanAbsoluteError": 0.6666666666666666,
+          "maximum": 2,
+          "changedAbove8": 0,
+          "changedAbove8BoundsInclusive": null
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.5,
+          "maximum": 1,
+          "changedAbove8": 0,
+          "changedAbove8BoundsInclusive": null
+        }
+      },
+      "expandedSha256": "2e4af23b23bbe90b5e58094a816fe43661784eea5b0deea004e7a8843eb1c624",
+      "sha256": "3e0508f4576ba4442687dcc2ec5cf4cded70eb9a0ed79a0f32cb3d41e4d553ce"
+    },
+    {
+      "name": "pattern-matrix-transforms-mask",
+      "pixels": 10000,
+      "maximumAnalyticalByteError": 0.9499999999999886,
+      "pdfjsMeanError": 24.666666666666668,
+      "originalReferenceMetrics": {
+        "poppler": {
+          "meanAbsoluteError": 25.346666666666668,
+          "maximum": 55,
+          "changedAbove8": 5100,
+          "changedAbove8BoundsInclusive": [
+            25,
+            0,
+            75,
+            99
+          ]
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 25.176666666666666,
+          "maximum": 55,
+          "changedAbove8": 5100,
+          "changedAbove8BoundsInclusive": [
+            24,
+            0,
+            74,
+            99
+          ]
+        }
+      },
+      "expandedReferenceMeanErrors": {
+        "poppler": 0.17666666666666667,
+        "ghostscript": 0.125
+      },
+      "expandedReferenceMetrics": {
+        "poppler": {
+          "meanAbsoluteError": 0.17666666666666667,
+          "maximum": 2,
+          "changedAbove8": 0,
+          "changedAbove8BoundsInclusive": null
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.125,
+          "maximum": 1,
+          "changedAbove8": 0,
+          "changedAbove8BoundsInclusive": null
+        }
+      },
+      "expandedSha256": "ffdca0bd71239ace70cc2095d7b3f21a2bcf7f2774c694911142e5d22572d4d6",
+      "sha256": "eff50d3237eba80c75aff0d48d90d9839978b98d7fef6f93cab7bb87cd071ba4"
+    },
+    {
+      "name": "background-mask-bbox",
+      "pixels": 10000,
+      "maximumAnalyticalByteError": 1,
+      "pdfjsMeanError": 14.579333333333333,
+      "originalReferenceMetrics": {
+        "poppler": {
+          "meanAbsoluteError": 22.326,
+          "maximum": 89,
+          "changedAbove8": 3060,
+          "changedAbove8BoundsInclusive": [
+            25,
+            20,
+            75,
+            79
+          ]
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 14.618,
+          "maximum": 55,
+          "changedAbove8": 3060,
+          "changedAbove8BoundsInclusive": [
+            24,
+            20,
+            74,
+            79
+          ]
+        }
+      },
+      "expandedReferenceMeanErrors": {
+        "poppler": 3.644,
+        "ghostscript": 0.566
+      },
+      "expandedReferenceMetrics": {
+        "poppler": {
+          "meanAbsoluteError": 3.644,
+          "maximum": 50,
+          "changedAbove8": 3120,
+          "changedAbove8BoundsInclusive": [
+            25,
+            20,
+            90,
+            79
+          ]
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.566,
+          "maximum": 81,
+          "changedAbove8": 60,
+          "changedAbove8BoundsInclusive": [
+            24,
+            20,
+            24,
+            79
+          ]
+        }
+      },
+      "expandedSha256": "3fc05cad38b9db8af80db09e3ea7d95c2291851936a9740771b311b56365bfd1",
+      "sha256": "f90637bde2687c5ced83d9c8be929bfbc711a2b3e131c7d47d441b54b484edd5"
+    },
+    {
+      "name": "pattern-stroke-inner-half",
+      "pixels": 10000,
+      "maximumAnalyticalByteError": 0.5999999999999659,
+      "pdfjsMeanError": 3.546666666666667,
+      "originalReferenceMetrics": {
+        "poppler": {
+          "meanAbsoluteError": 3.5733333333333333,
+          "maximum": 56,
+          "changedAbove8": 800,
+          "changedAbove8BoundsInclusive": [
+            10,
+            45,
+            89,
+            54
+          ]
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 3.546666666666667,
+          "maximum": 56,
+          "changedAbove8": 800,
+          "changedAbove8BoundsInclusive": [
+            10,
+            45,
+            89,
+            54
+          ]
+        }
+      },
+      "expandedReferenceMeanErrors": {
+        "poppler": 0.08,
+        "ghostscript": 0.02666666666666667
+      },
+      "expandedReferenceMetrics": {
+        "poppler": {
+          "meanAbsoluteError": 0.08,
+          "maximum": 1,
+          "changedAbove8": 0,
+          "changedAbove8BoundsInclusive": null
+        },
+        "ghostscript": {
+          "meanAbsoluteError": 0.02666666666666667,
+          "maximum": 1,
+          "changedAbove8": 0,
+          "changedAbove8BoundsInclusive": null
+        }
+      },
+      "expandedSha256": "577721b0bc4793b9ad4a9d8ba29f03f383aa3ac4aa6b6e98a9746cd114e78d74",
+      "sha256": "366e26da9c1fcb90fbaaa409f7d5278567f800546a654a2abe933a6db7fa74b6"
+    }
+  ]
+}

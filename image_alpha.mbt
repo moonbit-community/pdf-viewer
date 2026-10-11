@@ -43,16 +43,46 @@ fn pdf_image_alpha_samples(
   guard pdf_image_alpha_source(document, image) is Some((source, invert)) else {
     return None
   }
+  pdf_image_alpha_samples_of_source(
+    document, resources, source, width, height, invert,
+  )
+}
+
+///|
+fn pdf_image_alpha_samples_of_source(
+  document : @pdflite.PdfDocument,
+  resources : @syntax.PdfObject,
+  source : @syntax.PdfObject,
+  width : Int,
+  height : Int,
+  invert : Bool,
+) -> PdfImageAlphaSamples? raise @core.PdfError {
   guard source is @syntax.PdfStreamObject(_) else { return None }
-  let decoded = document.pdf_decode_stream_until_unknown(source)
-  match
-    document.lookup_direct_or_else(
-      pdf_image_name("/Filter"),
-      pdf_image_name("/F"),
-      decoded,
-    ) {
-    Some(@syntax.PdfArray([])) | Some(@syntax.PdfNull) | None => ()
-    _ => return None
+  let declared_width = pdf_image_sample_int(
+    document, source, "/Width", "/W", width,
+  )
+  let declared_height = pdf_image_sample_int(
+    document, source, "/Height", "/H", height,
+  )
+  if declared_width > 0 &&
+    declared_height > 0 &&
+    !pdf_image_source_dimensions_allowed(declared_width, declared_height, 1, 1) {
+    raise @core.PdfError::EndOfInput
+  }
+  let decoded = pdf_image_decode_stream(
+    document,
+    resources,
+    source,
+    width~,
+    height~,
+  )
+  let encoded = if pdf_image_remaining_filter(document, decoded) is Some(_) {
+    match pdf_image_encoded_samples(document, decoded) {
+      Some(samples) if samples.components == 1 => Some(samples)
+      _ => return None
+    }
+  } else {
+    None
   }
   if !pdf_image_object_is_mask(document, source) {
     let object_space = document
@@ -75,30 +105,57 @@ fn pdf_image_alpha_samples(
   let mask_height = pdf_image_sample_int(
     document, decoded, "/Height", "/H", height,
   )
-  let width = if mask_width > 0 { mask_width } else { width }
-  let height = if mask_height > 0 { mask_height } else { height }
-  let bits = pdf_image_sample_int(
-    document,
-    decoded,
-    "/BitsPerComponent",
-    "/BPC",
-    if pdf_image_object_is_mask(document, source) {
-      1
+  let width = match encoded {
+    Some(samples) => samples.width
+    None => if mask_width > 0 { mask_width } else { width }
+  }
+  let height = match encoded {
+    Some(samples) => samples.height
+    None => if mask_height > 0 { mask_height } else { height }
+  }
+  let bits = match encoded {
+    Some(samples) => samples.bits
+    None =>
+      pdf_image_sample_int(
+        document,
+        decoded,
+        "/BitsPerComponent",
+        "/BPC",
+        if pdf_image_object_is_mask(document, source) {
+          1
+        } else {
+          0
+        },
+      )
+  }
+  if width <= 0 ||
+    height <= 0 ||
+    !(if encoded is Some(_) {
+      bits >= 1 && bits <= 16
     } else {
-      0
-    },
-  )
-  if width <= 0 || height <= 0 || !(bits is (1 | 2 | 4 | 8 | 16)) {
+      bits is (1 | 2 | 4 | 8 | 16)
+    }) {
     return None
   }
-  if width > (2147483647 - 7) / bits {
+  if !pdf_image_source_dimensions_allowed(width, height, 1, bits) ||
+    width > (2147483647 - 7) / bits {
     raise @core.PdfError::EndOfInput
   }
-  let row_bytes = (width * bits + 7) / 8
-  if height > 2147483647 / row_bytes {
+  let minimum_row_bytes = (width * bits + 7) / 8
+  let row_bytes = match encoded {
+    Some(samples) => samples.row_bytes
+    None => minimum_row_bytes
+  }
+  if row_bytes < minimum_row_bytes {
     raise @core.PdfError::EndOfInput
   }
-  let bytes = decoded.stream_bytes()
+  if height > 67108864 / row_bytes {
+    raise @core.PdfError::EndOfInput
+  }
+  let bytes = match encoded {
+    Some(samples) => samples.bytes
+    None => decoded.stream_bytes()
+  }
   if bytes.length() < row_bytes * height {
     raise @core.PdfError::EndOfInput
   }
@@ -201,4 +258,59 @@ fn pdf_image_unblend_component(value : Int, matte : Int, alpha : Int) -> Int {
   pdf_image_clamped_byte(
     (value - matte).to_double() * 255.0 / alpha.to_double() + matte.to_double(),
   )
+}
+
+///|
+fn PdfImageAlphaSamples::png(
+  self : PdfImageAlphaSamples,
+  transfer_map : Array[Int]?,
+  rgb? : Bool = false,
+) -> Bytes raise @core.PdfError {
+  if !pdf_image_source_dimensions_allowed(self.width, self.height, 1, self.bits) {
+    raise @core.PdfError::EndOfInput
+  }
+  let (width, height) = pdf_image_draw_dimensions(self.width, self.height)
+  let channels = if rgb { 3 } else { 1 }
+  let stride = width * channels + 1
+  let scanlines = FixedArray::make(stride * height, b'\x00')
+  for y in 0..<height {
+    for x in 0..<width {
+      let value = self.sample(x, y, width, height)
+      let value = pdf_apply_transfer_map(value, transfer_map).to_byte()
+      for channel in 0..<channels {
+        scanlines[y * stride + 1 + x * channels + channel] = value
+      }
+    }
+  }
+  pdf_png_of_scanline_bytes(
+    width,
+    height,
+    if rgb {
+      2
+    } else {
+      0
+    },
+    Bytes::from_array(scanlines),
+  )
+}
+
+///|
+/// Explicit/color-key masks constrain shape. Soft masks supply opacity and
+/// supersede the active graphics-state soft mask at this image paint site.
+fn pdf_image_local_mask_flags(
+  document : @pdflite.PdfDocument,
+  image : @syntax.PdfObject,
+) -> (Bool, Bool) {
+  match pdf_image_alpha_source(document, image) {
+    Some((_, explicit)) => return (true, explicit)
+    None => ()
+  }
+  if pdf_image_color_key_mask(document, image) is Some(_) {
+    return (true, true)
+  }
+  if pdf_image_sample_int(document, image, "/SMaskInData", "/SMaskInData", 0)
+    is (1 | 2) {
+    return (true, false)
+  }
+  (false, pdf_image_object_is_mask(document, image))
 }

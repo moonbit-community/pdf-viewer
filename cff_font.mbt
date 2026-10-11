@@ -819,10 +819,10 @@ fn pdf_cff_glyph_for_pdf_charcode(
         }
         match glyph_name {
           Some(name) =>
-            match pdf_cff_glyph_for_name(font, name) {
-              Some(glyph) => return Some(glyph)
-              None => ()
-            }
+            // An explicit PDF encoding is authoritative, even when the named
+            // glyph is absent. Reusing the built-in byte mapping would paint
+            // an unrelated glyph while copy/search still name the requested one.
+            return Some(pdf_cff_glyph_for_name(font, name).unwrap_or(0))
           None => ()
         }
         match font.encoding.get(charcode) {

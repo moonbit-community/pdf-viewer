@@ -1,0 +1,4 @@
+// T.800-2015 Annex G: Multi-Component Transform
+import {
+  "moonbit-community/pdf-viewer/vendor/jpeg2000/internal/math",
+}

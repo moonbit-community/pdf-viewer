@@ -1,0 +1,37 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+///|
+/// Each input has its own native process and timeout. A corrupt reader input
+/// cannot erase the preceding report or stop the rest of the inventory.
+async fn main {
+  let args = @env.args()
+  let directory = if args.length() > 1 { args[1] } else { "reference/pdf.js/test/pdfs" }
+  let prefix = if args.length() > 2 { args[2] } else { "" }
+  @shell.Cmd("moon", ["build", "--target", "native", "--release", "cmd/reader_probe"]).run()
+  let output = "_build/reader-corpus-\{@env.now()}"
+  @fs.mkdir(output, recursive=true)
+  let results : Array[Json] = []
+  let mut failures = 0
+  for name in @fs.readdir(directory, sort=true) {
+    if !name.has_suffix(".pdf") || !name.has_prefix(prefix) { continue }
+    let path = output + "/" + name + ".json"
+    let result = @shell.Cmd("_build/native/release/build/cmd/reader_probe/reader_probe.exe", [directory + "/" + name, path])
+      .output(timeout_ms=10000) catch { _ => None } noraise { value => Some(value) }
+    let report : Json = if @fs.exists(path) {
+      @json.parse(@fs.read_file(path).text())
+    } else { {"file": name, "passed": false, "error": result.map(result => result.stderr()).unwrap_or("timeout or process failure")} }
+    if !(report is {"passed": True, ..}) { failures += 1; println("FAIL: " + name + " " + report.stringify()) }
+    results.push(report)
+    if results.length() % 100 == 0 { println("Reader files checked: \{results.length()}") }
+  }
+  let report : Json = {"files": results.length(), "failures": failures, "results": results}
+  @fs.write_file(output + "/report.json", report.stringify(indent=2))
+  println("Reader corpus: " + output + "/report.json")
+}

@@ -6,6 +6,12 @@ fn pdf_image_resource_of_resources(
   document : @pdflite.PdfDocument,
   resources : @syntax.PdfObject,
   name : StringView,
+  retain_ink_samples? : Bool = false,
+  convert_ink_to_device_cmyk? : Bool = true,
+  resource_context? : PdfResourceBuildContext? = None,
+  rendering_intent? : String = "/RelativeColorimetric",
+  black_generation? : @syntax.PdfObject = @syntax.PdfNull,
+  undercolour_removal? : @syntax.PdfObject = @syntax.PdfNull,
 ) -> PdfImageResource? {
   let xobject_name = pdf_image_name(name.to_owned())
   match document.lookup_direct(pdf_image_name("/XObject"), resources) {
@@ -18,9 +24,23 @@ fn pdf_image_resource_of_resources(
               resources,
               name.to_owned(),
               xobject,
+              retain_ink_samples~,
+              convert_ink_to_device_cmyk~,
+              resource_context~,
+              rendering_intent~,
+              black_generation~,
+              undercolour_removal~,
             )
           catch {
-            _ => None
+            error =>
+              Some(
+                pdf_image_failed_resource(
+                  document,
+                  name.to_owned(),
+                  xobject,
+                  @debug.to_string(error),
+                ),
+              )
           } noraise {
             resource => Some(resource)
           }
@@ -36,10 +56,26 @@ fn pdf_image_resource_of_object(
   resources : @syntax.PdfObject,
   name : String,
   xobject : @syntax.PdfObject,
+  retain_ink_samples? : Bool = false,
+  convert_ink_to_device_cmyk? : Bool = true,
+  resource_context? : PdfResourceBuildContext? = None,
+  rendering_intent? : String = "/RelativeColorimetric",
+  black_generation? : @syntax.PdfObject = @syntax.PdfNull,
+  undercolour_removal? : @syntax.PdfObject = @syntax.PdfNull,
 ) -> PdfImageResource raise @core.PdfError {
   let width = pdf_image_dimension(document, xobject, "/Width")
   let height = pdf_image_dimension(document, xobject, "/Height")
+  match (width, height) {
+    (Some(w), Some(h)) if w > 0 &&
+      h > 0 &&
+      !pdf_image_source_dimensions_allowed(w, h, 1, 1) =>
+      raise @core.PdfError::EndOfInput
+    _ => ()
+  }
   let interpolate = pdf_image_interpolate(document, xobject)
+  let (has_local_mask, alpha_is_explicit_shape) = pdf_image_local_mask_flags(
+    document, xobject,
+  )
   let (alpha_mask_width, alpha_mask_height) = match
     pdf_image_alpha_source(document, xobject) {
     Some((mask, _)) =>
@@ -49,10 +85,69 @@ fn pdf_image_resource_of_object(
       )
     None => (None, None)
   }
-  match pdf_image_colour_png(document, resources, xobject) {
+  if pdf_image_object_is_mask(document, xobject) {
+    match
+      pdf_image_alpha_samples_of_source(
+        document,
+        resources,
+        xobject,
+        width.unwrap_or(0),
+        height.unwrap_or(0),
+        true,
+      ) {
+      Some(samples) if samples.bits == 1 =>
+        return {
+          name,
+          error: None,
+          ink_samples: None,
+          has_local_mask,
+          alpha_is_explicit_shape,
+          mime_type: "image/mask",
+          data_uri: None,
+          mask_data_uri: Some(
+            pdf_image_data_uri("image/png", samples.png(None, rgb=true)),
+          ),
+          alpha_mask_data_uri: None,
+          width: Some(
+            pdf_image_draw_dimensions(samples.width, samples.height).0,
+          ),
+          height: Some(
+            pdf_image_draw_dimensions(samples.width, samples.height).1,
+          ),
+          interpolate,
+          alpha_mask_width: None,
+          alpha_mask_height: None,
+        }
+      _ => ()
+    }
+  }
+  let ink_samples : Ref[PdfImageInkSamples?] = Ref(None)
+  match
+    pdf_image_colour_png(
+      document,
+      resources,
+      xobject,
+      ink_samples=if retain_ink_samples { Some(ink_samples) } else { None },
+      convert_ink_to_device_cmyk~,
+      resource_context~,
+      rendering_intent~,
+      black_generation~,
+      undercolour_removal~,
+    ) {
     Some((raw_width, raw_height, png, alpha_integrated)) =>
       return {
         name,
+        error: if !alpha_integrated &&
+          pdf_image_alpha_source(document, xobject) is Some(_) {
+          Some(
+            "Image mask sample decoding unavailable; encoded fallback may not preserve Decode",
+          )
+        } else {
+          None
+        },
+        ink_samples: ink_samples.val,
+        has_local_mask,
+        alpha_is_explicit_shape,
         mime_type: "image/png",
         data_uri: Some(pdf_image_data_uri("image/png", png)),
         mask_data_uri: None,
@@ -77,7 +172,8 @@ fn pdf_image_resource_of_object(
       }
     None => ()
   }
-  let image = document.get_image_24bpp(resources, xobject)
+  let bounded = pdf_image_decode_stream(document, resources, xobject)
+  let image = document.get_image_24bpp(resources, bounded)
   let mask_data_uri = if pdf_image_object_is_mask(document, xobject) {
     pdf_image_mask_data_uri(image)
   } else {
@@ -91,6 +187,12 @@ fn pdf_image_resource_of_object(
     @pdflite.PdfJPEG(data, _) =>
       {
         name,
+        ink_samples: None,
+        has_local_mask,
+        alpha_is_explicit_shape,
+        error: Some(
+          "JPEG sample decoding unavailable; encoded fallback may not preserve masks or Decode",
+        ),
         mime_type: "image/jpeg",
         data_uri: Some(pdf_image_data_uri("image/jpeg", data)),
         mask_data_uri: None,
@@ -104,6 +206,12 @@ fn pdf_image_resource_of_object(
     @pdflite.PdfJPEG2000(data, _) =>
       {
         name,
+        ink_samples: None,
+        has_local_mask,
+        alpha_is_explicit_shape,
+        error: Some(
+          "JPX sample decoding unavailable; encoded fallback may not preserve masks or Decode",
+        ),
         mime_type: "image/jp2",
         data_uri: Some(pdf_image_data_uri("image/jp2", data)),
         mask_data_uri: None,
@@ -117,6 +225,12 @@ fn pdf_image_resource_of_object(
     @pdflite.PdfJBIG2(data, _, _) =>
       {
         name,
+        ink_samples: None,
+        has_local_mask,
+        alpha_is_explicit_shape,
+        error: Some(
+          "JBIG2 sample decoding unavailable; encoded fallback may not preserve masks or Decode",
+        ),
         mime_type: "image/jbig2",
         data_uri: Some(pdf_image_data_uri("image/jbig2", data)),
         mask_data_uri: None,
@@ -137,6 +251,10 @@ fn pdf_image_resource_of_object(
       }
       {
         name,
+        error: None,
+        ink_samples: None,
+        has_local_mask,
+        alpha_is_explicit_shape,
         mime_type: "image/png",
         data_uri: Some(pdf_image_data_uri("image/png", png)),
         mask_data_uri: None,
@@ -153,6 +271,10 @@ fn pdf_image_resource_of_object(
     Some(mask_data_uri) =>
       {
         name,
+        error: None,
+        ink_samples: None,
+        has_local_mask,
+        alpha_is_explicit_shape,
         mime_type: "image/mask",
         data_uri: None,
         mask_data_uri: Some(mask_data_uri),
@@ -278,7 +400,21 @@ fn pdf_image_alpha_mask_data_uri_of_stream(
   transfer_map : Array[Int]?,
 ) -> String? {
   try {
-    let mask_image = document.get_image_24bpp(resources, mask_object)
+    match
+      pdf_image_alpha_samples_of_source(
+        document,
+        resources,
+        mask_object,
+        pdf_image_sample_int(document, mask_object, "/Width", "/W", 0),
+        pdf_image_sample_int(document, mask_object, "/Height", "/H", 0),
+        pdf_image_object_is_mask(document, mask_object),
+      ) {
+      Some(samples) =>
+        return Some(pdf_image_data_uri("image/png", samples.png(transfer_map)))
+      None => ()
+    }
+    let bounded = pdf_image_decode_stream(document, resources, mask_object)
+    let mask_image = document.get_image_24bpp(resources, bounded)
     pdf_image_alpha_data_uri_of_image(
       mask_image,
       pdf_image_object_is_mask(document, mask_object),
@@ -353,7 +489,7 @@ fn pdf_transfer_map_of_mask(
       match function {
         Some(function) => {
           let output : Array[Int] = Array(capacity=256)
-          for index in 0..<=256 {
+          for index in 0..<256 {
             let input = index.to_double() / 255.0
             let value = try {
               match function.eval([input]) {
@@ -458,6 +594,12 @@ fn pdf_inline_image_resource_of(
   dictionary : @syntax.PdfObject,
   data : Bytes,
   decode_parms? : @syntax.PdfObject? = None,
+  retain_ink_samples? : Bool = false,
+  convert_ink_to_device_cmyk? : Bool = true,
+  resource_context? : PdfResourceBuildContext? = None,
+  rendering_intent? : String = "/RelativeColorimetric",
+  black_generation? : @syntax.PdfObject = @syntax.PdfNull,
+  undercolour_removal? : @syntax.PdfObject = @syntax.PdfNull,
 ) -> PdfImageResource? {
   try {
     let dictionary = match decode_parms {
@@ -470,9 +612,28 @@ fn pdf_inline_image_resource_of(
       @syntax.PdfInteger(data.length()),
     )
     let image = @syntax.pdf_stream(image_dictionary, StreamGot(data))
-    pdf_image_resource_of_object(document, resources, name, image)
+    pdf_image_resource_of_object(
+      document,
+      resources,
+      name,
+      image,
+      retain_ink_samples~,
+      convert_ink_to_device_cmyk~,
+      resource_context~,
+      rendering_intent~,
+      black_generation~,
+      undercolour_removal~,
+    )
   } catch {
-    _ => None
+    error =>
+      Some(
+        pdf_image_failed_resource(
+          document,
+          name,
+          dictionary,
+          @debug.to_string(error),
+        ),
+      )
   } noraise {
     resource => Some(resource)
   }
@@ -608,9 +769,23 @@ fn pdf_png_of_scanlines(
   colour_type : Int,
   scanlines : ArrayView[Int],
 ) -> Bytes raise @core.PdfError {
-  let compressed = @flate.pdf_flate_encode(
+  pdf_png_of_scanline_bytes(
+    width,
+    height,
+    colour_type,
     @core.pdf_bytes_of_int_array(scanlines),
   )
+}
+
+///|
+/// Byte-oriented entry point avoids a four-byte Int for each image channel.
+fn pdf_png_of_scanline_bytes(
+  width : Int,
+  height : Int,
+  colour_type : Int,
+  scanlines : Bytes,
+) -> Bytes raise @core.PdfError {
+  let compressed = @flate.pdf_flate_encode(scanlines)
   let output : Array[Int] = []
   pdf_png_append_signature(output)
   let header : Array[Int] = []
@@ -751,4 +926,29 @@ fn pdf_png_crc32_byte(crc : UInt, value : Int) -> UInt {
     }
   }
   current
+}
+
+///|
+fn pdf_image_failed_resource(
+  document : @pdflite.PdfDocument,
+  name : String,
+  object : @syntax.PdfObject,
+  error : String,
+) -> PdfImageResource {
+  {
+    name,
+    error: Some("Image decode failed: " + error),
+    ink_samples: None,
+    has_local_mask: false,
+    alpha_is_explicit_shape: false,
+    mime_type: "application/x-pdf-image-error",
+    data_uri: None,
+    mask_data_uri: None,
+    alpha_mask_data_uri: None,
+    width: pdf_image_dimension(document, object, "/Width"),
+    height: pdf_image_dimension(document, object, "/Height"),
+    interpolate: pdf_image_interpolate(document, object),
+    alpha_mask_width: None,
+    alpha_mask_height: None,
+  }
 }

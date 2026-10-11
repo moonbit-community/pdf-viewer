@@ -1,0 +1,148 @@
+{
+  "entry": "web/pdf-runtime.mjs + cmd/browser --release",
+  "scope": "Actual shipped JavaScript entry on @napi-rs/canvas 1.0.10; not a DOM browser test",
+  "bridgeSha256": "08b61e7f41df26bcee21beae91b872db00796474cba98789279284077a0be655",
+  "pdfjsVersion": "6.4.299",
+  "cases": [
+    {
+      "entry": "web/pdf-runtime.mjs + cmd/browser --release",
+      "fixture": "JBIG2Globals.pdf",
+      "pages": [
+        {
+          "number": 1,
+          "width": 623,
+          "height": 832,
+          "bridgeMs": 2604.11219,
+          "totalMs": 2922.265262,
+          "diagnostics": [],
+          "textLayerItems": 7012
+        }
+      ],
+      "totalMs": 2923.310887,
+      "memory": {
+        "rss": 547958784,
+        "heapTotal": 210563072,
+        "heapUsed": 88948608,
+        "external": 98578663,
+        "arrayBuffers": 42947247
+      },
+      "icc": "LittleCMS via lcms-wasm 1.0.5",
+      "jbig2": "installed",
+      "scope": "Native Canvas API host, not a browser DOM test",
+      "fixtureSha256": "19c9ab320b3effffd9d6761bd5eb377ea240346fc01f61474d89021953df28eb",
+      "pixels": {
+        "wholePage": true,
+        "meanAbsoluteError": 0.0021974163476972466,
+        "maximum": 1,
+        "above8": 0
+      }
+    },
+    {
+      "entry": "web/pdf-runtime.mjs + cmd/browser --release",
+      "fixture": "jpx_smaskindata.pdf",
+      "pages": [
+        {
+          "number": 1,
+          "width": 140,
+          "height": 40,
+          "bridgeMs": 46.752837,
+          "totalMs": 78.22619599999996,
+          "diagnostics": [],
+          "textLayerItems": 0
+        }
+      ],
+      "totalMs": 79.59141999999997,
+      "memory": {
+        "rss": 182845440,
+        "heapTotal": 67272704,
+        "heapUsed": 36644608,
+        "external": 49440472,
+        "arrayBuffers": 664354
+      },
+      "icc": "LittleCMS via lcms-wasm 1.0.5",
+      "jbig2": "installed",
+      "scope": "Native Canvas API host, not a browser DOM test",
+      "fixtureSha256": "a82813559c74f074b0caf92c80875fc018acb737269a2af5508c7e083b2a5fd3",
+      "pixels": {
+        "wholePage": true,
+        "meanAbsoluteError": 0,
+        "maximum": 0,
+        "above8": 0
+      }
+    },
+    {
+      "entry": "web/pdf-runtime.mjs + cmd/browser --release",
+      "fixture": "issue13931.pdf",
+      "pages": [
+        {
+          "number": 1,
+          "width": 596,
+          "height": 842,
+          "bridgeMs": 6286.97086,
+          "totalMs": 12048.745814,
+          "diagnostics": [],
+          "textLayerItems": 512
+        }
+      ],
+      "totalMs": 12050.761454,
+      "memory": {
+        "rss": 2409127936,
+        "heapTotal": 184451072,
+        "heapUsed": 77860312,
+        "external": 116254865,
+        "arrayBuffers": 63092792
+      },
+      "icc": "LittleCMS via lcms-wasm 1.0.5",
+      "jbig2": "installed",
+      "scope": "Native Canvas API host, not a browser DOM test",
+      "fixtureSha256": "c8548f91ccb744c81c00778ca6b93912756c5b70c5324acbcc198ccdfc198298",
+      "pixels": {
+        "wholePage": {
+          "meanAbsoluteError": 1.6178501968786367,
+          "maximum": 164,
+          "above8": 14502
+        },
+        "stampCrop": {
+          "rect": [
+            440,
+            72,
+            555,
+            143
+          ],
+          "meanAbsoluteError": 0.02180036742192284,
+          "maximum": 2,
+          "above8": 0
+        }
+      },
+      "imageOnlyControl": {
+        "entry": "web/pdf-runtime.mjs + cmd/browser --release",
+        "pages": [
+          {
+            "number": 1,
+            "width": 596,
+            "height": 842,
+            "bridgeMs": 6323.60966,
+            "totalMs": 6486.6251950000005,
+            "diagnostics": [],
+            "textLayerItems": 512
+          }
+        ],
+        "totalMs": 6486.844007000001,
+        "memory": {
+          "rss": 588115968,
+          "heapTotal": 188907520,
+          "heapUsed": 83636664,
+          "external": 94152019,
+          "arrayBuffers": 41029144
+        },
+        "icc": "LittleCMS via lcms-wasm 1.0.5",
+        "jbig2": "installed",
+        "scope": "Native Canvas API host, not a browser DOM test"
+      },
+      "notes": [
+        "The image-only control filters Canvas paint items after the same original PDF was parsed; it is a performance control, not the delivered whole page.",
+        "Large additional RSS and paint time in the full page are attributable to text replay; reported to the text workstream."
+      ]
+    }
+  ]
+}

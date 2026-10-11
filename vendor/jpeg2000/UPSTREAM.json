@@ -1,0 +1,361 @@
+{
+  "package": "trkbt10/jpeg2000",
+  "version": "0.2.0",
+  "license": "Apache-2.0",
+  "source": "https://github.com/trkbt10/jpeg2000_mbt",
+  "changes": [
+    "Package prefix renamed for licensed vendoring; compiler-specific clang overrides and excluded upstream test imports removed.",
+    "A new public all-component wrapper is added in components.mbt.",
+    "Run current moon fmt; generate current package interfaces. Public components wrapper imports local orchestration, rejects zero_recon placeholders."
+  ],
+  "files": [
+    {
+      "path": "internal/decoder/moon.pkg",
+      "upstream_sha256": "53cb418ebffa23581715d9aecb403e10eecac6808d7e3465b66fa42796ad7613"
+    },
+    {
+      "path": "internal/decoder/public_api.mbt",
+      "upstream_sha256": "4e183b97286f7c64e9df5fcf7389d54283ea4779cc95402c670f86bf85f5b3f6"
+    },
+    {
+      "path": "internal/bytes/hex.mbt",
+      "upstream_sha256": "24e7be68bc7bb7af1e92b7af73f4f32aef32a6a2b88fb11f6958b5b994687976"
+    },
+    {
+      "path": "internal/bytes/moon.pkg",
+      "upstream_sha256": "d3a680aac4e561ff93dddb0c8808d277df78949adfd20706a252926869c02ba6"
+    },
+    {
+      "path": "internal/bytes/convert.mbt",
+      "upstream_sha256": "54b7c24baa712eae8af064ce8bf92491bc3e52010ad3d1bf5c9a9bc06680554e"
+    },
+    {
+      "path": "internal/bytes/read.mbt",
+      "upstream_sha256": "ff423293f8445adec1d46e183b395185164c0b8be67ddccbeeb768d5c1ccc73f"
+    },
+    {
+      "path": "internal/core/packet_primitives.mbt",
+      "upstream_sha256": "75e0980197eb5a9ec751c68aab577b024b701b3cd450d90d54953f8afed046f8"
+    },
+    {
+      "path": "internal/core/types.mbt",
+      "upstream_sha256": "d0ffaacd3c4ae944bfb6bb930bd0c96f66feee3c624dbe7ca0a50236f5e43071"
+    },
+    {
+      "path": "internal/core/markers.mbt",
+      "upstream_sha256": "d2fe6681c41e5a6a96d9caab356755e41aa77678f1d7b6f3d6d9c219c98bd725"
+    },
+    {
+      "path": "internal/core/moon.pkg",
+      "upstream_sha256": "3dc196324a806f0394cbab7b5002ab4a5757bb3c924b1f55c10c7449679b6773"
+    },
+    {
+      "path": "internal/core/packet_header_codeblock.mbt",
+      "upstream_sha256": "e0a9ecbd57e29e5eff8ac51651df983160251a5b8e444bf2b371984ec2659fb7"
+    },
+    {
+      "path": "internal/core/codestream_parse.mbt",
+      "upstream_sha256": "6d8f61caea97ca6569aff5526b5f3646aef1f23d8bf73f24ac694aa084e3b090"
+    },
+    {
+      "path": "internal/core/packet_header_tag_tree.mbt",
+      "upstream_sha256": "ce4d2b8ad5b01ac5f19ce5d3ecc16f5a2c7ca8208b077995c307a31c9e180c76"
+    },
+    {
+      "path": "internal/core/marker_validation.mbt",
+      "upstream_sha256": "2bbe1f048f770c225e23c871d998dde12383fa1339e7000076422bdf840811eb"
+    },
+    {
+      "path": "internal/core/roundtrip_api.mbt",
+      "upstream_sha256": "b7d82c24f002b9e8713042e70ae649323e633aef370ca418ff79db03e93034f2"
+    },
+    {
+      "path": "internal/core/metadata_api.mbt",
+      "upstream_sha256": "86efa38b853cc7b58803f56c2f9d5bb42015ba74f8734ccfe0e6fa5114199c96"
+    },
+    {
+      "path": "internal/core/codestream_encode.mbt",
+      "upstream_sha256": "9ab9cb7dbe3360b47150de2222fce46f3edd4c8d5a1efe833b3f41beb4470732"
+    },
+    {
+      "path": "internal/core/sample_codestreams.mbt",
+      "upstream_sha256": "7e158faa2ad6ecdd0a2addbe79cd5884efdf795f09e03109104f853966966246"
+    },
+    {
+      "path": "internal/core/public_api.mbt",
+      "upstream_sha256": "9024732be17ce2a291a7031dce67b955a9c4c87e43b14d753463bc8d175f1c35"
+    },
+    {
+      "path": "internal/core/metadata_parsers.mbt",
+      "upstream_sha256": "0321f1ef5609204538a94ed2cab10bb9caaa9699bee7b9e84e342aa07ce565dc"
+    },
+    {
+      "path": "internal/core/codeblock_lengths.mbt",
+      "upstream_sha256": "a1eab264f652d420f82252c1cfc023f6900a651c1c5bd8d3623fc7b72130eaad"
+    },
+    {
+      "path": "internal/math/float.mbt",
+      "upstream_sha256": "c2545ff9e15fc8fa5e87c6d51b3d88b2445054a36dff1949c1502868001d4133"
+    },
+    {
+      "path": "internal/math/integer.mbt",
+      "upstream_sha256": "b7550e77dc6ffd8f982bbcbbd4c50250dbf62e0e7efeadb22706b3700806a6d9"
+    },
+    {
+      "path": "internal/math/moon.pkg",
+      "upstream_sha256": "4be8d6bab092ab7f0a89caa706aae2a9311c1f2ad3abc7debc7dad905ab2a05b"
+    },
+    {
+      "path": "internal/decoder/geometry/decode_component_context.mbt",
+      "upstream_sha256": "aa3dccc7d5e328c6eb82fb040ac76d21406fcc88ccfc42ea6465555fadb5ce82"
+    },
+    {
+      "path": "internal/decoder/geometry/moon.pkg",
+      "upstream_sha256": "5451eb85218d9a94b4a006b5696ff4105caec1612e0e8b8e96868bbcd5ed3b74"
+    },
+    {
+      "path": "internal/decoder/geometry/decode_per_component_metadata.mbt",
+      "upstream_sha256": "8d995335471f45320b6135e423d5106716d6a32645a8702d9bd31465fbacb67b"
+    },
+    {
+      "path": "internal/decoder/geometry/decode_tile_geometry.mbt",
+      "upstream_sha256": "ade634e8fe370cc3d92b9cbc9a8f4d9f81e956bb89860da47fdb4124eb04743d"
+    },
+    {
+      "path": "internal/decoder/packet/moon.pkg",
+      "upstream_sha256": "e67ac62224d9fb2c58ad5e824f070c1a9288f38d6d3093aa580f13911777dff5"
+    },
+    {
+      "path": "internal/decoder/packet/packet_bits.mbt",
+      "upstream_sha256": "87624e790a78f699a0d97534c6ef485c91d7cda5476c099735aeae25279fed10"
+    },
+    {
+      "path": "internal/decoder/quant/moon.pkg",
+      "upstream_sha256": "cd6f3f31a68dba8a2fe853c3a6baa7baa84f268ac7c8621523ebb1173b953c25"
+    },
+    {
+      "path": "internal/decoder/quant/annex_e_dequant.mbt",
+      "upstream_sha256": "1d97fdc24f3ad4395dbcfd4698d7ea7a22ac9cf65280de99241ef1e0d7c7d582"
+    },
+    {
+      "path": "internal/decoder/mq/moon.pkg",
+      "upstream_sha256": "62acf86a7d8fe1ce1dbedb6f93144e2c450fff70f22b38e0bb36d93ab319f260"
+    },
+    {
+      "path": "internal/decoder/mq/annex_c_tables.mbt",
+      "upstream_sha256": "26d42f6e55bcfdba14fa4c419f9c93e53e4735c6c7058d6662100da9da15764b"
+    },
+    {
+      "path": "internal/decoder/mq/annex_c_context.mbt",
+      "upstream_sha256": "13db009287451aaa10923774181267ad3655fb292a3886b8194e15b2d3cbf3cd"
+    },
+    {
+      "path": "internal/decoder/mq/annex_c_mq.mbt",
+      "upstream_sha256": "346d776e37fb7ca434920f0ba7fcb6c5fa12d0b1010659e747c2f4dfc535a61d"
+    },
+    {
+      "path": "internal/decoder/t1/moon.pkg",
+      "upstream_sha256": "dcd478ee0f8152dcac7d1a5e5b93469ce2c79257fb9860cf44f3d44bc1358b7a"
+    },
+    {
+      "path": "internal/decoder/t1/annex_d_pass.mbt",
+      "upstream_sha256": "b15c7f5f80acf707f6aca9e25f8814eed67aea58f4848e97d9d639603955b726"
+    },
+    {
+      "path": "internal/decoder/precinct/moon.pkg",
+      "upstream_sha256": "65568fdb30b6b7cc971cc7e0c6bca69b8399038e939128a1d19f6d956225f44c"
+    },
+    {
+      "path": "internal/decoder/precinct/annex_b10_packet_order.mbt",
+      "upstream_sha256": "d010dadc90c570ecad30d33cb97d26655177212b683bc26b56f88c8990b2b31b"
+    },
+    {
+      "path": "internal/decoder/precinct/annex_b10_precinct.mbt",
+      "upstream_sha256": "25cca0a1d03351666c393026191569e1f548393e433a66d61f8e46272501378e"
+    },
+    {
+      "path": "internal/decoder/profile/moon.pkg",
+      "upstream_sha256": "729ffca8d2b46b3bbb32aa0e5591f887f3d481640cba3d64e8c67857a0023b02"
+    },
+    {
+      "path": "internal/decoder/profile/profile.mbt",
+      "upstream_sha256": "2f7d1ff4d22d602fc205d680c307cb3590122b68dbe129acbf5b842273ae4155"
+    },
+    {
+      "path": "internal/decoder/orchestrate/model.mbt",
+      "upstream_sha256": "b83084a8d892c7dcb8a4f0d494d91738b7e278f90af30954e256d3fb43b36089"
+    },
+    {
+      "path": "internal/decoder/orchestrate/decode_all_components_core.mbt",
+      "upstream_sha256": "ff3f4f2b72fcf1b412674cebb130ab10f2ef2011a2f481c10c9fc93d3e2f729d"
+    },
+    {
+      "path": "internal/decoder/orchestrate/decode_dwt_pipeline.mbt",
+      "upstream_sha256": "976888013c5d8eaaf20bef45017b1222e1f3624153c5b25c4a1ac14932499bc5"
+    },
+    {
+      "path": "internal/decoder/orchestrate/decode_output.mbt",
+      "upstream_sha256": "e572f6bafb309b5f6e264ae6c780c2827d58d27cdd5ffbe4454ec8c7b8e51a71"
+    },
+    {
+      "path": "internal/decoder/orchestrate/moon.pkg",
+      "upstream_sha256": "69e671d0f1195b76cd5e34a71c7f3a6923b95a8eeac0097f180aec51c760ee2b"
+    },
+    {
+      "path": "internal/decoder/orchestrate/decode_all_components_helpers.mbt",
+      "upstream_sha256": "47b8529e743b3068a1bd910b50203caf973ccadde84f10fb2058675afb9bb971"
+    },
+    {
+      "path": "internal/decoder/orchestrate/decode_impl_single_cb.mbt",
+      "upstream_sha256": "7482f28690ced5921dea2987d41d684b3f2dbd9d94463768f579fc81b9dc3b86"
+    },
+    {
+      "path": "internal/decoder/orchestrate/decode_audit.mbt",
+      "upstream_sha256": "ff837fbee521453ab5cc0064eb37d0488c1af0c1bbcdf98fbf98ce131eb3760b"
+    },
+    {
+      "path": "internal/decoder/orchestrate/decode_tile_helpers.mbt",
+      "upstream_sha256": "6aa3a8f1f4b13df4fd53252b468422668a0c1138d183af11d20ea1ac055856b8"
+    },
+    {
+      "path": "internal/decoder/orchestrate/decode_impl_multi_cb.mbt",
+      "upstream_sha256": "efcad56305afc8671896e30b424b2a9e26880dedff553bbd7c19dc3b5beabee4"
+    },
+    {
+      "path": "internal/decoder/orchestrate/decode_impl.mbt",
+      "upstream_sha256": "dd936af4b13f238754ea270b2368f61ddd0805cedf76d40a7500467d2d55d27a"
+    },
+    {
+      "path": "internal/decoder/orchestrate/decode_simple_profile_orchestration.mbt",
+      "upstream_sha256": "694b6040942661ca8b40b2b0dc6b5bf2db9e3902e7ea3b4a56e3efd38701cbd8"
+    },
+    {
+      "path": "internal/decoder/orchestrate/decode_all_components_multi_tile.mbt",
+      "upstream_sha256": "1dcc57d3030a70dcfc9387062a906bdbe4eed0964bde2244d1c83a6a0c842a43"
+    },
+    {
+      "path": "internal/decoder/subband/subband_utils.mbt",
+      "upstream_sha256": "45a4db2ed1caf6d37d40a1346db44ab03b4565296399a268b5bb67a2c9da319d"
+    },
+    {
+      "path": "internal/decoder/subband/moon.pkg",
+      "upstream_sha256": "8e1b2ad6b14bbd7f6259c6b0a4c470ba9b5a4ad78b606c90bef1d55328057285"
+    },
+    {
+      "path": "internal/decoder/subband/subband_dims.mbt",
+      "upstream_sha256": "aea7c8355911c9e310d8b845c5a074a4a2c2e41fb57df342040a6bfa59eb85ce"
+    },
+    {
+      "path": "internal/decoder/roi/moon.pkg",
+      "upstream_sha256": "dc163fee1112ce4d15dec85ce2758bc131059440bb19783598ac39e8d11f4615"
+    },
+    {
+      "path": "internal/decoder/roi/annex_h_roi.mbt",
+      "upstream_sha256": "e8439fc4934cc84f8887f41438f000c1a96ead1ed94fd0cc4b598803e5300762"
+    },
+    {
+      "path": "internal/decoder/ht/moon.pkg",
+      "upstream_sha256": "8873c6f1b04afc13bf3c2e3f7c280ddc3f03c2a76ac5948cc355de428f953827"
+    },
+    {
+      "path": "internal/decoder/ht/ht_tables.mbt",
+      "upstream_sha256": "5f6f3a6503f96524c400e94cb92db803ce22fb365cb6d842aca35a47dccbc66a"
+    },
+    {
+      "path": "internal/decoder/ht/ht_cleanup.mbt",
+      "upstream_sha256": "a9064b81bc5de4283e637c39b4810294f1bafe20d82ad9ed67c5d020f066fe87"
+    },
+    {
+      "path": "internal/decoder/ht/ht_refinement.mbt",
+      "upstream_sha256": "3add2d69a67a9244dad5bffc339e091c4d78ced36d3f7e22732a6d266fdc50aa"
+    },
+    {
+      "path": "internal/decoder/mct/moon.pkg",
+      "upstream_sha256": "ca0ebf51746d6b6561562867eb6e13650ddd202ab0fe57ef5012771831ab94f1"
+    },
+    {
+      "path": "internal/decoder/mct/annex_g_mct.mbt",
+      "upstream_sha256": "87b8f85212f8ce6374840c12e00a19ad0bebe498571d7b058134e95d01cc2906"
+    },
+    {
+      "path": "internal/decoder/input/moon.pkg",
+      "upstream_sha256": "abeac27316149e7845febc10d1851655b975245c738f95a6536c8d716cdb1f47"
+    },
+    {
+      "path": "internal/decoder/input/annex_i_input.mbt",
+      "upstream_sha256": "f8924d12693bf44ac14620cb7d7b5427ceec3f0c9c6b8f979df265cbeeb79415"
+    },
+    {
+      "path": "internal/decoder/a8/packet_shape.mbt",
+      "upstream_sha256": "a450db1906e60ddcc35a4bd34533be5cbf017eb2e543870140841b38d516b3b1"
+    },
+    {
+      "path": "internal/decoder/a8/moon.pkg",
+      "upstream_sha256": "bdde752c95615bb7a78f2b519eddebb2d3ba7251fda75608687962f9a62af172"
+    },
+    {
+      "path": "internal/decoder/a8/annex_a8_packet.mbt",
+      "upstream_sha256": "b0ac32983d6b01dae9c9a65bb7c22bf39ed89bd4ba16ab221cdd544671eb629c"
+    },
+    {
+      "path": "internal/decoder/a8/annex_a8_tagtree.mbt",
+      "upstream_sha256": "9f349846934793c8cdd06e10ac0f4c91ffa3f078edb262a89de06f6733671179"
+    },
+    {
+      "path": "internal/decoder/dwt/moon.pkg",
+      "upstream_sha256": "3463108c1ac22125bfe1e6818d20acfe670800df4492783c2317d0aa007a6896"
+    },
+    {
+      "path": "internal/decoder/dwt/annex_f_dwt.mbt",
+      "upstream_sha256": "4c286fe72a777efe769e3450491882fe5727f559d10b733c848156e4dd908221"
+    },
+    {
+      "path": "internal/decoder/dwt/idwt_53_spec.mbt",
+      "upstream_sha256": "102ea25b220cf106e2bed317943814ce89e2f6244a995c1512ba92ba2a4df7be"
+    },
+    {
+      "path": "internal/decoder/dwt/pseo.mbt",
+      "upstream_sha256": "5b4fd621a009506809a0bfc3731ddc8c4c944ae3ce813306545e6a4740a59543"
+    },
+    {
+      "path": "internal/decoder/codeblock/moon.pkg",
+      "upstream_sha256": "481c466fe2b6ef43a46db845888082803cb4c5925ece314f2f34ca6f6dfbab5a"
+    },
+    {
+      "path": "internal/decoder/codeblock/decode_codeblock_accumulation.mbt",
+      "upstream_sha256": "407d3c73bd03e06844175834c4418a50aad7b022e70d2666b3bebb5254acbb96"
+    },
+    {
+      "path": "internal/decoder/codeblock/decode_codeblock_utils.mbt",
+      "upstream_sha256": "3c1a4569edb874cd5fd32fc1606fbd942473e2c5cda45adadb1b08575b9f21cb"
+    },
+    {
+      "path": "internal/decoder/codeblock/decode_codeblock.mbt",
+      "upstream_sha256": "9b3e93812cb7f8feb1bcd083a3c2f1197d72a8b92dd30b5cec7dbfbb32e3a3f4"
+    },
+    {
+      "path": "internal/decoder/codeblock/decode_codeblock_helpers.mbt",
+      "upstream_sha256": "cb75a3090c5e20cfd5a9f9a45d1d146a775210300f6abb366720543f7613c73d"
+    },
+    {
+      "path": "internal/decoder/layer/moon.pkg",
+      "upstream_sha256": "c1647f5a39c1620c62a86197a5bf9ce277c858ee9938124ddb78386bcb66c1d1"
+    },
+    {
+      "path": "internal/decoder/layer/annex_b10_accumulate.mbt",
+      "upstream_sha256": "2650318b1d127cc8e3c9e530d8d67005d651444c9c7cfd28ead45ec3bc577274"
+    },
+    {
+      "path": "internal/decoder/layer/layer_audit.mbt",
+      "upstream_sha256": "ff837fbee521453ab5cc0064eb37d0488c1af0c1bbcdf98fbf98ce131eb3760b"
+    },
+    {
+      "path": "internal/decoder/layer/annex_b10_layer.mbt",
+      "upstream_sha256": "96355ee5cea8c8e781dfd56cdf76689aa365fc9924542172e9ef64198f83a091"
+    },
+    {
+      "path": "internal/decoder/layer/annex_b10_dwt_bridge.mbt",
+      "upstream_sha256": "5005ee50043ed2fbb491b661d93cea51d49bb3af32504acc0545cda2502ca772"
+    }
+  ]
+}

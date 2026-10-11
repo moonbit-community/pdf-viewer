@@ -307,6 +307,7 @@ fn pdf_update_soft_mask_for_viewer(
   resources : @syntax.PdfObject,
   name : @core.PdfName,
   current : PdfCollectedSoftMask?,
+  ctm : @geometry.TransformMatrix,
 ) -> PdfCollectedSoftMask? {
   let extgstates = match
     document.lookup_direct(pdf_image_name("/ExtGState"), resources) {
@@ -323,21 +324,23 @@ fn pdf_update_soft_mask_for_viewer(
     Some(@syntax.PdfNameObject(mask_name)) if pdf_annotation_name_text(
         mask_name,
       ).contains("None") => None
-    Some(value) => Some({ dictionary: value, resources, })
+    Some(value) => Some({ dictionary: value, resources, ctm, })
   }
 }
 
 ///|
 /// Lower a collected soft mask to a page item resource. Form masks retain
 /// their `/BBox`; image masks use the current page as their placement box.
-fn pdf_soft_mask_resource_of_collected(
+fn pdf_soft_mask_legacy_resource_of_collected(
   document : @pdflite.PdfDocument,
   origin_x : Double,
   origin_y : Double,
   page_width : Double,
   page_height : Double,
   collected : PdfCollectedSoftMask?,
+  context? : PdfResourceBuildContext = pdf_resource_build_context(),
 ) -> PdfSoftMaskResource? {
+  ignore(context)
   let collected = match collected {
     Some(value) => value
     None => return None
@@ -415,5 +418,264 @@ fn pdf_soft_mask_resource_of_collected(
     bounds,
     luminosity,
     background: pdf_transfer_mask_colour(backdrop, transfer_map),
+    page: None,
+    matrix: [
+      collected.ctm.a,
+      collected.ctm.b,
+      collected.ctm.c,
+      collected.ctm.d,
+      collected.ctm.e,
+      collected.ctm.f,
+    ],
+    backdrop: [backdrop, backdrop, backdrop],
+    backdrop_components: [backdrop],
+    transfer_map,
   })
+}
+
+///|
+fn pdf_soft_mask_resource_of_collected(
+  document : @pdflite.PdfDocument,
+  origin_x : Double,
+  origin_y : Double,
+  page_width : Double,
+  page_height : Double,
+  collected : PdfCollectedSoftMask?,
+  context? : PdfResourceBuildContext = pdf_resource_build_context(),
+) -> PdfSoftMaskResource? raise @core.PdfError {
+  guard collected is Some(collected) else { return None }
+  for (source, resource) in context.mask_cache {
+    if source.dictionary == collected.dictionary &&
+      source.resources == collected.resources &&
+      source.ctm == collected.ctm {
+      return resource
+    }
+  }
+  let form = match
+    document.lookup_direct(pdf_name_key("/G"), collected.dictionary) {
+    Some(value) => value
+    None => return None
+  }
+  if context.mask_active.contains(form) ||
+    context.mask_active.length() >= 16 ||
+    context.mask_count >= 128 {
+    raise @core.SoftError(
+      "Recursive soft mask or soft-mask resource limit exceeded",
+    )
+  }
+  context.mask_count += 1
+  context.mask_active.push(form)
+  let result = try {
+    let bbox = match document.lookup_direct(pdf_name_key("/BBox"), form) {
+      Some(value) => document.parse_rectangle(value)
+      None => raise @core.SoftError("Soft-mask form is missing its BBox")
+    }
+    let width = bbox.max_x - bbox.min_x
+    let height = bbox.max_y - bbox.min_y
+    if width <= 0.0 ||
+      height <= 0.0 ||
+      width.is_inf() ||
+      height.is_inf() ||
+      width.is_nan() ||
+      height.is_nan() {
+      raise @core.SoftError("Soft-mask form has invalid bounds")
+    }
+    let resources = pdf_form_mask_resources(document, collected.resources, form)
+    let group_dictionary = document
+      .lookup_direct(pdf_name_key("/Group"), form)
+      .unwrap_or(@syntax.PdfNull)
+    let colour_object = document
+      .lookup_direct(pdf_name_key("/CS"), group_dictionary)
+      .unwrap_or(@syntax.PdfNameObject(pdf_name_key("/DeviceGray")))
+    let space = pdf_read_colour_space_for_viewer(
+      document, resources, colour_object,
+    ).unwrap_or(@pdflite.PdfDeviceGray)
+    let colour_space = match space {
+      @pdflite.PdfCalGray(_, _, _) => "CalGray"
+      @pdflite.PdfCalRGB(_, _, _, _) => "CalRGB"
+      @pdflite.PdfLab(_, _, _) => "Lab"
+      @pdflite.PdfDeviceGray | @pdflite.PdfICCBased(1, _, _, _, _) =>
+        "DeviceGray"
+      @pdflite.PdfDeviceCMYK | @pdflite.PdfICCBased(4, _, _, _, _) =>
+        "DeviceCMYK"
+      _ => "DeviceRGB"
+    }
+    let components : Array[Double] = []
+    match document.lookup_direct(pdf_name_key("/BC"), collected.dictionary) {
+      Some(@syntax.PdfArray(values)) =>
+        for value in values {
+          components.push(document.get_number(value))
+        }
+      _ => ()
+    }
+    // Missing BC means the initial colour of the group's blend space. CMYK
+    // starts with maximum K, while RGB and Gray start with zero components.
+    if components.is_empty() {
+      match space {
+        @pdflite.PdfDeviceCMYK => components.append([0.0, 0.0, 0.0, 1.0])
+        @pdflite.PdfDeviceGray | @pdflite.PdfCalGray(_, _, _) =>
+          components.push(0.0)
+        @pdflite.PdfICCBased(n, _, _, _, _) =>
+          for _ in 0..<n {
+            components.push(0.0)
+          }
+        _ => components.append([0.0, 0.0, 0.0])
+      }
+    }
+    let (r, g, b) = pdf_colour_rgb_of_transform(
+      pdf_colour_transform(Some(document), space),
+      components,
+    )
+    let backdrop = [r, g, b]
+    let luminosity = match
+      document.lookup_direct(pdf_name_key("/S"), collected.dictionary) {
+      Some(@syntax.PdfNameObject(name)) => name == pdf_name_key("/Luminosity")
+      _ => false
+    }
+    let transfer_map = pdf_transfer_map_of_mask(document, collected.dictionary).map(table => {
+        [
+          for i in 0..<256 => table[i]
+        ]
+      },
+    )
+    let bounds : PdfBounds = {
+      min_x: bbox.min_x,
+      min_y: bbox.min_y,
+      max_x: bbox.max_x,
+      max_y: bbox.max_y,
+    }
+    let (profile_space, icc_profile_id) = pdf_colour_group_profile(
+      document, resources, group_dictionary, context,
+    )
+    // Preserve an unavailable explicit ICC identity, as for page/Form groups.
+    // Treating its unconverted components as DeviceRGB would hide the error.
+    let colour_space = if profile_space == "" {
+      colour_space
+    } else {
+      profile_space
+    }
+    let group : PdfTransparencyGroup = {
+      id: "soft-mask-\{context.mask_count}",
+      isolated: true,
+      knockout: pdf_bool_entry(
+        document,
+        pdf_name_key("/K"),
+        group_dictionary,
+        false,
+      ),
+      alpha: 1.0,
+      blend_mode: "normal",
+      alpha_is_shape: false,
+      bounds: Some(bounds),
+      color_space: colour_space,
+      rendering_intent: "/RelativeColorimetric",
+      calibration: pdf_colour_group_calibration(
+        document, resources, group_dictionary,
+      ),
+      icc_profile_id,
+      soft_mask: None,
+    }
+    let initial = @pdflite.pdf_content_initial_operator_state(
+      bbox.min_x,
+      bbox.min_y,
+      bbox.max_x,
+      bbox.max_y,
+    )
+    let ops = document.parse_content_ops_with_resources(resources, [form])
+    let collected_entries = pdf_collected_entries_of_ops(
+      document,
+      initial,
+      resources,
+      ops,
+      initial.clipping_path,
+      None,
+      [group],
+      false,
+      false,
+      invocation_scope=group.id,
+      resource_context=context,
+    )
+    let fonts : PdfAppearanceFontScope = {
+      id: group.id,
+      fonts: [],
+      sources: [],
+    }
+    let items = pdf_items_of_collected(
+      document,
+      collected_entries[:],
+      bbox.min_x,
+      bbox.min_y,
+      width,
+      height,
+      appearance_fonts=fonts,
+      resource_context=context,
+      retain_ink_samples=colour_space == "DeviceCMYK" ||
+        group.icc_profile_id is Some(_) ||
+        group.calibration is Some(_),
+      convert_ink_to_device_cmyk=group.icc_profile_id is None &&
+        group.calibration is None,
+    )
+    let page : PdfPageModel = {
+      number: 0,
+      blend_space: if colour_space.has_prefix("/") {
+        colour_space[1:].to_owned()
+      } else {
+        colour_space
+      },
+      blend_profile_id: group.icc_profile_id,
+      blend_calibration: group.calibration,
+      icc_profiles: context.icc_profiles.copy(),
+      origin_x: bbox.min_x,
+      origin_y: bbox.min_y,
+      width,
+      height,
+      user_unit: 1.0,
+      rotation: 0,
+      fonts: fonts.fonts,
+      items,
+      annotations: [],
+      text: "",
+    }
+    let matrix = @geometry.transform_matrix_compose(
+      collected.ctm,
+      document.parse_matrix(pdf_name_key("/Matrix"), form),
+    )
+    let legacy = pdf_soft_mask_legacy_resource_of_collected(
+      document,
+      origin_x,
+      origin_y,
+      page_width,
+      page_height,
+      Some(collected),
+    )
+    let data_uri = legacy.map(value => value.data_uri).unwrap_or("")
+    Some({
+      data_uri,
+      bounds,
+      luminosity,
+      background: pdf_transfer_mask_colour(
+        if luminosity {
+          r * 0.3 + g * 0.59 + b * 0.11
+        } else {
+          0.0
+        },
+        transfer_map,
+      ),
+      page: Some(page),
+      matrix: [matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f],
+      backdrop,
+      backdrop_components: components,
+      transfer_map,
+    })
+  } catch {
+    error => {
+      ignore(context.mask_active.pop())
+      raise error
+    }
+  } noraise {
+    value => value
+  }
+  ignore(context.mask_active.pop())
+  context.mask_cache.push((collected, result))
+  result
 }
