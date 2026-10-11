@@ -3,6 +3,7 @@ import { installPdfIccEngine } from './pdf-icc.mjs';
 import { installJbig2Decoder } from './vendor/jbig2/decoder.mjs';
 import { renderPdfCanvas, multiplyMatrix, checkPdfRender } from './pdf-canvas.mjs';
 import { createPatternPainter } from './pdf-patterns.mjs';
+import {prepareNativeCanvasItems} from './pdf-canvas-native.mjs';
 
 let initialization;
 /** Install mature synchronous image/colour primitives before parsing pages. */
@@ -33,10 +34,11 @@ export async function renderPdfPage(canvas,plan,options={}) {
   }
   configured.paintShading=options.paintShading || createShadingPainter(configured);
   configured.paintPattern=options.paintPattern || createPatternPainter(configured);
+  const nativeItems=prepareNativeCanvasItems(plan,configured);
   try {
     const width=configured.width||Math.ceil(plan.viewport.width),height=configured.height||Math.ceil(plan.viewport.height);
     const budget=options.maxWorkingBytes||536870912;
-    const tileSize=options.tileSize ?? (width*height*256>budget?1024:0);
+    const tileSize=options.tileSize ?? (width*height>(options.maxPixels||16777216)||width*height*(nativeItems?4:256)>budget?1024:0);
     if(tileSize&& !options.returnInks&&!options.returnGroupComponents&&!options.outputGroupComponents&&!options.backdrop){
       return await renderTiledPage(canvas,plan,configured,width,height,tileSize);
     }

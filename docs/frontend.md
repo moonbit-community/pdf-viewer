@@ -40,7 +40,23 @@ modules remain adapters rather than application views or navigation controllers.
 
 The PDF parser runs in the Worker. Canvas process-colour conversion uses the
 MoonBit primitive compiled into the UI module, without loading the parser again
-on the main thread. Canvas replay skips paints outside each tile and shares a
+on the main thread. The reader, thumbnails and printing ask the bridge to omit
+the unused whole-page SVG. The public `render_page` and `render_print_page`
+exports still include SVG by default; their optional fourth argument enables
+`omit_svg` and preserves all other page payloads.
+
+Display rendering (`returnPixels: false`) paints ordinary RGB source-over pages
+directly through Canvas2D. Opaque Type3 glyphs containing one filled path reuse
+that path, and empty charprocs skip painting. Isolated normal groups render into
+bounded transparent surfaces before applying group opacity once. Simple patterns
+reuse the existing pattern rasterizer. Backdrop-dependent blending, knockout,
+masks, CMYK, calibrated/ICC blend groups and proof/component outputs retain the
+PDF compositor wherever needed. `nativeCanvas: false` selects the retained
+renderer for comparisons. Native display uses the browser's RGBA8 rasterization;
+its antialiasing and rounding can differ from Float32 replay. Pixel-returning
+calls retain the previous renderer and its shape/component arrays.
+
+Canvas replay skips paints outside each tile and shares a
 bounded image/annotation raster cache across the page's tiles. It releases that
 cache after completion or cancellation, yields to browser events and checks the
 MoonBit task's lifetime before continuing. Pages, thumbnails and printing use
@@ -50,6 +66,16 @@ pending page. The MoonBit view attaches the page's Canvas before painting, so
 finished tiles appear while the remaining tiles are still loading. Cancellation
 removes only that task's partial paint; text, annotation and editing layers
 mount after the page completes.
+
+To compare rendering with the pinned PDF.js checkout, build both static outputs
+as described in [the reference setup](../reference/README.md), then run
+`node tools/render_benchmark.mjs /path/to/document.pdf 1,2,12`.
+`PDF_BROWSER=chromium` selects Chromium; the default is WebKit at DPR 2.
+The tool uses identical Canvas dimensions and finishes reader prefetch before
+timing replay. Reports separate reader startup, Worker payloads, paint time and
+pixel-flush time. `PDF_BENCH_COMPARE_RETAINED=1` also compares native display
+against retained replay and reports both renderers' differences from PDF.js.
+Input files stay local and reports are written only under ignored `_build/`.
 
 `tools/build_web.mbtx` builds both `cmd/browser` and `cmd/viewer`. Static hosting
 must include both generated modules and the existing codec/XFA assets. Develop

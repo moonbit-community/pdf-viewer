@@ -50,6 +50,7 @@ async fn print_document_async() -> Unit {
           @js.Value::cast_from(number),
           @js.Value::cast_from(1.0),
           @js.Value::cast_from(0),
+          @js.Value::cast_from(true),
         ],
         controller~,
         priority=-2,

@@ -1,0 +1,72 @@
+// Plain source-over pages can use Canvas directly. PDF groups, masks and
+// component-space compositing still need the retained transparency renderer.
+const opaqueColour=colour=>/^#[\da-f]{3}(?:[\da-f]{3})?$/i.test(colour);
+const independentPattern=resource=>{
+  const tile=resource?.tile_plan;
+  if(!tile||tile.page.blend_space!=='DeviceRGB'||tile.blend_profile_id||tile.page.blend_profile_id||tile.blend_calibration||tile.page.blend_calibration)return false;
+  return tile.items.every(item=>{
+    const p=item.paint;
+    return ['path','image'].includes(item.kind)&&!(item.groups||p.group_path||[]).length&&!item.mask&&!p.soft_mask&&!item.pattern&&!p.pattern&&!item.stroke_pattern&&!p.stroke_pattern&&!p.shading_pattern&&!p.fill_overprint&&!p.stroke_overprint&&!p.alpha_is_shape&&['normal','compatible'].includes(p.blend_mode);
+  });
+};
+export function singleType3Path(item,page){
+  const scene=item.type3_plan;
+  if(!scene||scene.version!==1||scene.items.length>1||scene.diagnostics?.length||scene.annotation_svg||scene.annotation_fragments?.length)return null;
+  if(['origin_x','origin_y','width','height'].some(key=>scene.page[key]!==page[key]))return null;
+  if(scene.blend_profile_id||scene.page.blend_profile_id||scene.blend_calibration||scene.page.blend_calibration)return null;
+  if(!scene.items.length)return {...item,kind:'path',paint:{...item.paint,svg_path:'',filled:false,stroked:false}};
+  const child=scene.items[0],p=child.paint;
+  if(child.kind!=='path'||(child.groups||p.group_path||[]).length||child.mask||p.soft_mask||child.pattern||p.pattern||child.stroke_pattern||p.stroke_pattern||p.shading_pattern||!['normal','compatible'].includes(p.blend_mode)||p.fill_alpha!==1||!opaqueColour(p.fill_color)||!p.filled||p.stroked||p.fill_overprint||p.stroke_overprint||p.alpha_is_shape)return null;
+  return {...child,paint:{...p,index:item.paint.index},groups:item.groups||item.paint.group_path||[]};
+}
+
+export function prepareNativeCanvasItems(plan,options={}){
+  if(options.nativeCanvas===false||options._nativePageDisabled||(options.maxDepth??32)<=1||options.returnPixels!==false||options.proof||options.backdrop||options.returnInks||options.returnGroupComponents||options.outputGroupComponents||options._maskBackdrop||options.fullSurfaceReplay||options.fullSceneReplay)return null;
+  const space=plan.page.blend_space||'DeviceRGB';
+  if(space!=='DeviceRGB'||plan.blend_profile_id||plan.page.blend_profile_id||plan.blend_calibration||plan.page.blend_calibration)return null;
+  const items=[];
+  for(let i=0;i<plan.items.length;i++){
+    const raw=plan.items[i],groups=raw.groups||raw.paint.group_path||[],group=groups[0];
+    if(group){
+      // An isolated source-over group can be rendered against transparency
+      // independently, then placed over the native page in its original order.
+      if(!group.isolated||!['normal','compatible'].includes(group.blend_mode)||group.alpha_is_shape)return null;
+      let end=i+1;
+      while(end<plan.items.length&&(plan.items[end].groups||plan.items[end].paint.group_path||[])[0]?.id===group.id)end++;
+      const scene={...plan,items:plan.items.slice(i,end),annotation_svg:null,annotation_fragments:[]};
+      const children={...scene,items:scene.items.map(item=>{
+        const groups=(item.groups||item.paint.group_path||[]).slice(1);
+        return {...item,groups,paint:{...item.paint,group_path:groups}};
+      })};
+      const direct=!group.knockout&&!group.soft_mask&&!group.icc_profile_id&&!group.calibration&&(!group.color_space||group.color_space==='DeviceRGB')&&prepareNativeCanvasItems(children,{...options,maxDepth:(options.maxDepth??32)-1,transparent:true})!==null;
+      items.push({kind:'retained',scene:direct?children:scene,native:direct,alpha:direct?group.alpha:1,bounds:direct?group.bounds:null});
+      i=end-1;continue;
+    }
+    const p=raw.paint;
+    if(raw.mask||p.soft_mask||p.fill_overprint||p.stroke_overprint||p.alpha_is_shape||!['normal','compatible'].includes(p.blend_mode))return null;
+    const patterns=[raw.pattern||p.pattern,raw.stroke_pattern||p.stroke_pattern,p.shading_pattern].filter(Boolean);
+    if(patterns.length){
+      // Normal cells without transparency groups or nested patterns do not
+      // depend on the page backdrop. Keep the existing pattern rasterizer.
+      if(raw.kind!=='path'||!patterns.every(independentPattern))return null;
+      items.push({kind:'retained',native:false,scene:{...plan,items:[raw],annotation_svg:null,annotation_fragments:[]}});
+      continue;
+    }
+    let item=raw;
+    if(raw.kind==='text'){
+      // With opaque elementary glyphs, shape equals alpha, so text knockout
+      // reduces to source-over. Translucent glyphs retain the PDF group path.
+      if(raw.type3_plan){item=singleType3Path(raw,plan.page);if(!item)return null;}
+      else{
+        const mode=p.rendering_mode,filled=[0,2,4,6].includes(mode),stroked=[1,2,5,6].includes(mode),pen=p.stroke;
+        if((filled&&(p.fill_alpha!==1||!opaqueColour(p.fill_color)))||(stroked&&((pen?.stroke_alpha??p.stroke_alpha)!==1||!opaqueColour(p.stroke_color))))return null;
+        if(p.fill_path!=null)item={...raw,kind:'path',paint:{...p,svg_path:p.fill_path,filled,stroked,stroke_alpha:pen?.stroke_alpha??p.stroke_alpha,line_cap:pen?.line_cap,line_join:pen?.line_join}};
+        else if(pen?.svg_path!=null)item={...raw,kind:'path',paint:{...p,svg_path:pen.svg_path,fill_transform:pen.transform,filled,stroked,stroke_alpha:pen.stroke_alpha,line_cap:pen.line_cap,line_join:pen.line_join}};
+        else if(!filled||stroked)return null;
+      }
+    }else if(!['path','image'].includes(raw.kind))return null;
+    if(item.kind==='path'&&item.paint.filled&&item.paint.stroked&&(item.paint.fill_alpha!==1||item.paint.stroke_alpha!==1||!opaqueColour(item.paint.fill_color)||!opaqueColour(item.paint.stroke_color)))return null;
+    items.push(item);
+  }
+  return items;
+}

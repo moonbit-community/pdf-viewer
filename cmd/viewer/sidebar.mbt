@@ -73,6 +73,7 @@ fn start_thumbnails() -> Unit {
                 @js.Value::cast_from(number),
                 @js.Value::cast_from(0.12),
                 @js.Value::cast_from(0),
+                @js.Value::cast_from(true),
               ],
               controller=task,
               priority=-5,

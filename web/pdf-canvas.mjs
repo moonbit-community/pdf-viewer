@@ -5,6 +5,7 @@ import { pdfDashedHairlinePath,pdfStrokeGeometry } from './pdf-hairline.mjs';
 import { createColourPlaneSurface, paintColourPlaneSurface, resolveColourPlaneSurface, invalidateColourPlaneSurface } from './pdf-colour-planes.mjs';
 import { PdfCompositor, rgba8ToPremultiplied, premultipliedToRgba8, softMaskSamples } from './pdf-compositor.mjs';
 import { pdfPixelRegion } from './pdf-pixel-region.mjs';
+import {prepareNativeCanvasItems,singleType3Path} from './pdf-canvas-native.mjs';
 
 export const multiplyMatrix = (a,b) => [
   a[0]*b[0]+a[2]*b[1], a[1]*b[0]+a[3]*b[1],
@@ -118,6 +119,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
 
   const width=options.width || Math.ceil(plan.viewport.width), height=options.height || Math.ceil(plan.viewport.height);
   const matrix=options.matrix || multiplyMatrix(plan.viewport.matrix,pageFlip(plan.page));
+  const nativeItems=prepareNativeCanvasItems(plan,options);
   const resourceDepth=options._resourceDepth || 0;
   if(resourceDepth>16) throw new RangeError('PDF raster resource recursion limit exceeded');
   const inheritedWorkingBytes=options._inheritedWorkingBytes || 0;
@@ -131,7 +133,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
   const proofNames=[...new Set(['Cyan','Magenta','Yellow','Black',...colorants.filter(name=>name!=='None'&&name!=='All')])];
   const proofBytes=hasOverprint&&!inkMode?width*height*(proofNames.length*4+21):0;
   if(!Number.isSafeInteger(proofBytes)||proofBytes>availableBytes)throw new RangeError('PDF proof planes exceed the shared working-memory budget');
-  const rasterBytes=width*height*40;
+  const rasterBytes=width*height*(nativeItems?4:40);
   if(!Number.isSafeInteger(rasterBytes)||proofBytes+rasterBytes>=availableBytes)throw new RangeError('PDF raster surfaces exceed the shared working-memory budget');
   availableBytes-=proofBytes+rasterBytes;
   const liveCompositors=new Set();
@@ -179,9 +181,9 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
     return value;
   };
   try {
-  layer=createCanvas(width,height);shapeLayer=createCanvas(width,height);
-  const ctx=layer.getContext('2d',{willReadFrequently:true}), shapeCtx=shapeLayer.getContext('2d',{willReadFrequently:true});
-  const sourcePixels=new Float32Array(width*height*4),sourceShape=new Float32Array(width*height);
+  if(!nativeItems){layer=createCanvas(width,height);shapeLayer=createCanvas(width,height);}
+  const ctx=layer?.getContext('2d',{willReadFrequently:true}), shapeCtx=shapeLayer?.getContext('2d',{willReadFrequently:true});
+  const sourcePixels=nativeItems?null:new Float32Array(width*height*4),sourceShape=nativeItems?null:new Float32Array(width*height);
   let previousSourceRegion=null;
   const environments={createCanvas,loadImage,Path2D:Path,image,width,height,matrix,page:plan.page,diagnostics,resourceDepth,glyphCache};
   const retainedWorkingBytes=()=>inheritedWorkingBytes+glyphReservation+imageReservation+proofBytes+maskCacheBytes+(options._imageCache?0:imageCache.bytes)+(inkImageCache?inkImageCache.data.byteLength+inkImageCache.alpha.byteLength+inkImageCache.canvas.width*inkImageCache.canvas.height*4:0)+availableBytes-(inkMode?compositor.maxBytes:compositor.maxWorkingBytes)+compositor.workingBytes()+rasterBytes;
@@ -224,7 +226,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
     // the axis-aligned device allocation alone is not that clipping polygon.
     context.beginPath();context.rect(0,0,plan.page.width,plan.page.height);context.clip();
     for (const clip of paint.clips || []) context.clip(new Path(clip.svg_path),clip.even_odd?'evenodd':'nonzero');
-    for (const bounds of groupBounds) {
+    for (const bounds of [...(options._nativeClipBounds||[]),...groupBounds]) {
       context.beginPath();
       context.rect(bounds.min_x-plan.page.origin_x,plan.page.origin_y+plan.page.height-bounds.max_y,bounds.max_x-bounds.min_x,bounds.max_y-bounds.min_y);
       context.clip();
@@ -449,7 +451,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
       for(let y=0;y<h;y++)backdrop.set(environments.backdrop.subarray(((y+region.y)*width+region.x)*stride,((y+region.y)*width+region.x+w)*stride),y*w*stride);
       const localMatrix=[...matrix];localMatrix[4]-=region.x;localMatrix[5]-=region.y;
       const target=createCanvas(w,h);
-      const rendered=await renderPdfCanvas(target,nested,{...options,_glyphCacheReserved:true,createCanvas,loadImage,Path2D:Path,width:w,height:h,matrix:localMatrix,transparent:true,backdrop,returnInks:ink,outputGroupComponents:true,_profileScope:options._profileScope,_resourceDepth:resourceDepth+1,_inheritedWorkingBytes:retainedWorkingBytes()+w*h*(stride*4+24)});
+      const rendered=await renderPdfCanvas(target,nested,{...options,_nativeClipBounds:[],_glyphCacheReserved:true,createCanvas,loadImage,Path2D:Path,width:w,height:h,matrix:localMatrix,transparent:true,backdrop,returnInks:ink,outputGroupComponents:true,_profileScope:options._profileScope,_resourceDepth:resourceDepth+1,_inheritedWorkingBytes:retainedWorkingBytes()+w*h*(stride*4+24)});
       diagnostics.push(...rendered.diagnostics);target.width=1;
       const pixels=ink?rendered.inkProof?.premultiplied:rendered.premultiplied;
       if(!pixels||pixels.length!==w*h*stride)throw new Error('Retained scene lost its group component samples');
@@ -476,7 +478,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
     const target=createCanvas(width,height);
     const pdfMatrix=multiplyMatrix(matrix,[1,0,0,-1,-plan.page.origin_x,plan.page.origin_y+plan.page.height]);
     const maskMatrix=multiplyMatrix(pdfMatrix,multiplyMatrix(mask.matrix || [1,0,0,1,0,0],pageFlip(mask.plan.page)));
-    const rendered=await renderPdfCanvas(target,mask.plan,{...options,_glyphCacheReserved:true,createCanvas,loadImage,Path2D:Path,width,height,matrix:maskMatrix,transparent:true,returnInks:true,backdrop:null,outputGroupComponents:false,_maskBackdrop:mask.luminosity?(mask.backdrop_components||mask.backdrop):null,_resourceDepth:resourceDepth+1,_inheritedWorkingBytes:retainedWorkingBytes()});
+    const rendered=await renderPdfCanvas(target,mask.plan,{...options,_nativeClipBounds:[],_glyphCacheReserved:true,createCanvas,loadImage,Path2D:Path,width,height,matrix:maskMatrix,transparent:true,returnInks:true,backdrop:null,outputGroupComponents:false,_maskBackdrop:mask.luminosity?(mask.backdrop_components||mask.backdrop):null,_resourceDepth:resourceDepth+1,_inheritedWorkingBytes:retainedWorkingBytes()});
     diagnostics.push(...rendered.diagnostics);
     const samples=softMaskSamples(rendered.premultiplied,mask);
     target.width=1;
@@ -569,6 +571,31 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
     for(let i=start;i<end;i++){const r=paintRegion(items[i]);if(r.width&&r.height)return true;}
     return false;
   };
+  const drawAnnotations=async output=>{
+    if(!plan.annotation_svg&&!plan.annotation_fragments?.length)return;
+    // Rasterize annotation vectors at the output density before placing them
+    // in logical page space, so AP text and edges retain their print/DPR detail.
+    const fragments=plan.annotation_fragments || [{svg:plan.annotation_svg,x:0,y:0,width:plan.page.width,height:plan.page.height}];
+    for(const fragment of fragments){
+      let placement=matrix;
+      if(fragment.no_zoom||fragment.no_rotate){
+        const anchor=fragment.anchor,logicalScale=plan.viewport.scale*(plan.page.user_unit||1);
+        let a=matrix[0],b=matrix[1],c=matrix[2],d=matrix[3];
+        if(fragment.no_rotate){const sx=Math.hypot(a,b),sy=Math.hypot(c,d);a=sx;b=0;c=0;d=sy;}
+        if(fragment.no_zoom){a/=logicalScale;b/=logicalScale;c/=logicalScale;d/=logicalScale;}
+        placement=[a,b,c,d,matrix[0]*anchor[0]+matrix[2]*anchor[1]+matrix[4]-a*anchor[0]-c*anchor[1],matrix[1]*anchor[0]+matrix[3]*anchor[1]+matrix[5]-b*anchor[0]-d*anchor[1]];
+      }
+      const aw=Math.max(1,Math.ceil(fragment.width*Math.hypot(placement[0],placement[1])));
+      const ah=Math.max(1,Math.ceil(fragment.height*Math.hypot(placement[2],placement[3])));
+      if(aw*ah*4>availableBytes)throw new RangeError('PDF annotation raster exceeds the working memory budget');
+      const svg=fragment.svg.replace(/(<svg\b[^>]*\bwidth=")[^"]*(")/,`$1${aw}$2`).replace(/(<svg\b[^>]*\bheight=")[^"]*(")/,`$1${ah}$2`);
+      output.save();output.setTransform(...placement);output.globalCompositeOperation=fragment.blend||'source-over';
+      const uri=svgUri(svg);
+      const raster=options._imageCache&&aw*ah<=(options.maxPixels||16777216)?await image(uri):await loadImage(uri);
+      try{output.drawImage(raster,fragment.x,fragment.y,fragment.width,fragment.height);}
+      finally{if(!options._imageCache||images.get(uri)?.value!==raster){uncachedImages.delete(raster);releaseImage(raster);}output.restore();}
+    }
+  };
   let yieldDeadline=performance.now()+12;
   const walk=async(items,depth,bounds=[],textScope=null)=>{
     for(let i=0;i<items.length;){
@@ -620,6 +647,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
         // A retained Type3 charproc inherits the complete graphics state;
         // internal gs operators replace it, so it must not be applied again
         // as an outer glyph opacity/blend/mask after extracting the scene.
+        if(item.kind==='text'&&item.type3_plan&&options.returnPixels===false&&options.nativeCanvas!==false&&!options.fullSceneReplay&&!inkMode&&!compositor.colour.profileId&&!compositor.colour.calibration)item=singleType3Path(item,plan.page)||item;
         if(item.kind==='text'&&item.type3_plan)item={...item,mask:null,paint:{...item.paint,fill_alpha:1,stroke_alpha:1,blend_mode:'normal',soft_mask:null,alpha_is_shape:false,fill_overprint:false,stroke_overprint:false}};
         // A1 provides the glyph outline with only the graphics CTM removed.
         // Replay that same geometry directly, avoiding an SVG bitmap resample.
@@ -645,6 +673,40 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
       }
     }
   };
+  if(nativeItems){
+    canvas.width=width;canvas.height=height;
+    const output=canvas.getContext('2d');
+    if(!options.transparent){output.fillStyle='#fff';output.fillRect(0,0,width,height);}
+    for(const item of nativeItems){
+      checkPdfRender(options);
+      if(options.yieldToHost&&performance.now()>=yieldDeadline){await options.yieldToHost();checkPdfRender(options);yieldDeadline=performance.now()+12;}
+      output.save();
+      try{
+        if(item.kind==='retained'){
+          const r=sceneRegion(item.scene);
+          if(r.width&&r.height){
+            const target=createCanvas(r.width,r.height),localMatrix=[...matrix];localMatrix[4]-=r.x;localMatrix[5]-=r.y;
+            try{
+              const rendered=await renderPdfCanvas(target,item.scene,{...options,_nativePageDisabled:!item.native,width:r.width,height:r.height,matrix:localMatrix,
+                maxDepth:(options.maxDepth??32)-(item.native?1:0),
+                _nativeClipBounds:item.native&&item.bounds?[...(options._nativeClipBounds||[]),item.bounds]:options._nativeClipBounds,
+                transparent:true,_glyphCacheReserved:true,_inheritedWorkingBytes:retainedWorkingBytes()});
+              diagnostics.push(...rendered.diagnostics);checkPdfRender(options);
+              output.setTransform(1,0,0,1,0,0);output.globalAlpha=item.alpha??1;output.drawImage(target,r.x,r.y);
+            }finally{target.width=target.height=1;}
+          }
+        }else{
+          clips(output,item.paint);
+          if(item.kind==='path')await drawPath(output,item.paint,false);
+          else if(item.kind==='image')await drawImage(output,item.paint,false);
+          else await drawText(output,item,false);
+        }
+      }finally{output.restore();}
+      for(const value of uncachedImages)releaseImage(value);uncachedImages.clear();
+    }
+    checkPdfRender(options);await drawAnnotations(output);checkPdfRender(options);
+    return {width,height,diagnostics,native:true,blendCapabilities:compositor.capabilities};
+  }
   if(options.backdrop&&options.backdrop.length!==width*height*(inkMode?compositor.stride:4))throw new RangeError('PDF initial backdrop dimensions differ');
   compositor.beginGroup({isolated:!options.backdrop,color_space:plan.page.blend_space || 'DeviceRGB'},options.backdrop || null);
   // The PDF page is an isolated group. A viewer's white paper belongs below
@@ -673,28 +735,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
   canvas.width=width;canvas.height=height;
   const output=canvas.getContext('2d'),data=output.createImageData(width,height);data.data.set(bytes);output.putImageData(data,0,0);
   if(plan.annotation_svg||plan.annotation_fragments?.length){
-    // Rasterize annotation vectors at the output density before placing them
-    // in logical page space, so AP text and edges retain their print/DPR detail.
-    const fragments=plan.annotation_fragments || [{svg:plan.annotation_svg,x:0,y:0,width:plan.page.width,height:plan.page.height}];
-    for(const fragment of fragments){
-      let placement=matrix;
-      if(fragment.no_zoom||fragment.no_rotate){
-        const anchor=fragment.anchor,logicalScale=plan.viewport.scale*(plan.page.user_unit||1);
-        let a=matrix[0],b=matrix[1],c=matrix[2],d=matrix[3];
-        if(fragment.no_rotate){const sx=Math.hypot(a,b),sy=Math.hypot(c,d);a=sx;b=0;c=0;d=sy;}
-        if(fragment.no_zoom){a/=logicalScale;b/=logicalScale;c/=logicalScale;d/=logicalScale;}
-        placement=[a,b,c,d,matrix[0]*anchor[0]+matrix[2]*anchor[1]+matrix[4]-a*anchor[0]-c*anchor[1],matrix[1]*anchor[0]+matrix[3]*anchor[1]+matrix[5]-b*anchor[0]-d*anchor[1]];
-      }
-      const aw=Math.max(1,Math.ceil(fragment.width*Math.hypot(placement[0],placement[1])));
-      const ah=Math.max(1,Math.ceil(fragment.height*Math.hypot(placement[2],placement[3])));
-      if(aw*ah*4>availableBytes)throw new RangeError('PDF annotation raster exceeds the working memory budget');
-      const svg=fragment.svg.replace(/(<svg\b[^>]*\bwidth=")[^"]*(")/,`$1${aw}$2`).replace(/(<svg\b[^>]*\bheight=")[^"]*(")/,`$1${ah}$2`);
-      output.save();output.setTransform(...placement);output.globalCompositeOperation=fragment.blend||'source-over';
-      const uri=svgUri(svg);
-      const raster=options._imageCache&&aw*ah<=(options.maxPixels||16777216)?await image(uri):await loadImage(uri);
-      try{output.drawImage(raster,fragment.x,fragment.y,fragment.width,fragment.height);}
-      finally{if(!options._imageCache||images.get(uri)?.value!==raster){uncachedImages.delete(raster);releaseImage(raster);}output.restore();}
-    }
+    await drawAnnotations(output);
     bytes=output.getImageData(0,0,width,height).data;
     rgba8ToPremultiplied(bytes,result.pixels);
   }

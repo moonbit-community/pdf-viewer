@@ -56,6 +56,77 @@ await test('page tiles share annotation appearance rasters without changing thei
  }});
  assert.equal(loads,1);assert.equal(closed,1);assert.deepEqual(actual.data,control.data);assert.deepEqual(actual.premultiplied,control.premultiplied);
 });
+await test('ordinary display paints and opaque Type3 text avoid pixel readback',async()=>{
+ const glyph=path('M2 2H10V10H2Z','#0000ff',{clips:[{svg_path:'M4 0H20V20H4Z'}]});
+ const text=(scene,index)=>({kind:'text',paint:{index,text_object_id:'opaque',text_knockout:true,fill_alpha:1,blend_mode:'normal'},type3_plan:scene});
+ const input=plan([path(rect,'#ff0000'),text(plan([glyph]),1),text(plan([]),2),text(plan([path('M6 6H12V12H6Z','#00ff00')]),3)]);
+ const control=createCanvas(1,1);
+ await renderPdfCanvas(control,input,{...options,nativeCanvas:false,width:40,height:40,matrix:[2,0,0,2,0,0]});
+ let reads=0,allocatedPixels=0;const seen=new WeakSet();
+ const instrument=(w,h)=>{
+  allocatedPixels+=w*h;const c=createCanvas(w,h),ctx=c.getContext('2d');
+  if(!seen.has(ctx)){seen.add(ctx);const get=ctx.getImageData;ctx.getImageData=function(...args){reads++;return get.apply(this,args);};}
+  return c;
+ };
+ const canvas=instrument(1,1);
+ const result=await renderPdfCanvas(canvas,input,{...options,createCanvas:instrument,returnPixels:false,width:40,height:40,matrix:[2,0,0,2,0,0]});
+ assert.equal(result.native,true);assert.equal(reads,0,'Painting does not read pixels back from Canvas');
+ assert(allocatedPixels<40*40,'There are no full-page scratch surfaces');
+ assert.deepEqual(canvas.getContext('2d').getImageData(0,0,40,40).data,control.getContext('2d').getImageData(0,0,40,40).data);
+});
+await test('native display retains isolated groups and their knockout and blend semantics',async()=>{
+ const group={id:'mixed',isolated:true,knockout:true,alpha:0.5,blend_mode:'normal',bounds:{min_x:4,min_y:4,max_x:16,max_y:16}};
+ const input=plan([path(rect,'#ff0000'),path(rect,'#00ff00',{fill_alpha:0.5,group_path:[group]}),path('M8 0H20V20H8Z','#0000ff',{blend_mode:'multiply',group_path:[group]}),path('M0 0H2V20H0Z','#000')]);
+ const control=createCanvas(1,1),canvas=createCanvas(1,1);
+ await renderPdfCanvas(control,input,{...options,nativeCanvas:false});
+ const result=await renderPdfCanvas(canvas,input,{...options,returnPixels:false});
+ assert.equal(result.native,true);
+ const a=canvas.getContext('2d').getImageData(0,0,20,20).data,b=control.getContext('2d').getImageData(0,0,20,20).data;
+ for(let i=0;i<a.length;i++)assert(Math.abs(a[i]-b[i])<=1,`group pixel ${i}: ${a[i]} != ${b[i]}`);
+ near(Array.from(a.slice((10*20+2)*4,(10*20+2)*4+4)),[255,0,0,255]);
+});
+await test('isolated native groups apply opacity once after clipped children overlap',async()=>{
+ const group={id:'isolated',isolated:true,knockout:false,alpha:0.5,blend_mode:'normal',bounds:{min_x:4,min_y:4,max_x:16,max_y:16}};
+ const input=plan([path(rect,'#ff0000'),path(rect,'#00ff00',{group_path:[group]}),path('M8 0H20V20H8Z','#0000ff',{group_path:[group]})]);
+ for(const [matrix,min_x] of [[[2,0,0,2,0,0],4],[[0,2,-2,0,40,0],4.25]]){
+  group.bounds.min_x=min_x;
+  const control=createCanvas(1,1),canvas=createCanvas(1,1);
+  await renderPdfCanvas(control,input,{...options,nativeCanvas:false,width:40,height:40,matrix});
+  const actual=await renderPdfCanvas(canvas,input,{...options,returnPixels:false,width:40,height:40,matrix});
+  assert.equal(actual.native,true);
+  const a=canvas.getContext('2d').getImageData(0,0,40,40).data,b=control.getContext('2d').getImageData(0,0,40,40).data;
+  // Canvas applies group alpha in RGBA8; the retained renderer uses Float32.
+  for(let i=0;i<a.length;i++)assert(Math.abs(a[i]-b[i])<=2,`isolated pixel ${i}: ${a[i]} != ${b[i]}`);
+ }
+});
+await test('translucent knockout text and backdrop-dependent groups use the retained renderer',async()=>{
+ const group={id:'backdrop',isolated:false,knockout:false,alpha:1,blend_mode:'normal'};
+ const text=color=>({kind:'text',paint:{text_object_id:'translucent',text_knockout:true,rendering_mode:0,fill_path:rect,fill_color:color,fill_alpha:0.5,blend_mode:'normal',bounds:{min_x:0,min_y:0,max_x:20,max_y:20}}});
+ for(const input of [plan([text('#ff0000'),text('#0000ff')]),plan([path(rect,'#ff0000'),path(rect,'#0000ff',{blend_mode:'multiply',group_path:[group]})])]){
+  const control=createCanvas(1,1),canvas=createCanvas(1,1);
+  await renderPdfCanvas(control,input,{...options,nativeCanvas:false});
+  const result=await renderPdfCanvas(canvas,input,{...options,returnPixels:false});
+  assert.equal(result.native,undefined);
+  assert.deepEqual(canvas.getContext('2d').getImageData(0,0,20,20).data,control.getContext('2d').getImageData(0,0,20,20).data);
+ }
+});
+await test('native display cancellation frees images and its partially painted output',async()=>{
+ const controller=new AbortController(),canvas=createCanvas(1,1),source=createCanvas(1,1);let closed=0,yields=0;
+ source.getContext('2d').fillRect(0,0,1,1);
+ const input=plan([{kind:'image',paint:{quad:{p0:{x:0,y:0},p1:{x:0,y:20},p2:{x:20,y:20},p3:{x:20,y:0}},resource:{data_uri:source.toDataURL(),width:1,height:1},fill_alpha:1,blend_mode:'normal'}},path(rect,'#f00')]);
+ await assert.rejects(renderPdfPage(canvas,input,{...options,returnPixels:false,signal:controller.signal,
+  loadImage:async uri=>{const image=await loadImage(uri);image.close=()=>closed++;await new Promise(resolve=>setTimeout(resolve,20));return image;},
+  yieldToHost:async()=>{yields++;controller.abort();}}),{name:'AbortError'});
+ assert.equal(yields,1);assert.equal(closed,1);assert.equal(canvas.width,1);assert.equal(canvas.height,1);
+});
+await test('ordinary display fits an RGBA-only budget and keeps output pixel limits',async()=>{
+ const input=plan([path(rect,'#ff0000')]),canvas=createCanvas(1,1);
+ const actual=await renderPdfCanvas(canvas,input,{...options,returnPixels:false,maxWorkingBytes:4096});
+ assert.equal(actual.native,true);near(Array.from(canvas.getContext('2d').getImageData(10,10,1,1).data),[255,0,0,255]);
+ await assert.rejects(()=>renderPdfCanvas(createCanvas(1,1),input,{...options,returnPixels:false,nativeCanvas:false,maxWorkingBytes:4096}),RangeError);
+ await assert.rejects(()=>renderPdfPage(createCanvas(1,1),input,{...options,returnPixels:false,width:9000,height:9000}),RangeError);
+ await assert.rejects(()=>renderPdfCanvas(createCanvas(1,1),input,{...options,returnPixels:false,maxDepth:0}),RangeError);
+});
 await test('structured geometry, separate clip stack and evenodd rule',async()=>{
  const result=await renderPdfCanvas(createCanvas(20,20),plan([path(rect,'#ff0000',{clips:[{svg_path:'M 2 2H18V18H2Z M 6 6H14V14H6Z',even_odd:true}]})]),options);
  near(pixel(result,3,3),[255,0,0,255]);near(pixel(result,9,9),[255,255,255,255]);near(pixel(result,0,0),[255,255,255,255]);

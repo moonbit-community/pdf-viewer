@@ -56,6 +56,10 @@ for(const [matrix,width,height,axis] of [['1 0 0 16 0 0',16,16,'y'],['16 0 0 1 0
  const body=axis==='y'?'1 g 0 0 1 1 re f 1 0 0 rg 0 .5 1 .5 re f':'1 g 0 0 1 1 re f 1 0 0 rg 0 0 .5 1 re f';
  const plan=page('/Pattern cs /P scn 0 0 16 16 re f','/Pattern << /P 5 0 R >>',[stream(`/Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 1 1] /XStep 1 /YStep 1 /Matrix [${matrix}] /Resources << >>`,body)],'',`${width} ${height}`);
  const rendered=await renderPdfPage(createCanvas(1,1),plan,options);
+ const display=createCanvas(1,1);
+ await renderPdfPage(display,plan,{...options,returnPixels:false});
+ const displayPixels=display.getContext('2d').getImageData(0,0,width,height).data;
+ for(let i=0;i<displayPixels.length;i++)assert(Math.abs(displayPixels[i]-rendered.data[i])<=2,'Native display preserves the anchored pattern raster');
  for(let y=2;y<14;y++)for(let x=2;x<14;x++){
   if((axis==='y'?y:x)===7||(axis==='y'?y:x)===8)continue;
   near(sample(rendered,x,y),(axis==='y'?y:x)<8?[255,0,0,255]:[255,255,255,255]);
@@ -63,6 +67,11 @@ for(const [matrix,width,height,axis] of [['1 0 0 16 0 0',16,16,'y'],['16 0 0 1 0
  assert.deepEqual(rendered.diagnostics,[]);
 }
 const logical=page('1 0 0 rg 0 0 10 20 re f');
+for(const method of ['render_page','render_print_page']){
+ const legacy=JSON.parse(bridge[method](1,1,0)),compact=JSON.parse(bridge[method](1,1,0,true));
+ assert.equal(legacy.ok,true);assert.equal(compact.ok,true);assert(legacy.svg.startsWith('<svg'));
+ assert.equal(compact.svg,'');assert.deepEqual({...legacy,svg:''},compact,'Omitting SVG preserves all Canvas, editor, annotation and accessibility data');
+}
 for(const scale of [1,2,150/72]){
  const surface=createCanvas(1,1),rendered=await renderPdfPage(surface,logical,{...options,outputScale:scale});
  assert.equal(surface.width,Math.ceil(20*scale));assert.equal(surface.height,Math.ceil(20*scale));

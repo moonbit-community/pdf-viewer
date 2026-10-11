@@ -230,7 +230,7 @@ extern "js" fn render_scheduled(
   rotation : Int,
   options : @js.Value,
 ) -> @js_async.Promise[String] =
-  #| (number,scale,rotation,options) => globalThis.pdfViewerHost.pdf.call("render_page",[number,scale,rotation],options)
+  #| (number,scale,rotation,options) => globalThis.pdfViewerHost.pdf.call("render_page",[number,scale,rotation,true],options)
 
 ///|
 extern "js" fn scheduler_document(

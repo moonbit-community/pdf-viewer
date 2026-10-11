@@ -228,8 +228,15 @@ fn browser_page_fonts(
 }
 
 ///|
-pub fn render_page(number : Int, scale : Double, rotation : Int) -> String {
-  browser_render_page(number, scale, rotation, false)
+/// Canvas readers can omit the legacy SVG document without changing the
+/// Canvas, selection, annotation, editing or accessibility payloads.
+pub fn render_page(
+  number : Int,
+  scale : Double,
+  rotation : Int,
+  omit_svg? : Bool = false,
+) -> String {
+  browser_render_page(number, scale, rotation, false, omit_svg)
 }
 
 ///|
@@ -238,6 +245,7 @@ fn browser_render_page(
   scale : Double,
   rotation : Int,
   printing : Bool,
+  omit_svg : Bool,
 ) -> String {
   if scale <= 0.0 || scale.is_nan() || scale.is_inf() {
     return browser_error_with_code(
@@ -264,7 +272,7 @@ fn browser_render_page(
     }
     let page = if printing { page.with_print_annotations() } else { page }
     let rotation = page.rotation + rotation
-    let svg = page.render_svg(rotation~, scale~)
+    let svg = if omit_svg { "" } else { page.render_svg(rotation~, scale~) }
     let result : Json = {
       "ok": true,
       "page": number,
