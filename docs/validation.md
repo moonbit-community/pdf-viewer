@@ -6,9 +6,10 @@ CLI. That conversion baseline does not measure parity with pdf.js rendering.
 The automated selected-page visual baseline below now measures actual output
 against the same pinned PDF.js build.
 
-The suite currently contains **379 tests on each of wasm, wasm-gc, JavaScript,
+The suite currently contains **387 tests on each of wasm, wasm-gc, JavaScript,
 and native**; the browser host adds two lightweight page-layout regressions and
-three annotation interaction/print regressions to the final A1 results below. Earlier stages included
+three annotation interaction/print regressions, followed by eight semantic-source
+and accessibility regressions, to the final A1 results below. Earlier stages included
 13 annotation tests, 17 CFF tests, 25 Type 1 tests, 5 CID
 layout tests, 9 variable-length CMap tests, 4 text-geometry tests, and 8
 text-clipping tests, one mixed-paint scaling regression, and one tiling-pattern
@@ -34,6 +35,91 @@ The expanded selected-page baseline in `_build/visual-test-1791598324155/`
 measured **57/57 combinations from 20 PDFs**, **0 failures**, and **55 with
 pixel or text differences**. Its calibrated-colour interior samples below
 are an additional diagnostic, not an exemption from full-page differences.
+
+## Tagged page accessibility and source association
+
+Validated on 2026-10-11 with Chromium **145.0.7632.6** on macOS arm64.
+Report: `_build/browser-test-1791704140404/report.json`, **93/93 checks pass**;
+MoonBit passes **387/387** on each of wasm, wasm-gc, JavaScript and native,
+and both all-target and browser bridge checks pass. The browser suite adds
+**13 accessibility checks** and **two selection-lifecycle regressions** to the
+previous 78 interactions/pressure checks. The eight new MoonBit tests cover semantic
+source association without changing paint, native text selection or A1 source
+indices. This accepts the **X-01 main path**; the readonly checklist is **30/50**.
+
+`PdfViewerDocument::accessibility_page_json(n)` uses existing pdflite objects,
+content ops, the glyph collector and Form/string provenance. A bounded marked
+content pass associates MCIDs with the scope where BDC began, including parent
+markers inherited by Forms. It preserves individual invocation paths when the
+same Form is painted repeatedly, and separates page MCIDs from MCR stream
+MCIDs. ParentTree resolves integer `/K` references without `/Pg`; explicit
+page references keep identical MCIDs on different pages isolated. The model
+reports mapped/unmapped/excluded glyph counts and truncation. Unassociated
+visible text retains A1's inferred paragraph order rather than being dropped.
+
+RoleMap, language, Alt/ActualText, table spans/scope and annotation OBJR
+references enter the page-local view. Table attributes can follow Layout
+attributes in an `/A` array. An inline Span without its own MCID can replace
+multiple painted string operands with ActualText once while retaining adjacent
+text and source indices. Structural/marked artifacts stay out of narration;
+hidden OCG text is excluded by the existing collector. Cyclic structure and
+role maps terminate; deep trees retain readable fallback text and set the
+truncation flag. Bounds are 40 structure traversal levels/6,000 visited entries,
+32 content/Form levels/100,000 scanned operations and 32 ParentTree levels/
+2,000 visited entries. These bound the semantic pass, not whole-PDF decoding.
+
+`web/accessibility-layer.js` exposes actual DOM/ARIA headings, paragraphs,
+lists, table rows/headers/cells and figure alternatives. All PDF strings use
+text content/attributes. The geometric glyph layer is hidden from AX when the
+semantic view is available, avoiding duplicate character narration. Tagged
+links own existing native annotation controls with `aria-owns`; their pointer
+geometry stays in place. The semantic layer is clipped, unselectable and
+omitted from printing. Its lifetime follows page mounting, repaint and close.
+If semantic extraction fails, display still renders and leaves glyph narration
+available. No second PDF reader, text-layout engine or accessibility framework
+is introduced.
+
+Real `structure_simple.pdf` produces H1/H2 roles and language, with glyph
+references joining the original DOM items; `issue6782.pdf` exercises real
+MCR structure. The untagged `90ms_rksj_h_sample.pdf` exposes Japanese once in
+fallback paragraphs. The authored two-page fixture checks page-local MCID
+isolation, RoleMap, language, ActualText, lists, table attribute arrays, literal
+figure alternatives and native link ownership. CDP's actual accessibility tree
+verifies roles and names, replacement text once, and artifact/duplicate
+suppression. Native keyboard pagination loads the next semantic page; selection
+still copies painted source text, and rotation/repaint/document replacement
+clear or rebuild the expected narration. Existing 200-page virtualization,
+copying, physical print export and raw-image pressure checks remain in the suite.
+
+The authored fixture is `_build/browser-test-1791704140404/accessibility.pdf`,
+with SHA-256 `3ed86946f53776c8f84481c811ffd4b7d687f7138eb0a5d157f0576a444ea508`.
+The actual CDP snapshot is
+`_build/browser-test-1791704140404/accessibility-tree.json`.
+
+Final regression exposed a selection-lifecycle race: a collapsed native
+`selectionchange` could cancel asynchronous document-wide source collection
+before its DOM range was restored. A deterministic real-file probe initially
+returned a cleared selection, then returned **14 ranges / 79,092 characters**
+after the fix. Expected collapse/mount notifications are ignored only during
+programmatic restoration; new pointer input still cancels that pending work.
+Both behaviors are now in the full browser suite without increasing timeouts.
+
+The tagged narrative follows structure-tree order, while copy/search retain A1
+source order and native glyph geometry. Partially tagged documents append
+unclaimed inferred paragraphs; no PDF semantics are invented for them. Narration
+is page-local and follows virtualization; use the labelled native page controls
+to load subsequent pages. Chromium AX evidence is not manual VoiceOver/NVDA
+acceptance or PDF/UA conformance. PDF 2.0 namespaces, ClassMap/complex attribute
+inheritance, MathML/ruby and complete accessible readonly-widget behavior remain
+coverage extensions; readonly field layout also remains A-02/A-03.
+
+Reproduce with the development server running:
+
+```sh
+moon run tools/browser_test.mbtx http://127.0.0.1:4312 /path/to/chromium
+moon test --target all
+moon check --target all
+```
 
 ## Readonly annotation interaction and print intent
 

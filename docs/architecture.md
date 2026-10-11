@@ -372,6 +372,26 @@ and named page/history actions use the viewer navigation state. Unknown/remote
 targets stay disabled. The visual SVG is inert to avoid duplicate interactive
 links. Widget editing remains outside the readonly layer.
 
+`accessibility.mbt` associates tagged structure with the existing collector's
+glyph indices and string/Form provenance. A bounded marked-content pass keeps
+the originating MCID stream distinct from the Form invocation that paints its
+text; ParentTree can resolve page-local integer references without `/Pg`.
+`RoleMap`, `/Lang`, `/Alt`, `/ActualText`, table attributes and annotation OBJR
+references form a page-local semantic view. Unmapped visible text retains the
+A1 geometrical paragraph order. Cycles/depth/node/operation limits retain
+fallback text; the JSON reports mapped/unmapped/excluded counts and truncation.
+
+The display response includes this view. `web/accessibility-layer.js` creates
+clipped, unselectable DOM/ARIA narration and hides the geometric glyph layer
+from AX. Plain text replaces character-by-character duplicate narration;
+tagged links own the existing native annotation controls with `aria-owns`.
+Paint, native selection and A1 copy/search source indices are retained. The
+semantic DOM shares page mount/unload lifetime; labelled native page controls
+load subsequent pages. Print responses omit this layer. A semantic extraction
+error leaves the original glyph layer available rather than blanking paint.
+AX evidence and remaining assistive-technology/tag coverage are recorded in
+[validation.md](validation.md#tagged-page-accessibility-and-source-association).
+
 The validation renderer is separate from the standalone viewer. A temporary
 loopback server in `tools/visual_test.mbtx` serves the pinned PDF.js build and
 the same MoonBit browser bridge to an isolated Chromium profile. It captures

@@ -14,6 +14,7 @@ import {
 } from "./pdf-client.js";
 import { PageScheduler } from "./page-scheduler.js";
 import { AnnotationLayer } from "./annotation-layer.js";
+import { makeAccessibilityLayer } from "./accessibility-layer.js";
 
 const $ = (id) => document.getElementById(id);
 const viewer = $("viewer");
@@ -38,6 +39,7 @@ const state = {
   pending: false,
   searchController: null,
   selectionController: null,
+  selectionRestore: null,
   selectionPromise: null,
   thumbnailController: null,
   thumbnailObserver: null,
@@ -634,7 +636,12 @@ function mountPage(result) {
   // SVG strings come from the MoonBit serializer, whose text and attributes
   // are escaped; user input is never interpolated into this HTML boundary.
   paint.innerHTML = result.svg;
-  page.append(paint, makeTextLayer(result.layer), annotationUI.create(result.annotations || [], result.layer.viewport));
+  const text = makeTextLayer(result.layer);
+  const annotations = annotationUI.create(result.annotations || [], result.layer.viewport);
+  const accessibility = makeAccessibilityLayer(result.accessibility, annotations);
+  if (accessibility) text.setAttribute("aria-hidden", "true");
+  page.append(paint, text, annotations);
+  if (accessibility) page.append(accessibility);
   return page;
 }
 
@@ -839,6 +846,7 @@ function boundary(node, offset, end = false) {
 
 function clearSelection() {
   state.selectionController?.abort();
+  state.selectionRestore = null;
   state.selectionPromise = null;
   state.selection = null;
   state.selectionRange = null;
@@ -853,6 +861,9 @@ async function readSelection() {
   if (viewer.getAttribute("aria-busy") === "true") return;
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed || !selection.rangeCount) {
+    // Full-document selection collects source ranges before restoring DOM.
+    // Native collapse/mount notifications during that interval are expected.
+    if (state.selectionRestore && !state.selectionRestore.signal.aborted) return;
     clearSelection();
     return;
   }
@@ -881,6 +892,8 @@ async function collectSelection(start, end, restore = false) {
   state.selectionController?.abort();
   const controller = new AbortController();
   state.selectionController = controller;
+  state.selectionRestore = restore ? controller : null;
+  if (restore) window.getSelection()?.removeAllRanges();
   const generation = state.documentGeneration;
   state.selectionRange = { start, end };
   state.selection = null;
@@ -932,6 +945,8 @@ async function collectSelection(start, end, restore = false) {
     );
   } catch (error) {
     if (!controller.signal.aborted && generation === state.documentGeneration) showError(error);
+  } finally {
+    if (state.selectionRestore === controller) state.selectionRestore = null;
   }
 }
 
@@ -1087,6 +1102,9 @@ viewer.addEventListener("dragover", (event) => {
 viewer.addEventListener("dragleave", () =>
   viewer.classList.remove("drag-over"),
 );
+viewer.addEventListener("pointerdown", () => {
+  if (state.selectionRestore && !state.selectionRestore.signal.aborted) clearSelection();
+});
 viewer.addEventListener("drop", (event) => {
   event.preventDefault();
   viewer.classList.remove("drag-over");

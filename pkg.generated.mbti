@@ -748,6 +748,7 @@ pub struct PdfViewerDocument {
   font_fallbacks : Array[PdfFontFallback]
   // private fields
 }
+pub fn PdfViewerDocument::accessibility_page_json(Self, Int) -> Json? raise @core.PdfError
 pub fn PdfViewerDocument::annotation_layer_json(Self, Int) -> Json?
 pub fn PdfViewerDocument::attachment_bytes(Self, Int) -> Bytes? raise @core.PdfError
 pub fn PdfViewerDocument::attachment_manifest_json(Self) -> Json raise @core.PdfError

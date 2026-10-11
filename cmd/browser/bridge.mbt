@@ -260,6 +260,17 @@ fn browser_render_page(
           None => Json::array([])
         }
       },
+      "accessibility": if printing {
+        Json::null()
+      } else {
+        match current_document.val {
+          Some(document) =>
+            (document.accessibility_page_json(number) catch { _ => None }).unwrap_or(
+              Json::null(),
+            )
+          None => Json::null()
+        }
+      },
       "intent": if printing {
         "print"
       } else {
