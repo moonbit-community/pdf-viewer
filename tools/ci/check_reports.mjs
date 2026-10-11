@@ -49,7 +49,9 @@ export function checkVisual(report,baseline){
 if(process.argv[1]?.endsWith('/check_reports.mjs')){
   const corpus=latest('reader-corpus-'),visual=latest('visual-test-'),browser=latest('browser-test-');
   checkCorpus(read(`${corpus}/report.json`),read('tools/ci/corpus.json'));
-  checkVisual(read(`${visual}/report.json`),read('tools/ci/visual_baseline.json'));
+  const visualReport=read(`${visual}/report.json`),host=visualReport.reference_runtime.userAgent;
+  assert.match(host,/Linux|Macintosh/,'No measured visual baseline for this platform');
+  checkVisual(visualReport,read(/Linux/.test(host)?'tools/ci/visual_baseline_linux.json':'tools/ci/visual_baseline.json'));
   const dom=read(`${browser}/report.json`);
   assert.equal(dom.status,'passed');assert.ok(dom.passed>=104,'Browser checks were dropped');
   assert.equal(dom.host_runtime.printed_pages,200);

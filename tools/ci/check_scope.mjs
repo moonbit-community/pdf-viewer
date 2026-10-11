@@ -16,6 +16,7 @@ assert.equal(gaps.reduce((sum,row)=>sum+Number(row[1]),0),0,'Remaining domain co
 const revision=read('tools/ci/toolchain.json').pdfjs_reference;
 assert.equal(read('tools/ci/corpus.json').reference_revision,revision);
 assert.equal(read('tools/ci/visual_cases.json').reference_revision,revision);
+for(const path of ['tools/ci/visual_baseline.json','tools/ci/visual_baseline_linux.json'])assert.equal(read(path).reference_revision,revision);
 for(const directory of ['assets/annotations','vendor/xfa']){
   const upstream=read(`${directory}/UPSTREAM.json`);assert.equal(upstream.commit,revision);
   assert.equal(upstream.license,'Apache-2.0');assert.ok(readFileSync(`${directory}/LICENSE`).length>10000);

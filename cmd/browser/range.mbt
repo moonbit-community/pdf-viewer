@@ -91,7 +91,15 @@ pub fn range_document() -> String {
       Some(old) => view.with_font_fallbacks(old.font_fallbacks())
       None => view
     }
-    browser_install_document(view)
+    if current_document.val is None {
+      browser_install_document(view)
+    } else {
+      // Hydration only adds objects from the same validated source. Completed
+      // page models are independent snapshots and remain valid in the bounded
+      // page cache, including when their encoded streams have been evicted.
+      current_document.val = Some(view)
+      ({ "ok": true, "pages": view.page_count() } : Json).stringify()
+    }
   } catch {
     error => browser_error_with_code("range-fallback", @debug.to_string(error))
   }

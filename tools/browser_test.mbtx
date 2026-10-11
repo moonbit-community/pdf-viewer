@@ -42,7 +42,7 @@ async fn Browser::command(
   }
   self.socket.send_text(request.stringify())
   for ;; {
-    let message = @async.with_timeout(30000, () => {
+    let message = @async.with_timeout(60000, () => {
       self.socket.recv().read_all().text()
     })
     let response = @json.parse(message)
@@ -958,11 +958,14 @@ async fn main {
         #|   document.getElementById('viewer').focus();
         #|   const done = new Promise(resolve => document.getElementById('viewer').addEventListener('pdf-selection-change', function ready(e) { if (e.detail?.ranges.length === 14) { this.removeEventListener('pdf-selection-change', ready); resolve(); } }));
         #|   document.getElementById('viewer').dispatchEvent(new KeyboardEvent('keydown', {key: 'a', ctrlKey: true, bubbles: true, cancelable: true}));
-        #|   await Promise.race([done, new Promise((_, reject) => setTimeout(() => reject(new Error('select all timed out')), 25000))]);
+        #|   const started=performance.now();
+        #|   await Promise.race([done, new Promise((_, reject) => setTimeout(() => reject(new Error('select all timed out: '+JSON.stringify({status:document.getElementById('selection-status').textContent,error:document.getElementById('error').textContent,ranges:window.lastPdfSelection?.ranges.length}))), 55000))]);
+        #|   window.fullSelectionMs=performance.now()-started;
         #|   return (lastPdfSelection?.ranges.length === 14 && !getSelection().toString().includes('打开 PDF')) || {ranges: lastPdfSelection?.ranges.map(r => r.page), text: getSelection().toString().slice(0, 100), error: document.getElementById('error').textContent};
         #| })()
       ),
     )
+    let full_selection_ms = browser.evaluate("fullSelectionMs")
     browser.check("pending full selection survives a collapsed native selection notification", (
       #| (async () => {
       #|   const host = await import('./viewer.js'); getSelection().removeAllRanges();
@@ -1603,6 +1606,7 @@ async fn main {
           "samples": "Independent 512x512 raw RGB images; authored deterministic fixture",
         },
         "cold_hot_render": cached_render,
+        "fourteen_page_selection_ms": full_selection_ms,
         "memory_samples": memory,
         "retained_after_gc": retained,
         "printed_pages": print_pages.length(),

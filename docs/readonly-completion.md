@@ -94,8 +94,13 @@ have paint-order text differences. Viewport geometry matches in every case.
 The raw PDF.js Canvas oracle omits no-AP HTML widget controls, so the authored
 field fixture's extra ink is explicitly a comparison-scope difference. Browser
 and typed-layout tests independently verify those controls' readonly appearance.
-The [visual baseline](../tools/ci/visual_baseline.json) retains raw counts and
-bounded platform tolerances. Gates reject missing inputs, viewport regressions,
+The [macOS baseline](../tools/ci/visual_baseline.json) and
+[Linux baseline](../tools/ci/visual_baseline_linux.json) retain raw counts and
+bounded tolerances independently, because the same source has different font
+rasterization on these platforms. The initial Linux run also exposed a too-short
+14-page full-selection harness deadline. Range hydration now preserves decoded
+page snapshots, and the harness allows 55 seconds with explicit timeout state.
+Gates reject missing inputs, viewport regressions,
 increased differences/missing ink and lost viewer ink. They do not turn known
 differences into pixel parity. CI uploads HTML/JSON, reference/viewer/diff PNGs,
 text/geometry records, print PDFs and manifests even on failures.

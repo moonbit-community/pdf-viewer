@@ -24,8 +24,9 @@ const opened=parse(await reader.open());assert.equal(opened.pages,2);assert.equa
 await reader.prepare('render_page',[1]);const partial=parse(bridge.render_page(1,1,0));
 assert.deepEqual(partial,full,'Range must preserve the public page model and Canvas plan');
 assert.deepEqual(parse(bridge.select_page_text(1,-1,-1,-1,-1)),expectedSelection,'Range retains verified PDF byte provenance');
+const cachedFirstPage=parse(bridge.cache_info()).pages;
 const first=source.diagnostics();assert.ok(first.received_bytes<bytes.length/10,JSON.stringify(first));assert.ok(!mocked.requests.includes('full'));
-await reader.prepare('render_page',[2]);assert.equal(parse(bridge.render_page(2,1,0)).page,2);assert.ok(source.stats.received_bytes>first.received_bytes+7*1024*1024);
+await reader.prepare('render_page',[2]);assert.equal(parse(bridge.cache_info()).pages,cachedFirstPage,'Hydrating another page preserves decoded page snapshots');assert.equal(parse(bridge.render_page(2,1,0)).page,2);assert.ok(source.stats.received_bytes>first.received_bytes+7*1024*1024);
 assert.ok(source.cacheBytes<=source.diagnostics().cache_budget_bytes);
 for(const options of [{range:false},{badRange:true},{truncate:true},{etag:''}]){
   const mock=mockFetch(bytes,options),source=new PdfRangeSource('https://example.test/fallback.pdf',mock);
