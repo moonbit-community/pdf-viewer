@@ -295,7 +295,7 @@ pub fn PdfRangeReader::install_object(
 }
 
 ///|
-/// Missing references reachable from the page tree, one page, or metadata.
+/// Missing references reachable from the page tree, one page, structure, or metadata.
 /// Following parents of fields is required; page parents and page backlinks
 /// are excluded so one page cannot pull in other pages' images or content.
 pub fn PdfRangeReader::missing(
@@ -325,6 +325,14 @@ pub fn PdfRangeReader::missing(
     if catalog.lookup_immediate(pdf_name_key("/OCProperties"))
       is Some(properties) {
       pending.push((properties, None, 0))
+    }
+  } else if mode == "structure" {
+    let catalog = self.document.lookup_object_or_null(self.document.root())
+    if catalog.lookup_immediate(pdf_name_key("/StructTreeRoot")) is Some(root) {
+      pending.push((root, None, 0))
+    }
+    if catalog.lookup_immediate(pdf_name_key("/Lang")) is Some(lang) {
+      pending.push((lang, None, 0))
     }
   } else if mode == "metadata" || mode == "all" {
     pending.push((self.trailer.val, None, 0))
@@ -362,7 +370,7 @@ pub fn PdfRangeReader::missing(
       @syntax.PdfDictionary(values) => {
         let kind = object.lookup_immediate(pdf_name_key("/Type"))
         let leaf = kind == Some(@syntax.PdfNameObject(pdf_name_key("/Page")))
-        if mode == "metadata" && leaf {
+        if (mode == "metadata" || mode == "structure") && leaf {
           continue
         }
         let resources = match
@@ -406,6 +414,12 @@ pub fn PdfRangeReader::missing(
               continue
             }
             if mode == "page" && (key == "Fields" || key == "XFA") {
+              continue
+            }
+            // Page hydration owns content and annotation streams. Structure
+            // backlinks must not download resources from off-screen pages.
+            if (mode == "structure" || mode == "metadata") &&
+              (key == "Pg" || key == "Stm" || key == "Obj") {
               continue
             }
             pending.push((value, None, depth + 1))

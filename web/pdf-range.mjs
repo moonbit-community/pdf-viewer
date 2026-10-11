@@ -78,7 +78,7 @@ export class PdfRangeSource {
 }
 
 export class PdfRangeDocument {
-  constructor(source,bridge){this.source=source;this.bridge=bridge;this.active=new Set();this.changed=false;}
+  constructor(source,bridge){this.source=source;this.bridge=bridge;this.active=new Set();this.changed=false;this.structureReady=false;}
   async open(){
     const source=this.source;await source.initialize();
     if(source.full)return this.bridge.open_pdf(source.full);
@@ -113,7 +113,10 @@ export class PdfRangeDocument {
   }
   async prepare(method,args){
     const pageMethods=['render_page','render_print_page','select_page_text','select_text','search_page'];
-    if(pageMethods.includes(method))await this.hydrate('page',args[0]);
+    if(pageMethods.includes(method)){
+      if(!this.structureReady){await this.hydrate('structure',0);this.structureReady=true;}
+      await this.hydrate('page',args[0]);
+    }
     else if(['document_info','download_metadata','download_attachment','xfa_data'].includes(method))await this.hydrate('metadata',0);
     if(method!=='cache_info'&&this.changed){checked(this.bridge.range_document());this.changed=false;}
   }

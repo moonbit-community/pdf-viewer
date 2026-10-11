@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as bridge from '../../web/_generated/pdf.js';
 import {PdfRangeSource,PdfRangeDocument} from '../../web/pdf-range.mjs';
-import {rangeFixture} from './readonly_fixtures.mjs';
+import {rangeFixture,taggedRangeFixture} from './readonly_fixtures.mjs';
 const parse=value=>{const result=JSON.parse(value);assert.equal(result.ok,true,result.error);return result;};
 const bytes=rangeFixture();
 function mockFetch(data,{range=true,etag='"fixture-v1"',truncate=false,badRange=false}={}){
@@ -51,6 +51,16 @@ const expectedSearch=parse(bridge.search_pdf('Range',false,false,false)).results
 const searchReader=new PdfRangeDocument(new PdfRangeSource('https://example.test/search.pdf',mockFetch(bytes)),bridge);
 parse(await searchReader.open());assert.deepEqual(parse(await searchReader.search(['Range',false,false,false])).results,expectedSearch);
 const aborted=new AbortController();aborted.abort();
+const tagged=taggedRangeFixture();parse(bridge.open_pdf(tagged));
+const fullAccessibility=parse(bridge.render_page(1,1,0)).accessibility;
+assert.equal(fullAccessibility.tagged,true);
+const taggedSource=new PdfRangeSource('https://example.test/tagged.pdf',mockFetch(tagged)),taggedReader=new PdfRangeDocument(taggedSource,bridge);
+parse(await taggedReader.open());await taggedReader.prepare('render_page',[1]);
+assert.deepEqual(parse(bridge.render_page(1,1,0)).accessibility,fullAccessibility,'The first segmented render must include its structure tree before document_info is requested');
+assert.ok(taggedSource.stats.received_bytes<tagged.length/10,'Structure links must not hydrate other page contents');
+await taggedReader.prepare('document_info',[]);parse(bridge.document_info());
+assert.ok(taggedSource.stats.received_bytes<tagged.length/10,'Document metadata must not follow structure backlinks into off-screen streams');
+assert.deepEqual(parse(bridge.render_page(1,1,0)).accessibility,fullAccessibility,'Metadata hydration preserves the tagged page snapshot');
 const cancelled=new PdfRangeSource('https://example.test/cancelled.pdf',{signal:aborted.signal,fetch:async(url,options)=>{options.signal.throwIfAborted();}});
 await assert.rejects(()=>cancelled.initialize(),error=>error.name==='AbortError');
 // Exercise actual classic and compressed xrefs from the pinned PDF.js corpus.
@@ -59,4 +69,4 @@ for(const name of ['tracemonkey.pdf','Pages-tree-refs.pdf','xfa_issue14315.pdf']
   const source=new PdfRangeSource('https://example.test/'+name,mock),reader=new PdfRangeDocument(source,bridge);
   const opened=parse(await reader.open());assert.ok(opened.pages>0);if(!source.full)await reader.prepare('render_page',[1]);parse(bridge.render_page(1,1,0));
 }
-console.log(JSON.stringify({passed:true,first_page_bytes:first.received_bytes,total_bytes:bytes.length,range_requests:mocked.requests.length,checks:['page equality','source provenance','lazy second page','streamed body','full fallback','truncated range','invalid Content-Range','validator change','abort','real xrefs']}));
+console.log(JSON.stringify({passed:true,first_page_bytes:first.received_bytes,total_bytes:bytes.length,range_requests:mocked.requests.length,checks:['page equality','source provenance','lazy second page','streamed body','full fallback','truncated range','invalid Content-Range','validator change','tagged first render','lazy structure streams','abort','real xrefs']}));

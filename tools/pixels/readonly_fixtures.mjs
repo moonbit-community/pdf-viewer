@@ -10,14 +10,30 @@ export function makePdf(objects, trailer=''){
 }
 export function stream(dictionary,body){body=Buffer.from(body);return Buffer.concat([Buffer.from(`<< ${dictionary} /Length ${body.length} >>\nstream\n`),body,Buffer.from('\nendstream')]);}
 export function rangeFixture(){
-  return makePdf([
+  return makePdf(rangeObjects());
+}
+function rangeObjects(){
+  return [
     '<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 /MediaBox [0 0 200 800] >>',
     '<< /Type /Page /Parent 2 0 R /Resources << /Font << /F 6 0 R >> >> /Contents 5 0 R >>',
     '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Rotate 90 /Resources << /XObject << /Unused 8 0 R >> >> /Contents 7 0 R >>',
     stream('','BT /F 12 Tf 10 760 Td (Range first page) Tj ET'),
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',stream('','0 0 1 rg 10 10 50 50 re f'),
     stream('/Type /XObject /Subtype /Form /BBox [0 0 200 300] /Resources << >>',Buffer.alloc(8*1024*1024,32)),
-  ]);
+  ];
+}
+export function taggedRangeFixture(){
+  const objects=rangeObjects();
+  objects[0]='<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 9 0 R /MarkInfo << /Marked true >> >>';
+  objects[2]=objects[2].replace('/Type /Page ','/Type /Page /StructParents 0 ');
+  objects[4]=stream('','/P << /MCID 0 >> BDC BT /F 12 Tf 10 760 Td (Range first page) Tj ET EMC');
+  objects[6]=stream('','0 0 1 rg 10 10 50 50 re f /Unused Do');
+  objects[7]=stream('/Type /XObject /Subtype /Form /BBox [0 0 200 300] /Resources << >> /StructParents 1',
+    Buffer.concat([Buffer.from('/P << /MCID 0 >> BDC EMC\n'),Buffer.alloc(8*1024*1024,32)]));
+  objects.push('<< /Type /StructTreeRoot /K [10 0 R 12 0 R] /ParentTree 11 0 R >>',
+    '<< /Type /StructElem /S /P /P 9 0 R /Pg 3 0 R /K 0 >>','<< /Nums [0 [10 0 R] 1 [12 0 R]] >>',
+    '<< /Type /StructElem /S /P /P 9 0 R /Pg 4 0 R /K << /Type /MCR /Pg 4 0 R /Stm 8 0 R /MCID 0 >> >>');
+  return makePdf(objects);
 }
 export function annotationFixture(){
   return makePdf([

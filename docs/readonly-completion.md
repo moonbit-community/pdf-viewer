@@ -68,7 +68,9 @@ The authored 8,389,611-byte two-page PDF needs **132,075 bytes (1.57%)** for its
 first page. Full and segmented page/Canvas models and lexical byte provenance
 match. The second page hydrates its 8 MiB resource on demand. Tests also cover
 actual classic/compressed xrefs, abort, truncated responses, changed sources,
-full fallback, stream eviction/reload and cyclic revisions.
+full fallback, stream eviction/reload and cyclic revisions. Tagged PDFs hydrate
+their structure tree before the first page render, without following structure
+links into other pages' content or resources.
 
 ## Continuous checks
 

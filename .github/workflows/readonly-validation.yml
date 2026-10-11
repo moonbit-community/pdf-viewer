@@ -37,6 +37,9 @@ jobs:
           echo "MOON_HOME=$RUNNER_TEMP/pdf-moon" >> "$GITHUB_ENV"
       - name: Install pinned web primitives
         run: npm ci --prefix tools/web-assets --ignore-scripts --omit=optional
+      - name: Download MoonBit dependencies
+        # Retry registry connection resets before compiling; persistent failures still fail.
+        run: moon install || moon install || moon install
       - name: Install Linux colour engine
         if: matrix.os == 'ubuntu-24.04' && matrix.target == 'native'
         run: sudo apt-get update && sudo apt-get install -y liblcms2-2
@@ -85,6 +88,8 @@ jobs:
           tools/test-host/node_modules/.bin/playwright install --with-deps chromium
           echo "PDF_CANVAS_PACKAGE=$GITHUB_WORKSPACE/tools/test-host/package.json" >> "$GITHUB_ENV"
           node --input-type=module -e "import{createRequire}from'node:module';const r=createRequire(process.cwd()+'/tools/test-host/package.json'); console.log('PDF_CHROMIUM='+r('playwright').chromium.executablePath())" >> "$GITHUB_ENV"
+      - name: Download MoonBit dependencies
+        run: moon install || moon install || moon install
       - name: Build fixed PDF.js reference
         working-directory: reference/pdf.js
         run: |
