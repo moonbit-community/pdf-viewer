@@ -7,13 +7,16 @@ import {createRequire} from 'node:module';
 import {mkdir,readFile,stat,writeFile} from 'node:fs/promises';
 import {extname,resolve,sep} from 'node:path';
 import {layerFixture} from './pixels/layer_fixtures.mjs';
-import {xfaFixture} from './pixels/readonly_fixtures.mjs';
+import {xfaFixture,makePdf,stream} from './pixels/readonly_fixtures.mjs';
 import {waitForUI} from './browser_ui.mjs';
 
 const require=createRequire(resolve('tools/test-host/package.json'));
-const {chromium}=require('playwright');
+const {chromium,webkit}=require('playwright');
+const engine=process.env.PDF_BROWSER||'chromium';
+assert.ok(['chromium','webkit'].includes(engine),'PDF_BROWSER must be chromium or webkit');
+const launcher=engine==='webkit'?webkit:chromium;
 const root=resolve('_build/pages'),prefix='/pdf-viewer/';
-const output=resolve('_build/pages-test-'+Date.now());await mkdir(output,{recursive:true});
+const output=resolve('_build/pages-test-'+engine+'-'+Date.now());await mkdir(output,{recursive:true});
 const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8',
   '.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8',
   '.wasm':'application/wasm','.pdf':'application/pdf','.svg':'image/svg+xml'};
@@ -43,10 +46,24 @@ async function idle(filename){
       document.querySelector('.page[data-page="1"][data-rendered="true"]')
   ),filename);
 }
+function readingFixture(profile){
+  const count=6,samples=Buffer.alloc(256*128*3);
+  for(let i=0;i<256*128;i++)samples.set(i%2?[32,96,160]:[255,255,255],i*3);
+  const objects=['<< /Type /Catalog /Pages 2 0 R >>',
+    `<< /Type /Pages /Count ${count} /MediaBox [0 0 612 792] /Kids [${Array.from({length:count},(_,i)=>`${6+i*2} 0 R`).join(' ')}] >>`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',stream('/N 3 /Alternate /DeviceRGB',profile),
+    stream('/Type /XObject /Subtype /Image /Width 256 /Height 128 /BitsPerComponent 8 /ColorSpace [/ICCBased 4 0 R]',samples)];
+  for(let i=1;i<=count;i++){
+    objects.push(`<< /Type /Page /Parent 2 0 R /Resources << /Font << /F 3 0 R >> /XObject << /I 5 0 R >> >> /Contents ${7+(i-1)*2} 0 R >>`,
+      stream('',Array.from({length:16},(_,row)=>`BT /F 12 Tf 30 ${750-row*24} Td (Page ${i}: a real reading surface with text and images.) Tj ET`).join('\n')+'\nq 500 0 0 250 30 50 cm /I Do Q'));
+  }
+  return makePdf(objects);
+}
 try{
-  browser=await chromium.launch({executablePath:process.env.PDF_CHROMIUM||chromium.executablePath(),
-    headless:true,args:['--no-sandbox']});
-  page=await browser.newPage({viewport:{width:1280,height:900},acceptDownloads:true});
+  browser=await launcher.launch({headless:true,...(engine==='chromium'?{
+    executablePath:process.env.PDF_CHROMIUM||chromium.executablePath(),args:['--no-sandbox'],
+  }:{})});
+  page=await browser.newPage({viewport:{width:1280,height:900},deviceScaleFactor:2,acceptDownloads:true});
   page.setDefaultTimeout(30000);
   page.on('request',request=>{
     if(/^https?:/.test(request.url())&&
@@ -65,6 +82,7 @@ try{
     await assert.rejects(stat(resolve(root,'_test')),{code:'ENOENT'});
     await stat(resolve(root,'.nojekyll'));
     await stat(resolve(root,'licenses/liberation-fonts.txt'));
+    assert.equal(requests.includes(prefix+'_generated/pdf.js'),false,'The main thread loads only the UI; the full parser belongs to the Worker');
   });
   await check('Packaged Worker paints a local PDF without network uploads',async()=>{
     await page.locator('#file-input').setInputFiles({name:'local.pdf',mimeType:'application/pdf',buffer:layerFixture()});
@@ -121,6 +139,39 @@ try{
     assert.deepEqual(failures,[]);
     assert.ok(requests.length>10&&requests.every(path=>path.startsWith(prefix)));
   });
+  await check('Scrolling during Retina rendering cancels old pages and keeps controls responsive',async()=>{
+    await page.goto(base);
+    await page.evaluate(()=>{
+      const times=window.renderTicks=[];window.renderTimer=setInterval(()=>times.push(performance.now()),25);
+    });
+    await page.locator('#file-input').setInputFiles({name:'reading.pdf',mimeType:'application/pdf',
+      buffer:readingFixture(await readFile(resolve('assets/icc/rgb-gamma22.icc')))});
+    await page.waitForFunction(()=>document.querySelector('#page-count').textContent==='/ 6'&&document.querySelector('.page[data-page="6"]')?.offsetHeight>0);
+    await page.locator('.page[data-page="6"]').evaluate(page=>page.scrollIntoView({block:'start'}));
+    await waitForUI(page,()=>document.querySelector('#page-number').value==='6'&&document.querySelector('.page[data-page="6"]')?.dataset.rendered==='true'&&document.querySelector('#viewer').getAttribute('aria-busy')==='false');
+    assert.equal(await page.locator('#error').isVisible(),false);
+    assert.match(await page.locator('#status').textContent(),/^6 页 · /,'Cancelled first-page work must not leave a permanent loading status');
+    const runtime=await page.evaluate(async()=> (await import('./viewer.js')).runtimeDiagnostics());
+    assert.ok(runtime.worker.cancelled>0,'Work for the initial page is cancelled after scrolling');
+    const tick=await page.evaluate(()=>{
+      clearInterval(window.renderTimer);const times=window.renderTicks;
+      return {count:times.length,maxGap:Math.max(0,...times.slice(1).map((time,i)=>time-times[i]))};
+    });
+    assert.ok(tick.count>2);assert.ok(tick.maxGap<1000,`Main-thread rendering blocked controls for ${tick.maxGap} ms`);
+    await page.screenshot({path:resolve(output,'retina-reading.png')});
+    for(const number of [1,2,3,4,5,6]){
+      await page.locator('#page-number').fill(String(number));await page.locator('#page-number').press('Enter');
+      await page.waitForFunction(n=>document.querySelector('.page[data-page="'+n+'"]')?.dataset.rendered==='true',number);
+      const ink=await page.locator(`.page[data-page="${number}"] canvas`).evaluate(canvas=>{
+        const small=document.createElement('canvas');small.width=small.height=32;
+        const ctx=small.getContext('2d');ctx.drawImage(canvas,0,0,32,32);
+        return ctx.getImageData(0,0,32,32).data.some((value,index)=>index%4!==3&&value<128);
+      });
+      assert.equal(ink,true,`Page ${number} must contain painted pixels`);
+      assert.equal(await page.locator('#error').isVisible(),false);
+    }
+    assert.deepEqual(failures,[]);
+  });
   ok=true;
 }catch(error){
   console.error(current,error);
@@ -134,7 +185,7 @@ try{
   if(page)await page.screenshot({path:resolve(output,'failure.png'),fullPage:true}).catch(()=>{});
   process.exitCode=1;
 }finally{
-  await writeFile(resolve(output,'report.json'),JSON.stringify({ok,failed:ok?null:current,checks,failures,requests},null,2));
+  await writeFile(resolve(output,'report.json'),JSON.stringify({ok,engine,failed:ok?null:current,checks,failures,requests},null,2));
   if(browser)await browser.close();
   await new Promise(resolve=>server.close(resolve));
   console.log(output);

@@ -159,3 +159,34 @@ test "raw spot colour images evaluate their tint transform" {
   )
   assert_eq(colour_image_scanlines(resource), [0, 255, 255, 255, 0, 255, 0])
 }
+
+///|
+test "ICC image colour cache retries failed transforms and preserves Alternate recovery" {
+  let calls = Ref(0)
+  let icc : PdfIccTransform = {
+    convert: values => {
+      calls.val += 1
+      if calls.val == 1 {
+        (0.0 / 0.0, 0.0 / 0.0, 0.0 / 0.0)
+      } else {
+        (values[0] / 2.0, values[1] / 2.0, values[2] / 2.0)
+      }
+    },
+  }
+  let cache : Map[Int, (Double, Double, Double)] = Map([])
+  let convert = () => {
+    pdf_image_cached_icc_rgb(
+      icc,
+      Samples(@pdflite.PdfDeviceRGB),
+      [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+      [0.2, 0.4, 0.8],
+      1,
+      cache,
+    )
+  }
+  assert_eq(convert(), (0.2, 0.4, 0.8))
+  assert_eq(cache.length(), 0)
+  assert_eq(convert(), (0.1, 0.2, 0.4))
+  assert_eq(convert(), (0.1, 0.2, 0.4))
+  assert_eq(calls.val, 2)
+}

@@ -30,6 +30,13 @@ test "accessibility maps named properties roles language and artifacts to origin
   ])
   let before = document.page(1).unwrap().text_content()
   let data = document.accessibility_page_json(1).unwrap()
+  let cached = document.page(1).unwrap()
+  assert_eq(
+    document.accessibility_page_json(1, page_model=Some(cached)),
+    Some(data),
+  )
+  assert_eq(document.accessibility_page_json(0, page_model=Some(cached)), None)
+  assert_eq(document.accessibility_page_json(2, page_model=Some(cached)), None)
   assert_true(
     data
     is {

@@ -6,7 +6,6 @@ import {makeAccessibilityLayer} from './accessibility-layer.js';
 import {makeXfaLayer,clearXfaFonts} from './pdf-xfa-layer.mjs';
 import {installPdfIccEngine} from './pdf-icc.mjs';
 import {renderPdfPage} from './pdf-runtime.mjs';
-import {process_cmyk_to_rgb} from './_generated/pdf.js';
 
 let initialization,measure;
 export const viewerHost={
@@ -21,10 +20,11 @@ export const viewerHost={
     const encoded=password===null?null:new TextEncoder().encode(password);
     return file.url?open_pdf_url(file.url,encoded):encoded===null?open_pdf(data):open_pdf_with_password(data,encoded);
   },
-  paintCanvas(canvas,result,outputScale){
+  paintCanvas(canvas,result,outputScale,isCurrent,convertProcess){
     return renderPdfPage(canvas,result.canvas,{
-      unsupported:'warn',returnPixels:false,outputScale,
-      convertProcess:values=>process_cmyk_to_rgb(...values),
+      unsupported:'warn',returnPixels:false,outputScale,isCurrent,
+      yieldToHost:()=>new Promise(resolve=>setTimeout(resolve,0)),
+      convertProcess:values=>convertProcess(...values),
     });
   },
   createAnnotations(viewer,navigate,sourceURL){return new AnnotationLayer({viewer,navigate,sourceURL});},

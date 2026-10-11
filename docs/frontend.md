@@ -38,6 +38,14 @@ operations use Rabbita's DOM package where available; Selection/Range and PDF
 engine calls use native bindings. Worker transport, page scheduling and rendering
 modules remain adapters rather than application views or navigation controllers.
 
+The PDF parser runs in the Worker. Canvas process-colour conversion uses the
+MoonBit primitive compiled into the UI module, without loading the parser again
+on the main thread. Canvas replay skips paints outside each tile, yields to
+browser events and checks the MoonBit task's lifetime before continuing. Pages,
+thumbnails and printing use the same cancellation boundary. The reader keeps
+scroll navigation active during page loading and shows a loading label on each
+pending page.
+
 `tools/build_web.mbtx` builds both `cmd/browser` and `cmd/viewer`. Static hosting
 must include both generated modules and the existing codec/XFA assets. Develop
 with `moon run tools/dev.mbtx 4312` after installing MoonBit and web dependencies.

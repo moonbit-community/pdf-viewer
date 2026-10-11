@@ -23,13 +23,15 @@ extern "js" fn blur_input(id : String) -> Unit =
 
 ///|
 async fn viewer_scroll() -> Unit {
-  if state.scroll_pending || state.busy || state.count == 0 {
+  if state.scroll_pending ||
+    state.count == 0 ||
+    state.layouts.length() != state.count {
     return
   }
   state.scroll_pending = true
   native_frame().wait()
   state.scroll_pending = false
-  if state.busy || state.count == 0 {
+  if state.count == 0 || state.layouts.length() != state.count {
     return
   }
   let top = element("viewer").get_bounding_client_rect().get_top()

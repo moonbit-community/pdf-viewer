@@ -19,10 +19,13 @@ the actual URL, including a custom domain if one is configured.
 The [Pages workflow](../.github/workflows/pages.yml) builds and verifies the
 website on pushes to `master`, pull requests and manual runs. It uses the
 repository's verified MoonBit toolchain and locked npm assets, compiles both
-MoonBit browser packages, and tests the published directory in Chromium under
-`/pdf-viewer/`. The check exercises actual Worker paint, search, layer switching,
-form editing/save/reopen, XFA layout and the packaged Wasm files. It does not
-require the local PDF.js comparison checkout.
+MoonBit browser packages, minifies their generated modules with the existing
+locked esbuild, and tests the published directory in Chromium and
+WebKit at 2× pixel density under `/pdf-viewer/`. The checks exercise actual Worker
+paint, search, layer switching, form editing/save/reopen, XFA layout and the
+packaged Wasm files. A six-page image and text fixture also checks scrolling
+during loading, cancellation, responsive controls and nonblank page pixels.
+They do not require the local PDF.js comparison checkout.
 
 Deployment runs after the build succeeds, for `master` only. Until Pages is
 enabled with GitHub Actions as its source, the workflow uploads the verified
@@ -55,8 +58,9 @@ To run the same subpath check locally:
 
 ```sh
 npm ci --prefix tools/test-host --ignore-scripts
-tools/test-host/node_modules/.bin/playwright install chromium
+tools/test-host/node_modules/.bin/playwright install chromium webkit
 node tools/pages_browser_test.mjs
+PDF_BROWSER=webkit node tools/pages_browser_test.mjs
 ```
 
 Reports and downloaded PDFs are written to `_build/pages-test-*/` and retained

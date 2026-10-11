@@ -75,7 +75,16 @@ async fn print_document_async() -> Unit {
         )
       } else {
         let canvas = make_element("canvas")
-        let rendered = paint_canvas(canvas, result, 150.0 / 72.0).wait()
+        let rendered = paint_canvas(
+          canvas,
+          result,
+          150.0 / 72.0,
+          current=Some(() => {
+            !controller_aborted(controller) &&
+            generation == state.document_generation &&
+            token == print_generation.val
+          }),
+        ).wait()
         (canvas, value_field(rendered, "diagnostics"))
       }
       if controller_aborted(controller) ||

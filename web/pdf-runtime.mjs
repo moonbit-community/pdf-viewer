@@ -1,7 +1,7 @@
 import {createShadingPainter} from './pdf-shading.mjs';
 import { installPdfIccEngine } from './pdf-icc.mjs';
 import { installJbig2Decoder } from './vendor/jbig2/decoder.mjs';
-import { renderPdfCanvas, multiplyMatrix } from './pdf-canvas.mjs';
+import { renderPdfCanvas, multiplyMatrix, checkPdfRender } from './pdf-canvas.mjs';
 import { createPatternPainter } from './pdf-patterns.mjs';
 
 let initialization;
@@ -20,6 +20,7 @@ export function initializePdfGraphics(options={}) {
 }
 
 export async function renderPdfPage(canvas,plan,options={}) {
+  checkPdfRender(options);
   const configured={...options};
   const scale=options.outputScale ?? 1;
   if(!Number.isFinite(scale)||scale<=0)throw new RangeError('PDF output scale must be finite and positive');
@@ -42,6 +43,10 @@ export async function renderPdfPage(canvas,plan,options={}) {
     const result=await renderPdfCanvas(canvas,plan,configured);
     return options.returnPixels===false?{width:result.width,height:result.height,diagnostics:result.diagnostics}:result;
   }
+  catch(error){
+    if(error.name==='AbortError')canvas.width=canvas.height=1;
+    throw error;
+  }
   finally { if(!options.paintPattern)configured.paintPattern.dispose?.(); }
 }
 
@@ -62,11 +67,14 @@ async function renderTiledPage(canvas,plan,options,width,height,tileSize){
   canvas.width=width;canvas.height=height;const context=canvas.getContext('2d');
   try{
     for(let y=0;y<height;y+=tileSize)for(let x=0;x<width;x+=tileSize){
+      checkPdfRender(options);
+      if(options.yieldToHost){await options.yieldToHost();checkPdfRender(options);}
       const w=Math.min(tileSize,width-x),h=Math.min(tileSize,height-y);
       const tile=await renderPdfCanvas(target,plan,{...options,width:w,height:h,
         matrix:multiplyMatrix([1,0,0,1,-x,-y],matrix),_profileScope:scope,
         _glyphCache:glyphCache,_glyphCacheReserved:true,
         _inheritedWorkingBytes:(options._inheritedWorkingBytes||0)+outputBytes+glyphCache.limit});
+      checkPdfRender(options);
       context.drawImage(target,x,y);
       blendCapabilities ||= tile.blendCapabilities;
       for(const diagnostic of tile.diagnostics||[])diagnostics.set(JSON.stringify(diagnostic),diagnostic);

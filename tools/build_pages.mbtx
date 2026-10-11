@@ -37,6 +37,7 @@ async fn main {
       }
     },
   )
+  @shell.Cmd("node", ["tools/minify_pages.mjs"]).run()
   @fs.write_file(output + "/.nojekyll", "")
   @fs.mkdir(output + "/licenses", allow_exist=true)
   for

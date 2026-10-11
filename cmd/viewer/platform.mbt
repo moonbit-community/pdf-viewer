@@ -261,12 +261,32 @@ extern "js" fn native_fonts_ready() -> @js_async.Promise[Unit] =
   #| () => document.fonts.ready.then(() => {})
 
 ///|
-extern "js" fn paint_canvas(
+fn paint_canvas(
   node : @dom.Element,
   result : @js.Value,
   output_scale : Double,
+  current? : (() -> Bool)? = None,
+) -> @js_async.Promise[@js.Value] {
+  native_paint_canvas(
+    node,
+    result,
+    output_scale,
+    @js.Nullable::from_option(current),
+    (c, m, y, k) => {
+      FixedArray::from_array(@pdf.process_cmyk_to_rgb(c, m, y, k)[:])
+    },
+  )
+}
+
+///|
+extern "js" fn native_paint_canvas(
+  node : @dom.Element,
+  result : @js.Value,
+  output_scale : Double,
+  current : @js.Nullable[() -> Bool],
+  convert : (Double, Double, Double, Double) -> FixedArray[Double],
 ) -> @js_async.Promise[@js.Value] =
-  #| (node, result, outputScale) => globalThis.pdfViewerHost.paintCanvas(node, result, outputScale)
+  #| (node, result, outputScale, current, convert) => globalThis.pdfViewerHost.paintCanvas(node, result, outputScale, current, convert)
 
 ///|
 extern "js" fn create_xfa(

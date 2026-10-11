@@ -89,7 +89,14 @@ fn start_thumbnails() -> Unit {
               )
             } else {
               let canvas = make_element("canvas")
-              let rendered = paint_canvas(canvas, result, 1.0).wait()
+              let rendered = paint_canvas(
+                canvas,
+                result,
+                1.0,
+                current=Some(() => {
+                  !controller_aborted(task) && !controller_aborted(controller)
+                }),
+              ).wait()
               (canvas, value_field(rendered, "diagnostics"))
             }
             if controller_aborted(task) || controller_aborted(controller) {

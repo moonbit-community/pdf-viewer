@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 import * as bridge from '../../web/_generated/pdf.js';
 import {renderPdfPage} from '../../web/pdf-runtime.mjs';
 import {createPdfIccEngine} from '../../web/pdf-icc.mjs';
-import {annotationFixture} from './readonly_fixtures.mjs';
+import {annotationFixture,makePdf} from './readonly_fixtures.mjs';
 const require=createRequire(process.env.PDF_CANVAS_PACKAGE||import.meta.url);
 const {createCanvas,Path2D,loadImage,GlobalFonts}=require('@napi-rs/canvas');
 const options={createCanvas,Path2D,loadImage,convertProcess:v=>bridge.process_cmyk_to_rgb(...v)};
@@ -30,6 +30,22 @@ assert.equal(ordinary.icc_profiles.length,1);
 near(sample(await renderPdfPage(createCanvas(1,1),ordinary,options),10,10),[51,128,204,255]);
 const engine=await createPdfIccEngine();globalThis.__moonbit_pdf_icc=engine;
 try{
+ // A repeated-colour ICC image must decode once for painting and semantics,
+ // and successful CMM results must be reused without changing output colours.
+ const rgb=Buffer.alloc(32*32*3);
+ for(let i=0;i<32*32;i++)rgb.set(i%2?[32,96,160]:[255,255,255],i*3);
+ const binaryStream=(dict,bytes)=>Buffer.concat([Buffer.from(`<< ${dict} /Length ${bytes.length} >>\nstream\n`),bytes,Buffer.from('\nendstream')]);
+ const imagePdf=makePdf(['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+  '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 32 32] /Resources << /XObject << /I 5 0 R >> >> /Contents 4 0 R >>',
+  stream('','32 0 0 32 0 0 cm /I Do'),binaryStream('/Type /XObject /Subtype /Image /Width 32 /Height 32 /BitsPerComponent 8 /ColorSpace [/ICCBased 6 0 R]',rgb),binaryStream('/N 3 /Alternate /DeviceRGB',profile)]);
+ assert.equal(JSON.parse(bridge.open_pdf(imagePdf)).ok,true);
+ const samplesBefore=engine.statistics.samples;
+ const imagePlan=JSON.parse(bridge.render_page(1,1,0)).canvas;
+ assert.equal(engine.statistics.samples-samplesBefore,2,'Two source colours need exactly two CMM conversions, including accessibility');
+ const painted=await renderPdfPage(createCanvas(1,1),imagePlan,options);
+ const handle=engine.open(profile,3,1),converted=new Float64Array(3);
+ handle.convert(32/255,96/255,160/255,0,converted);handle.close();
+ for(let y=0;y<32;y++)for(let x=0;x<32;x++)near(sample(painted,x,y),x%2?[...converted].map(v=>Math.round(v*255)).concat(255):[255,255,255,255]);
  const group='/Group << /S /Transparency /CS /DeviceCMYK >>';
  const invalid=page('/C cs .2 .5 .8 scn 0 0 20 20 re f','/ColorSpace << /C [/ICCBased 5 0 R] >>',[stream('/N 3 /Alternate /DeviceRGB','bad')],group);
  const alternate=page('.2 .5 .8 rg 0 0 20 20 re f','',[],group);

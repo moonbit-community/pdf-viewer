@@ -292,9 +292,9 @@ fn browser_render_page(
       } else {
         match current_document.val {
           Some(document) =>
-            (document.accessibility_page_json(number) catch { _ => None }).unwrap_or(
-              Json::null(),
-            )
+            (document.accessibility_page_json(number, page_model=Some(page)) catch {
+              _ => None
+            }).unwrap_or(Json::null())
           None => Json::null()
         }
       },

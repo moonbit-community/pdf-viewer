@@ -38,11 +38,13 @@ jobs:
           moon install || moon install || moon install
           npm ci --prefix tools/web-assets --ignore-scripts --omit=optional
           npm ci --prefix tools/test-host --ignore-scripts
-          tools/test-host/node_modules/.bin/playwright install --with-deps chromium
+          tools/test-host/node_modules/.bin/playwright install --with-deps chromium webkit
       - name: Build static viewer
         run: moon run tools/build_pages.mbtx
       - name: Exercise the published site under a repository subpath
-        run: node tools/pages_browser_test.mjs
+        run: |
+          node tools/pages_browser_test.mjs
+          PDF_BROWSER=webkit node tools/pages_browser_test.mjs
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:

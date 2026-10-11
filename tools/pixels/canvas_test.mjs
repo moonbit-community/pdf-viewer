@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { renderPdfCanvas } from '../../web/pdf-canvas.mjs';
 import {createPatternPainter} from '../../web/pdf-patterns.mjs';
+import {renderPdfPage} from '../../web/pdf-runtime.mjs';
 const require=createRequire(process.env.PDF_CANVAS_PACKAGE || import.meta.url);
 const {createCanvas,Path2D,loadImage}=require('@napi-rs/canvas');
 const options={createCanvas,Path2D,loadImage};
@@ -13,6 +14,27 @@ const pixel=(result,x,y)=>Array.from(result.data.slice((y*20+x)*4,(y*20+x)*4+4))
 const near=(value,expected,tolerance=2)=>value.forEach((v,i)=>assert.ok(Math.abs(v-expected[i])<=tolerance,`${value} != ${expected}`));
 let count=0;
 async function test(name,fn){await fn();count++;console.log(`ok ${name}`);}
+await test('cropped tiles skip invisible sources and groups without changing pixels',async()=>{
+ const image=createCanvas(1,1);image.getContext('2d').fillRect(0,0,1,1);
+ const group={id:'outside',isolated:true,knockout:false,alpha:1,blend_mode:'normal'};
+ const source={kind:'image',paint:{quad:{p0:{x:100,y:100},p1:{x:100,y:101},p2:{x:101,y:101},p3:{x:101,y:100}},bounds:{min_x:100,min_y:100,max_x:101,max_y:101},resource:{data_uri:image.toDataURL(),width:1,height:1},fill_alpha:1,blend_mode:'normal',group_path:[group]}};
+ const input=plan([path(rect,'#ff0000'),source]);
+ let loads=0;
+ const opts={...options,loadImage:async uri=>{loads++;return loadImage(uri);}};
+ const control=await renderPdfCanvas(createCanvas(1,1),input,{...opts,fullSurfaceReplay:true});
+ assert.equal(loads,1,'The control replays the off-tile image');loads=0;
+ const actual=await renderPdfCanvas(createCanvas(1,1),input,opts);
+ assert.equal(loads,0,'The image is never decoded for an invisible group');
+ assert.deepEqual(actual.data,control.data);assert.deepEqual(actual.shape,control.shape);
+});
+await test('cancelled tiled paint stops before another tile and frees its output',async()=>{
+ const controller=new AbortController(),canvas=createCanvas(1,1);let loads=0,yields=0;
+ const source=createCanvas(1,1);source.getContext('2d').fillRect(0,0,1,1);
+ const input=plan([{kind:'image',paint:{quad:{p0:{x:0,y:0},p1:{x:0,y:20},p2:{x:20,y:20},p3:{x:20,y:0}},bounds:{min_x:0,min_y:0,max_x:20,max_y:20},resource:{data_uri:source.toDataURL(),width:1,height:1},fill_alpha:1,blend_mode:'normal'}}]);
+ await assert.rejects(renderPdfPage(canvas,input,{...options,returnPixels:false,tileSize:10,signal:controller.signal,
+  loadImage:async uri=>{loads++;return loadImage(uri);},yieldToHost:async()=>{if(++yields===2)controller.abort();}}),{name:'AbortError'});
+ assert.equal(loads,1);assert.equal(yields,2);assert.equal(canvas.width,1);assert.equal(canvas.height,1);
+});
 await test('structured geometry, separate clip stack and evenodd rule',async()=>{
  const result=await renderPdfCanvas(createCanvas(20,20),plan([path(rect,'#ff0000',{clips:[{svg_path:'M 2 2H18V18H2Z M 6 6H14V14H6Z',even_odd:true}]})]),options);
  near(pixel(result,3,3),[255,0,0,255]);near(pixel(result,9,9),[255,255,255,255]);near(pixel(result,0,0),[255,255,255,255]);

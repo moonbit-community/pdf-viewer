@@ -123,7 +123,12 @@ async fn mount_page(result : @js.Value, current : () -> Bool) -> @dom.Element {
   paint.set_attribute("aria-hidden", "true")
   paint.set_property("inert", @js.Value::cast_from(true))
   let canvas = make_element("canvas")
-  let rendered = paint_canvas(canvas, result, output_scale()).wait()
+  let rendered = paint_canvas(
+    canvas,
+    result,
+    output_scale(),
+    current=Some(current),
+  ).wait()
   if current() {
     report_diagnostics(value_field(rendered, "diagnostics"))
   }
@@ -424,6 +429,9 @@ async fn repaint(preserve? : Bool = true) -> Unit {
     error => if generation == state.generation { show_error(error) }
   }
   if generation == state.generation {
+    if state.status.has_prefix("正在渲染第") {
+      state.status = "\{state.count} 页 · \{(state.scale * 100.0).round().to_int()}%"
+    }
     set_busy(false)
   }
 }

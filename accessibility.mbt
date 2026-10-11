@@ -466,11 +466,19 @@ fn PdfAccessibilityTree::walk(
 /// existing reader/interpreter/provenance data; it does not mutate paint or
 /// infer PDF tags for untagged content. Unmapped visible text is retained in
 /// geometrically ordered paragraphs. Invalid page numbers return None.
+/// Pass the page model already decoded for this document view to avoid
+/// rebuilding image/font resources while constructing semantic nodes.
 pub fn PdfViewerDocument::accessibility_page_json(
   self : PdfViewerDocument,
   number : Int,
+  page_model? : PdfPageModel? = None,
 ) -> Json? raise @core.PdfError {
-  guard self.page(number) is Some(page) else { return None }
+  guard number >= 1 && number <= self.pages.length() else { return None }
+  let page = match page_model {
+    Some(page) if page.number == number => Some(page)
+    _ => self.page(number)
+  }
+  guard page is Some(page) else { return None }
   let document = self.document
   let catalog = document.catalog()
   let root = document.lookup_direct(pdf_name_key("/StructTreeRoot"), catalog)

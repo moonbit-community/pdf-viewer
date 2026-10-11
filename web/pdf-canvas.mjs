@@ -67,11 +67,17 @@ const textPaintPadding=paint=>{
 };
 const groupAt = (item,depth) => (item.groups || item.paint.group_path)?.[depth];
 
+export function checkPdfRender(options) {
+  if(options.signal?.aborted || options.isCurrent?.()===false)
+    throw new DOMException('PDF page rendering cancelled','AbortError');
+}
+
 /** Render a MoonBit PdfPageModel.canvas_plan into a Canvas2D target.
  * The plan contains source paints and explicit group/clip state. Only A1's
  * individual glyph primitives use SVG; paths, images and transparency are
  * replayed independently. A Canvas2D host is required on every target. */
 export async function renderPdfCanvas(canvas, plan, options = {}) {
+  checkPdfRender(options);
   let scope=options._profileScope,owned=null;
   const ownedGlyphCache=!options._glyphCache;
   const glyphCache=options._glyphCache||{entries:new Map(),bytes:0,limit:Math.max(0,Math.min(options.maxGlyphCacheBytes??16777216,(options.maxWorkingBytes||536870912)/32))};
@@ -510,6 +516,9 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
     return true;
   };
   const paintSource=async(part,bounds,depth,overrideMask=undefined)=>{
+    // Tiled replay keeps the complete group hierarchy, but a source outside
+    // this tile has no colour or shape coverage and needs no raster or mask.
+    if(!options.fullSurfaceReplay){const r=paintRegion(part);if(!r.width||!r.height)return;}
     const p=part.paint,stroke=p.filled===false||(part.kind==='text'&&(p.rendering_mode===1||p.rendering_mode===5));
     const patterned=stroke?p.stroke_pattern:p.pattern||p.shading_pattern;
     const sampled=inkMode&&(part.type3_plan||part.kind==='shading'||part.kind==='image'&&!p.resource?.mask_data_uri||patterned);
@@ -554,11 +563,22 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
       options.paintPattern?.releasePaint?.(paintKey);
     }
   };
+  const visibleSources=(items,start,end)=>{
+    if(options.fullSurfaceReplay)return true;
+    for(let i=start;i<end;i++){const r=paintRegion(items[i]);if(r.width&&r.height)return true;}
+    return false;
+  };
+  let yieldDeadline=performance.now()+12;
   const walk=async(items,depth,bounds=[],textScope=null)=>{
     for(let i=0;i<items.length;){
+      checkPdfRender(options);
+      if(options.yieldToHost&&performance.now()>=yieldDeadline){
+        await options.yieldToHost();checkPdfRender(options);yieldDeadline=performance.now()+12;
+      }
       const group=groupAt(items[i],depth);
       if(group){
         let end=i+1; while(end<items.length&&groupAt(items[end],depth)?.id===group.id)end++;
+        if(!visibleSources(items,i,end)){i=end;continue;}
         const parentEngine=compositor,parentInkMode=inkMode,parent=compositor.frames.at(-1);
         // Nonisolated groups inherit their parent's blend space (ISO 11.7.2).
         const space=(group.isolated?(group.color_space||parent.color_space):parent.color_space).replace(/^\//,'');
@@ -586,6 +606,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
         if(textId&&candidate.paint.text_knockout!==false&&textScope!==textId){
           let end=i+1;
           while(end<items.length&&items[end].kind==='text'&&items[end].paint.text_object_id===textId&&!groupAt(items[end],depth))end++;
+          if(!visibleSources(items,i,end)){i=end;continue;}
           const parent=compositor.frames.at(-1);
           compositor.beginGroup({isolated:false,knockout:true,color_space:parent.color_space},parent.knockout?parent.initial:parent.pixels);
           await walk(items.slice(i,end),depth,bounds,textId);

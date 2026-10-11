@@ -1,4 +1,34 @@
 ///|
+fn pdf_image_cached_icc_rgb(
+  icc : PdfIccTransform,
+  alternate : PdfColourTransform,
+  ranges : Array[(Double, Double)],
+  values : ArrayView[Double],
+  key : Int,
+  cache : Map[Int, (Double, Double, Double)],
+) -> (Double, Double, Double) {
+  if cache.get(key) is Some(rgb) {
+    return rgb
+  }
+  let values = pdf_icc_clip(values, ranges)
+  let (r, g, b) = (icc.convert)(values[:])
+  if r.is_nan() ||
+    g.is_nan() ||
+    b.is_nan() ||
+    r.is_inf() ||
+    g.is_inf() ||
+    b.is_inf() {
+    // A failed transform may recover on a later activation. Do not retain
+    // Alternate recovery as if it were a successful ICC conversion.
+    return pdf_colour_rgb_of_transform(alternate, values[:])
+  }
+  if cache.length() < 4096 {
+    cache[key] = (r, g, b)
+  }
+  (r, g, b)
+}
+
+///|
 /// Decode supported PDF filters with pdflite, then convert the original
 /// samples in the viewer. Converting pdflite's already-RGB output would lose
 /// CalGray/CalRGB/Lab semantics, precision, and colour-key mask operands.
@@ -243,6 +273,14 @@ fn pdf_image_colour_png(
     None
   }
   let values = Array::make(components, 0.0)
+  // Repeated screenshot/scan colours should not cross the CMM boundary once
+  // per pixel. Raw sample keys are exact for up to four 8-bit components;
+  // associated alpha changes the decoded values and must bypass this cache.
+  let cache_colours = bits <= 8 &&
+    components <= 4 &&
+    transform is Icc(Some(_), _, _) &&
+    !(encoded is Some({ embedded_alpha_associated: true, .. }))
+  let colour_cache : Map[Int, (Double, Double, Double)] = Map([])
   let retained_values = Array::make(components, 0.0)
   let scanlines = FixedArray::make(
     draw_height * (draw_width * channels + 1),
@@ -260,56 +298,88 @@ fn pdf_image_colour_png(
         None => 1.0
       }
       let mut transparent = has_mask
-      for component in 0..<components {
-        let offset = (source_x * components + component) * bits
-        let sample = pdf_image_read_sample(row, offset, bits)
-        match mask {
-          Some(mask) if has_mask =>
-            if !pdf_color_key_component_matches(
-                sample,
-                mask[component * 2],
-                mask[component * 2 + 1],
-              ) {
-              transparent = false
-            }
-          _ => ()
+      let mut colour_key = 0
+      let cached_rgb = if cache_colours &&
+        bits == 8 &&
+        retained_components is None &&
+        !has_mask {
+        for component in 0..<components {
+          colour_key = (colour_key << 8) |
+            row[source_x * components + component].to_int()
         }
-        let (lower, upper) = decode[component]
-        let normalized = if gray_reduce_factor > 1 {
-          pdf_image_gray_cell_coverage(
-            bytes, row_bytes, width, height, x, y, gray_reduce_factor,
-          )
-        } else {
-          sample.to_double() / max_sample.to_double()
-        }
-        let value = if gray_reduce_factor > 1 {
-          // Decode and source-range clipping precede spatial reduction. With
-          // binary samples this is the weighted average of the two endpoints.
-          let (minimum, maximum) = ranges[component]
-          let lower = lower.max(minimum).min(maximum)
-          let upper = upper.max(minimum).min(maximum)
-          lower + normalized * (upper - lower)
-        } else {
-          lower + normalized * (upper - lower)
-        }
-        let value = match encoded {
-          Some(samples) if samples.embedded_alpha_associated => {
-            let matte = match embedded_matte {
-              Some(values) if values.length() == components => values[component]
-              _ => 0.0
-            }
-            if embedded_opacity == 0.0 {
-              1.0
-            } else {
-              (value - matte) / embedded_opacity + matte
-            }
-          }
-          _ => value
-        }
-        let (minimum, maximum) = ranges[component]
-        values[component] = value.max(minimum).min(maximum)
+        colour_cache.get(colour_key)
+      } else {
+        None
       }
-      let (red, green, blue) = pdf_colour_rgb_of_transform(transform, values[:])
+      if cached_rgb is None {
+        colour_key = 0
+        for component in 0..<components {
+          let offset = (source_x * components + component) * bits
+          let sample = pdf_image_read_sample(row, offset, bits)
+          if cache_colours {
+            colour_key = (colour_key << 8) | sample
+          }
+          match mask {
+            Some(mask) if has_mask =>
+              if !pdf_color_key_component_matches(
+                  sample,
+                  mask[component * 2],
+                  mask[component * 2 + 1],
+                ) {
+                transparent = false
+              }
+            _ => ()
+          }
+          let (lower, upper) = decode[component]
+          let normalized = if gray_reduce_factor > 1 {
+            pdf_image_gray_cell_coverage(
+              bytes, row_bytes, width, height, x, y, gray_reduce_factor,
+            )
+          } else {
+            sample.to_double() / max_sample.to_double()
+          }
+          let value = if gray_reduce_factor > 1 {
+            // Decode and source-range clipping precede spatial reduction. With
+            // binary samples this is the weighted average of the two endpoints.
+            let (minimum, maximum) = ranges[component]
+            let lower = lower.max(minimum).min(maximum)
+            let upper = upper.max(minimum).min(maximum)
+            lower + normalized * (upper - lower)
+          } else {
+            lower + normalized * (upper - lower)
+          }
+          let value = match encoded {
+            Some(samples) if samples.embedded_alpha_associated => {
+              let matte = match embedded_matte {
+                Some(values) if values.length() == components =>
+                  values[component]
+                _ => 0.0
+              }
+              if embedded_opacity == 0.0 {
+                1.0
+              } else {
+                (value - matte) / embedded_opacity + matte
+              }
+            }
+            _ => value
+          }
+          let (minimum, maximum) = ranges[component]
+          values[component] = value.max(minimum).min(maximum)
+        }
+      }
+      let (red, green, blue) = match (cached_rgb, transform) {
+        (Some(rgb), _) => rgb
+        (None, Icc(Some(icc), alternate, ranges)) if cache_colours =>
+          pdf_image_cached_icc_rgb(
+            icc,
+            alternate,
+            ranges,
+            values[:],
+            colour_key,
+            colour_cache,
+          )
+        _ => pdf_colour_rgb_of_transform(transform, values[:])
+      }
       let opacity = if !paints {
         0
       } else {
