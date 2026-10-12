@@ -281,7 +281,7 @@ try{
       const expected=JSON.parse(await pdfViewerHost.pdf.call('select_page_text',args)).selection;
       const call=pdfViewerHost.pdf.call,updates=[],pending=[],writeText=navigator.clipboard.writeText;let requests=0;
       const {PageScheduler}=await import('./page-scheduler.js'),update=PageScheduler.prototype.update;
-      let scheduled=0;PageScheduler.prototype.update=function(...args){scheduled++;return update.apply(this,args);};
+      let scheduled=0;const schedules=[];PageScheduler.prototype.update=function(...args){scheduled++;schedules.push({page:args[0],scroll:document.querySelector('#viewer').scrollTop,stack:new Error().stack});return update.apply(this,args);};
       const listener=event=>{if(event.detail)updates.push(event.detail);};
       document.querySelector('#viewer').addEventListener('pdf-selection-change',listener);
       // Hold any selection request as if a synchronous render occupied the
@@ -293,6 +293,10 @@ try{
       try{
         select(5);
         await Promise.race([host.readSelection(),new Promise((_,reject)=>setTimeout(()=>reject(Error('Displayed selection waited for the PDF Worker')),1000))]);
+        // Initial pinning can also deliver one viewport observation. Measure
+        // range extensions after that layout, with the pin set unchanged.
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        scheduled=0;schedules.length=0;
         for(let end=6;end<=24;end++){select(end);await new Promise(requestAnimationFrame);}
         await host.readSelection();
         const before=updates.at(-1).text;
@@ -304,7 +308,7 @@ try{
         const buttonCopy=new Promise(resolve=>{navigator.clipboard.writeText=text=>{resolve(text);return Promise.resolve();};});
         select(24);document.querySelector('#copy-selection').click();
         const buttonText=await Promise.race([buttonCopy,new Promise((_,reject)=>setTimeout(()=>reject(Error('Copy button waited for the PDF Worker')),1000))]);
-        return {requests,scheduled,before,buttonText,prevented:event.defaultPrevented,text:data.getData('text/plain'),actual,expected};
+        return {requests,scheduled,schedules,before,buttonText,prevented:event.defaultPrevented,text:data.getData('text/plain'),actual,expected};
       }finally{
         navigator.clipboard.writeText=writeText;
         pdfViewerHost.pdf.call=call;PageScheduler.prototype.update=update;
@@ -313,7 +317,7 @@ try{
       }
     });
     assert.equal(result.requests,0,'Dragging displayed text does not enqueue PDF parsing work');
-    assert.ok(result.scheduled<=1,'Selection changes within a page do not repeatedly reschedule page rendering');
+    assert.equal(result.scheduled,0,'Extending selection within a page does not reschedule page rendering: '+JSON.stringify(result.schedules));
     assert.notEqual(result.before,result.expected.text);
     assert.equal(result.buttonText,result.before,'The copy button refreshes a selection changed in the same event turn');
     assert.equal(result.prevented,true);assert.equal(result.text,result.expected.text);
