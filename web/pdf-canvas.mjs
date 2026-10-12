@@ -191,7 +191,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
   const ctx=layer?.getContext('2d',{willReadFrequently:true}), shapeCtx=shapeLayer?.getContext('2d',{willReadFrequently:true});
   const sourcePixels=nativeItems?null:new Float32Array(width*height*4),sourceShape=nativeItems?null:new Float32Array(width*height);
   let previousSourceRegion=null;
-  const environments={createCanvas,loadImage,Path2D:Path,image,width,height,matrix,page:plan.page,diagnostics,resourceDepth,glyphCache,imageCache};
+  const environments={createCanvas,loadImage,Path2D:Path,image,width,height,matrix,page:plan.page,diagnostics,resourceDepth,glyphCache,imageCache,nativeCanvas:!!nativeItems};
   const retainedWorkingBytes=()=>inheritedWorkingBytes+glyphReservation+imageReservation+proofBytes+maskCacheBytes+(options._imageCache?0:imageCache.bytes)+(inkImageCache?inkImageCache.data.byteLength+inkImageCache.alpha.byteLength+inkImageCache.canvas.width*inkImageCache.canvas.height*4:0)+availableBytes-(inkMode?compositor.maxBytes:compositor.maxWorkingBytes)+compositor.workingBytes()+rasterBytes;
   const imageComponent=(resource,component)=>{
     const samples=resource.ink_samples;
@@ -702,6 +702,8 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
             }finally{target.width=target.height=1;}
           }
         }else{
+          environments.paintBounds=paintRegion(item);
+          environments.inheritedWorkingBytes=retainedWorkingBytes();
           clips(output,item.paint);
           if(item.kind==='path')await drawPath(output,item.paint,false);
           else if(item.kind==='image')await drawImage(output,item.paint,false);

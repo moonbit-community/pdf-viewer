@@ -15,7 +15,7 @@ const engine=process.env.PDF_BROWSER||'webkit';
 assert(['webkit','chromium'].includes(engine),'PDF_BROWSER must be webkit or chromium');
 const require=createRequire(resolve('tools/test-host/package.json'));
 const launcher=require('playwright')[engine];
-const roots={viewer:resolve('_build/pages'),reference:resolve('reference/pdf.js/build/generic')};
+const roots={viewer:resolve(process.env.PDF_BENCH_VIEWER_ROOT||'_build/pages'),reference:resolve('reference/pdf.js/build/generic')};
 const mime={'.mjs':'text/javascript','.js':'text/javascript','.html':'text/html','.css':'text/css','.wasm':'application/wasm','.svg':'image/svg+xml'};
 const output=resolve('_build/render-benchmark-'+Date.now());
 await mkdir(output,{recursive:true});

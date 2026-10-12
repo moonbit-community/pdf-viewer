@@ -1,4 +1,4 @@
-import { renderPdfCanvas, multiplyMatrix } from './pdf-canvas.mjs';
+import { renderPdfCanvas, multiplyMatrix, checkPdfRender } from './pdf-canvas.mjs';
 import { PdfCompositor, premultipliedToRgba8 } from './pdf-compositor.mjs';
 import { PdfInkCompositor } from './pdf-ink-compositor.mjs';
 
@@ -54,6 +54,44 @@ export function createPatternPainter(options={}) {
     return (p.blend_mode&&p.blend_mode!=='normal')||(item.groups||[]).some(g=>!g.isolated)||
       [item.pattern,item.stroke_pattern,p.pattern,p.stroke_pattern].some(resource=>resource?.tile_plan&&usesBackdrop(resource.tile_plan));
   });
+  // Independent display patterns need only their colour surface. Replay
+  // transparent cells in device coordinates once, without full-page shape,
+  // backdrop and Float32 component buffers. Retained/proof callers keep field.
+  const nativeField=async(context,resource,path,patternToDevice,env)=>{
+    const {width,height}=env,b=resource.bbox,stepX=Math.abs(resource.x_step),stepY=Math.abs(resource.y_step);
+    const bounds=env.paintBounds||{x:0,y:0,width,height};
+    const left=Math.max(0,Math.floor(bounds.x)),top=Math.max(0,Math.floor(bounds.y));
+    const right=Math.min(width,Math.ceil(bounds.x+bounds.width)),bottom=Math.min(height,Math.ceil(bounds.y+bounds.height));
+    if(right<=left||bottom<=top)return;
+    const bytes=(right-left)*(bottom-top)*4,inherited=(env.inheritedWorkingBytes||0)+bytes;
+    if(!Number.isSafeInteger(bytes)||inherited>=(options.maxWorkingBytes??536870912))throw new RangeError('PDF pattern surface exceeds working-memory budget');
+    const deviceToPattern=inverse(patternToDevice),corners=[[left,top],[right,top],[left,bottom],[right,bottom]].map(([x,y])=>point(deviceToPattern,x,y));
+    const nx0=Math.floor((Math.min(...corners.map(p=>p[0]))-b.max_x)/stepX)+1,nx1=Math.ceil((Math.max(...corners.map(p=>p[0]))-b.min_x)/stepX)-1;
+    const ny0=Math.floor((Math.min(...corners.map(p=>p[1]))-b.max_y)/stepY)+1,ny1=Math.ceil((Math.max(...corners.map(p=>p[1]))-b.min_y)/stepY)-1;
+    if((nx1-nx0+1)*(ny1-ny0+1)>4096)throw new RangeError('PDF pattern cell budget exceeded');
+    const surface=env.createCanvas(right-left,bottom-top),output=surface.getContext('2d');
+    let yieldDeadline=performance.now()+12;
+    try{
+      for(let ny=ny0;ny<=ny1;ny++)for(let nx=nx0;nx<=nx1;nx++){
+        checkPdfRender(options);
+        if(options.yieldToHost&&performance.now()>=yieldDeadline){await options.yieldToHost();checkPdfRender(options);yieldDeadline=performance.now()+12;}
+        const matrix=multiplyMatrix(patternToDevice,[1,0,0,-1,b.min_x+nx*stepX,b.max_y+ny*stepY]);
+        const points=[[0,0],[b.max_x-b.min_x,0],[0,b.max_y-b.min_y],[b.max_x-b.min_x,b.max_y-b.min_y]].map(([x,y])=>point(matrix,x,y));
+        const x0=Math.max(left,Math.floor(Math.min(...points.map(p=>p[0])))),x1=Math.min(right,Math.ceil(Math.max(...points.map(p=>p[0]))));
+        const y0=Math.max(top,Math.floor(Math.min(...points.map(p=>p[1])))),y1=Math.min(bottom,Math.ceil(Math.max(...points.map(p=>p[1]))));
+        if(x1<=x0||y1<=y0)continue;
+        const tile=env.createCanvas(x1-x0,y1-y0),localMatrix=[...matrix];localMatrix[4]-=x0;localMatrix[5]-=y0;
+        try{
+          const rendered=await renderPdfCanvas(tile,resource.tile_plan,{...options,createCanvas:env.createCanvas,loadImage:env.loadImage,Path2D:env.Path2D,width:x1-x0,height:y1-y0,matrix:localMatrix,transparent:true,returnPixels:false,outputGroupComponents:false,_profileScope:env.profileScope,_glyphCache:env.glyphCache,_glyphCacheReserved:!!env.glyphCache,_imageCache:env.imageCache,_imageCacheReserved:!!env.imageCache,paintPattern,_resourceDepth:(env.resourceDepth||0)+1,_inheritedWorkingBytes:inherited});
+          env.diagnostics?.push(...rendered.diagnostics);checkPdfRender(options);
+          output.drawImage(tile,x0-left,y0-top);
+        }finally{tile.width=tile.height=1;}
+      }
+      context.save();
+      try{context.clip(new env.Path2D(path.svg_path),path.fill_even_odd?'evenodd':'nonzero');context.setTransform(1,0,0,1,0,0);context.drawImage(surface,left,top);}
+      finally{context.restore();}
+    }finally{surface.width=surface.height=1;}
+  };
   // Re-evaluate non-isolated cells against the actual device backdrop. A
   // cached transparent tile is not equivalent when a cell uses a blend mode.
   const field=async(resource,patternToDevice,env)=>{
@@ -168,6 +206,9 @@ export function createPatternPainter(options={}) {
     // Transparent cell edges need one device-space coverage evaluation. A
     // resampled repeating alpha texture would filter both shape and opacity.
     if(bitmap.replay){
+      if(env.nativeCanvas&&operation==='fill'){
+        await nativeField(context,resource,path,patternToDevice,env);return;
+      }
       const result=await field(resource,patternToDevice,env),surface=env.shapeOnly?result.shape:result.bitmap(env.component);
       drawField(context,surface,path,operation,env);
       return;

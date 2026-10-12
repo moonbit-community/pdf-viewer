@@ -56,6 +56,10 @@ export function prepareNativeCanvasItems(plan,options={}){
       // Simple tiling cells and opaque normal shading scenes are independent
       // of the page backdrop. Rasterize only the pattern; keep siblings native.
       if(raw.kind!=='path'||!patterns.every(independentPattern))return null;
+      const fillPattern=raw.pattern||p.pattern;
+      if(p.filled&&!p.stroked&&!p.fill_transform&&!p.shading_pattern&&fillPattern?.tile_plan){
+        items.push({...raw,paint:{...p,pattern:fillPattern}});continue;
+      }
       items.push({kind:'retained',native:false,scene:{...plan,items:[raw],annotation_svg:null,annotation_fragments:[]}});
       continue;
     }

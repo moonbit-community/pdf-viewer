@@ -76,6 +76,29 @@ await test('native groups and pattern cells share the page image and release it 
  finally{painter.dispose();}
  assert.equal(loads,1,'Pattern replay borrows the same page image cache');
 });
+await test('independent transparent pattern fills avoid page component buffers and preserve affine coverage',async()=>{
+ const cellPage={...page,width:8,height:8,blend_space:'DeviceRGB'};
+ const cell={version:1,page:cellPage,viewport:{width:8,height:8,matrix:[1,0,0,-1,0,8]},items:[
+  path('M0 0H7V8H0Z','#0000ff',{bounds:{min_x:0,min_y:0,max_x:7,max_y:8},fill_alpha:.65}),
+ ]};
+ const pattern={name:'transparent',bbox:{min_x:0,min_y:0,max_x:8,max_y:8},x_step:6,y_step:8,matrix:[1,0,0,1,0,0],tile_plan:cell};
+ const fill=path('M2 2H18V18H2Z M8 8H12V12H8Z','#000',{bounds:{min_x:2,min_y:2,max_x:18,max_y:18},fill_even_odd:true,fill_alpha:.7,clips:[{svg_path:'M3 0H20V20H3Z'}]});
+ const input=plan([path(rect,'#ff0000'),{...fill,pattern}]);
+ for(const matrix of [[2,0,0,2,0,0],[0,2,-2,0,40,0],[1.5,.25,.2,1.5,2,1]]){
+  const retained=createCanvas(1,1),canvas=createCanvas(1,1),opts={...options,width:40,height:40,matrix};
+  const paint=async(target,extra)=>{const configured={...opts,...extra},painter=createPatternPainter(configured);try{return await renderPdfCanvas(target,input,{...configured,paintPattern:painter});}finally{painter.dispose();}};
+  await paint(retained,{nativeCanvas:false});
+  let pageReads=0;const seen=new WeakSet(),instrument=(w,h)=>{
+   const c=createCanvas(w,h),ctx=c.getContext('2d');
+   if(!seen.has(ctx)){seen.add(ctx);const get=ctx.getImageData;ctx.getImageData=function(...args){if(this.canvas.width*this.canvas.height>400)pageReads++;return get.apply(this,args);};}
+   return c;
+  };
+  const result=await paint(canvas,{returnPixels:false,createCanvas:instrument});
+  assert.equal(result.native,true);assert.equal(pageReads,0,'Only cell colour/shape is read, never a page surface');
+  const actual=canvas.getContext('2d').getImageData(0,0,40,40).data,expected=retained.getContext('2d').getImageData(0,0,40,40).data;
+  for(let i=0;i<actual.length;i++)assert(Math.abs(actual[i]-expected[i])<=2,`affine pattern pixel ${i}: ${actual[i]} != ${expected[i]}`);
+ }
+});
 await test('ordinary display paints and opaque Type3 text avoid pixel readback',async()=>{
  const glyph=path('M2 2H10V10H2Z','#0000ff',{clips:[{svg_path:'M4 0H20V20H4Z'}]});
  const text=(scene,index)=>({kind:'text',paint:{index,text_object_id:'opaque',text_knockout:true,fill_alpha:1,blend_mode:'normal'},type3_plan:scene});

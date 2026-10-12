@@ -48,14 +48,24 @@ exports still include SVG by default; their optional fourth argument enables
 Display rendering (`returnPixels: false`) paints ordinary RGB source-over pages
 directly through Canvas2D. Opaque Type3 glyphs containing one filled path reuse
 that path, and empty charprocs skip painting. Isolated normal groups render into
-bounded transparent surfaces before applying group opacity once. Simple patterns
-and opaque normal shading scenes reuse the existing rasterizers while ordinary
-sibling paints stay on Canvas. Backdrop-dependent blending, knockout,
+bounded transparent surfaces before applying group opacity once. Independent RGB
+tiling fills use Canvas colour surfaces; transparent cells replay once at their
+device coordinates without page-sized shape or component buffers. Compound or
+stroked patterns and opaque normal shading scenes use the retained rasterizers
+while ordinary sibling paints stay on Canvas. Backdrop-dependent blending, knockout,
 masks, CMYK, calibrated/ICC blend groups and proof/component outputs retain the
 PDF compositor wherever needed. `nativeCanvas: false` selects the retained
 renderer for comparisons. Native display uses the browser's RGBA8 rasterization;
 its antialiasing and rounding can differ from Float32 replay. Pixel-returning
 calls retain the previous renderer and its shape/component arrays.
+
+Page images use the existing MoonBit Flate whole-buffer encoder and checksum
+library for PNG output. A simple pattern's compatibility SVG borrows images
+already converted for its cell, preserving its original resource indices and
+colour policy. Tagged pages retain at most 16,384 text-source entries for one
+semantic projection, so accessibility does not repeat the content interpreter.
+Font or layer view changes discard that provenance; uncached projections retain
+the normal collector path.
 
 Canvas replay skips paints outside each tile and shares a
 bounded image/annotation raster cache across tiles, nested groups, masks and
@@ -92,6 +102,8 @@ To compare rendering with the pinned PDF.js checkout, build both static outputs
 as described in [the reference setup](../reference/README.md), then run
 `node tools/render_benchmark.mjs /path/to/document.pdf 1,2,12`.
 `PDF_BROWSER=chromium` selects Chromium; the default is WebKit at DPR 2.
+`PDF_BENCH_VIEWER_ROOT=/path/to/static/viewer` selects another packaged build for
+before/after comparisons.
 The tool uses identical Canvas dimensions and finishes reader prefetch before
 timing replay. Reports separate reader startup, Worker payloads, paint time and
 pixel-flush time. `PDF_BENCH_COMPARE_RETAINED=1` also compares native display
