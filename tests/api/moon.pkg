@@ -11,3 +11,7 @@ import {
   "moonbitlang/pdflite/ocg",
   "moonbitlang/core/test",
 } for "test"
+
+options(
+  link: { "native": { "cc-link-flags": "-lstdc++" } },
+)
