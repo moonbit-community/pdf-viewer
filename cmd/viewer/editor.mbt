@@ -42,41 +42,41 @@ async fn editor_commit(patch : Json) -> Unit {
   state.error = ""
   notify()
   try {
-    let id = edit_string(patch, "id")
+    let id = json_string_field(patch, "id")
     let previous = editor_changes()
-      .filter(entry => edit_string(entry, "id") == id)
+      .filter(entry => json_string_field(entry, "id") == id)
       .get(0)
-    let field_name = edit_string(patch, "field_name")
+    let field_name = json_string_field(patch, "field_name")
     let next = editor_changes().filter(entry => {
-      edit_string(entry, "id") != id &&
-      !(edit_string(patch, "kind") == "field" &&
+      json_string_field(entry, "id") != id &&
+      !(json_string_field(patch, "kind") == "field" &&
       field_name != "" &&
-      edit_string(entry, "kind") == "field" &&
-      edit_string(entry, "field_name") == field_name)
+      json_string_field(entry, "kind") == "field" &&
+      json_string_field(entry, "field_name") == field_name)
     })
     let patch = if previous is Some(previous) &&
       (
-        edit_string(previous, "kind") == "add" ||
+        json_string_field(previous, "kind") == "add" ||
         (
-          edit_string(previous, "kind") == "update" &&
-          edit_string(patch, "kind") == "update"
+          json_string_field(previous, "kind") == "update" &&
+          json_string_field(patch, "kind") == "update"
         )
       ) {
       let mut merged = previous
       if patch is Object(fields) {
         for key, value in fields {
-          merged = edit_put(merged, key, value)
+          merged = json_put(merged, key, value)
         }
       }
-      edit_put(merged, "kind", json_field(previous, "kind"))
+      json_put(merged, "kind", json_field(previous, "kind"))
     } else {
       patch
     }
-    if !(edit_string(patch, "kind") == "add" &&
-      edit_string(patch, "delete") == "true") {
+    if !(json_string_field(patch, "kind") == "add" &&
+      json_string_field(patch, "delete") == "true") {
       next.push(patch)
     }
-    state.current_page = edit_number(json_field(patch, "page")).to_int()
+    state.current_page = json_number(json_field(patch, "page")).to_int()
     if editor_apply_snapshot(next, generation) {
       editor.history = editor.history[:editor.cursor + 1].to_owned()
       editor.history.push(next)
@@ -88,7 +88,7 @@ async fn editor_commit(patch : Json) -> Unit {
         ignore(editor.history.remove(0))
         editor.cursor -= 1
       }
-      editor.status = "修改已应用，可下载保存"
+      editor.status = "Changes applied. Download to save."
     }
   } catch {
     error => if generation == state.document_generation { show_error(error) }
@@ -117,7 +117,7 @@ async fn editor_history(delta : Int) -> Unit {
   try {
     if editor_apply_snapshot(editor.history[cursor], generation) {
       editor.cursor = cursor
-      editor.status = if delta < 0 { "已撤销" } else { "已重做" }
+      editor.status = if delta < 0 { "Undone" } else { "Redone" }
     }
   } catch {
     error => if generation == state.document_generation { show_error(error) }
@@ -149,7 +149,7 @@ async fn editor_save() -> Unit {
     if state.file is Some(file) {
       download_native(file, state.file_name)
       editor.saved = "[]"
-      editor.status = "已下载 PDF"
+      editor.status = "Downloaded PDF"
       notify()
     }
     return
@@ -171,7 +171,7 @@ async fn editor_save() -> Unit {
       )
       editor.saved = ToJson::to_json(editor_changes()).stringify()
       editor.pending_input = false
-      editor.status = "已下载修改后的 PDF"
+      editor.status = "Downloaded edited PDF"
     }
   } catch {
     error => if generation == state.document_generation { show_error(error) }
@@ -189,12 +189,12 @@ async fn editor_handle(action : EditorAction) -> Unit {
       if !editor.enabled {
         if state.xfa {
           raise ViewerError(
-            "edit-unavailable", "动态 XFA 文档暂不支持编辑和保存",
+            "edit-unavailable", "Editing and saving dynamic XFA documents is not supported yet",
           )
         }
         let generation = state.document_generation
         editor.applying = true
-        editor.status = "正在准备编辑文档"
+        editor.status = "Preparing document for editing"
         notify()
         let result = call("editor_info") catch {
           error => {
@@ -219,9 +219,9 @@ async fn editor_handle(action : EditorAction) -> Unit {
       editor.selected = Json::null()
       editor.status = if editor.enabled {
         if editor.annotations {
-          "可填写表单；选择工具后在页面拖动"
+          "Fill forms, or select a tool and drag on the page"
         } else {
-          "此 PDF 允许填写表单，禁止修改批注"
+          "This PDF allows form filling but prohibits annotation changes"
         }
       } else {
         ""
@@ -244,12 +244,14 @@ async fn editor_handle(action : EditorAction) -> Unit {
       editor.ink_id = ""
       editor.ink_page = 0
       editor.status = match tool {
-        "text" => "输入文字后，在页面拖出文本框"
-        "highlight" => "在页面拖动标记区域"
-        "ink" => "在页面上绘制笔迹"
-        "signature" => "在页面上写下签名"
-        "image" => "选择签名图片后，在页面拖出放置区域"
-        _ => "选择批注可修改、拖动或调整右下角大小"
+        "text" => "Enter text, then drag a text box on the page"
+        "highlight" => "Drag to highlight an area on the page"
+        "ink" => "Draw ink on the page"
+        "signature" => "Draw your signature on the page"
+        "image" =>
+          "Select a signature image, then drag its placement area on the page"
+        _ =>
+          "Select an annotation to edit, move, or resize from its lower-right corner"
       }
       editor_refresh_layers()
       notify()
@@ -276,17 +278,19 @@ async fn editor_handle(action : EditorAction) -> Unit {
       }
       let patch : Json = {
         "kind": "delete",
-        "id": edit_string(editor.selected, "id"),
+        "id": json_string_field(editor.selected, "id"),
         "page": json_field(editor.selected, "page"),
       }
       let previous = editor_changes()
         .filter(entry => {
-          edit_string(entry, "id") == edit_string(editor.selected, "id")
+          json_string_field(entry, "id") ==
+          json_string_field(editor.selected, "id")
         })
         .get(0)
       editor_commit(
-        if previous is Some(previous) && edit_string(previous, "kind") == "add" {
-          edit_put(patch, "delete", Json::string("true"))
+        if previous is Some(previous) &&
+          json_string_field(previous, "kind") == "add" {
+          json_put(patch, "delete", Json::string("true"))
         } else {
           patch
         },
@@ -298,15 +302,15 @@ async fn editor_handle(action : EditorAction) -> Unit {
       }
       let mut patch : Json = {
         "kind": "update",
-        "id": edit_string(editor.selected, "id"),
+        "id": json_string_field(editor.selected, "id"),
         "page": json_field(editor.selected, "page"),
         "contents": editor.text,
         "color": edit_rgb(),
         "size": editor.size,
       }
-      if edit_string(editor.selected, "subtype") == "free-text" ||
-        edit_string(editor.selected, "subtype") == "freetext" {
-        patch = edit_put(
+      if json_string_field(editor.selected, "subtype") == "free-text" ||
+        json_string_field(editor.selected, "subtype") == "freetext" {
+        patch = json_put(
           patch,
           "image",
           if editor.text.iter().any(c => c.to_int() > 255) {
@@ -343,7 +347,7 @@ async fn editor_handle(action : EditorAction) -> Unit {
       }
       editor.image = value_json(image)
       editor.tool = "image"
-      editor.status = "在页面拖出图片签名的放置区域"
+      editor.status = "Drag the image signature placement area on the page"
       editor_refresh_layers()
       notify()
     }

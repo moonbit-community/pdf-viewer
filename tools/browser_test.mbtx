@@ -654,7 +654,7 @@ async fn main {
       #|   const host=await import('./viewer.js'),canvas=document.querySelector('.paint-layer canvas'),glyph=document.querySelector('.glyph-text').firstChild,pages=document.getElementById('pages');
       #|   const range=new Range();range.setStart(glyph,0);range.setEnd(glyph,glyph.length);getSelection().removeAllRanges();getSelection().addRange(range);await host.readSelection();
       #|   const text=getSelection().toString(),wait=async condition=>{for(let n=0;n<100&&!condition();n++)await new Promise(r=>setTimeout(r,10));if(!condition())throw Error('Rabbita DOM did not update');};
-      #|   for(const [id,title] of [['info-toggle','文档信息'],['outline-toggle','目录'],['thumbnail-toggle','缩略图']]){document.getElementById(id).click();await wait(()=>document.getElementById('sidebar-title').textContent===title&&!document.getElementById('sidebar').hidden);}
+      #|   for(const [id,title] of [['info-toggle','Document information'],['outline-toggle','Outline'],['thumbnail-toggle','Thumbnails']]){document.getElementById(id).click();await wait(()=>document.getElementById('sidebar-title').textContent===title&&!document.getElementById('sidebar').hidden);}
       #|   document.getElementById('sidebar-close').click();await wait(()=>document.getElementById('sidebar').hidden);
       #|   const stable=canvas===document.querySelector('.paint-layer canvas')&&pages===document.getElementById('pages')&&glyph===document.querySelector('.glyph-text').firstChild&&getSelection().toString()===text&&!document.getElementById('copy-selection').disabled;
       #|   const outside=new Range();outside.selectNodeContents(document);getSelection().removeAllRanges();getSelection().addRange(outside);await host.readSelection();
@@ -723,7 +723,7 @@ async fn main {
       ),
     )
     browser.check(
-      "outline panel renders local navigation entries", "!document.getElementById('sidebar').hidden && document.getElementById('sidebar-title').textContent === '目录' && document.querySelectorAll('#sidebar-content .sidebar-item').length > 0",
+      "outline panel renders local navigation entries", "!document.getElementById('sidebar').hidden && document.getElementById('sidebar-title').textContent === 'Outline' && document.querySelectorAll('#sidebar-content .sidebar-item').length > 0",
     )
     browser.check(
       "outline entry navigates to its destination",
@@ -750,7 +750,7 @@ async fn main {
         #|     await new Promise(r => setTimeout(r, 25));
         #|   }
         #|   const count = document.querySelectorAll('.thumbnail-preview canvas').length;
-        #|   return document.getElementById('sidebar-title').textContent === '缩略图' && document.querySelectorAll('.thumbnail-item').length === 9 && count > 0 && count < 9;
+        #|   return document.getElementById('sidebar-title').textContent === 'Thumbnails' && document.querySelectorAll('.thumbnail-item').length === 9 && count > 0 && count < 9;
         #| })()
       ),
     )
@@ -769,7 +769,7 @@ async fn main {
       browser.evaluate("document.getElementById('info-toggle').click(); true"),
     )
     browser.check(
-      "info panel exposes document fields and print control", "document.getElementById('sidebar-title').textContent === '文档信息' && document.querySelector('.info-list') !== null && document.getElementById('print').disabled === false",
+      "info panel exposes document fields and print control", "document.getElementById('sidebar-title').textContent === 'Document information' && document.querySelector('.info-list') !== null && document.getElementById('print').disabled === false",
     )
     browser.navigate(base + "/?file=/fixtures/labelled_pages.pdf", 11)
     browser.check(
@@ -1029,7 +1029,7 @@ async fn main {
         #|   const started=performance.now();
         #|   await Promise.race([done, new Promise((_, reject) => setTimeout(() => reject(new Error('select all timed out: '+JSON.stringify({status:document.getElementById('selection-status').textContent,error:document.getElementById('error').textContent,ranges:window.lastPdfSelection?.ranges.length}))), 55000))]);
         #|   window.fullSelectionMs=performance.now()-started;
-        #|   return (lastPdfSelection?.ranges.length === 14 && !getSelection().toString().includes('打开 PDF')) || {ranges: lastPdfSelection?.ranges.map(r => r.page), text: getSelection().toString().slice(0, 100), error: document.getElementById('error').textContent};
+        #|   return (lastPdfSelection?.ranges.length === 14 && !getSelection().toString().includes('Open PDF')) || {ranges: lastPdfSelection?.ranges.map(r => r.page), text: getSelection().toString().slice(0, 100), error: document.getElementById('error').textContent};
         #| })()
       ),
     )

@@ -27,17 +27,17 @@ export class PdfWorkerClient {
       const error = Object.assign(new Error(message), { code: "worker-error" });
       this.close(error);
     };
-    this.startupTimer = setTimeout(() => fail("PDF Worker 启动超时"), 15000);
+    this.startupTimer = setTimeout(() => fail("PDF Worker startup timed out"), 15000);
     worker.addEventListener("error", event => {
       event.preventDefault();
-      fail(event.message || "PDF Worker 无法运行");
+      fail(event.message || "PDF Worker failed to start");
     });
-    worker.addEventListener("messageerror", () => fail("PDF Worker 消息无法读取"));
+    worker.addEventListener("messageerror", () => fail("Unable to read a PDF Worker message"));
     worker.addEventListener("message", event => {
       if (this.worker !== worker) return;
       const message = event.data;
       if (message.type === "startup-error") {
-        fail(message.error?.message || "PDF Worker 图形引擎无法初始化");
+        fail(message.error?.message || "Unable to initialize the PDF Worker graphics engine");
         return;
       }
       if (message.type === "ready") {

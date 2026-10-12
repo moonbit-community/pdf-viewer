@@ -27,7 +27,7 @@ fn editor_position(
   entry : Json,
   matrix : Array[Double],
 ) -> Unit {
-  let bounds = edit_array(json_field(entry, "bounds")).map(edit_number)
+  let bounds = json_array(json_field(entry, "bounds")).map(json_number)
   let x = bounds[0]
   let y = bounds[3]
   set_style(control, "width", "\{bounds[2]-x}px")
@@ -46,29 +46,30 @@ fn editor_fill_layer(layer : @dom.Element) -> Unit {
   if !editor.enabled {
     return
   }
-  let entries = edit_array(
+  let entries = json_array(
     value_json(parse_value(element_data(layer, "entries"))),
   )
   let viewport = value_json(parse_value(element_data(layer, "viewport")))
-  let matrix = edit_array(json_field(viewport, "matrix")).map(edit_number)
+  let matrix = json_array(json_field(viewport, "matrix")).map(json_number)
   if matrix.length() != 6 {
     return
   }
   for entry in entries {
-    if edit_string(entry, "subtype") == "widget" {
+    if json_string_field(entry, "subtype") == "widget" {
       if editor_field_control(entry) is Some(control) {
         editor_position(control, entry, matrix)
         append_element(layer, control)
       }
-    } else if editor.tool == "select" && edit_bool(entry, "editable") {
+    } else if editor.tool == "select" && json_bool_field(entry, "editable") {
       let control = make_element("button", class_name="editor-annotation")
       control.set_attribute("type", "button")
       control.set_attribute(
         "aria-label",
-        "编辑批注：" + edit_string(entry, "contents"),
+        "Edit annotation: " + json_string_field(entry, "contents"),
       )
       set_data(control, "entry", entry.stringify())
-      if edit_string(entry, "id") == edit_string(editor.selected, "id") {
+      if json_string_field(entry, "id") ==
+        json_string_field(editor.selected, "id") {
         control.set_attribute("aria-pressed", "true")
         let resize = make_element("span", class_name="editor-resize")
         resize.set_attribute("aria-hidden", "true")
@@ -88,13 +89,13 @@ fn editor_fill_layer(layer : @dom.Element) -> Unit {
   preview.set_property(
     "width",
     @js.Value::cast_from(
-      edit_number(json_field(viewport, "width")).ceil().to_int(),
+      json_number(json_field(viewport, "width")).ceil().to_int(),
     ),
   )
   preview.set_property(
     "height",
     @js.Value::cast_from(
-      edit_number(json_field(viewport, "height")).ceil().to_int(),
+      json_number(json_field(viewport, "height")).ceil().to_int(),
     ),
   )
   append_element(layer, preview)
@@ -103,12 +104,12 @@ fn editor_fill_layer(layer : @dom.Element) -> Unit {
 ///|
 fn editor_select(entry : Json) -> Unit {
   editor.selected = entry
-  editor.text = edit_string(entry, "contents")
-  let color = edit_string(entry, "color")
+  editor.text = json_string_field(entry, "contents")
+  let color = json_string_field(entry, "color")
   if color.has_prefix("#") && color.length() == 7 {
     editor.color = color
   }
-  editor.status = "拖动批注可移动；拖动右下角可调整大小"
+  editor.status = "Drag an annotation to move it; drag its lower-right corner to resize"
   editor_refresh_layers()
   notify()
 }
@@ -116,13 +117,13 @@ fn editor_select(entry : Json) -> Unit {
 ///|
 fn editor_field_control(entry : Json) -> @dom.Element? {
   let generation = state.document_generation
-  let field_type = edit_string(entry, "field_type")
-  let flags = edit_number(json_field(entry, "field_flags")).to_int()
+  let field_type = json_string_field(entry, "field_type")
+  let flags = json_number(json_field(entry, "field_flags")).to_int()
   if (field_type != "Tx" && field_type != "Ch" && field_type != "Btn") ||
     (field_type == "Btn" && (flags & 65536) != 0) {
     return None
   }
-  let editable = edit_bool(entry, "editable")
+  let editable = json_bool_field(entry, "editable")
   let control = make_element(
     if field_type == "Ch" && (flags & 262144) == 0 {
       "select"
@@ -133,19 +134,19 @@ fn editor_field_control(entry : Json) -> @dom.Element? {
     },
     class_name="editor-field",
   )
-  let values = edit_array(json_field(entry, "values")).map(json_string)
-  let id = edit_string(entry, "id")
-  let label = edit_string(entry, "field_label")
+  let values = json_array(json_field(entry, "values")).map(json_string)
+  let id = json_string_field(entry, "id")
+  let label = json_string_field(entry, "field_label")
   control.set_attribute(
     "aria-label",
     if label != "" {
       label
     } else {
-      "PDF 表单字段 " + id
+      "PDF form field " + id
     },
   )
   set_data(control, "editorId", id)
-  set_data(control, "fieldName", edit_string(entry, "field_name"))
+  set_data(control, "fieldName", json_string_field(entry, "field_name"))
   control.set_property("disabled", @js.Value::cast_from(!editable))
   if field_type == "Btn" {
     control.set_attribute(
@@ -158,11 +159,11 @@ fn editor_field_control(entry : Json) -> @dom.Element? {
     )
     control.set_attribute(
       "name",
-      "pdf-field-" + edit_string(entry, "field_name"),
+      "pdf-field-" + json_string_field(entry, "field_name"),
     )
     control.set_property(
       "checked",
-      @js.Value::cast_from(edit_bool(entry, "checked")),
+      @js.Value::cast_from(json_bool_field(entry, "checked")),
     )
   } else if field_type == "Ch" && (flags & 262144) == 0 {
     control.set_property(
@@ -172,13 +173,13 @@ fn editor_field_control(entry : Json) -> @dom.Element? {
     if (flags & 131072) == 0 {
       control.set_attribute("size", "4")
     }
-    for option in edit_array(json_field(entry, "options")) {
+    for option in json_array(json_field(entry, "options")) {
       let item = make_element("option")
-      item.set_attribute("value", edit_string(option, "export_value"))
-      set_text(item, edit_string(option, "display_value"))
+      item.set_attribute("value", json_string_field(option, "export_value"))
+      set_text(item, json_string_field(option, "display_value"))
       item.set_property(
         "selected",
-        @js.Value::cast_from(edit_bool(option, "selected")),
+        @js.Value::cast_from(json_bool_field(option, "selected")),
       )
       append_element(control, item)
     }
@@ -195,7 +196,7 @@ fn editor_field_control(entry : Json) -> @dom.Element? {
       "value",
       @js.Value::cast_from(values.get(0).unwrap_or("")),
     )
-    let max = edit_number(json_field(entry, "max_length")).to_int()
+    let max = json_number(json_field(entry, "max_length")).to_int()
     if max > 0 {
       control.set_attribute("maxlength", max.to_string())
     }
@@ -205,7 +206,7 @@ fn editor_field_control(entry : Json) -> @dom.Element? {
     if field_type == "Btn" {
       [
         if native_field_checked(control) {
-          edit_string(entry, "on_value")
+          json_string_field(entry, "on_value")
         } else {
           "Off"
         },
@@ -239,15 +240,15 @@ fn editor_field_control(entry : Json) -> @dom.Element? {
         "id": id,
         "page": json_field(entry, "page"),
         "values": values,
-        "field_name": edit_string(entry, "field_name"),
+        "field_name": json_string_field(entry, "field_name"),
       }
       if indices != Json::null() {
-        patch = edit_put(patch, "indices", indices)
+        patch = json_put(patch, "indices", indices)
       }
       if field_type == "Tx" &&
         values.get(0) is Some(text) &&
         text.iter().any(c => c.to_int() > 255) {
-        patch = edit_put(
+        patch = json_put(
           patch,
           "image",
           editor_text_image(

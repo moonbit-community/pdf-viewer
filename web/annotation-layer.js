@@ -99,7 +99,7 @@ export class AnnotationLayer {
           control.classList.add("annotation-link");
           control.href = navigable ? `#page=${link.destination.page}` : "#";
           control.setAttribute("aria-label", annotation.contents ||
-            (navigable ? `前往第 ${link.destination.page} 页` : link.action));
+            (navigable ? `Go to page ${link.destination.page}` : link.action));
           control.addEventListener("click", event => {
             event.preventDefault();
             event.stopPropagation();
@@ -110,7 +110,7 @@ export class AnnotationLayer {
         } else if (popup) {
           control.type = "button";
           control.classList.add("annotation-comment");
-          control.setAttribute("aria-label", `查看批注：${annotation.subject || annotation.title || annotation.contents}`);
+          control.setAttribute("aria-label", `View annotation: ${annotation.subject || annotation.title || annotation.contents}`);
           control.setAttribute("aria-haspopup", "dialog");
           control.setAttribute("aria-expanded", "false");
           control.addEventListener("click", event => {
@@ -121,7 +121,7 @@ export class AnnotationLayer {
           control.classList.add("annotation-unavailable");
           control.setAttribute("role", "link");
           control.setAttribute("aria-disabled", "true");
-          control.title = link?.destination?.remote ? "此链接指向另一份文档" : "此链接的目标不可用";
+          control.title = link?.destination?.remote ? "This link points to another document" : "This link destination is unavailable";
         }
         layer.append(control);
         if (popup) layer.targets.push({ control, annotation, rect });
@@ -177,11 +177,11 @@ export class AnnotationLayer {
     control.setAttribute("aria-expanded", "true");
     const title = document.createElement("strong");
     title.id = "annotation-popup-title";
-    title.textContent = annotation.title || "批注";
+    title.textContent = annotation.title || "Annotation";
     const close = document.createElement("button");
     close.type = "button";
     close.textContent = "×";
-    close.setAttribute("aria-label", "关闭批注");
+    close.setAttribute("aria-label", "Close annotation");
     close.addEventListener("click", () => this.close(true));
     const header = document.createElement("header");
     header.append(title, close);

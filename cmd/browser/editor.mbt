@@ -33,7 +33,7 @@ pub fn editor_info() -> String {
       "forms": permissions.forms,
       "encrypted": permissions.encrypted,
       "reason": if !permissions.annotations && !permissions.forms {
-        "此 PDF 的权限禁止批注编辑和表单填写"
+        "PDF permissions prohibit annotation editing and form filling"
       } else {
         ""
       },

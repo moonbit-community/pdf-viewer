@@ -129,7 +129,7 @@ async function waitLength(number,count){
 async function waitSaved(){
   // The download event can arrive before Rabbita publishes the saved snapshot.
   await page.waitForFunction(()=>document.querySelector('#editor-dirty').textContent==='' &&
-    document.querySelector('#editor-status').textContent.startsWith('已下载') &&
+    document.querySelector('#editor-status').textContent.startsWith('Downloaded') &&
     !document.querySelector('#edit-toggle').disabled);
   await idle();
 }
@@ -247,7 +247,7 @@ try {
     assert.equal((await draw('ink',[[50,35],[65,65],[90,45],[130,55]])).subtype,'ink');
   });
   await check('Handwritten and image signatures are placed with their PDF geometry',async()=>{
-    assert.equal((await draw('signature',[[180,35],[195,60],[220,40],[245,55]])).contents,'手写签名');
+    assert.equal((await draw('signature',[[180,35],[195,60],[220,40],[245,55]])).contents,'Handwritten signature');
     await check('Handwriting groups multiple strokes and supports undoing one stroke',async()=>{
       const signature=(await entries()).at(-1),before=(await entries()).length;
       await drag(1,[[185,65],[205,75],[245,65]]);
@@ -267,7 +267,7 @@ try {
       assert.equal((await entries()).find(entry=>entry.id===signature.id).paths.length,2);
     });
     await page.locator('#signature-image').setInputFiles(imagePath);
-    await page.waitForFunction(()=>document.querySelector('#editor-status').textContent.includes('图片签名的放置区域'));
+    await page.waitForFunction(()=>document.querySelector('#editor-status').textContent.includes('image signature placement area'));
     const stamp=await draw('image',[[180,165],[270,195]]);
     assert.equal(stamp.subtype,'stamp');
     assert.ok(Math.abs((stamp.bounds[2]-stamp.bounds[0])/(stamp.bounds[3]-stamp.bounds[1])-3)<.02);
@@ -317,8 +317,8 @@ try {
     assert.equal(annotations.filter(a=>a.fieldName==='radio').every(a=>a.fieldValue==='B'),true);
     assert.equal(annotations.find(a=>a.contentsObj?.str==='修改后的批注').hasAppearance,true);
     assert.ok(annotations.some(a=>a.contentsObj?.str==='Existing revised' && a.hasAppearance));
-    assert.ok(annotations.some(a=>a.contentsObj?.str==='手写签名' && a.hasAppearance));
-    assert.ok(annotations.some(a=>a.contentsObj?.str==='图片签名' && a.hasAppearance));
+    assert.ok(annotations.some(a=>a.contentsObj?.str==='Handwritten signature' && a.hasAppearance));
+    assert.ok(annotations.some(a=>a.contentsObj?.str==='Image signature' && a.hasAppearance));
     await loading.destroy();
     assert.equal(await page.locator('#editor-dirty').innerText(),'');
   });
@@ -329,7 +329,7 @@ try {
     const canvas=createCanvas(Math.ceil(viewport.width),Math.ceil(viewport.height)),ctx=canvas.getContext('2d');
     await reference.render({canvasContext:ctx,viewport,annotationMode:pdfjs.AnnotationMode.ENABLE}).promise;
     const annotations=await reference.getAnnotations();
-    for(const contents of ['手写签名','图片签名','修改后的批注','Existing revised']){
+    for(const contents of ['Handwritten signature','Image signature','修改后的批注','Existing revised']){
       const annotation=annotations.find(annotation=>annotation.contentsObj?.str===contents);
       const rect=[...viewport.convertToViewportPoint(annotation.rect[0],annotation.rect[1]),...viewport.convertToViewportPoint(annotation.rect[2],annotation.rect[3])];
       const x=Math.max(0,Math.floor(Math.min(rect[0],rect[2]))),y=Math.max(0,Math.floor(Math.min(rect[1],rect[3])));
@@ -370,8 +370,8 @@ try {
   await check('Undo and redo compare against the saved snapshot for dirty state',async()=>{
     assert.equal(await page.locator('#editor-dirty').innerText(),'');
     await page.locator('#edit-undo').click();
-    await page.waitForFunction(()=>document.querySelector('#editor-dirty').textContent==='未保存');await idle();
-    assert.equal(await page.locator('#editor-dirty').innerText(),'未保存');
+    await page.waitForFunction(()=>document.querySelector('#editor-dirty').textContent==='Unsaved');await idle();
+    assert.equal(await page.locator('#editor-dirty').innerText(),'Unsaved');
     await page.locator('#edit-redo').click();
     await page.waitForFunction(()=>document.querySelector('#editor-dirty').textContent==='');await idle();
     assert.equal(await page.locator('#editor-dirty').innerText(),'');
@@ -390,9 +390,9 @@ try {
       const layer=document.querySelector('.page[data-page="1"] .editor-layer');
       return layer && JSON.parse(layer.dataset.entries).some(entry=>entry.contents==='Another session');
     });await idle();
-    assert.equal(await page.locator('#editor-dirty').innerText(),'未保存');
+    assert.equal(await page.locator('#editor-dirty').innerText(),'Unsaved');
     await page.locator('#edit-redo').click();await waitField('person',['Saved from active field']);
-    assert.equal(await page.locator('#editor-dirty').innerText(),'未保存');
+    assert.equal(await page.locator('#editor-dirty').innerText(),'Unsaved');
     await captureDownload();
     assert.equal(await page.locator('#editor-dirty').innerText(),'');
   });
@@ -555,7 +555,7 @@ try {
     assert.equal((await (await document.getPage(1)).getAnnotations()).find(annotation=>annotation.fieldName==='person').fieldValue,'Permitted form');
     await task.destroy();
     await openEncrypted('encrypted-7.pdf','reader');await page.locator('#edit-toggle').click();
-    await page.waitForFunction(()=>document.querySelector('#error').textContent.includes('权限禁止'));
+    await page.waitForFunction(()=>document.querySelector('#error').textContent.includes('permissions prohibit'));
     assert.equal(await page.locator('#editor-toolbar').isVisible(),false);
     await openEncrypted('encrypted-7.pdf','owner');await enterEditor();
     assert.equal(await page.locator('#edit-text').isDisabled(),false);

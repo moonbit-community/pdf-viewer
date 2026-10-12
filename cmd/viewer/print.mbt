@@ -42,7 +42,7 @@ async fn print_document_async() -> Unit {
   append_element(root, style)
   try {
     for number in 1..<=state.count {
-      state.status = "正在准备打印第 \{number} / \{state.count} 页"
+      state.status = PreparingPrintPage(number)
       notify()
       let result = call(
         "render_print_page",
@@ -114,7 +114,7 @@ async fn print_document_async() -> Unit {
   }
   if generation == state.document_generation && token == print_generation.val {
     state.printing = false
-    state.status = "\{state.count} 页 · \{(state.scale * 100.0).round().to_int()}%"
+    state.status = DocumentLoaded
     notify()
   }
 }

@@ -39,7 +39,7 @@ export async function createXfaDocument(data, bridge) {
   let xml = data.packets.map(packet => packetText(packet.data_base64)).join('');
   if (!/<(?:\w+:)?xdp\b/.test(xml)) xml = `<xdp:xdp xmlns:xdp="http://ns.adobe.com/xdp/">${xml}</xdp:xdp>`;
   const factory = new XFAFactory(new Map([['xdp:xdp', xml]]));
-  if (!factory.isValid()) throw Object.assign(Error('XFA 模板或数据绑定无效'), { code: 'xfa-invalid' });
+  if (!factory.isValid()) throw Object.assign(Error('Invalid XFA template or data binding'), { code: 'xfa-invalid' });
   const fonts = assets.map(font => layoutFont(font, bridge));
   for (const [family, alias] of [['Helvetica','Arial'],['Times','Times New Roman'],['Courier','Courier New']]) {
     for (const font of fonts.filter(font => font.cssFontInfo.fontFamily===family)) fonts.push({...font,cssFontInfo:{...font.cssFontInfo,fontFamily:alias}});
@@ -52,10 +52,10 @@ export async function createXfaDocument(data, bridge) {
     factory.appendFonts([fallback], new Set(missing));
   }
   const count = await factory.getNumPages();
-  if (!count || count > 5000) throw Error('XFA 分页数量无效或超出 5000 页预算');
+  if (!count || count > 5000) throw Error('Invalid XFA page count or the 5000-page budget was exceeded');
   const layouts = Array.from({length: count}, (_, index) => {
     const [, , width, height] = factory.getBoundingBox(index);
-    if (!(width > 0 && height > 0 && width <= 20000 && height <= 20000)) throw Error('XFA 页面尺寸无效');
+    if (!(width > 0 && height > 0 && width <= 20000 && height <= 20000)) throw Error('Invalid XFA page dimensions');
     return { page: index + 1, width, height, rotation: 0 };
   });
   const pages = (await factory.getPages()).children;

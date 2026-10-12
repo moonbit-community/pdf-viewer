@@ -29,7 +29,7 @@ pub fn close_document() -> Unit {
   state.layouts = []
   element("viewer").set_scroll_top(0.0)
   element("viewer").set_scroll_left(0.0)
-  state.status = "就绪"
+  state.status = Ready
   set_busy(false)
 }
 
@@ -46,7 +46,7 @@ async fn load_document(file : @js.Value, path : String) -> Unit {
   let generation = state.document_generation
   set_busy(true)
   state.error = ""
-  state.status = "正在读取文档"
+  state.status = ReadingDocument
   notify()
   try {
     reset_worker()
@@ -79,9 +79,9 @@ async fn load_document(file : @js.Value, path : String) -> Unit {
             raise ViewerError(code, message)
           }
           let prompt = if code == "password-invalid" {
-            "密码不正确，请重新输入"
+            "Incorrect password. Try again."
           } else {
-            "此 PDF 需要密码"
+            "This PDF requires a password"
           }
           password = prompt_password(prompt).to_option()
           if password is None {

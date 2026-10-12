@@ -108,10 +108,10 @@ try{
     await page.waitForFunction(()=>!document.querySelector('#editor-toolbar').hidden&&!document.querySelector('#edit-toggle').disabled);
     const field=page.locator('[data-field-name="layer-field"]');
     await field.fill('Saved from GitHub Pages');await field.press('Tab');
-    await page.waitForFunction(()=>document.querySelector('#editor-dirty').textContent==='未保存'&&!document.querySelector('#edit-toggle').disabled);
+    await page.waitForFunction(()=>document.querySelector('#editor-dirty').textContent==='Unsaved'&&!document.querySelector('#edit-toggle').disabled);
     const downloaded=page.waitForEvent('download');await page.locator('#download').click();
     const saved=resolve(output,'saved.pdf');await (await downloaded).saveAs(saved);
-    await page.waitForFunction(()=>document.querySelector('#editor-status').textContent.startsWith('已下载')&&document.querySelector('#editor-dirty').textContent==='');
+    await page.waitForFunction(()=>document.querySelector('#editor-status').textContent.startsWith('Downloaded')&&document.querySelector('#editor-dirty').textContent==='');
     const bytes=await readFile(saved);assert.equal(bytes.subarray(0,5).toString(),'%PDF-');
     await page.locator('#file-input').setInputFiles({name:'saved.pdf',mimeType:'application/pdf',buffer:bytes});await idle('saved.pdf');
     await page.locator('#layers-toggle').click();await page.locator('#layer-7').click();
@@ -197,7 +197,7 @@ try{
     await page.evaluate(()=>window.resumeFirstPaint());
     await waitForUI(page,()=>document.querySelector('#page-number').value==='6'&&document.querySelector('.page[data-page="6"]')?.dataset.rendered==='true'&&document.querySelector('#viewer').getAttribute('aria-busy')==='false');
     assert.equal(await page.locator('#error').isVisible(),false);
-    assert.match(await page.locator('#status').textContent(),/^6 页 · /,'Cancelled first-page work must not leave a permanent loading status');
+    assert.match(await page.locator('#status').textContent(),/^6 pages · /,'Cancelled first-page work must not leave a permanent loading status');
     assert.equal(await page.evaluate(()=>window.firstPaintCancelled),true,'The actual renderer rejects the obsolete first-page paint after scrolling');
     assert.equal(await page.locator('.page[data-page="1"] canvas').count(),0,
       'A cancelled page removes its partial paint without retaining an obsolete Canvas');

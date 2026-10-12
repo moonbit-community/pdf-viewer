@@ -4,19 +4,19 @@ fn editor_view(model : EditorModel, emit : @cmd.Emit[Msg]) -> @html.Html {
     id="editor-toolbar",
     class="editor-toolbar",
     hidden=!model.enabled,
-    attrs=@html.Attrs::build().aria_label("批注和表单编辑"),
+    attrs=@html.Attrs::build().aria_label("Annotation and form editing"),
     [
       @html.div(
         class="editor-tools",
         [
           for
             (value, label) in [
-              ("select", "选择"),
-              ("text", "文字"),
-              ("highlight", "标记"),
-              ("ink", "画笔"),
-              ("signature", "手写签名"),
-              ("image", "图片签名"),
+              ("select", "Select"),
+              ("text", "Text"),
+              ("highlight", "Highlight"),
+              ("ink", "Ink"),
+              ("signature", "Handwritten signature"),
+              ("image", "Image signature"),
             ] => {
             @html.button(
               id="edit-" + value,
@@ -35,9 +35,9 @@ fn editor_view(model : EditorModel, emit : @cmd.Emit[Msg]) -> @html.Html {
         id="editor-text",
         input_type=Text,
         value=model.text,
-        placeholder="批注文字",
+        placeholder="Annotation text",
         attrs=@html.Attrs::build()
-          .aria_label("批注文字")
+          .aria_label("Annotation text")
           .disabled(!model.annotations),
         on_input=@cmd.Emit(text => emit(Edit(Text(text)))),
       ),
@@ -46,7 +46,7 @@ fn editor_view(model : EditorModel, emit : @cmd.Emit[Msg]) -> @html.Html {
         input_type=Color,
         value=model.color,
         attrs=@html.Attrs::build().disabled(!model.annotations),
-        title="批注颜色",
+        title="Annotation color",
         on_input=@cmd.Emit(color => emit(Edit(Color(color)))),
       ),
       @html.input(
@@ -56,15 +56,15 @@ fn editor_view(model : EditorModel, emit : @cmd.Emit[Msg]) -> @html.Html {
         max=200,
         value=model.size.to_string(),
         attrs=@html.Attrs::build().disabled(!model.annotations),
-        title="字号／线宽",
+        title="Font size / line width",
         on_input=@cmd.Emit(size => emit(Edit(Size(size)))),
       ),
       @html.label(class="editor-image-picker", [
         @html.text(
           if model.image_ready {
-            "更换签名图片"
+            "Replace signature image"
           } else {
-            "选择签名图片"
+            "Select signature image"
           },
         ),
         @html.input(
@@ -84,32 +84,32 @@ fn editor_view(model : EditorModel, emit : @cmd.Emit[Msg]) -> @html.Html {
         id="edit-apply-text",
         disabled=model.busy || model.selected == Json::null(),
         on_click=emit(Edit(ApplyText)),
-        "应用文字/样式",
+        "Apply text / style",
       ),
       @html.button(
         id="edit-delete",
         disabled=model.busy || model.selected == Json::null(),
         on_click=emit(Edit(Delete)),
-        "删除",
+        "Delete",
       ),
       @html.button(
         id="edit-undo",
         disabled=model.busy || !model.undo,
         on_click=emit(Edit(Undo)),
-        "撤销",
+        "Undo",
       ),
       @html.button(
         id="edit-redo",
         disabled=model.busy || !model.redo,
         on_click=emit(Edit(Redo)),
-        "重做",
+        "Redo",
       ),
       @html.span(
         id="editor-status",
         attrs=@html.Attrs::build().aria_live("polite"),
         model.status,
       ),
-      @html.span(id="editor-dirty", if model.dirty { "未保存" } else { "" }),
+      @html.span(id="editor-dirty", if model.dirty { "Unsaved" } else { "" }),
     ],
   )
 }

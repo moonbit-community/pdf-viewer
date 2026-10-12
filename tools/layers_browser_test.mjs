@@ -55,8 +55,8 @@ try{
   await check('Rabbita layers show Unicode nested order usage hints and locked controls',async()=>{
     assert.match(await page.locator('.layers-panel').innerText(),/图层[\s\S]*中文[\s\S]*Nested[\s\S]*Beta/);
     assert.equal(await page.locator('#layer-10').isDisabled(),true);
-    assert.match(await page.locator('#layer-8').locator('..').innerText(),/打印隐藏/);
-    assert.match(await page.locator('#layer-9').locator('..').innerText(),/打印可见/);
+    assert.match(await page.locator('#layer-8').locator('..').innerText(),/Hidden in print/);
+    assert.match(await page.locator('#layer-9').locator('..').innerText(),/Visible in print/);
     assert.deepEqual(await displaySamples(),[blue,white,pink,white]);
     assert.equal(await page.locator('#pages [data-field-name="layer-field"]').count(),0);
   });
@@ -164,7 +164,7 @@ try{
     await page.locator('#layers-toggle').click();await page.waitForSelector('#layers-config');
     await page.locator('#edit-toggle').click();await page.waitForFunction(()=>!document.querySelector('#editor-toolbar').hidden&&!document.querySelector('#edit-toggle').disabled);await idle();
     const field=page.locator('#pages [data-field-name="layer-field"]');await field.fill('Edited layer field');await field.press('Tab');
-    await page.waitForFunction(()=>document.querySelector('#editor-dirty').textContent==='未保存'&&!document.querySelector('#edit-toggle').disabled);await idle();
+    await page.waitForFunction(()=>document.querySelector('#editor-dirty').textContent==='Unsaved'&&!document.querySelector('#edit-toggle').disabled);await idle();
     assert.match(await text(),/Beta/);assert.doesNotMatch(await text(),/Alpha/);
     await page.locator('#edit-undo').click();await page.waitForFunction(()=>document.querySelector('[data-field-name="layer-field"]')?.value==='Before'&&!document.querySelector('#edit-toggle').disabled);
     await page.locator('#edit-redo').click();await page.waitForFunction(()=>document.querySelector('[data-field-name="layer-field"]')?.value==='Edited layer field'&&!document.querySelector('#edit-toggle').disabled);
@@ -176,7 +176,7 @@ try{
     assert.equal(await field.inputValue(),'Active before layer toggle');
     const downloaded=page.waitForEvent('download');await page.locator('#download').click();const download=await downloaded;
     const saved=resolve(output,'saved.pdf');await download.saveAs(saved);
-    await page.waitForFunction(()=>document.querySelector('#editor-status').textContent.startsWith('已下载')&&document.querySelector('#editor-dirty').textContent==='');
+    await page.waitForFunction(()=>document.querySelector('#editor-status').textContent.startsWith('Downloaded')&&document.querySelector('#editor-dirty').textContent==='');
     const loading=pdfjs.getDocument({data:new Uint8Array(readFileSync(saved)),isEvalSupported:false}),document=await loading.promise;
     const config=await document.getOptionalContentConfig();assert.equal(config.getGroup('6R').visible,true);assert.equal(config.getGroup('7R').visible,false);
     const annotations=await (await document.getPage(1)).getAnnotations();assert.equal(annotations.find(item=>item.fieldName==='layer-field').fieldValue,'Active before layer toggle');await loading.destroy();

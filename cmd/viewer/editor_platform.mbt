@@ -5,7 +5,7 @@ extern "js" fn native_signature_image(
   file : @js.Value,
 ) -> @js_async.Promise[@js.Value] =
   #| async file => {
-  #|   if (!file.type.startsWith('image/')) throw new Error('请选择图片文件');
+  #|   if (!file.type.startsWith('image/')) throw new Error('Please select an image file');
   #|   const image=await createImageBitmap(file),scale=Math.min(1,1024/Math.max(image.width,image.height));
   #|   try {
   #|     const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.width*scale));canvas.height=Math.max(1,Math.round(image.height*scale));
@@ -42,7 +42,7 @@ fn editor_text_image(
   color : String,
   password : Bool,
 ) -> Json {
-  let bounds = edit_array(rectangle).map(edit_number)
+  let bounds = json_array(rectangle).map(json_number)
   let width = bounds[2] - bounds[0]
   let height = bounds[3] - bounds[1]
   let lines : Array[String] = []

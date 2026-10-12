@@ -117,7 +117,7 @@ struct Runtime {
   mut generation : Int
   mut document_generation : Int
   mut busy : Bool
-  mut status : String
+  mut status : ViewerStatus
   mut error : String
   mut search_input : String
   mut search_case : Bool
@@ -169,7 +169,7 @@ let state : Runtime = {
   generation: 0,
   document_generation: 0,
   busy: false,
-  status: "就绪",
+  status: Ready,
   error: "",
   search_input: "",
   search_case: false,
@@ -212,7 +212,7 @@ fn snapshot() -> Model {
   let search_status = if search_count > 0 {
     "\{state.search_active + 1} / \{search_count}"
   } else if state.search_query != "" {
-    "无结果"
+    "No results"
   } else {
     ""
   }
@@ -229,7 +229,7 @@ fn snapshot() -> Model {
     layers: state.layers,
     layers_busy: state.layers_busy,
     busy: state.busy,
-    status: state.status,
+    status: state.status.text(state.count, state.scale),
     error: state.error,
     search_input: state.search_input,
     search_status,
@@ -249,55 +249,5 @@ fn snapshot() -> Model {
 fn notify() -> Unit {
   if ui_emit.val is Some(emit) && ui_scheduler.val is Some(scheduler) {
     scheduler.queue_command(emit(Publish(snapshot())))
-  }
-}
-
-///|
-fn json_field(value : Json, name : String) -> Json {
-  match value {
-    Object(fields) => fields.get(name).unwrap_or(Json::null())
-    _ => Json::null()
-  }
-}
-
-///|
-fn json_string(value : Json) -> String {
-  match value {
-    String(value) => value
-    Null => ""
-    _ => value.stringify()
-  }
-}
-
-///|
-fn json_int(value : Json) -> Int {
-  match value {
-    Number(value, ..) => value.to_int()
-    _ => 0
-  }
-}
-
-///|
-fn json_bool(value : Json) -> Bool {
-  match value {
-    True => true
-    _ => false
-  }
-}
-
-///|
-fn json_array(value : Json) -> Array[Json] {
-  match value {
-    Array(values) => values
-    _ => []
-  }
-}
-
-///|
-fn json_point(value : Json) -> TextPoint {
-  {
-    page: json_int(json_field(value, "page")),
-    item: json_int(json_field(value, "item")),
-    offset: json_int(json_field(value, "offset")),
   }
 }

@@ -17,6 +17,9 @@ You can browse and install extra skills here:
 
 ## Coding convention
 
+- Use English for identifiers, comments, UI text, and diagnostic messages.
+  Preserve non-Latin text in PDF fixtures and Unicode regression tests.
+
 - MoonBit code is organized in block style, each block is separated by `///|`,
   the order of each block is irrelevant. In some refactorings, you can process
   block by block independently.

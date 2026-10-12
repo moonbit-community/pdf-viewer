@@ -162,7 +162,7 @@ async fn toggle_sidebar(sidebar : Sidebar) -> Unit {
 fn outline_view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
   let entries = json_array(json_field(model.document_info, "outline"))
   if entries.is_empty() {
-    return @html.p(class="sidebar-empty", "此文档没有目录")
+    return @html.p(class="sidebar-empty", "This document has no outline")
   }
   @html.fragment(
     entries.map(entry => {
@@ -174,9 +174,9 @@ fn outline_view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
         type_="button",
         disabled=page == 0 || json_bool(json_field(destination, "remote")),
         title=if page != 0 {
-          "第 \{page} 页"
+          "Page \{page}"
         } else {
-          "此条目没有可定位的本地页面"
+          "This entry has no local page destination"
         },
         attrs=@html.Attrs::build().style(
           "padding-left",
@@ -184,7 +184,7 @@ fn outline_view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
         ),
         on_click=emit(Navigate(page, true)),
         if title == "" {
-          "未命名条目"
+          "Untitled entry"
         } else {
           title
         },
@@ -198,14 +198,8 @@ fn info_view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
   let info = json_field(model.document_info, "info")
   let rows : Array[@html.Html] = []
   for
-    (label, key) in [
-      ("标题", "Title"),
-      ("作者", "Author"),
-      ("主题", "Subject"),
-      ("创建者", "Creator"),
-      ("生成器", "Producer"),
-      ("页数", "Pages"),
-      ("版本", "Version"),
+    key in [
+      "Title", "Author", "Subject", "Creator", "Producer", "Pages", "Version",
     ] {
     let field = json_field(info, key)
     let value = if key == "Pages" && field is Null {
@@ -218,12 +212,12 @@ fn info_view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
     if value == "" {
       continue
     }
-    rows.push(@html.dt(label))
+    rows.push(@html.dt(key))
     rows.push(@html.dd(value))
   }
   if rows.is_empty() {
     rows.push(
-      @html.dd(class="sidebar-empty", "此文档没有公开的 Info 字段"),
+      @html.dd(class="sidebar-empty", "This document has no public Info fields"),
     )
   }
   let metadata = json_field(model.document_info, "metadata")
@@ -236,20 +230,25 @@ fn info_view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
         if available {
           "XMP metadata · \{json_int(json_field(metadata, "size"))} bytes"
         } else {
-          "没有嵌入 XMP metadata"
+          "No embedded XMP metadata"
         },
       ),
       @html.button(
         class="sidebar-item",
         hidden=!available,
         on_click=emit(DownloadMetadata),
-        "下载 XMP",
+        "Download XMP",
       ),
     ]),
-    @html.h3("附件（\{attachments.length()}）"),
+    @html.h3("Attachments (\{attachments.length()})"),
   ]
   if attachments.is_empty() {
-    children.push(@html.p(class="sidebar-empty", "此文档没有嵌入附件"))
+    children.push(
+      @html.p(
+        class="sidebar-empty",
+        "This document has no embedded attachments",
+      ),
+    )
   }
   for attachment in attachments {
     let name = json_string(json_field(attachment, "name"))
@@ -266,7 +265,7 @@ fn info_view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
           on_click=emit(
             DownloadAttachment(json_int(json_field(attachment, "index")), name),
           ),
-          "下载",
+          "Download",
         ),
       ]),
     )
@@ -286,7 +285,7 @@ fn thumbnails_view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
         type_="button",
         attrs=@html.Attrs::build()
           .data_set("page", number.to_string())
-          .aria_label("第 \{label} 页"),
+          .aria_label("Page \{label}"),
         on_click=emit(Navigate(number, true)),
         [
           @html.div(class="thumbnail-preview", ([] : Array[@html.Html])),
@@ -297,7 +296,10 @@ fn thumbnails_view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
   }
   if model.count > limit {
     children.push(
-      @html.p(class="sidebar-empty", "仅显示前 \{limit} 页缩略图"),
+      @html.p(
+        class="sidebar-empty",
+        "Showing thumbnails for the first \{limit} pages",
+      ),
     )
   }
   @html.fragment(children)

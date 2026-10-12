@@ -31,7 +31,7 @@ export function makeAccessibilityLayer(data, annotationLayer) {
   const layer = document.createElement("div");
   layer.className = "accessibility-layer";
   layer.setAttribute("role", "document");
-  layer.setAttribute("aria-label", `第 ${data.page} 页正文`);
+  layer.setAttribute("aria-label", `Page ${data.page} text`);
   layer.dataset.page = data.page;
   layer.dataset.tagged = data.tagged;
   layer.dataset.truncated = data.truncated;

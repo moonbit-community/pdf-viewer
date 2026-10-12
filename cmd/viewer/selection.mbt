@@ -1,4 +1,13 @@
 ///|
+fn json_point(value : Json) -> TextPoint {
+  {
+    page: json_int(json_field(value, "page")),
+    item: json_int(json_field(value, "item")),
+    offset: json_int(json_field(value, "offset")),
+  }
+}
+
+///|
 // Only mounted pages retain a selection index. The Worker owns unloaded pages.
 let selection_pages : Map[Int, @pdf.PdfTextLayer] = Map([])
 
@@ -290,7 +299,7 @@ fn publish_selection(
       FixedArray::from_array(ranges[:]),
     ),
   )
-  state.selection_status = "已选 \{state.selection_text.iter().count()} 个字符"
+  state.selection_status = "Selected \{state.selection_text.iter().count()} characters"
   if changed_pages {
     scheduler_update(state.scheduler.unwrap(), state.current_page)
   }
@@ -399,7 +408,7 @@ async fn collect_selection(
   state.selection_range = Some({ start, end, })
   state.selection = None
   state.selection_text = ""
-  state.selection_status = "正在准备选中文字"
+  state.selection_status = "Preparing selected text"
   scheduler_update(state.scheduler.unwrap(), state.current_page)
   notify()
   let ranges : Array[@js.Value] = []

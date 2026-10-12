@@ -42,7 +42,7 @@ export class PageScheduler {
       const page = document.createElement("section");
       page.className = "page";
       page.dataset.page = layout.page;
-      page.setAttribute("aria-label", `第 ${layout.page} 页`);
+      page.setAttribute("aria-label", `Page ${layout.page}`);
       fragment.append(page);
     }
     this.pages.append(fragment);

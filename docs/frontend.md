@@ -5,15 +5,23 @@ The browser application uses [Rabbita](https://mooncakes.io/docs/moonbit-communi
 it to an ES module for the browser. No separate JavaScript application controller
 or handwritten virtual DOM is used.
 
-`cmd/viewer/view.mbt` and `sidebar.mbt` define the toolbar, document panels and
-status with Rabbita HTML. `model.mbt` holds typed view snapshots and message types;
+`cmd/viewer/view.mbt` assembles the application with Rabbita HTML;
+`toolbar.mbt` defines the reader controls and `sidebar.mbt` the document panels.
+Authored UI text, ARIA labels and diagnostic messages
+use English; PDF content and multilingual regression fixtures retain their
+original text. `model.mbt` holds typed view snapshots and message types;
 Rabbita state and commands connect them in `main.mbt`. The async reader session
 tracks document generations, abort controllers and page/selection lifetimes in
-MoonBit. Navigation and page/text mounting live in `pages.mbt`, search and native
-selection in their corresponding files, and file/print lifecycle in `document.mbt`
+MoonBit. `pages.mbt` connects page scheduling and surface mounting;
+`text_layer.mbt` constructs native text layers and measures glyphs, and
+`navigation.mbt` handles paging, zoom and annotation destinations. Search and native
+selection live in their corresponding files, and file/print lifecycle in `document.mbt`
 and `print.mbt`. Native browser events are connected in `events.mbt`.
 `layers.mbt` implements the Rabbita layer panel and configuration changes,
 including editor flushing, cache invalidation and stale-reply suppression.
+`status.mbt` defines viewer states independently of their status-bar text;
+runtime transitions match variants rather than message prefixes. `json.mbt`
+shares JSON access and update helpers between reader panels and the editor.
 
 The editor follows the same boundary: `editor_model.mbt` defines its typed state,
 `editor_view.mbt` builds Rabbita controls, and `editor.mbt` applies snapshots,

@@ -85,7 +85,7 @@ async function handleMessage(event) {
       rangeDocument = rangeSource = null;
     }
     if (["editor_info", "apply_edits", "save_pdf"].includes(method)) {
-      if (xfa) throw Object.assign(new Error("动态 XFA 文档暂不支持编辑和保存"), {code:"edit-unavailable"});
+      if (xfa) throw Object.assign(new Error("Editing and saving dynamic XFA documents is not supported yet"), {code:"edit-unavailable"});
       // A writer needs every indirect object, including objects never visited
       // by lazy page rendering. Complete and re-open the source once before
       // entering the editor, retaining the HTTP validator checks.

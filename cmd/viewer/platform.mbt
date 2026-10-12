@@ -380,13 +380,22 @@ fn show_error(error : Error) -> Unit {
     ViewerError(_, message) => message
     _ => error.to_string()
   }
+  show_error_message(message)
+}
+
+///|
+fn show_error_message(message : String) -> Unit {
   if message.contains("AbortError") || message.contains("cancelled") {
     return
   }
   state.error = message
-  state.status = "未能完成操作"
+  state.status = OperationFailed
   notify()
 }
+
+///|
+extern "js" fn parse_float(text : String) -> Double =
+  #| text => parseFloat(text) || 0
 
 ///|
 fn set_busy(busy : Bool) -> Unit {

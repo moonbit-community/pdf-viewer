@@ -232,7 +232,7 @@ main:focus-visible {
   overflow: hidden;
 }
 .page[aria-busy="true"]::before {
-  content: "正在加载第 " attr(data-page) " 页…";
+  content: "Loading page " attr(data-page) "…";
   position: absolute;
   inset: 0;
   display: grid;
@@ -694,7 +694,7 @@ h1 {
     break-after: auto;
   }
   body:not(.pdf-print-ready)::before {
-    content: "请使用阅读器工具栏的“打印”按钮，准备完整文档后再打印。";
+    content: "Use the Print button in the reader toolbar to prepare the complete document before printing.";
     display: block;
     padding: 24px;
   }

@@ -27,17 +27,17 @@ fn editor_pointer_down(event : @dom.PointerEvent) -> Unit {
     editor_select(entry)
   }
   if mode == "image" && editor.image == Json::null() {
-    editor.status = "先选择签名图片"
+    editor.status = "Select a signature image first"
     notify()
     return
   }
   if mode == "text" && editor.text.trim().is_empty() {
-    editor.status = "先在工具栏输入文字"
+    editor.status = "Enter text in the toolbar first"
     notify()
     return
   }
   let viewport = value_json(parse_value(element_data(layer, "viewport")))
-  let matrix = edit_array(json_field(viewport, "matrix")).map(edit_number)
+  let matrix = json_array(json_field(viewport, "matrix")).map(json_number)
   if matrix.length() != 6 ||
     (matrix[0] * matrix[3] - matrix[1] * matrix[2]).abs() < 1.0e-12 {
     return
@@ -69,7 +69,7 @@ fn editor_gesture_bounds(
   end : EditPoint,
 ) -> Array[Double] {
   if gesture.mode == "move" || gesture.mode == "resize" {
-    let old = edit_array(json_field(gesture.entry, "bounds")).map(edit_number)
+    let old = json_array(json_field(gesture.entry, "bounds")).map(json_number)
     let dx = end.x - gesture.start.x
     let dy = end.y - gesture.start.y
     if gesture.mode == "move" {
@@ -156,7 +156,7 @@ async fn editor_pointer_up(event : @dom.PointerEvent) -> Unit {
     {
       "kind": "update",
       "page": gesture.number,
-      "id": edit_string(gesture.entry, "id"),
+      "id": json_string_field(gesture.entry, "id"),
       "bounds": bounds,
     }
   } else {
@@ -183,47 +183,47 @@ async fn editor_pointer_up(event : @dom.PointerEvent) -> Unit {
       xs.fold(init=xs[0], Double::max) + padding,
       ys.fold(init=ys[0], Double::max) + padding,
     ]
-    patch = edit_put(patch, "bounds", ToJson::to_json(bounds))
-    patch = edit_put(patch, "subtype", Json::string("Ink"))
-    patch = edit_put(patch, "paths", ToJson::to_json([points]))
-    patch = edit_put(
+    patch = json_put(patch, "bounds", ToJson::to_json(bounds))
+    patch = json_put(patch, "subtype", Json::string("Ink"))
+    patch = json_put(patch, "paths", ToJson::to_json([points]))
+    patch = json_put(
       patch,
       "contents",
       Json::string(
         if gesture.mode == "signature" {
-          "手写签名"
+          "Handwritten signature"
         } else {
-          "笔迹"
+          "Ink"
         },
       ),
     )
     let previous = editor_changes()
       .filter(entry => {
-        edit_string(entry, "id") == editor.ink_id &&
-        edit_string(entry, "kind") == "add" &&
-        edit_number(json_field(entry, "size")) == editor.size &&
+        json_string_field(entry, "id") == editor.ink_id &&
+        json_string_field(entry, "kind") == "add" &&
+        json_number(json_field(entry, "size")) == editor.size &&
         json_field(entry, "color") == ToJson::to_json(edit_rgb())
       })
       .get(0)
     if previous is Some(previous) && editor.ink_page == gesture.number {
-      let old = edit_array(json_field(previous, "bounds")).map(edit_number)
+      let old = json_array(json_field(previous, "bounds")).map(json_number)
       bounds = [
         bounds[0].min(old[0]),
         bounds[1].min(old[1]),
         bounds[2].max(old[2]),
         bounds[3].max(old[3]),
       ]
-      patch = edit_put(patch, "bounds", ToJson::to_json(bounds))
-      patch = edit_put(patch, "id", json_field(previous, "id"))
-      patch = edit_put(
+      patch = json_put(patch, "bounds", ToJson::to_json(bounds))
+      patch = json_put(patch, "id", json_field(previous, "id"))
+      patch = json_put(
         patch,
         "paths",
         Json::array(
-          [..edit_array(json_field(previous, "paths")), ToJson::to_json(points)],
+          [..json_array(json_field(previous, "paths")), ToJson::to_json(points)],
         ),
       )
     }
-    editor.ink_id = edit_string(patch, "id")
+    editor.ink_id = json_string_field(patch, "id")
     editor.ink_page = gesture.number
   } else if gesture.mode == "text" {
     if bounds[2] - bounds[0] < 2.0 || bounds[3] - bounds[1] < 2.0 {
@@ -234,11 +234,11 @@ async fn editor_pointer_up(event : @dom.PointerEvent) -> Unit {
         gesture.start.y,
       ]
     }
-    patch = edit_put(patch, "bounds", ToJson::to_json(bounds))
-    patch = edit_put(patch, "subtype", Json::string("FreeText"))
-    patch = edit_put(patch, "contents", Json::string(editor.text))
+    patch = json_put(patch, "bounds", ToJson::to_json(bounds))
+    patch = json_put(patch, "subtype", Json::string("FreeText"))
+    patch = json_put(patch, "contents", Json::string(editor.text))
     if editor.text.iter().any(c => c.to_int() > 255) {
-      patch = edit_put(
+      patch = json_put(
         patch,
         "image",
         editor_text_image(
@@ -254,8 +254,8 @@ async fn editor_pointer_up(event : @dom.PointerEvent) -> Unit {
     if bounds[2] - bounds[0] < 2.0 || bounds[3] - bounds[1] < 2.0 {
       return
     }
-    patch = edit_put(patch, "subtype", Json::string("Highlight"))
-    patch = edit_put(patch, "contents", Json::string(editor.text))
+    patch = json_put(patch, "subtype", Json::string("Highlight"))
+    patch = json_put(patch, "contents", Json::string(editor.text))
   } else if gesture.mode == "image" {
     if bounds[2] - bounds[0] < 2.0 || bounds[3] - bounds[1] < 2.0 {
       bounds = [
@@ -265,8 +265,8 @@ async fn editor_pointer_up(event : @dom.PointerEvent) -> Unit {
         gesture.start.y,
       ]
     }
-    let ratio = edit_number(json_field(editor.image, "width")) /
-      edit_number(json_field(editor.image, "height"))
+    let ratio = json_number(json_field(editor.image, "width")) /
+      json_number(json_field(editor.image, "height"))
     let w = bounds[2] - bounds[0]
     let h = bounds[3] - bounds[1]
     if w / h > ratio {
@@ -274,22 +274,22 @@ async fn editor_pointer_up(event : @dom.PointerEvent) -> Unit {
     } else {
       bounds[1] = bounds[3] - w / ratio
     }
-    patch = edit_put(patch, "bounds", ToJson::to_json(bounds))
-    patch = edit_put(patch, "subtype", Json::string("Stamp"))
-    patch = edit_put(patch, "image", editor.image)
-    patch = edit_put(patch, "contents", Json::string("图片签名"))
+    patch = json_put(patch, "bounds", ToJson::to_json(bounds))
+    patch = json_put(patch, "subtype", Json::string("Stamp"))
+    patch = json_put(patch, "image", editor.image)
+    patch = json_put(patch, "contents", Json::string("Image signature"))
   } else if moving {
     let previous = editor_changes()
       .filter(entry => {
-        edit_string(entry, "id") == edit_string(gesture.entry, "id")
+        json_string_field(entry, "id") == json_string_field(gesture.entry, "id")
       })
       .get(0)
     if previous is Some(previous) &&
       json_field(previous, "paths") is Array(paths) {
-      let old = edit_array(json_field(gesture.entry, "bounds")).map(edit_number)
+      let old = json_array(json_field(gesture.entry, "bounds")).map(json_number)
       let paths = paths.map(path => {
-        edit_array(path).map(point => {
-          let point = edit_array(point).map(edit_number)
+        json_array(path).map(point => {
+          let point = json_array(point).map(json_number)
           [
             bounds[0] +
             (point[0] - old[0]) * (bounds[2] - bounds[0]) / (old[2] - old[0]),
@@ -298,7 +298,7 @@ async fn editor_pointer_up(event : @dom.PointerEvent) -> Unit {
           ]
         })
       })
-      patch = edit_put(patch, "paths", ToJson::to_json(paths))
+      patch = json_put(patch, "paths", ToJson::to_json(paths))
     }
   }
   editor_commit(patch)
@@ -392,4 +392,50 @@ fn editor_can_replace() -> Bool {
 
 ///|
 extern "js" fn native_discard_edits() -> Bool =
-  #| () => confirm('当前 PDF 有未保存的修改，是否放弃这些修改？')
+  #| () => confirm('Discard unsaved changes to this PDF?')
+
+///|
+fn edit_rgb() -> Array[Double] {
+  let value = editor.color
+  fn digit(c : UInt16) -> Int {
+    if c >= 97 {
+      c.to_int() - 87
+    } else if c >= 65 {
+      c.to_int() - 55
+    } else {
+      c.to_int() - 48
+    }
+  }
+  [
+    for i in [1, 3, 5] => {
+      (digit(value[i]) * 16 + digit(value[i + 1])).to_double() / 255.0
+    }
+  ]
+}
+
+///|
+fn edit_bounds(start : EditPoint, end : EditPoint) -> Array[Double] {
+  [
+    start.x.min(end.x),
+    start.y.min(end.y),
+    start.x.max(end.x),
+    start.y.max(end.y),
+  ]
+}
+
+///|
+fn edit_pdf_point(
+  page : @dom.Element,
+  matrix : Array[Double],
+  x : Double,
+  y : Double,
+) -> EditPoint {
+  let rect = page.get_bounding_client_rect()
+  let x = x - rect.get_left() - matrix[4]
+  let y = y - rect.get_top() - matrix[5]
+  let det = matrix[0] * matrix[3] - matrix[1] * matrix[2]
+  {
+    x: (matrix[3] * x - matrix[2] * y) / det,
+    y: (matrix[0] * y - matrix[1] * x) / det,
+  }
+}

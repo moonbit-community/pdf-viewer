@@ -95,9 +95,9 @@ fn layer_rows_view(
         @html.label(
           class="layer-item",
           title=if locked {
-            "文档锁定的图层"
+            "Layer locked by the document"
           } else if visible != print_visible {
-            "此图层的显示与打印状态不同"
+            "This layer has different display and print visibility"
           } else {
             name
           },
@@ -125,16 +125,16 @@ fn layer_rows_view(
                 emit(LayerVisibility(number, !visible))
               }),
             ),
-            @html.span(if name == "" { "未命名图层" } else { name }),
+            @html.span(if name == "" { "Unnamed layer" } else { name }),
             @html.span(
               class="layer-hint",
               if locked {
-                "锁定"
+                "Locked"
               } else if visible != print_visible {
                 if print_visible {
-                  "打印可见"
+                  "Visible in print"
                 } else {
-                  "打印隐藏"
+                  "Hidden in print"
                 }
               } else {
                 ""
@@ -150,7 +150,7 @@ fn layer_rows_view(
           @html.h3(
             class="layer-group-name",
             if name == "" {
-              "其他图层"
+              "Other layers"
             } else {
               name
             },
@@ -172,7 +172,7 @@ fn layer_rows_view(
 fn layers_view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
   let entries = json_array(json_field(model.layers, "groups"))
   if entries.is_empty() {
-    return @html.p(class="sidebar-empty", "此文档没有图层")
+    return @html.p(class="sidebar-empty", "This document has no layers")
   }
   let index = json_field(model.layers, "config_index")
   let selected = if index is Null { -1 } else { json_int(index) }
@@ -187,9 +187,9 @@ fn layers_view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
         if name != "" {
           name
         } else if value == -1 {
-          "默认配置"
+          "Default configuration"
         } else {
-          "配置 \{value + 1}"
+          "Configuration \{value + 1}"
         },
       ),
     )
@@ -209,12 +209,12 @@ fn layers_view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
       .data_set("config-index", selected.to_string()),
     [
       @html.label(class="layer-config-label", [
-        @html.text("图层配置"),
+        @html.text("Layer configuration"),
         @html.select(
           id="layers-config",
           disabled=busy,
           attrs=@html.Attrs::build()
-            .aria_label("图层配置")
+            .aria_label("Layer configuration")
             .value_prop(selected.to_string()),
           on_change=@cmd.Emit(value => {
             emit(LayerConfig(parse_float(value).to_int()))
@@ -226,7 +226,7 @@ fn layers_view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
         id="layers-reset",
         disabled=busy,
         on_click=emit(LayerConfig(selected)),
-        "恢复此配置",
+        "Reset this configuration",
       ),
       layer_rows_view(
         json_array(json_field(model.layers, "order")),

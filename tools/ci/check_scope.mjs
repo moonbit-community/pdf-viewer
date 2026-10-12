@@ -8,8 +8,9 @@ assert.equal(items.length,50,'Update the documented inventory when adding/removi
 assert.equal(new Set(items.map(item=>item[2])).size,50,'Duplicate TODO IDs');
 assert.equal(items.filter(item=>item[1]==='x').length,50,'Readonly gap table and checklist disagree');
 assert.match(todo,/50\/50/);
-assert.match(todo,/编辑、保存和签名/);
-const gapTable=todo.split('## 能力差距表')[1]?.split('## ')[0] || todo;
+assert.ok(todo.includes('<!-- editor-extension-roadmap -->'),'Keep the editor roadmap separate from the readonly inventory');
+const gapTable=todo.match(/<!-- readonly-gap-table:start -->([\s\S]*?)<!-- readonly-gap-table:end -->/)?.[1];
+assert.ok(gapTable,'The readonly gap table must have stable inventory markers');
 const gaps=[...gapTable.matchAll(/^\|[^\n]*\| (\d+) \| (?:—|[^|]+) \|$/gm)];
 assert.equal(gaps.length,14,'Capability table must cover 14 domains');
 assert.equal(gaps.reduce((sum,row)=>sum+Number(row[1]),0),0,'Remaining domain counts disagree with the checklist');
