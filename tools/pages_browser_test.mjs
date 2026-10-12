@@ -123,6 +123,7 @@ try{
   await check('Packaged XFA renders readonly fields and copies pending source ranges',async()=>{
     await page.locator('#file-input').setInputFiles({name:'xfa.pdf',mimeType:'application/pdf',buffer:xfaFixture()});
     await page.waitForFunction(()=>document.querySelector('.xfaLayer input')?.value==='Bound value');
+    await waitForUI(page,()=>document.querySelector('#viewer').getAttribute('aria-busy')==='false');
     const input=page.locator('.xfaLayer input').first();
     assert.equal(await input.isEditable(),false);
     const copy=await page.evaluate(async()=>{
