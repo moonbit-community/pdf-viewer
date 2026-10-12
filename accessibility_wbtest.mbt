@@ -31,10 +31,23 @@ test "accessibility maps named properties roles language and artifacts to origin
   let before = document.page(1).unwrap().text_content()
   let data = document.accessibility_page_json(1).unwrap()
   let cached = document.page(1).unwrap()
+  assert_true(document.accessibility_sources.val is Some((1, _)))
   assert_eq(
     document.accessibility_page_json(1, page_model=Some(cached)),
     Some(data),
   )
+  assert_eq(document.accessibility_sources.val, None)
+  // The same page model also works once the one-use provenance is consumed.
+  assert_eq(
+    document.accessibility_page_json(1, page_model=Some(cached)),
+    Some(data),
+  )
+  ignore(document.page(1))
+  let fallback_view = document.with_font_fallbacks([])
+  assert_eq(fallback_view.accessibility_sources.val, None)
+  assert_true(document.accessibility_sources.val is Some((1, _)))
+  ignore(document.page(1, optional_content_intent=Print))
+  assert_eq(document.accessibility_sources.val, None)
   assert_eq(document.accessibility_page_json(0, page_model=Some(cached)), None)
   assert_eq(document.accessibility_page_json(2, page_model=Some(cached)), None)
   assert_true(

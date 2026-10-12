@@ -12,6 +12,8 @@ test "raw PDF pixels become a browser-readable PNG" {
   assert_eq(parsed.width, 1)
   assert_eq(parsed.height, 1)
   assert_eq(parsed.color_type, 2)
+  assert_eq(@flate.pdf_flate_decode(parsed.idat), b"\x00\xFF\x00\x80")
+  assert_eq(png[png.length() - 12:], b"\x00\x00\x00\x00IEND\xAE\x42\x60\x82")
 }
 
 ///|

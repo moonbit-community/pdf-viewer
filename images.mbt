@@ -683,31 +683,7 @@ fn pdf_png_of_raw_image(
       position += 1
     }
   }
-  let compressed = @flate.pdf_flate_encode(
-    @core.pdf_bytes_of_int_array(scanlines),
-  )
-  let output : Array[Int] = []
-  pdf_png_append_signature(output)
-  let header : Array[Int] = []
-  for value in pdf_png_u32_bytes(width) {
-    header.push(value)
-  }
-  for value in pdf_png_u32_bytes(height) {
-    header.push(value)
-  }
-  header.push(8)
-  header.push(2)
-  header.push(0)
-  header.push(0)
-  header.push(0)
-  pdf_png_append_chunk(output, [0x49, 0x48, 0x44, 0x52], header)
-  pdf_png_append_chunk(
-    output,
-    [0x49, 0x44, 0x41, 0x54],
-    @core.pdf_int_array_of_bytes(compressed),
-  )
-  pdf_png_append_chunk(output, [0x49, 0x45, 0x4e, 0x44], [])
-  @core.pdf_bytes_of_int_array(output)
+  pdf_png_of_scanlines(width, height, 2, scanlines)
 }
 
 ///|
@@ -785,29 +761,21 @@ fn pdf_png_of_scanline_bytes(
   colour_type : Int,
   scanlines : Bytes,
 ) -> Bytes raise @core.PdfError {
-  let compressed = @flate.pdf_flate_encode(scanlines)
-  let output : Array[Int] = []
-  pdf_png_append_signature(output)
-  let header : Array[Int] = []
-  for value in pdf_png_u32_bytes(width) {
-    header.push(value)
-  }
-  for value in pdf_png_u32_bytes(height) {
-    header.push(value)
-  }
-  header.push(8)
-  header.push(colour_type)
-  header.push(0)
-  header.push(0)
-  header.push(0)
-  pdf_png_append_chunk(output, [0x49, 0x48, 0x44, 0x52], header)
-  pdf_png_append_chunk(
-    output,
-    [0x49, 0x44, 0x41, 0x54],
-    @core.pdf_int_array_of_bytes(compressed),
-  )
-  pdf_png_append_chunk(output, [0x49, 0x45, 0x4e, 0x44], [])
-  @core.pdf_bytes_of_int_array(output)
+  // All scanlines are already available. The ecosystem whole-buffer encoder
+  // avoids restaging them through a suspendable compression input window.
+  let compressed = @font_zlib.zlib_compress(scanlines)
+  let output = @buffer.Buffer(size_hint=compressed.length() + 57)
+  output.write_bytes(b"\x89PNG\x0D\x0A\x1A\x0A")
+  let header = @buffer.Buffer(size_hint=13)
+  header.write_int_be(width)
+  header.write_int_be(height)
+  header.write_byte(b'\x08')
+  header.write_byte(colour_type.to_byte())
+  header.write_bytes(b"\x00\x00\x00")
+  pdf_png_append_chunk(output, b"IHDR", header.to_bytes())
+  pdf_png_append_chunk(output, b"IDAT", compressed)
+  pdf_png_append_chunk(output, b"IEND", b"")
+  output.to_bytes()
 }
 
 ///|
@@ -871,61 +839,18 @@ fn pdf_png_rgb_pixels(
 }
 
 ///|
-fn pdf_png_u32_bytes(value : Int) -> Array[Int] {
-  [(value >> 24) & 255, (value >> 16) & 255, (value >> 8) & 255, value & 255]
-}
-
-///|
-fn pdf_png_append_signature(output : Array[Int]) -> Unit {
-  for value in [137, 80, 78, 71, 13, 10, 26, 10] {
-    output.push(value)
-  }
-}
-
-///|
 fn pdf_png_append_chunk(
-  output : Array[Int],
-  kind : ArrayView[Int],
-  data : ArrayView[Int],
+  output : @buffer.Buffer,
+  kind : BytesView,
+  data : BytesView,
 ) -> Unit {
-  for value in pdf_png_u32_bytes(data.length()) {
-    output.push(value)
-  }
-  for value in kind {
-    output.push(value)
-  }
-  for value in data {
-    output.push(value)
-  }
-  let crc = pdf_png_crc32(kind, data)
-  for value in pdf_png_u32_bytes(crc) {
-    output.push(value)
-  }
-}
-
-///|
-fn pdf_png_crc32(kind : ArrayView[Int], data : ArrayView[Int]) -> Int {
-  let mut crc : UInt = 0xFFFFFFFFU
-  for value in kind {
-    crc = pdf_png_crc32_byte(crc, value)
-  }
-  for value in data {
-    crc = pdf_png_crc32_byte(crc, value)
-  }
-  (crc ^ 0xFFFFFFFFU).reinterpret_as_int()
-}
-
-///|
-fn pdf_png_crc32_byte(crc : UInt, value : Int) -> UInt {
-  let mut current = crc ^ value.reinterpret_as_uint()
-  for _ in 0..<8 {
-    current = if (current & 1U) == 1U {
-      (current >> 1) ^ 0xEDB88320U
-    } else {
-      current >> 1
-    }
-  }
-  current
+  output.write_int_be(data.length())
+  output.write_bytes(kind)
+  output.write_bytes(data)
+  let crc = @image_checksum.Crc32()
+  crc.update(kind)
+  crc.update(data)
+  output.write_int_be(crc.finish().reinterpret_as_int())
 }
 
 ///|

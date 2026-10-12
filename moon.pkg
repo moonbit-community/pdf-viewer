@@ -12,6 +12,7 @@ import {
   "moonbit-community/ucd",
   "moonbit-community/flate" @raw_flate,
   "moonbit-community/flate/zlib" @font_zlib,
+  "moonbit-community/flate/checksum" @image_checksum,
   "mizchi/font",
   "moonbitlang/pdflite",
   "moonbitlang/pdflite/content",

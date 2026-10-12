@@ -541,6 +541,7 @@ pub struct PdfViewerDocument {
   pages : Array[@page.PdfPage]
   optional_content_state : PdfOptionalContentState?
   font_fallbacks : Array[PdfFontFallback]
+  priv accessibility_sources : Ref[(Int, Array[PdfTextStringSource?])?]
   priv reader_observations : Array[PdfReaderDiagnostic]
   priv editor_security : PdfEditorSecurity?
 }
@@ -681,6 +682,7 @@ fn pdf_viewer_document_of_parsed_document(
     pages,
     optional_content_state: None,
     font_fallbacks: [],
+    accessibility_sources: Ref(None),
     reader_observations,
     editor_security: None,
   }
@@ -695,7 +697,7 @@ pub fn PdfViewerDocument::with_font_fallbacks(
   self : PdfViewerDocument,
   fallbacks : Array[PdfFontFallback],
 ) -> PdfViewerDocument {
-  { ..self, font_fallbacks: fallbacks, }
+  { ..self, font_fallbacks: fallbacks, accessibility_sources: Ref(None), }
 }
 
 ///|
@@ -713,7 +715,11 @@ pub fn PdfViewerDocument::with_optional_content_state(
   self : PdfViewerDocument,
   state : PdfOptionalContentState,
 ) -> PdfViewerDocument {
-  { ..self, optional_content_state: Some(state), }
+  {
+    ..self,
+    optional_content_state: Some(state),
+    accessibility_sources: Ref(None),
+  }
 }
 
 ///|
@@ -746,19 +752,30 @@ pub fn PdfViewerDocument::page(
   page_number : Int,
   optional_content_intent? : PdfOptionalContentIntent = Display,
 ) -> PdfPageModel? raise @core.PdfError {
+  self.accessibility_sources.val = None
   if page_number < 1 || page_number > self.pages.length() {
     None
   } else {
-    Some(
-      pdf_page_model(
-        self.document,
-        self.pages[page_number - 1],
-        page_number,
-        self.optional_content_state,
-        self.font_fallbacks,
-        optional_content_intent~,
-      ),
+    let sources : Ref[Array[PdfTextStringSource?]?] = Ref(None)
+    let tagged = optional_content_intent == Display &&
+      self.document.lookup_direct(
+        pdf_name_key("/StructTreeRoot"),
+        self.document.catalog(),
+      )
+      is Some(_)
+    let model = pdf_page_model(
+      self.document,
+      self.pages[page_number - 1],
+      page_number,
+      self.optional_content_state,
+      self.font_fallbacks,
+      optional_content_intent~,
+      text_sources=if tagged { Some(sources) } else { None },
     )
+    if sources.val is Some(values) {
+      self.accessibility_sources.val = Some((page_number, values))
+    }
+    Some(model)
   }
 }
 
@@ -1169,6 +1186,7 @@ fn pdf_page_model(
   optional_content_state : PdfOptionalContentState?,
   font_fallbacks : ArrayView[PdfFontFallback],
   optional_content_intent? : PdfOptionalContentIntent = Display,
+  text_sources? : Ref[Array[PdfTextStringSource?]?]? = None,
 ) -> PdfPageModel raise @core.PdfError {
   let rectangle = pdf_page_view_box(document, page)
   let user_unit = pdf_page_user_unit(document, page)
@@ -1198,6 +1216,7 @@ fn pdf_page_model(
     resource_context~,
     page_fonts~,
     optional_content_view~,
+    text_sources~,
   )
   let text = pdf_text_of_items(items)
   let fonts = page_fonts.fonts
@@ -2010,16 +2029,27 @@ fn pdf_items_of_page(
   page_fonts? : PdfPageFontScope,
   optional_content_view? : PdfOptionalContentView? = None,
   resource_context? : PdfResourceBuildContext = pdf_resource_build_context(),
+  text_sources? : Ref[Array[PdfTextStringSource?]?]? = None,
 ) -> Array[PdfPageItem] raise @core.PdfError {
   let collected_entries = pdf_collected_entries_of_page(
     document,
     page,
     optional_content_view~,
     resource_context~,
+    collect_text_sources=text_sources is Some(_),
     font_fallbacks=page_fonts
       .map(scope => scope.fallbacks[:])
       .unwrap_or(resource_context.font_fallbacks[:]),
   )
+  if text_sources is Some(output) && collected_entries.length() <= 16384 {
+    // Keep only operator provenance for the immediately following semantic
+    // projection, rather than a second copy of paint/interpreter state.
+    output.val = Some(
+      collected_entries.map(entry => {
+        entry.text_source.map(source => source.string_source)
+      }),
+    )
+  }
   let (blend_space, blend_profile) = pdf_colour_page_profile(
     document, page, resource_context,
   )

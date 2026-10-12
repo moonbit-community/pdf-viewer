@@ -26,6 +26,71 @@ fn image_pattern_test_page(
 }
 
 ///|
+test "pattern compatibility images reuse their collected index and default colour policy" {
+  let document = annotation_test_document([
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 20 20] /Contents 4 0 R /Resources << /XObject << /Im 5 0 R >> >> >>",
+    annotation_test_stream("", "/Im Do"),
+    annotation_test_stream(
+      "/Type /XObject /Subtype /Image /Width 1 /Height 1 /BitsPerComponent 8 /ColorSpace /DeviceRGB /Filter /ASCIIHexDecode",
+      "FF0000>",
+    ),
+  ])
+  let entries = pdf_collected_entries_of_page(
+    document.document,
+    document.pages[0],
+  )
+  guard document.page(1).unwrap().items is [Image(image)] &&
+    image.resource is Some(resource) else {
+    fail("missing converted image")
+  }
+  let borrowed = PdfPageItem::Image({
+    ..image,
+    resource: Some({
+      ..resource,
+      data_uri: Some("data:image/png;base64,borrowed"),
+    }),
+  })
+  let parts = (
+    entries : ArrayView[PdfCollectedEntry],
+    items : ArrayView[PdfPageItem],
+  ) => {
+    pdf_pattern_tile_svg(
+      document.document,
+      entries,
+      0.0,
+      0.0,
+      20.0,
+      None,
+      decoded_items=items,
+    ).0
+  }
+  assert_true(parts(entries[:], [borrowed]).contains("base64,borrowed"))
+  let original = parts(entries[:], [])
+  assert_eq(
+    parts(entries[:], [Image({ ..image, index: 1, resource: image.resource, })]),
+    original,
+  )
+  let altered = entries.map(entry => {
+    ..entry,
+    state: {
+      ..entry.state,
+      path_state: {
+        ..entry.state.path_state,
+        rendering_intent: "/AbsoluteColorimetric",
+      },
+    },
+  })
+  assert_eq(parts(altered[:], [borrowed]), original)
+  let failed = PdfPageItem::Image({
+    ..image,
+    resource: Some({ ..resource, error: Some("retry"), }),
+  })
+  assert_eq(parts(entries[:], [failed]), original)
+}
+
+///|
 test "stencil image captures coloured pattern before image CTM changes" {
   let page = image_pattern_test_page(
     "/Pattern cs /P scn q 20 0 0 20 0 0 cm /Im Do Q",

@@ -321,6 +321,7 @@ fn pdf_pattern_resource_of_object(
           bbox.min_y,
           bbox.max_y - bbox.min_y,
           uncolored_colour,
+          decoded_items=tile_page.items[:],
         )
         parts
       } else {
@@ -543,9 +544,10 @@ fn pdf_pattern_tile_svg(
   bbox_min_y : Double,
   bbox_height : Double,
   uncolored_colour : String?,
+  decoded_items? : ArrayView[PdfPageItem] = [],
 ) -> (String, Array[PdfPatternTilePart]) {
   let parts : Array[PdfPatternTilePart] = []
-  for collected in entries {
+  for index, collected in entries {
     let output = StringBuilder()
     let entry = collected.entry
     match entry.object {
@@ -626,9 +628,34 @@ fn pdf_pattern_tile_svg(
           )
         }
       }
-      @pdflite.PdfContentImageObject(name) =>
-        match
-          pdf_image_resource_of_resources(document, collected.resources, name) {
+      @pdflite.PdfContentImageObject(name) => {
+        // The compatibility parts and complete cell use the same collected
+        // indices and resource scopes. Borrow the already converted ordinary
+        // image; non-default colour policies keep their legacy projection.
+        let reused = if collected.state.path_state.rendering_intent ==
+          "/RelativeColorimetric" &&
+          collected.state.black_generation == @syntax.PdfNull &&
+          collected.state.undercolour_removal == @syntax.PdfNull {
+          for item in decoded_items {
+            if item
+              is Image({ index: cached_index, resource: Some(resource), .. }) &&
+              cached_index == index &&
+              resource.error is None &&
+              resource.ink_samples is None {
+              break Some(resource)
+            }
+          } nobreak {
+            None
+          }
+        } else {
+          None
+        }
+        let resource = match reused {
+          Some(resource) => Some(resource)
+          None =>
+            pdf_image_resource_of_resources(document, collected.resources, name)
+        }
+        match resource {
           Some(resource) =>
             match resource.data_uri {
               Some(_) => {
@@ -639,6 +666,7 @@ fn pdf_pattern_tile_svg(
             }
           None => ()
         }
+      }
       _ => ()
     }
     let fragment = output.to_string()

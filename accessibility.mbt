@@ -488,21 +488,26 @@ pub fn PdfViewerDocument::accessibility_page_json(
   let mut truncated = false
   if root is Some(root) {
     let raw_page = self.pages[number - 1]
-    let entries = pdf_collected_entries_of_page(
-      document,
-      raw_page,
-      optional_content_view=pdf_optional_content_view(
-        document,
-        self.optional_content_state,
-      ),
-      collect_text_sources=true,
-      font_fallbacks=self.font_fallbacks[:],
-    )
+    let cached = self.accessibility_sources.val
+    self.accessibility_sources.val = None
+    let sources = match cached {
+      Some((cached_number, sources)) if cached_number == number => sources
+      _ =>
+        pdf_collected_entries_of_page(
+          document,
+          raw_page,
+          optional_content_view=pdf_optional_content_view(
+            document,
+            self.optional_content_state,
+          ),
+          collect_text_sources=true,
+          font_fallbacks=self.font_fallbacks[:],
+        ).map(entry => entry.text_source.map(source => source.string_source))
+    }
     let wanted : Map[String, Bool] = Map([])
     let prefixes : Map[String, Bool] = Map([])
-    for entry in entries {
-      if entry.text_source is Some(source) {
-        let source = source.string_source
+    for source in sources {
+      if source is Some(source) {
         wanted[pdf_accessibility_operator(
           pdf_accessibility_path(source.form_path[:]),
           source.operator_index,
@@ -534,11 +539,7 @@ pub fn PdfViewerDocument::accessibility_page_json(
     let groups : Array[PdfAccessibilityGroup] = []
     let mut previous_key : String? = None
     for item in page.text_content().items {
-      guard entries.get(item.index) is Some(entry) &&
-        entry.text_source is Some(source) else {
-        continue
-      }
-      let source = source.string_source
+      guard sources.get(item.index) is Some(Some(source)) else { continue }
       let path = pdf_accessibility_path(source.form_path[:])
       guard marks.get(pdf_accessibility_operator(path, source.operator_index))
         is Some(mark) else {
