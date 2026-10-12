@@ -30,7 +30,7 @@
     }
   ],
   "gray_jpeg": {
-    "source": "Original 32x16 constant grayscale blocks, encoded with cjpeg -grayscale -sample 2x2 -quality 100; embedded in image_jpeg_wbtest.mbt",
+    "source": "Original 32x16 constant grayscale blocks, encoded with cjpeg -grayscale -sample 2x2 -quality 100; embedded in internal/engine/image_jpeg_wbtest.mbt",
     "sha256": "78a8f9cc9af53fc8afdec095404c077f356f4c677cd183a7b14d51b14dab85d9",
     "license": "Apache-2.0",
     "pixel_blocks": [

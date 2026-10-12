@@ -3,7 +3,7 @@ test "all pinned Adobe binary CMaps decode and retain valid inherited names" {
   let names = pdf_builtin_cmap_names()
   assert_eq(names.length(), 168)
   for name in names {
-    guard pdf_builtin_cmap_asset(name) is Some(bytes) else {
+    guard @cmap_assets.lookup(name) is Some(bytes) else {
       fail("CMap asset missing: " + name)
     }
     let cmap = pdf_parse_binary_cmap(bytes)

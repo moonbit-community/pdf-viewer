@@ -1,6 +1,6 @@
 # Adobe CMap data
 
-The generated `builtin_cmap_assets.mbt` embeds the binary CMaps from
+The generated [`internal/cmap_assets/assets.mbt`](../../internal/cmap_assets/assets.mbt) embeds the binary CMaps from
 [PDF.js](https://github.com/mozilla/pdf.js/tree/89b500f5e1d98ed89bb90211e45b28730b2d99ac/external/bcmaps).
 Their Adobe redistribution terms are preserved in `LICENSE`.
 

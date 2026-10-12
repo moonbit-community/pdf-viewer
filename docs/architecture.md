@@ -1,5 +1,36 @@
 # Renderer architecture
 
+## Package boundaries
+
+The root package is a facade containing `api.mbt`, its `moon.pkg` and the generated
+interface. It re-exports the existing eight functions and 65 types from the PDF
+engine. Applications continue to import `moonbit-community/pdf-viewer`; methods,
+fields and function parameters remain available through that entry point.
+
+| Directory | Responsibility |
+| --- | --- |
+| `internal/engine/` | Document/page models, content collection, fonts, text, graphics, editing and whitebox tests |
+| `internal/cmap_assets/` | Generated, pinned Adobe CMap bytes |
+| `internal/font_assets/` | Generated, pinned Standard 14 font programs |
+| `tests/api/` | Consumer tests that import the root facade |
+| `codecs/` | Existing JPX and JBIG2 codec packages |
+| `cmd/` | Reader CLI, browser bridge and Rabbita application |
+
+Production dependencies run from the facade to the engine, then to resource and
+codec packages. Internal packages never import the facade in production; the
+engine imports it only for documentation tests. Models and their methods remain
+in the same compilation unit, keeping implementation helpers private instead of
+exporting them across artificial package boundaries.
+
+Within the engine, `model.mbt` holds shared page data, `document.mbt` handles the
+document API and opening, `page_api.mbt` defines viewport/page methods, and
+`collector.mbt` lowers content into page items. Other files retain their feature
+names. Public enum constructors should be qualified through the exported type,
+for example `@pdf.PdfPageItem::Path(item)`; package-level shorthand such as
+`@pdf.Path(item)` is not forwarded by a type re-export.
+
+## Rendering flow
+
 The project is split around the same boundary that makes pdf.js testable:
 
 ```text
@@ -134,7 +165,7 @@ Explicit PDF Encoding names select the CFF charset or `.notdef`, avoiding an
 unrelated built-in encoding glyph. Damaged charstrings/programs retain copy
 text, PDF advances and the remaining page, with located fallback observations.
 
-A1's `standard14.mbt` and `standard14_assets.mbt` reuse the existing CFF and
+A1's `internal/engine/standard14.mbt` and `internal/font_assets/assets.mbt` reuse the existing CFF and
 TrueType readers for fixed Standard 14 replacement programs, with AFM/PDF widths
 preserving positioning. Embedded PDF programs remain preferred. A matching
 `PdfFontFallback` / `set_font_fallbacks` override deliberately suppresses bundled
@@ -170,7 +201,7 @@ byte spans remain internal. Complex external-stream inheritance and
 reader-lost codespaces remain outside this correction.
 
 `binary_cmap.mbt` decodes the binary CMap format from the pinned PDF.js
-reference. `builtin_cmap_assets.mbt` embeds 168 Adobe mapping assets, with
+reference. `internal/cmap_assets/assets.mbt` embeds 168 Adobe mapping assets, with
 licenses retained in `assets/cmaps/`; `tools/cmap_assets.mbtx` regenerates them
 after checking the reference revision. `builtin_cmap.mbt` loads and caches
 individual maps on demand, follows named inheritance for CID lookup,

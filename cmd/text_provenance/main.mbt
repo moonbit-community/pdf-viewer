@@ -189,7 +189,7 @@ fn inspect(
       _ => errors.push("recovery observation disagrees with its glyph origin")
     }
     match page.items.get(observation.item_index) {
-      Some(@pdf.Text(item)) if observation.page == page.number &&
+      Some(@pdf.PdfPageItem::Text(item)) if observation.page == page.number &&
         observation.charcode == item.charcode &&
         observation.font == item.font => ()
       _ =>

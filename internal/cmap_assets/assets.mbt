@@ -3,7 +3,7 @@
 // Redistribution terms: assets/cmaps/LICENSE.
 
 ///|
-fn pdf_builtin_cmap_asset(name : String) -> Bytes? {
+pub fn lookup(name : String) -> Bytes? {
   let encoded = match name {
     "H" => {
       let value =

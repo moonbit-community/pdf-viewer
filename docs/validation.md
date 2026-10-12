@@ -958,9 +958,9 @@ The source dictionary is unchanged. `issue17147.pdf` consequently renders
 instead of failing with `FontWidthsExpected`.
 
 ```bash
-moon test image_alpha_wbtest.mbt
-moon test image_sampling_wbtest.mbt
-moon test font_recovery_wbtest.mbt
+moon test internal/engine/image_alpha_wbtest.mbt
+moon test internal/engine/image_sampling_wbtest.mbt
+moon test internal/engine/font_recovery_wbtest.mbt
 moon run tools/visual_test.mbtx tools/image_cases.json
 ```
 

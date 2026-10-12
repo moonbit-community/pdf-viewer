@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Recreate and verify every original JPEG embedded in image_jpeg_wbtest.mbt.
+"""Recreate and verify every original JPEG embedded in internal/engine/image_jpeg_wbtest.mbt.
 
 Requires Pillow 12.3.0 / libjpeg-turbo 3.1.4.1 for byte-identical encoding.
 The pixels are generated arithmetic patterns, not downloaded images or user data.
@@ -18,7 +18,7 @@ parser = ArgumentParser(description=__doc__)
 parser.add_argument('--write-dir', type=Path)
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[2]
-source = (root / 'image_jpeg_wbtest.mbt').read_text().split('_ => fail', 1)[0]
+source = (root / 'internal/engine/image_jpeg_wbtest.mbt').read_text().split('_ => fail', 1)[0]
 fixtures = re.findall(r'"([a-z0-9_]+)"\s*=>\s*"([A-Za-z0-9+/=]+)"', source)
 assert len(fixtures) == 12, f'Expected 12 named JPEGs, got {len(fixtures)}'
 rgb = Image.new('RGB', (17, 13))

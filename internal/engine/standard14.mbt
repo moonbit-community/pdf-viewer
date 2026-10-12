@@ -99,7 +99,7 @@ fn pdf_standard14_program(
   if pdf_standard14_programs.get(name) is Some(program) {
     return program
   }
-  let program = match pdf_standard14_asset(name) {
+  let program = match @font_assets.lookup(name) {
     Some(bytes) =>
       if pdf_viewer_ttf_table(bytes[:], "glyf") is Some(_) {
         Some(StandardTrueType(bytes))

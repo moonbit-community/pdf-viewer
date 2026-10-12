@@ -21,7 +21,7 @@ fn standard14_test_faces() -> Array[@pdflite.PdfStandardFont] {
 ///|
 test "all fourteen pinned standard font programs parse and paint without host fonts" {
   for face in standard14_test_faces() {
-    let bytes = pdf_standard14_asset(face.name()).unwrap()
+    let bytes = @font_assets.lookup(face.name()).unwrap()
     assert_true(bytes.length() > 10000)
     let program = pdf_standard14_program(face).unwrap()
     match program {
@@ -55,7 +55,7 @@ test "all fourteen pinned standard font programs parse and paint without host fo
     )
     assert_eq(font.embedded_fontfile_number(), None)
   }
-  assert_eq(pdf_standard14_asset("not-a-font"), None)
+  assert_eq(@font_assets.lookup("not-a-font"), None)
   assert_eq(pdf_standard14_programs.length(), 14)
 }
 

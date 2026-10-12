@@ -28,6 +28,6 @@ const provenance=read('tools/ci/provenance.json');
 for(const item of provenance.authored_pdfs){
   assert.equal(createHash('sha256').update(readFileSync(`web/_test/${item.name}`)).digest('hex'),item.sha256,item.name);
 }
-const jpeg=readFileSync('image_jpeg_wbtest.mbt','utf8').split('test "single-component JPEG sampling factors preserve raster block order"')[1].match(/@base64\.decode\(\s*"([^"]+)"/)[1];
+const jpeg=readFileSync('internal/engine/image_jpeg_wbtest.mbt','utf8').split('test "single-component JPEG sampling factors preserve raster block order"')[1].match(/@base64\.decode\(\s*"([^"]+)"/)[1];
 assert.equal(createHash('sha256').update(Buffer.from(jpeg,'base64')).digest('hex'),provenance.gray_jpeg.sha256);
 console.log('50 readonly IDs, fixed reference versions, authored fixtures and vendored licenses/checksums verified.');

@@ -31,5 +31,5 @@ fn main raise {
   output.write_string(
     "    _ => fail(\"unknown real CMap fixture\")\n  }\n  @utf8.decode(@base64.decode(encoded))\n}\n",
   )
-  @fs.write_string_to_file("cmap_real_assets_wbtest.mbt", output.to_string())
+  @fs.write_string_to_file("internal/engine/cmap_real_assets_wbtest.mbt", output.to_string())
 }

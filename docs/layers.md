@@ -72,7 +72,7 @@ CI checks every named case and retains reports/PDFs/screenshots in
 `_build/layers-test-*/` alongside the reader and editor reports.
 
 ```sh
-moon test optional_content_layers_wbtest.mbt --target js
+moon test internal/engine/optional_content_layers_wbtest.mbt --target js
 moon run tools/build_web.mbtx
 moon run tools/dev.mbtx 4315
 # In another terminal:

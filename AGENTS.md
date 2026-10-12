@@ -7,6 +7,11 @@ You can browse and install extra skills here:
 
 ## Project Structure
 
+- The root package is a public facade: keep only re-exports in `api.mbt`.
+  PDF implementation and whitebox tests belong in `internal/engine/`;
+  generated resources belong in `internal/cmap_assets/` and
+  `internal/font_assets/`. Public consumer tests belong in `tests/api/`.
+
 - MoonBit packages are organized per directory; each directory contains a
   `moon.pkg` file listing its dependencies. Each package has its files and
   blackbox test files (ending in `_test.mbt`) and whitebox test files (ending in

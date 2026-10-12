@@ -100,14 +100,16 @@ TODO 范围：R-02、F-03、F-05、F-06、F-07、T-01、T-02、T-04。
 
 ## 可修改的文件
 
+以下实现文件均位于 `internal/engine/`。根 `api.mbt` 只负责公开导出。
+
 - `font_resources.mbt`、`type3_outline.mbt`、`svg_text.mbt`、`text_selection.mbt`。
 - `truetype_outline.mbt`、`cff_*`、`type1_*`、`font_recovery.mbt`、`reader_recovery.mbt`。
 - `cmap_*`、`binary_cmap.mbt`、`builtin_cmap.mbt`、`cid_mapping.mbt`、`cid_geometry.mbt`。
 - `text_order.mbt`、`text_geometry.mbt`、`text_layer.mbt`、`text_layout.mbt`、
   `text_clipping.mbt`、`search.mbt`，以及对应专用测试和新增文字工具。
 
-`builtin_cmap_assets.mbt` 是生成资产，需要更新时保留固定来源和许可。
-公共模型/collector 在 A2 的 `pdf-viewer.mbt` 中；需要来源字段或调用调整时，
+`internal/cmap_assets/assets.mbt` 是生成资产，需要更新时保留固定来源和许可。
+公共模型/collector 在 A2 的 `model.mbt` / `collector.mbt` 中；需要来源字段或调用调整时，
 直接和 A2 交接该局部修改。优先用 sidecar/API，兼容现有公开 record 和消费者。
 
 ## 验收

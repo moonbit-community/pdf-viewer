@@ -16,7 +16,7 @@ fn pdf_builtin_cmap(name : String) -> PdfBuiltinCMap? {
   match pdf_builtin_cmap_cache.get(name) {
     Some(result) => result
     None => {
-      let result = match pdf_builtin_cmap_asset(name) {
+      let result = match @cmap_assets.lookup(name) {
         Some(bytes) => Some(pdf_parse_binary_cmap(bytes)) catch { _ => None }
         None => None
       }

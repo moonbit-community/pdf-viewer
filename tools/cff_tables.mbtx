@@ -69,5 +69,5 @@ async fn main {
     ] {
     emit_table(output, target, reference_table(file, source))
   }
-  @fs.write_file("cff_tables.mbt", output.to_string())
+  @fs.write_file("internal/engine/cff_tables.mbt", output.to_string())
 }

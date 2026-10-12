@@ -39,7 +39,7 @@ async fn main {
     expected +
     ".\n" +
     "// Original font bytes are unmodified. Licenses: assets/standard14/.\n\n" +
-    "///|\nfn pdf_standard14_asset(name : String) -> Bytes? {\n" +
+    "///|\npub fn lookup(name : String) -> Bytes? {\n" +
     "  let encoded = match name {\n",
   )
   let inventory : Array[Json] = []
@@ -84,7 +84,7 @@ async fn main {
       "fonts": Json::array(inventory),
     }).stringify(indent=2),
   )
-  @fs.write_file("standard14_assets.mbt", output.to_string())
+  @fs.write_file("internal/font_assets/assets.mbt", output.to_string())
   println(
     "Embedded \{files.length()} Standard 14 font programs from " + expected,
   )

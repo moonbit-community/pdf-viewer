@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include "vendor/lcms2/include/lcms2_plugin.h"
+#include "../../vendor/lcms2/include/lcms2_plugin.h"
 #if defined(_WIN32)
 #include <windows.h>
 #define ICC_OPEN() LoadLibraryA("lcms2.dll")

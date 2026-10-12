@@ -1,6 +1,6 @@
 # Standard 14 font programs
 
-The generated `standard14_assets.mbt` contains the unmodified font bytes from
+The generated [`internal/font_assets/assets.mbt`](../../internal/font_assets/assets.mbt) contains the unmodified font bytes from
 [the pinned PDF.js reference](https://github.com/mozilla/pdf.js/tree/89b500f5e1d98ed89bb90211e45b28730b2d99ac/external/standard_fonts).
 The ten Foxit faces originate in PDFium and retain `LICENSE_FOXIT`. Their `.pfb`
 filenames contain raw CFF programs; the generator preserves those bytes.

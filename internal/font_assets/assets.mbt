@@ -2,7 +2,7 @@
 // Original font bytes are unmodified. Licenses: assets/standard14/.
 
 ///|
-fn pdf_standard14_asset(name : String) -> Bytes? {
+pub fn lookup(name : String) -> Bytes? {
   let encoded = match name {
     "Times-Roman" => {
       let value =

@@ -22,9 +22,11 @@ component0 输出限制，先验证/扩展多组件 API。`enanandesu/icc` 只�
 
 ## 可修改的文件
 
+以下实现文件均位于 `internal/engine/`。根 `api.mbt` 只负责公开导出。
+
 - `images.mbt`、`image_colour.mbt`、`image_alpha.mbt`、`image_sampling.mbt`、
   `colour.mbt`、`masks.mbt`、`patterns.mbt`、`mesh.mbt`。
-- `pdf-viewer.mbt`、`svg.mbt`、`page_model.mbt`，新增 codec/色彩/绘制适配文件，
+- `model.mbt` / `collector.mbt`、`svg.mbt`、`page_model.mbt`，新增 codec/色彩/绘制适配文件，
   以及对应专用测试和新增图像工具。
 
 字体和文字输出使用 A1 的函数，不重写另一套。

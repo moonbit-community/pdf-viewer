@@ -31,7 +31,10 @@ test "public page model and SVG keep fill and stroke tiling paints independent" 
   let document = @pdf-viewer.open_document(@utf8.encode(pdf.to_string()))
   let page = document.page(1).unwrap()
   guard page.operator_list()
-    is [@pdf-viewer.Path(both), @pdf-viewer.Path(plain)] else {
+    is [
+      @pdf-viewer.PdfPageItem::Path(both),
+      @pdf-viewer.PdfPageItem::Path(plain),
+    ] else {
     fail("missing public path items")
   }
   guard both.pattern is Some(fill) && both.stroke_pattern is Some(stroke) else {

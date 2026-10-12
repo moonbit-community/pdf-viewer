@@ -2,10 +2,8 @@
 package "moonbit-community/pdf-viewer"
 
 import {
-  "moonbitlang/core/debug",
-  "moonbitlang/pdflite",
+  "moonbit-community/pdf-viewer/internal/engine",
   "moonbitlang/pdflite/core",
-  "moonbitlang/pdflite/page",
 }
 
 // Values
@@ -13,1109 +11,151 @@ pub fn clear_icc_transforms() -> Unit
 
 pub fn icc_capability() -> String
 
-pub fn open_document(Bytes) -> PdfViewerDocument raise @core.PdfError
+pub fn open_document(Bytes) -> @engine.PdfViewerDocument raise @core.PdfError
 
-pub fn open_document_with_passwords(Bytes, user_password? : Bytes?, owner_password? : Bytes?) -> PdfViewerDocument raise @core.PdfError
+pub fn open_document_with_passwords(Bytes, user_password? : Bytes?, owner_password? : Bytes?) -> @engine.PdfViewerDocument raise @core.PdfError
 
-pub fn open_range_reader(Bytes, Bytes, Int, stream_budget? : Int) -> PdfRangeReader raise @core.PdfError
+pub fn open_range_reader(Bytes, Bytes, Int, stream_budget? : Int) -> @engine.PdfRangeReader raise @core.PdfError
 
-pub fn pdf_optional_content_state(config_index? : Int?, on? : Array[Int], off? : Array[Int]) -> PdfOptionalContentState
+pub fn pdf_optional_content_state(config_index? : Int?, on? : Array[Int], off? : Array[Int]) -> @engine.PdfOptionalContentState
 
-pub fn pdf_search_options(case_sensitive? : Bool, whole_word? : Bool, diacritic_sensitive? : Bool) -> PdfSearchOptions
+pub fn pdf_search_options(case_sensitive? : Bool, whole_word? : Bool, diacritic_sensitive? : Bool) -> @engine.PdfSearchOptions
 
 pub fn process_cmyk_to_rgb(Double, Double, Double, Double) -> Array[Double]
 
 // Errors
 
 // Types and methods
-pub(all) struct PdfAnnotationAppearance {
-  bbox : PdfBounds
-  matrix : Array[Double]
-  svg : String
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfAnnotationAppearance::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfAnnotationAppearance::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfAnnotationAppearance::to_json(Self) -> Json
-#deprecated
-pub fn PdfAnnotationAppearance::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfAnnotationItem {
-  index : Int
-  subtype : String
-  flags : Int
-  visible : Bool
-  print : Bool
-  bounds : PdfBounds
-  quad_points : Array[PdfQuad]
-  line_points : Array[PdfPoint]
-  vertices : Array[PdfPoint]
-  ink_paths : Array[Array[PdfPoint]]
-  appearance : PdfAnnotationAppearance?
-  style : PdfAnnotationStyle
-  field_name : String?
-  field_type : String?
-  field_value : String?
-  field_flags : Int?
-  field_options : Array[String]
-  choice_options : Array[PdfChoiceOption]
-  field_tooltip : String?
-  button_value : String?
-  button_checked : Bool?
-  contents : String?
-  subject : String?
-  color : String?
-  border_width : Double
-  border_style : String
-  border_dash : Array[Int]
-  uri : String?
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfAnnotationItem::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfAnnotationItem::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfAnnotationItem::to_json(Self) -> Json
-#deprecated
-pub fn PdfAnnotationItem::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfAnnotationStyle {
-  interior_color : String?
-  opacity : Double
-  icon : String
-  line_endings : Array[String]
-  caption : String?
-  no_zoom : Bool
-  no_rotate : Bool
-} derive(Eq, ToJson, @debug.Debug)
-
-pub(all) struct PdfBounds {
-  min_x : Double
-  min_y : Double
-  max_x : Double
-  max_y : Double
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfBounds::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfBounds::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfBounds::to_json(Self) -> Json
-#deprecated
-pub fn PdfBounds::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfByteSpan {
-  start : Int
-  end : Int
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfByteSpan::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfByteSpan::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfByteSpan::to_json(Self) -> Json
-#deprecated
-pub fn PdfByteSpan::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfChoiceOption {
-  index : Int
-  export_value : String
-  display_value : String
-  selected : Bool
-} derive(Eq, ToJson, @debug.Debug)
-
-pub(all) struct PdfClipPath {
-  svg_path : String
-  even_odd : Bool
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfClipPath::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfClipPath::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfClipPath::to_json(Self) -> Json
-#deprecated
-pub fn PdfClipPath::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfColourCalibration {
-  components : Int
-  gamma : Array[Double]
-  pcs_matrix : Array[Double]
-  pcs_offset : Array[Double]
-} derive(Eq, ToJson, @debug.Debug)
-
-pub(all) struct PdfDestination {
-  kind : String
-  name : String?
-  page : Int?
-  remote_page : Int?
-  left : Double?
-  bottom : Double?
-  right : Double?
-  top : Double?
-  zoom : Double?
-  remote : Bool
-  resolved : Bool
-} derive(Eq, ToJson, @debug.Debug)
-
-pub struct PdfEditorPermissions {
-  encrypted : Bool
-  annotations : Bool
-  forms : Bool
-} derive(Eq, ToJson, @debug.Debug)
-
-type PdfEditorSecurity
-
-pub(all) struct PdfFontFallback {
-  pdf_name : String
-  family : String
-  weight : String?
-  style : String?
-} derive(Eq, ToJson, @debug.Debug)
-
-pub(all) struct PdfFontMetrics {
-  units_per_em : Int
-  ascent : Int
-  descent : Int
-  cap_height : Int
-  widths : Array[(Int, Int)]
-} derive(Eq, ToJson, @debug.Debug)
-
-pub(all) struct PdfFontResource {
-  name : String
-  family : String
-  base_name : String
-  standard_font : String?
-  metrics : PdfFontMetrics?
-  weight : String
-  style : String
-  mime_type : String
-  format : String
-  data_uri : String?
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfFontResource::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfFontResource::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfFontResource::to_json(Self) -> Json
-#deprecated
-pub fn PdfFontResource::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfGradientStop {
-  offset : Double
-  color : String
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfGradientStop::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfGradientStop::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfGradientStop::to_json(Self) -> Json
-#deprecated
-pub fn PdfGradientStop::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfGraphicsDiagnostic {
-  code : String
-  item : Int
-  message : String
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfGraphicsDiagnostic::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfGraphicsDiagnostic::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfGraphicsDiagnostic::to_json(Self) -> Json
-#deprecated
-pub fn PdfGraphicsDiagnostic::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfIccProfile {
-  id : String
-  components : Int
-  data_base64 : String
-} derive(Eq, ToJson, @debug.Debug)
-
-pub(all) struct PdfImageInkSamples {
-  width : Int
-  height : Int
-  components : Int
-  bits : Int
-  row_bytes : Int
-  data_base64 : String
-  alpha_base64 : String
-  source_colour : PdfSourceColour
-  process_cmyk : Bool
-} derive(Eq, ToJson, @debug.Debug)
-
-pub(all) struct PdfImageResource {
-  name : String
-  error : String?
-  ink_samples : PdfImageInkSamples?
-  has_local_mask : Bool
-  alpha_is_explicit_shape : Bool
-  mime_type : String
-  data_uri : String?
-  mask_data_uri : String?
-  alpha_mask_data_uri : String?
-  width : Int?
-  height : Int?
-  interpolate : Bool
-  alpha_mask_width : Int?
-  alpha_mask_height : Int?
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfImageResource::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfImageResource::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfImageResource::to_json(Self) -> Json
-#deprecated
-pub fn PdfImageResource::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfMeshTriangle {
-  p0 : PdfPoint
-  p1 : PdfPoint
-  p2 : PdfPoint
-  c0 : String
-  c1 : String
-  c2 : String
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfMeshTriangle::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfMeshTriangle::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfMeshTriangle::to_json(Self) -> Json
-#deprecated
-pub fn PdfMeshTriangle::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfNamedDestination {
-  name : String
-  destination : PdfDestination
-} derive(Eq, ToJson, @debug.Debug)
-
-pub(all) enum PdfOptionalContentIntent {
-  Display
-  Print
-  Export
-} derive(Eq, ToJson, @debug.Debug)
-
-pub(all) struct PdfOptionalContentState {
-  config_index : Int?
-  on : Array[Int]
-  off : Array[Int]
-} derive(Eq, ToJson, @debug.Debug)
-
-pub(all) enum PdfPageItem {
-  Text(PdfTextItem)
-  Path(PdfPathItem)
-  Image(PdfVisualItem)
-  Shading(PdfVisualItem)
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfPageItem::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfPageItem::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfPageItem::to_json(Self) -> Json
-#deprecated
-pub fn PdfPageItem::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfPageModel {
-  number : Int
-  blend_space : String
-  blend_profile_id : String?
-  blend_calibration : PdfColourCalibration?
-  icc_profiles : Array[PdfIccProfile]
-  origin_x : Double
-  origin_y : Double
-  width : Double
-  height : Double
-  user_unit : Double
-  rotation : Int
-  fonts : Array[PdfFontResource]
-  items : Array[PdfPageItem]
-  annotations : Array[PdfAnnotationItem]
-  text : String
-} derive(Eq, ToJson, @debug.Debug)
-pub fn PdfPageModel::canvas_plan(Self, scale? : Double, rotation? : Int) -> Json raise @core.PdfError
-#deprecated
-pub fn PdfPageModel::equal(Self, Self) -> Bool
-pub fn PdfPageModel::graphics_diagnostics(Self, renderer? : String) -> Array[PdfGraphicsDiagnostic]
-#deprecated
-pub fn PdfPageModel::not_equal(Self, Self) -> Bool
-pub fn PdfPageModel::operator_list(Self) -> Array[PdfPageItem]
-pub fn PdfPageModel::render_svg(Self, scale? : Double, rotation? : Int) -> String raise @core.PdfError
-pub fn PdfPageModel::select_text(Self, Int, Int, Int, Int) -> PdfTextRangeSelection?
-pub fn PdfPageModel::text_content(Self) -> PdfTextContent
-pub fn PdfPageModel::text_diagnostics(Self) -> Array[PdfTextDiagnostic]
-pub fn PdfPageModel::text_layer(Self, scale? : Double, rotation? : Int) -> PdfTextLayer
-pub fn PdfPageModel::text_sources(Self) -> Array[PdfTextSourceRange]
-pub fn PdfPageModel::text_structure(Self) -> PdfTextStructure
-#deprecated
-pub fn PdfPageModel::to_json(Self) -> Json
-#deprecated
-pub fn PdfPageModel::to_repr(Self) -> @debug.Repr
-pub fn PdfPageModel::viewport(Self, scale? : Double, rotation? : Int) -> PdfViewport
-pub fn PdfPageModel::with_print_annotations(Self) -> Self
-
-pub(all) struct PdfPathItem {
-  index : Int
-  bounds : PdfBounds
-  svg_path : String
-  filled : Bool
-  fill_even_odd : Bool
-  stroked : Bool
-  fill_color : String
-  stroke_color : String
-  fill_alpha : Double
-  stroke_alpha : Double
-  line_width : Double
-  line_cap : Int
-  line_join : Int
-  dash_array : Array[Double]
-  dash_phase : Double
-  stroke : PdfPathStroke?
-  pattern : PdfPatternResource?
-  stroke_pattern : PdfPatternResource?
-  shading_pattern : PdfShadingResource?
-  blend_mode : String
-  fill_source : PdfSourceColour
-  stroke_source : PdfSourceColour
-  fill_overprint : Bool
-  stroke_overprint : Bool
-  overprint_mode : Int
-  alpha_is_shape : Bool
-  clip_path : String?
-  clips : Array[PdfClipPath]
-  soft_mask : PdfSoftMaskResource?
-  group : PdfTransparencyGroup?
-  group_path : Array[PdfTransparencyGroup]
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfPathItem::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfPathItem::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfPathItem::to_json(Self) -> Json
-#deprecated
-pub fn PdfPathItem::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfPathStroke {
-  svg_path : String
-  transform : Array[Double]
-  line_width : Double
-  dash_array : Array[Double]
-  dash_phase : Double
-  miter_limit : Double
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfPathStroke::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfPathStroke::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfPathStroke::to_json(Self) -> Json
-#deprecated
-pub fn PdfPathStroke::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfPatternResource {
-  name : String
-  bbox : PdfBounds
-  x_step : Double
-  y_step : Double
-  matrix : Array[Double]
-  tile_svg : String
-  tile_page : PdfPageModel?
-  tile_parts : Array[PdfPatternTilePart]
-  shading : PdfShadingResource?
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfPatternResource::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfPatternResource::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfPatternResource::to_json(Self) -> Json
-#deprecated
-pub fn PdfPatternResource::to_repr(Self) -> @debug.Repr
-
-pub(all) enum PdfPatternTilePart {
-  Svg(String)
-  Image(PdfImageResource, PdfQuad)
-} derive(Eq, ToJson, @debug.Debug)
-
-pub(all) struct PdfPoint {
-  x : Double
-  y : Double
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfPoint::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfPoint::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfPoint::to_json(Self) -> Json
-#deprecated
-pub fn PdfPoint::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfQuad {
-  p0 : PdfPoint
-  p1 : PdfPoint
-  p2 : PdfPoint
-  p3 : PdfPoint
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfQuad::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfQuad::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfQuad::to_json(Self) -> Json
-#deprecated
-pub fn PdfQuad::to_repr(Self) -> @debug.Repr
-
-pub struct PdfRangeReader {
-  // private fields
-}
-pub fn PdfRangeReader::cache_info(Self) -> Json
-pub fn PdfRangeReader::document_view(Self) -> PdfViewerDocument raise @core.PdfError
-pub fn PdfRangeReader::install_object(Self, Int, Bytes) -> Unit raise @core.PdfError
-pub fn PdfRangeReader::install_section(Self, Int, Bytes) -> Unit raise @core.PdfError
-pub fn PdfRangeReader::missing(Self, String, Int) -> Array[Int] raise @core.PdfError
-pub fn PdfRangeReader::next_section(Self) -> Int?
-pub fn PdfRangeReader::object_dependencies(Self, Bytes) -> Array[Int] raise @core.PdfError
-pub fn PdfRangeReader::object_loaded(Self, Int) -> Bool
-pub fn PdfRangeReader::object_request(Self, Int) -> (Int, Int, Int)?
-
-pub(all) struct PdfReaderDiagnostic {
-  resource : String
-  object_number : Int?
-  message : String
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfReaderDiagnostic::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfReaderDiagnostic::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfReaderDiagnostic::to_json(Self) -> Json
-#deprecated
-pub fn PdfReaderDiagnostic::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfSearchOptions {
-  case_sensitive : Bool
-  whole_word : Bool
-  diacritic_sensitive : Bool
-} derive(Eq, ToJson, @debug.Debug)
-
-pub(all) struct PdfSearchResult {
-  page : Int
-  index : Int
-  length : Int
-  text : String
-  bounds : PdfBounds
-  item_indices : Array[Int]
-} derive(Eq, ToJson, @debug.Debug)
-
-pub(all) struct PdfSelection {
-  page : Int
-  bounds : PdfBounds
-  text : String
-  item_indices : Array[Int]
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfSelection::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfSelection::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfSelection::to_json(Self) -> Json
-#deprecated
-pub fn PdfSelection::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfShadingPatch {
-  points : Array[PdfPoint]
-  components : Array[Array[Double]]
-} derive(Eq, ToJson, @debug.Debug)
-
-pub(all) struct PdfShadingPatternState {
-  fill_alpha : Double
-  blend_mode : String
-  alpha_is_shape : Bool
-  fill_overprint : Bool
-  overprint_mode : Int
-  soft_mask : PdfSoftMaskResource?
-  background_color : String?
-  background_source : PdfSourceColour?
-  background_overprint : Bool
-  background_overprint_mode : Int
-} derive(Eq, ToJson, @debug.Debug)
-
-pub(all) struct PdfShadingRaster {
-  domain : Array[Double]
-  size : Array[Int]
-  samples : String
-  triangles : Array[PdfShadingTriangle]
-  patches : Array[PdfShadingPatch]
-  bbox : Array[Double]
-  background : String?
-  function_matrix : Array[Double]
-  paints : Bool
-  tree : Array[Double]
-  error : String?
-  process_samples : String?
-  process_background : Array[Double]?
-  process_error : String?
-  source_colour : PdfSourceColour?
-  source_samples : String?
-  source_background : Array[Double]?
-  source_direct : Bool
-  source_error : String?
-} derive(Eq, ToJson, @debug.Debug)
-
-pub(all) struct PdfShadingResource {
-  name : String
-  kind : String
-  coords : Array[Double]
-  matrix : Array[Double]
-  stops : Array[PdfGradientStop]
-  mesh : Array[PdfMeshTriangle]
-  raster : PdfShadingRaster?
-  pattern_state : PdfShadingPatternState?
-  extend_start : Bool
-  extend_end : Bool
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfShadingResource::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfShadingResource::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfShadingResource::to_json(Self) -> Json
-#deprecated
-pub fn PdfShadingResource::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfShadingTriangle {
-  points : Array[PdfPoint]
-  components : Array[Array[Double]]
-} derive(Eq, ToJson, @debug.Debug)
-
-pub(all) struct PdfSoftMaskResource {
-  data_uri : String
-  bounds : PdfBounds
-  luminosity : Bool
-  background : String
-  page : PdfPageModel?
-  matrix : Array[Double]
-  backdrop : Array[Double]
-  backdrop_components : Array[Double]
-  transfer_map : Array[Int]?
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfSoftMaskResource::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfSoftMaskResource::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfSoftMaskResource::to_json(Self) -> Json
-#deprecated
-pub fn PdfSoftMaskResource::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfSourceColour {
-  space : String
-  components : Array[Double]
-  colorants : Array[String]
-  paints : Bool
-  all : Bool
-  process_cmyk : Array[Double]?
-  alternate : PdfSourceColour?
-  rendering_intent : String
-  icc_profile_id : String?
-  whitepoint_xyy : Array[Double]?
-  component_ranges : Array[Double]?
-  pcs_xyz : Array[Double]?
-  calibration : PdfColourCalibration?
-} derive(Eq, ToJson, @debug.Debug)
-
-pub(all) struct PdfTextByteSpan {
-  stream_index : Int
-  object_number : Int?
-  decoded_stream_span : PdfByteSpan
-  file_span : PdfByteSpan?
-  encoded_stream_span : PdfByteSpan?
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTextByteSpan::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextByteSpan::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextByteSpan::to_json(Self) -> Json
-#deprecated
-pub fn PdfTextByteSpan::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfTextContent {
-  items : Array[PdfTextItem]
-  text : String
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTextContent::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextContent::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextContent::to_json(Self) -> Json
-#deprecated
-pub fn PdfTextContent::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfTextDiagnostic {
-  page : Int
-  source : PdfTextSourceRange
-  kind : PdfTextDiagnosticKind
-  resource : String
-  object_number : Int?
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTextDiagnostic::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextDiagnostic::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextDiagnostic::to_json(Self) -> Json
-#deprecated
-pub fn PdfTextDiagnostic::to_repr(Self) -> @debug.Repr
-
-pub(all) enum PdfTextDiagnosticKind {
-  ReplacementCharacter
-  MissingFontResource
-  HostFontFallback
-  MissingEmbeddedOutline
-  MissingClipOutline
-  FontStreamChecksumRecovered
-  FontStreamUnavailable
-  FontMetricsRecovered
-  FontEncodingRecovered
-  FontDictionaryRecovered
-  InvalidCharacterCode
-  UnicodeMappingFallback
-  CMapMalformedTokens(Int)
-  CMapIncompleteSection(String)
-  CMapCycle
-  CMapSourceUnavailable
-  CMapReaderFallback
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTextDiagnosticKind::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextDiagnosticKind::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextDiagnosticKind::to_json(Self) -> Json
-#deprecated
-pub fn PdfTextDiagnosticKind::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfTextFormInvocation {
-  name : String
-  object_number : Int?
-  operator_index : Int
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTextFormInvocation::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextFormInvocation::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextFormInvocation::to_json(Self) -> Json
-#deprecated
-pub fn PdfTextFormInvocation::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfTextItem {
-  index : Int
-  text : String
-  charcode : Int
-  advance_x : Double
-  advance_y : Double
-  vertical : Bool
-  glyph_transform : Array[Double]?
-  stroke : PdfTextStroke?
-  fill_path : String?
-  pattern : PdfPatternResource?
-  stroke_pattern : PdfPatternResource?
-  text_object_id : String?
-  text_knockout : Bool
-  bounds : PdfBounds
-  quad : PdfQuad
-  font : String
-  font_size : Double
-  rendering_mode : Int
-  fill_color : String
-  stroke_color : String
-  fill_alpha : Double
-  blend_mode : String
-  fill_source : PdfSourceColour
-  stroke_source : PdfSourceColour
-  fill_overprint : Bool
-  stroke_overprint : Bool
-  overprint_mode : Int
-  alpha_is_shape : Bool
-  clip_path : String?
-  clips : Array[PdfClipPath]
-  soft_mask : PdfSoftMaskResource?
-  group : PdfTransparencyGroup?
-  group_path : Array[PdfTransparencyGroup]
-  type3_outline : String?
-  type3_scene : PdfPageModel?
-  type3_scene_unresolved : String?
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTextItem::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextItem::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextItem::to_json(Self) -> Json
-#deprecated
-pub fn PdfTextItem::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfTextLayer {
-  page : Int
-  viewport : PdfViewport
-  items : Array[PdfTextLayerItem]
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTextLayer::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextLayer::not_equal(Self, Self) -> Bool
-pub fn PdfTextLayer::select_text(Self, Int, Int, Int, Int) -> PdfTextRangeSelection?
-#deprecated
-pub fn PdfTextLayer::to_json(Self) -> Json
-#deprecated
-pub fn PdfTextLayer::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfTextLayerItem {
-  item_index : Int
-  text : String
-  separator : String
-  quad : PdfQuad
-  matrix : Array[Double]
-  font_family : String
-  font_weight : String
-  font_style : String
-  vertical : Bool
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTextLayerItem::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextLayerItem::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextLayerItem::to_json(Self) -> Json
-#deprecated
-pub fn PdfTextLayerItem::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfTextLexicalSource {
-  item_index : Int
-  logical_source : PdfTextSourceRange?
-  string_source : PdfTextStringSource?
-  spans : Array[PdfTextByteSpan]
-  failure : String?
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTextLexicalSource::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextLexicalSource::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextLexicalSource::to_json(Self) -> Json
-#deprecated
-pub fn PdfTextLexicalSource::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfTextParagraph {
-  start : Int
-  end : Int
-  bounds : PdfBounds
-  runs : Array[PdfTextRun]
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTextParagraph::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextParagraph::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextParagraph::to_json(Self) -> Json
-#deprecated
-pub fn PdfTextParagraph::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfTextProvenance {
-  source : PdfTextSourceRange
-  string_source : PdfTextStringSource?
-  font_object_number : Int?
-  font_program_object_number : Int?
-  cid : Int?
-  gid : Int?
-  glyph_name : String?
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTextProvenance::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextProvenance::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextProvenance::to_json(Self) -> Json
-#deprecated
-pub fn PdfTextProvenance::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfTextRangeSelection {
-  page : Int
-  text : String
-  item_indices : Array[Int]
-  quads : Array[PdfQuad]
-  start_item : Int
-  start_offset : Int
-  end_item : Int
-  end_offset : Int
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTextRangeSelection::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextRangeSelection::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextRangeSelection::to_json(Self) -> Json
-#deprecated
-pub fn PdfTextRangeSelection::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfTextRecoveryDiagnostic {
-  page : Int
-  item_index : Int
-  charcode : Int
-  font : String
-  source : PdfTextSourceRange?
-  string_source : PdfTextStringSource?
-  kind : PdfTextDiagnosticKind
-  resource : String
-  object_number : Int?
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTextRecoveryDiagnostic::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextRecoveryDiagnostic::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextRecoveryDiagnostic::to_json(Self) -> Json
-#deprecated
-pub fn PdfTextRecoveryDiagnostic::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfTextRun {
-  start : Int
-  end : Int
-  font : String
-  vertical : Bool
-  bounds : PdfBounds
-  sources : Array[PdfTextSourceRange]
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTextRun::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextRun::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextRun::to_json(Self) -> Json
-#deprecated
-pub fn PdfTextRun::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfTextSourceRange {
-  item_index : Int
-  start : Int
-  end : Int
-  font : String
-  charcode : Int
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTextSourceRange::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextSourceRange::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextSourceRange::to_json(Self) -> Json
-#deprecated
-pub fn PdfTextSourceRange::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfTextStringSource {
-  content_streams : Array[Int?]
-  form_path : Array[PdfTextFormInvocation]
-  operator_index : Int
-  operand_index : Int
-  byte_start : Int
-  byte_end : Int
-  bytes : Bytes
-  charcode_valid : Bool
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTextStringSource::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextStringSource::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextStringSource::to_json(Self) -> Json
-#deprecated
-pub fn PdfTextStringSource::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfTextStroke {
-  svg_path : String?
-  transform : Array[Double]
-  line_width : Double
-  line_cap : Int
-  line_join : Int
-  dash_array : Array[Double]
-  dash_phase : Double
-  miter_limit : Double
-  stroke_alpha : Double
-  fallback_scale : Double?
-  unresolved : String?
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTextStroke::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextStroke::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextStroke::to_json(Self) -> Json
-#deprecated
-pub fn PdfTextStroke::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfTextStructure {
-  text : String
-  paragraphs : Array[PdfTextParagraph]
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTextStructure::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextStructure::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTextStructure::to_json(Self) -> Json
-#deprecated
-pub fn PdfTextStructure::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfTransparencyGroup {
-  id : String
-  isolated : Bool
-  knockout : Bool
-  alpha : Double
-  blend_mode : String
-  alpha_is_shape : Bool
-  bounds : PdfBounds?
-  color_space : String
-  rendering_intent : String
-  icc_profile_id : String?
-  calibration : PdfColourCalibration?
-  soft_mask : PdfSoftMaskResource?
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfTransparencyGroup::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTransparencyGroup::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfTransparencyGroup::to_json(Self) -> Json
-#deprecated
-pub fn PdfTransparencyGroup::to_repr(Self) -> @debug.Repr
-
-pub struct PdfViewerDocument {
-  source_length : Int
-  document : @pdflite.PdfDocument
-  pages : Array[@page.PdfPage]
-  optional_content_state : PdfOptionalContentState?
-  font_fallbacks : Array[PdfFontFallback]
-  // private fields
-}
-pub fn PdfViewerDocument::accessibility_page_json(Self, Int, page_model? : PdfPageModel?) -> Json? raise @core.PdfError
-pub fn PdfViewerDocument::annotation_layer_json(Self, Int) -> Json?
-pub fn PdfViewerDocument::attachment_bytes(Self, Int) -> Bytes? raise @core.PdfError
-pub fn PdfViewerDocument::attachment_manifest_json(Self) -> Json raise @core.PdfError
-pub fn PdfViewerDocument::attachments_json(Self) -> Json raise @core.PdfError
-pub fn PdfViewerDocument::destination_for_page(Self, Int) -> PdfDestination? raise @core.PdfError
-pub fn PdfViewerDocument::editor_page_json(Self, Int) -> Json?
-pub fn PdfViewerDocument::editor_permissions(Self) -> PdfEditorPermissions
-pub fn PdfViewerDocument::font_fallbacks(Self) -> Array[PdfFontFallback]
-pub fn PdfViewerDocument::info_json(Self) -> Json raise @core.PdfError
-pub fn PdfViewerDocument::metadata_bytes(Self) -> Bytes? raise @core.PdfError
-pub fn PdfViewerDocument::named_destination(Self, String) -> PdfDestination? raise @core.PdfError
-pub fn PdfViewerDocument::named_destinations(Self) -> Array[PdfNamedDestination] raise @core.PdfError
-pub fn PdfViewerDocument::named_destinations_json(Self) -> Json raise @core.PdfError
-pub fn PdfViewerDocument::operator_list(Self, Int) -> Array[PdfPageItem]? raise @core.PdfError
-pub fn PdfViewerDocument::optional_content_json(Self) -> Json? raise @core.PdfError
-pub fn PdfViewerDocument::optional_content_layers_json(Self) -> Json? raise @core.PdfError
-pub fn PdfViewerDocument::optional_content_state(Self) -> PdfOptionalContentState?
-pub fn PdfViewerDocument::outline_json(Self) -> Json raise @core.PdfError
-pub fn PdfViewerDocument::outline_navigation_json(Self) -> Json raise @core.PdfError
-pub fn PdfViewerDocument::page(Self, Int, optional_content_intent? : PdfOptionalContentIntent) -> PdfPageModel? raise @core.PdfError
-pub fn PdfViewerDocument::page_count(Self) -> Int
-pub fn PdfViewerDocument::page_json(Self, Int) -> Json? raise @core.PdfError
-pub fn PdfViewerDocument::page_labels(Self) -> Array[String] raise @core.PdfError
-pub fn PdfViewerDocument::page_labels_json(Self) -> Json raise @core.PdfError
-pub fn PdfViewerDocument::page_viewport(Self, Int, scale? : Double, rotation? : Int) -> PdfViewport?
-pub fn PdfViewerDocument::pages(Self, optional_content_intent? : PdfOptionalContentIntent) -> Array[PdfPageModel] raise @core.PdfError
-pub fn PdfViewerDocument::reader_diagnostics(Self) -> Array[PdfReaderDiagnostic]
-pub fn PdfViewerDocument::render_svg(Self, Int, scale? : Double) -> String? raise @core.PdfError
-pub fn PdfViewerDocument::render_svg_with_rotation(Self, Int, Int, scale? : Double) -> String? raise @core.PdfError
-pub fn PdfViewerDocument::save_bytes(Self, aes_iv_provider? : (Int, Int, Int) -> Bytes raise @core.PdfError) -> Bytes raise @core.PdfError
-pub fn PdfViewerDocument::search(Self, String, options? : PdfSearchOptions, page? : Int?) -> Array[PdfSearchResult] raise @core.PdfError
-pub fn PdfViewerDocument::select(Self, Int, PdfBounds) -> PdfSelection? raise @core.PdfError
-pub fn PdfViewerDocument::source_length(Self) -> Int
-pub fn PdfViewerDocument::struct_tree_json(Self) -> Json raise @core.PdfError
-pub fn PdfViewerDocument::summary_json(Self) -> Json raise @core.PdfError
-pub fn PdfViewerDocument::text_content(Self, Int) -> PdfTextContent? raise @core.PdfError
-pub fn PdfViewerDocument::text_diagnostics(Self, Int) -> Array[PdfTextDiagnostic]? raise @core.PdfError
-pub fn PdfViewerDocument::text_lexical_sources(Self, Int) -> Array[PdfTextLexicalSource]? raise @core.PdfError
-pub fn PdfViewerDocument::text_provenance(Self, Int) -> Array[PdfTextProvenance]? raise @core.PdfError
-pub fn PdfViewerDocument::text_recovery_diagnostics(Self, Int) -> Array[PdfTextRecoveryDiagnostic]? raise @core.PdfError
-pub fn PdfViewerDocument::with_editor_changes(Self, Json) -> Self raise @core.PdfError
-pub fn PdfViewerDocument::with_font_fallbacks(Self, Array[PdfFontFallback]) -> Self
-pub fn PdfViewerDocument::with_optional_content_config(Self, Int?) -> Self raise @core.PdfError
-pub fn PdfViewerDocument::with_optional_content_state(Self, PdfOptionalContentState) -> Self
-pub fn PdfViewerDocument::with_optional_content_visibility(Self, Int, Bool) -> Self raise @core.PdfError
-pub fn PdfViewerDocument::xfa_font_glyphs_json(Self, String, String) -> Json raise @core.PdfError
-pub fn PdfViewerDocument::xfa_fonts_json(Self) -> Json
-pub fn PdfViewerDocument::xfa_needs_rendering(Self) -> Bool
-pub fn PdfViewerDocument::xfa_packets(Self) -> Array[PdfXfaPacket] raise @core.PdfError
-
-pub(all) struct PdfViewport {
-  width : Double
-  height : Double
-  scale : Double
-  user_unit : Double
-  rotation : Int
-  matrix : Array[Double]
-  transform : String
-} derive(Eq, ToJson, @debug.Debug)
-pub fn PdfViewport::convert_to_pdf_point(Self, PdfPoint) -> PdfPoint
-pub fn PdfViewport::convert_to_viewport_point(Self, PdfPoint) -> PdfPoint
-#deprecated
-pub fn PdfViewport::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfViewport::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfViewport::to_json(Self) -> Json
-#deprecated
-pub fn PdfViewport::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfVisualItem {
-  index : Int
-  bounds : PdfBounds
-  quad : PdfQuad
-  name : String
-  resource : PdfImageResource?
-  shading : PdfShadingResource?
-  pattern : PdfPatternResource?
-  fill_color : String
-  fill_alpha : Double
-  stroke_alpha : Double
-  blend_mode : String
-  fill_source : PdfSourceColour
-  stroke_source : PdfSourceColour
-  fill_overprint : Bool
-  stroke_overprint : Bool
-  overprint_mode : Int
-  alpha_is_shape : Bool
-  clip_path : String?
-  clips : Array[PdfClipPath]
-  soft_mask : PdfSoftMaskResource?
-  group : PdfTransparencyGroup?
-  group_path : Array[PdfTransparencyGroup]
-} derive(Eq, ToJson, @debug.Debug)
-#deprecated
-pub fn PdfVisualItem::equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfVisualItem::not_equal(Self, Self) -> Bool
-#deprecated
-pub fn PdfVisualItem::to_json(Self) -> Json
-#deprecated
-pub fn PdfVisualItem::to_repr(Self) -> @debug.Repr
-
-pub(all) struct PdfXfaPacket {
-  name : String
-  data : Bytes
-} derive(Eq, @debug.Debug)
 
 // Type aliases
+pub using @engine {type PdfAnnotationAppearance}
+
+pub using @engine {type PdfAnnotationItem}
+
+pub using @engine {type PdfAnnotationStyle}
+
+pub using @engine {type PdfBounds}
+
+pub using @engine {type PdfByteSpan}
+
+pub using @engine {type PdfChoiceOption}
+
+pub using @engine {type PdfClipPath}
+
+pub using @engine {type PdfColourCalibration}
+
+pub using @engine {type PdfDestination}
+
+pub using @engine {type PdfEditorPermissions}
+
+pub using @engine {type PdfFontFallback}
+
+pub using @engine {type PdfFontMetrics}
+
+pub using @engine {type PdfFontResource}
+
+pub using @engine {type PdfGradientStop}
+
+pub using @engine {type PdfGraphicsDiagnostic}
+
+pub using @engine {type PdfIccProfile}
+
+pub using @engine {type PdfImageInkSamples}
+
+pub using @engine {type PdfImageResource}
+
+pub using @engine {type PdfMeshTriangle}
+
+pub using @engine {type PdfNamedDestination}
+
+pub using @engine {type PdfOptionalContentIntent}
+
+pub using @engine {type PdfOptionalContentState}
+
+pub using @engine {type PdfPageItem}
+
+pub using @engine {type PdfPageModel}
+
+pub using @engine {type PdfPathItem}
+
+pub using @engine {type PdfPathStroke}
+
+pub using @engine {type PdfPatternResource}
+
+pub using @engine {type PdfPatternTilePart}
+
+pub using @engine {type PdfPoint}
+
+pub using @engine {type PdfQuad}
+
+pub using @engine {type PdfRangeReader}
+
+pub using @engine {type PdfReaderDiagnostic}
+
+pub using @engine {type PdfSearchOptions}
+
+pub using @engine {type PdfSearchResult}
+
+pub using @engine {type PdfSelection}
+
+pub using @engine {type PdfShadingPatch}
+
+pub using @engine {type PdfShadingPatternState}
+
+pub using @engine {type PdfShadingRaster}
+
+pub using @engine {type PdfShadingResource}
+
+pub using @engine {type PdfShadingTriangle}
+
+pub using @engine {type PdfSoftMaskResource}
+
+pub using @engine {type PdfSourceColour}
+
+pub using @engine {type PdfTextByteSpan}
+
+pub using @engine {type PdfTextContent}
+
+pub using @engine {type PdfTextDiagnostic}
+
+pub using @engine {type PdfTextDiagnosticKind}
+
+pub using @engine {type PdfTextFormInvocation}
+
+pub using @engine {type PdfTextItem}
+
+pub using @engine {type PdfTextLayer}
+
+pub using @engine {type PdfTextLayerItem}
+
+pub using @engine {type PdfTextLexicalSource}
+
+pub using @engine {type PdfTextParagraph}
+
+pub using @engine {type PdfTextProvenance}
+
+pub using @engine {type PdfTextRangeSelection}
+
+pub using @engine {type PdfTextRecoveryDiagnostic}
+
+pub using @engine {type PdfTextRun}
+
+pub using @engine {type PdfTextSourceRange}
+
+pub using @engine {type PdfTextStringSource}
+
+pub using @engine {type PdfTextStroke}
+
+pub using @engine {type PdfTextStructure}
+
+pub using @engine {type PdfTransparencyGroup}
+
+pub using @engine {type PdfViewerDocument}
+
+pub using @engine {type PdfViewport}
+
+pub using @engine {type PdfVisualItem}
+
+pub using @engine {type PdfXfaPacket}
 
 // Traits

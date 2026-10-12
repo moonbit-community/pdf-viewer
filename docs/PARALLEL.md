@@ -1,6 +1,6 @@
 # PDF 内核的两条工作线
 
-A1/A2 的历史拆分只有两条主线；都在现有仓库和根 package 内工作。
+A1/A2 的历史拆分只有两条主线；实现现已迁入 `internal/engine/`；根 package 只保留 `api.mbt` 的公开导出。
 
 | 主线 | 目标 | 任务说明 |
 | --- | --- | --- |
@@ -15,14 +15,16 @@ A1/A2 的历史拆分只有两条主线；都在现有仓库和根 package 内�
 
 为减少同时修改主文件，已把字体资源、Type 3 字形、SVG 文字输出和文字选择
 原样移到 `font_resources.mbt`、`type3_outline.mbt`、`svg_text.mbt`、
-`text_selection.mbt`。它们仍属于根 package，函数名、可见性与调用方式不变。
+`text_selection.mbt`。这些实现文件现在属于 `internal/engine/` package，函数名、可见性与调用方式不变。
 
 - A1 修改字体、CMap、CID、reader 恢复及 `text_*`、`search.mbt`，包括上述四个专用文件。
-- A2 修改 `pdf-viewer.mbt`、`svg.mbt`、`page_model.mbt`，以及图片、颜色、遮罩、pattern、mesh 和新增绘制后端文件。
+- A2 修改 `model.mbt`、`collector.mbt`、`svg.mbt`、`page_model.mbt`，以及图片、颜色、遮罩、pattern、mesh 和新增绘制后端文件。
 - 新测试、fixture 清单和诊断工具分别放到各自主线的专用文件，避免同时改已有大型测试或公共 runner。
 - `moon.mod`、`moon.pkg` 和已有公共测试/工具需要改时，两人直接交接，顺序修改。接口文件用 `moon info` 生成。
 
-公共模型和内容收集器仍在 `pdf-viewer.mbt`。A1 若需要补来源数据或调整调用，
+上述实现文件均位于 `internal/engine/`，公共消费测试位于 `tests/api/`。
+生成 CMap/字体字节位于 `internal/cmap_assets/` 和 `internal/font_assets/`，需通过生成器更新。
+公共模型和内容收集器分别位于 `model.mbt` 与 `collector.mbt`。A1 若需要补来源数据或调整调用，
 把具体字段/函数需求交给 A2 修改；A1 自己完成文字适配。绘制后端调用 A1 的
 字形/文字函数，函数签名有变化时两人同步消费者。这个边界减少文件冲突，
 不会消除 PDF 文字与绘制之间的接口依赖。

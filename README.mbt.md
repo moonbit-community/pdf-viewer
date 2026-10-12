@@ -7,6 +7,11 @@ framework; its views and reader controller are in [`cmd/viewer/`](cmd/viewer/).
 The project provides a standalone browser application, structured document and
 page APIs, a Canvas2D pixel backend, and SVG compatibility output for native applications.
 
+The root package exposes the public API through [`api.mbt`](api.mbt).
+PDF implementation and whitebox tests live in [`internal/engine/`](internal/engine/),
+generated CMap/font resources in their own internal packages, and public consumer
+tests in [`tests/api/`](tests/api/). See [package boundaries](docs/architecture.md#package-boundaries).
+
 ## Features
 
 - Open local PDF files through the file picker or drag and drop.
@@ -47,12 +52,12 @@ provide the LittleCMS and standalone JBIG2 assets; the build verifies and copies
 them locally. Generated JS/Wasm assets are ignored by Git, and opening a PDF
 does not fetch them from npm or a CDN.
 
-Select **编辑** to fill fields or use the annotation/signature tools, then
-**下载** (Ctrl/Cmd+S) to save the edited PDF. See [editing and saving](docs/editor.md)
+Select **Edit / Fill** to fill fields or use the annotation/signature tools, then
+**Download** (Ctrl/Cmd+S) to save the edited PDF. See [editing and saving](docs/editor.md)
 for controls, supported fields and limitations. Handwritten/image signatures are
 visual annotations; certificate signing is separate work.
 
-Select **图层** to change layer visibility or restore a configuration. Display and
+Select **Layers** to change layer visibility or restore a configuration. Display and
 print usage can differ; layer choices remain viewing preferences when saving.
 See [layer controls](docs/layers.md).
 
