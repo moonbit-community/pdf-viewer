@@ -58,7 +58,8 @@ its antialiasing and rounding can differ from Float32 replay. Pixel-returning
 calls retain the previous renderer and its shape/component arrays.
 
 Canvas replay skips paints outside each tile and shares a
-bounded image/annotation raster cache across the page's tiles. It releases that
+bounded image/annotation raster cache across tiles, nested groups, masks and
+pattern cells. It releases that
 cache after completion or cancellation, yields to browser events and checks the
 MoonBit task's lifetime before continuing. Pages, thumbnails and printing use
 the same cancellation boundary. The reader keeps
@@ -67,6 +68,16 @@ pending page. The MoonBit view attaches the page's Canvas before painting, so
 finished tiles appear while the remaining tiles are still loading. Cancellation
 removes only that task's partial paint; text, annotation and editing layers
 mount after the page completes.
+
+Completed reader pages retain their Canvas and native text layer in an LRU
+cache with a limit of eight pages and 256 MiB of estimated Canvas RGBA storage.
+Visible and selection-pinned pages remain available even when they exceed that
+limit. Returning to a cached page needs no Worker request, painting or text-layer
+rebuild. Eviction clears the Canvas backing store and page-local selection data.
+Document replacement, scale/rotation changes, editing and layer visibility
+changes invalidate these surfaces; unchanged zoom or a height-only fit resize
+reuse them. Speculative neighboring pages begin after the requested page finishes
+painting and mounting, rather than competing with its first display.
 
 Mounted text layers retain their original PDF-space glyph quads and resolve
 selection locally through MoonBit's `PdfTextLayer::select_text`, using the same
@@ -87,7 +98,8 @@ pixel-flush time. `PDF_BENCH_COMPARE_RETAINED=1` also compares native display
 against retained replay and reports both renderers' differences from PDF.js.
 Input files stay local and reports are written only under ignored `_build/`.
 
-`tools/pages_browser_test.mjs` exercises Chromium and WebKit selection while
+`tools/pages_browser_test.mjs` checks page reuse, unchanged viewport resizing,
+bounded eviction and Canvas release. It exercises Chromium and WebKit selection while
 holding Worker selection requests, checks immediate copy before a
 `selectionchange` update, and compares local source indices and quads exactly
 with the Worker. Pass a published repository URL to run the same browser flow

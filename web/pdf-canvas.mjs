@@ -82,6 +82,8 @@ export async function renderPdfCanvas(canvas, plan, options = {}) {
   let scope=options._profileScope,owned=null;
   const ownedGlyphCache=!options._glyphCache;
   const glyphCache=options._glyphCache||{entries:new Map(),bytes:0,limit:Math.max(0,Math.min(options.maxGlyphCacheBytes??16777216,(options.maxWorkingBytes||536870912)/32))};
+  const ownedImageCache=!options._imageCache;
+  const imageCache=options._imageCache||{entries:new Map(),bytes:0,limit:Math.max(0,Math.min(options.maxImageCacheBytes??67108864,(options.maxWorkingBytes||536870912)/8))};
   if(!scope&&(plan.icc_profiles?.length||plan.blend_calibration||plan.page.blend_calibration||plan.items.some(item=>(item.groups||item.paint.group_path||[]).some(group=>group.calibration)))){
     const engine=options.iccEngine||globalThis.__moonbit_pdf_icc;
     // Ordinary ICC paints retain their legal PDF Alternate. A catalog alone
@@ -89,8 +91,12 @@ export async function renderPdfCanvas(canvas, plan, options = {}) {
     // their output-transform capability at the group boundary below.
     if(engine?.createProfileScope)owned=scope=engine.createProfileScope(plan.icc_profiles||[]);
   }
-  try{return await renderPdfCanvasScoped(canvas,plan,{...options,_profileScope:scope,_glyphCache:glyphCache});}
-  finally{owned?.dispose();if(ownedGlyphCache){for(const entry of glyphCache.entries.values())entry.value.close?.();glyphCache.entries.clear();glyphCache.bytes=0;}}
+  try{return await renderPdfCanvasScoped(canvas,plan,{...options,_profileScope:scope,_glyphCache:glyphCache,_imageCache:imageCache});}
+  finally{
+    owned?.dispose();
+    if(ownedGlyphCache){for(const entry of glyphCache.entries.values())entry.value.close?.();glyphCache.entries.clear();glyphCache.bytes=0;}
+    if(ownedImageCache){for(const entry of imageCache.entries.values())entry.value.close?.();imageCache.entries.clear();imageCache.bytes=0;}
+  }
 }
 
 async function renderPdfCanvasScoped(canvas, plan, options = {}) {
@@ -158,7 +164,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
   const diagnostics=[...(plan.diagnostics || [])];
   if(diagnostics.length&&options.unsupported!=='warn')throw new Error(diagnostics.map(d=>`${d.code}: ${d.message || d.reason}`).join('; '));
   let maskCacheBytes=0,inkImageCache=null,layer=null,shapeLayer=null;
-  const imageCache=options._imageCache||{entries:new Map(),bytes:0,limit:Math.min(67108864,Math.max(0,Math.floor(availableBytes/8)))};
+  const imageCache=options._imageCache;
   const images=imageCache.entries,uncachedImages=new Set(),imageLimit=imageCache.limit;
   const releaseImage=value=>{if(typeof value?.close==='function')value.close();};
   const glyphImage=async(svg,w,h)=>{
@@ -185,7 +191,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
   const ctx=layer?.getContext('2d',{willReadFrequently:true}), shapeCtx=shapeLayer?.getContext('2d',{willReadFrequently:true});
   const sourcePixels=nativeItems?null:new Float32Array(width*height*4),sourceShape=nativeItems?null:new Float32Array(width*height);
   let previousSourceRegion=null;
-  const environments={createCanvas,loadImage,Path2D:Path,image,width,height,matrix,page:plan.page,diagnostics,resourceDepth,glyphCache};
+  const environments={createCanvas,loadImage,Path2D:Path,image,width,height,matrix,page:plan.page,diagnostics,resourceDepth,glyphCache,imageCache};
   const retainedWorkingBytes=()=>inheritedWorkingBytes+glyphReservation+imageReservation+proofBytes+maskCacheBytes+(options._imageCache?0:imageCache.bytes)+(inkImageCache?inkImageCache.data.byteLength+inkImageCache.alpha.byteLength+inkImageCache.canvas.width*inkImageCache.canvas.height*4:0)+availableBytes-(inkMode?compositor.maxBytes:compositor.maxWorkingBytes)+compositor.workingBytes()+rasterBytes;
   const imageComponent=(resource,component)=>{
     const samples=resource.ink_samples;
@@ -451,7 +457,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
       for(let y=0;y<h;y++)backdrop.set(environments.backdrop.subarray(((y+region.y)*width+region.x)*stride,((y+region.y)*width+region.x+w)*stride),y*w*stride);
       const localMatrix=[...matrix];localMatrix[4]-=region.x;localMatrix[5]-=region.y;
       const target=createCanvas(w,h);
-      const rendered=await renderPdfCanvas(target,nested,{...options,_nativeClipBounds:[],_glyphCacheReserved:true,createCanvas,loadImage,Path2D:Path,width:w,height:h,matrix:localMatrix,transparent:true,backdrop,returnInks:ink,outputGroupComponents:true,_profileScope:options._profileScope,_resourceDepth:resourceDepth+1,_inheritedWorkingBytes:retainedWorkingBytes()+w*h*(stride*4+24)});
+      const rendered=await renderPdfCanvas(target,nested,{...options,_nativeClipBounds:[],_glyphCacheReserved:true,_imageCacheReserved:true,createCanvas,loadImage,Path2D:Path,width:w,height:h,matrix:localMatrix,transparent:true,backdrop,returnInks:ink,outputGroupComponents:true,_profileScope:options._profileScope,_resourceDepth:resourceDepth+1,_inheritedWorkingBytes:retainedWorkingBytes()+w*h*(stride*4+24)});
       diagnostics.push(...rendered.diagnostics);target.width=1;
       const pixels=ink?rendered.inkProof?.premultiplied:rendered.premultiplied;
       if(!pixels||pixels.length!==w*h*stride)throw new Error('Retained scene lost its group component samples');
@@ -478,7 +484,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
     const target=createCanvas(width,height);
     const pdfMatrix=multiplyMatrix(matrix,[1,0,0,-1,-plan.page.origin_x,plan.page.origin_y+plan.page.height]);
     const maskMatrix=multiplyMatrix(pdfMatrix,multiplyMatrix(mask.matrix || [1,0,0,1,0,0],pageFlip(mask.plan.page)));
-    const rendered=await renderPdfCanvas(target,mask.plan,{...options,_nativeClipBounds:[],_glyphCacheReserved:true,createCanvas,loadImage,Path2D:Path,width,height,matrix:maskMatrix,transparent:true,returnInks:true,backdrop:null,outputGroupComponents:false,_maskBackdrop:mask.luminosity?(mask.backdrop_components||mask.backdrop):null,_resourceDepth:resourceDepth+1,_inheritedWorkingBytes:retainedWorkingBytes()});
+    const rendered=await renderPdfCanvas(target,mask.plan,{...options,_nativeClipBounds:[],_glyphCacheReserved:true,_imageCacheReserved:true,createCanvas,loadImage,Path2D:Path,width,height,matrix:maskMatrix,transparent:true,returnInks:true,backdrop:null,outputGroupComponents:false,_maskBackdrop:mask.luminosity?(mask.backdrop_components||mask.backdrop):null,_resourceDepth:resourceDepth+1,_inheritedWorkingBytes:retainedWorkingBytes()});
     diagnostics.push(...rendered.diagnostics);
     const samples=softMaskSamples(rendered.premultiplied,mask);
     target.width=1;
@@ -690,7 +696,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
               const rendered=await renderPdfCanvas(target,item.scene,{...options,_nativePageDisabled:!item.native,width:r.width,height:r.height,matrix:localMatrix,
                 maxDepth:(options.maxDepth??32)-(item.native?1:0),
                 _nativeClipBounds:item.native&&item.bounds?[...(options._nativeClipBounds||[]),item.bounds]:options._nativeClipBounds,
-                transparent:true,_glyphCacheReserved:true,_inheritedWorkingBytes:retainedWorkingBytes()});
+                transparent:true,_glyphCacheReserved:true,_imageCacheReserved:true,_inheritedWorkingBytes:retainedWorkingBytes()});
               diagnostics.push(...rendered.diagnostics);checkPdfRender(options);
               output.setTransform(1,0,0,1,0,0);output.globalAlpha=item.alpha??1;output.drawImage(target,r.x,r.y);
             }finally{target.width=target.height=1;}
@@ -747,7 +753,6 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
   } finally {
     for(const engine of liveCompositors)releaseCompositor(engine);
     if(layer)layer.width=1;if(shapeLayer)shapeLayer.width=1;if(inkImageCache)inkImageCache.canvas.width=1;
-    if(!options._imageCache){for(const cached of images.values())releaseImage(cached.value);images.clear();imageCache.bytes=0;}
     for(const value of uncachedImages)releaseImage(value);
     uncachedImages.clear();
   }

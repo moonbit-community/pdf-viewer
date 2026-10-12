@@ -88,7 +88,7 @@ export function createPatternPainter(options={}) {
       const backdrop=new Float32Array(cw*ch*stride),frame=compositor.frames.at(-1);
       for(let y=0;y<ch;y++)backdrop.set(frame.pixels.subarray(((y+y0)*width+x0)*stride,((y+y0)*width+x1)*stride),y*cw*stride);
       const tile=env.createCanvas(cw,ch),localMatrix=[...matrix];localMatrix[4]-=x0;localMatrix[5]-=y0;
-      const rendered=await renderPdfCanvas(tile,plan,{...options,createCanvas:env.createCanvas,loadImage:env.loadImage,Path2D:env.Path2D,width:cw,height:ch,matrix:localMatrix,transparent:true,backdrop,returnInks:ink,outputGroupComponents:true,_profileScope:env.profileScope,_glyphCache:env.glyphCache,_glyphCacheReserved:!!env.glyphCache,paintPattern,_resourceDepth:(env.resourceDepth||0)+1,_inheritedWorkingBytes:(env.inheritedWorkingBytes||0)+width*height*(stride*12+24)});
+      const rendered=await renderPdfCanvas(tile,plan,{...options,createCanvas:env.createCanvas,loadImage:env.loadImage,Path2D:env.Path2D,width:cw,height:ch,matrix:localMatrix,transparent:true,backdrop,returnInks:ink,outputGroupComponents:true,_profileScope:env.profileScope,_glyphCache:env.glyphCache,_glyphCacheReserved:!!env.glyphCache,_imageCache:env.imageCache,_imageCacheReserved:!!env.imageCache,paintPattern,_resourceDepth:(env.resourceDepth||0)+1,_inheritedWorkingBytes:(env.inheritedWorkingBytes||0)+width*height*(stride*12+24)});
       env.diagnostics?.push(...rendered.diagnostics);
       const samples=ink?rendered.inkProof?.premultiplied:rendered.premultiplied;
       if(!samples||samples.length!==cw*ch*stride)throw new Error('Pattern cell did not retain its blend-space samples');
@@ -150,7 +150,7 @@ export function createPatternPainter(options={}) {
     if(bitmap){const entry=cacheOrder.get(bitmap);cacheOrder.delete(bitmap);cacheOrder.set(bitmap,entry);}
     if(!bitmap){
       const tile=env.createCanvas(tileWidth,tileHeight);
-      const rendered=await renderPdfCanvas(tile,resource.tile_plan,{...options,createCanvas:env.createCanvas,loadImage:env.loadImage,Path2D:env.Path2D,width:tileWidth,height:tileHeight,matrix:[tileWidth/(b.max_x-b.min_x),0,0,tileHeight/(b.max_y-b.min_y),0,0],transparent:true,outputGroupComponents:true,_profileScope:env.profileScope,_glyphCache:env.glyphCache,_glyphCacheReserved:!!env.glyphCache,paintPattern,_resourceDepth:(env.resourceDepth||0)+1,_inheritedWorkingBytes:env.inheritedWorkingBytes||0});
+      const rendered=await renderPdfCanvas(tile,resource.tile_plan,{...options,createCanvas:env.createCanvas,loadImage:env.loadImage,Path2D:env.Path2D,width:tileWidth,height:tileHeight,matrix:[tileWidth/(b.max_x-b.min_x),0,0,tileHeight/(b.max_y-b.min_y),0,0],transparent:true,outputGroupComponents:true,_profileScope:env.profileScope,_glyphCache:env.glyphCache,_glyphCacheReserved:!!env.glyphCache,_imageCache:env.imageCache,_imageCacheReserved:!!env.imageCache,paintPattern,_resourceDepth:(env.resourceDepth||0)+1,_inheritedWorkingBytes:env.inheritedWorkingBytes||0});
       env.diagnostics?.push(...rendered.diagnostics);
       const tileShape=shapeCanvas(rendered.shape,tileWidth,tileHeight,env);
       bitmap={color:env.createCanvas(width,height),shape:env.createCanvas(width,height),replay:rendered.shape.some(value=>value<1)};const target=bitmap.color.getContext('2d'),shapeTarget=bitmap.shape.getContext('2d');

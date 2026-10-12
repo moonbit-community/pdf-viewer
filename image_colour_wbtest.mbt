@@ -173,7 +173,7 @@ test "ICC image colour cache retries failed transforms and preserves Alternate r
       }
     },
   }
-  let cache : Map[Int, (Double, Double, Double)] = Map([])
+  let cache : Map[Int, PdfCachedImageRgb] = Map([])
   let convert = () => {
     pdf_image_cached_icc_rgb(
       icc,

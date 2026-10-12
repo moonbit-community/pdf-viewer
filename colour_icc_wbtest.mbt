@@ -80,8 +80,8 @@ test "ICC matrix profile reaches paths text images Indexed and shading" {
     extra=[
       icc_test_stream(icc_test_rgb_gamma22, "/N 3 /Alternate /DeviceRGB"),
       annotation_test_stream(
-        "/Type /XObject /Subtype /Image /Width 1 /Height 1 /BitsPerComponent 8 /ColorSpace /ICC /Filter /ASCIIHexDecode",
-        "3380CC>",
+        "/Type /XObject /Subtype /Image /Width 4 /Height 1 /BitsPerComponent 8 /ColorSpace /ICC /Filter /ASCIIHexDecode",
+        "3380CC3380CC3380CC3380CC>",
       ),
     ],
   )
@@ -99,7 +99,9 @@ test "ICC matrix profile reaches paths text images Indexed and shading" {
   assert_eq(path.fill_color, "#3080CD")
   assert_eq(text.fill_color, path.fill_color)
   assert_eq(indexed.fill_color, "#3081CD")
-  assert_eq(colour_image_scanlines(image.resource.unwrap()), [0, 48, 129, 205])
+  assert_eq(colour_image_scanlines(image.resource.unwrap()), [
+    0, 48, 129, 205, 48, 129, 205, 48, 129, 205, 48, 129, 205,
+  ])
   assert_eq(shading.shading.unwrap().stops[0].color, path.fill_color)
 }
 

@@ -56,6 +56,26 @@ await test('page tiles share annotation appearance rasters without changing thei
  }});
  assert.equal(loads,1);assert.equal(closed,1);assert.deepEqual(actual.data,control.data);assert.deepEqual(actual.premultiplied,control.premultiplied);
 });
+await test('native groups and pattern cells share the page image and release it once',async()=>{
+ const source=createCanvas(1,1);source.getContext('2d').fillStyle='#0000ff';source.getContext('2d').fillRect(0,0,1,1);
+ const image={kind:'image',paint:{quad:{p0:{x:0,y:0},p1:{x:0,y:20},p2:{x:20,y:20},p3:{x:20,y:0}},bounds:{min_x:0,min_y:0,max_x:20,max_y:20},resource:{data_uri:source.toDataURL(),width:1,height:1},fill_alpha:1,blend_mode:'normal'}};
+ const grouped=id=>({...image,groups:[{id,isolated:true,knockout:false,alpha:.5,blend_mode:'normal'}]});
+ const input=plan([path(rect,'#ff0000'),grouped('first'),grouped('second'),image]);
+ let loads=0,closed=0;
+ const canvas=createCanvas(1,1);
+ await renderPdfCanvas(canvas,input,{...options,returnPixels:false,loadImage:async uri=>{
+  loads++;const decoded=await loadImage(uri);decoded.close=()=>closed++;return decoded;
+ }});
+ assert.equal(loads,1,'Two native groups and the page share the decoded image');
+ assert.equal(closed,1,'Only the page owner releases the borrowed image');
+ assert.deepEqual([...canvas.getContext('2d').getImageData(10,10,1,1).data],[0,0,255,255]);
+ const tiles={name:'images',bbox:{min_x:0,min_y:0,max_x:20,max_y:20},x_step:20,y_step:20,matrix:[1,0,0,1,0,0],tile_plan:plan([image])};
+ const opts={...options,returnPixels:false,loadImage:async uri=>{loads++;return loadImage(uri);}};
+ const painter=createPatternPainter(opts);loads=0;
+ try{await renderPdfCanvas(createCanvas(1,1),plan([image,path(rect,'#fff',{pattern:tiles})]),{...opts,paintPattern:painter});}
+ finally{painter.dispose();}
+ assert.equal(loads,1,'Pattern replay borrows the same page image cache');
+});
 await test('ordinary display paints and opaque Type3 text avoid pixel readback',async()=>{
  const glyph=path('M2 2H10V10H2Z','#0000ff',{clips:[{svg_path:'M4 0H20V20H4Z'}]});
  const text=(scene,index)=>({kind:'text',paint:{index,text_object_id:'opaque',text_knockout:true,fill_alpha:1,blend_mode:'normal'},type3_plan:scene});

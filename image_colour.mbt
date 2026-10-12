@@ -1,14 +1,20 @@
 ///|
+priv struct PdfCachedImageRgb {
+  rgb : (Double, Double, Double)
+  mut bytes : Int?
+}
+
+///|
 fn pdf_image_cached_icc_rgb(
   icc : PdfIccTransform,
   alternate : PdfColourTransform,
   ranges : Array[(Double, Double)],
   values : ArrayView[Double],
   key : Int,
-  cache : Map[Int, (Double, Double, Double)],
+  cache : Map[Int, PdfCachedImageRgb],
 ) -> (Double, Double, Double) {
-  if cache.get(key) is Some(rgb) {
-    return rgb
+  if cache.get(key) is Some(entry) {
+    return entry.rgb
   }
   let values = pdf_icc_clip(values, ranges)
   let (r, g, b) = (icc.convert)(values[:])
@@ -23,7 +29,7 @@ fn pdf_image_cached_icc_rgb(
     return pdf_colour_rgb_of_transform(alternate, values[:])
   }
   if cache.length() < 4096 {
-    cache[key] = (r, g, b)
+    cache[key] = { rgb: (r, g, b), bytes: None, }
   }
   (r, g, b)
 }
@@ -280,7 +286,16 @@ fn pdf_image_colour_png(
     components <= 4 &&
     transform is Icc(Some(_), _, _) &&
     !(encoded is Some({ embedded_alpha_associated: true, .. }))
-  let colour_cache : Map[Int, (Double, Double, Double)] = Map([])
+  let colour_cache : Map[Int, PdfCachedImageRgb] = Map([])
+  // Opaque 8-bit images can reuse the final rounded RGB bytes as well. Keep
+  // alpha, Matte and retained component paths on their original sample rules.
+  let cache_bytes = cache_colours &&
+    bits == 8 &&
+    retained_components is None &&
+    !has_mask &&
+    alpha is None &&
+    !embedded_alpha &&
+    paints
   let retained_values = Array::make(components, 0.0)
   let scanlines = FixedArray::make(
     draw_height * (draw_width * channels + 1),
@@ -307,7 +322,15 @@ fn pdf_image_colour_png(
           colour_key = (colour_key << 8) |
             row[source_x * components + component].to_int()
         }
-        colour_cache.get(colour_key)
+        let entry = colour_cache.get(colour_key)
+        if cache_bytes && entry is Some({ bytes: Some(rgb), .. }) {
+          scanlines[scanline_position] = ((rgb >> 16) & 255).to_byte()
+          scanlines[scanline_position + 1] = ((rgb >> 8) & 255).to_byte()
+          scanlines[scanline_position + 2] = (rgb & 255).to_byte()
+          scanline_position += 3
+          continue
+        }
+        entry.map(entry => entry.rgb)
       } else {
         None
       }
@@ -469,6 +492,11 @@ fn pdf_image_colour_png(
       let red = pdf_transfer_value_to_byte(red)
       let green = pdf_transfer_value_to_byte(green)
       let blue = pdf_transfer_value_to_byte(blue)
+      // Failed ICC conversions use Alternate and remain retryable. Only a
+      // successful colour-cache entry can populate this byte palette.
+      if cache_bytes && colour_cache.get(colour_key) is Some(entry) {
+        entry.bytes = Some((red << 16) | (green << 8) | blue)
+      }
       let (red, green, blue) = if embedded_alpha && embedded_opacity == 0.0 {
         (255, 255, 255)
       } else {
