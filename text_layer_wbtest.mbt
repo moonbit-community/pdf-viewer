@@ -12,6 +12,7 @@ test "text layer corners follow the public viewport for every quarter rotation" 
       for index, item in layer.items {
         let source = page.text_content().items[index]
         assert_eq(item.item_index, source.index)
+        assert_eq(item.quad, source.quad)
         let left = layer.viewport.convert_to_viewport_point(source.quad.p1)
         let right = layer.viewport.convert_to_viewport_point(source.quad.p2)
         let bottom = layer.viewport.convert_to_viewport_point(source.quad.p0)
@@ -64,6 +65,24 @@ test "cursor ranges preserve sparse source indices partial glyphs and reverse en
   let empty = page.select_text(text[0].index, 1, text[0].index, 1).unwrap()
   assert_eq(empty.text, "")
   assert_true(empty.item_indices.is_empty())
+  for rotation in [0, 90, 180, 270] {
+    let layer = page.text_layer(rotation~, scale=2.0)
+    assert_eq(
+      layer.select_text(text[0].index, 1, text[1].index, 2),
+      Some(selection),
+    )
+    assert_eq(
+      layer.select_text(text[1].index, 2, text[0].index, 1),
+      Some(selection),
+    )
+    assert_eq(layer.select_text(text[0].index, 0, text[1].index, 1), None)
+    assert_eq(layer.select_text(text[0].index, -1, text[1].index, 2), None)
+    assert_eq(layer.select_text(999, 0, text[1].index, 2), None)
+    assert_eq(
+      layer.select_text(text[0].index, 1, text[0].index, 1),
+      Some(empty),
+    )
+  }
 }
 
 ///|
@@ -90,6 +109,28 @@ test "cursor text separators preserve rotated baselines and vertical columns" {
     "", "", "\n",
   ])
   assert_true(vertical.text_layer().items.iter().all(item => item.vertical))
+  for source in [page, vertical] {
+    let items = source.text_content().items
+    let layer = source.text_layer(scale=1.5, rotation=270)
+    for first in 0..<items.length() {
+      for last in first..<items.length() {
+        assert_eq(
+          layer.select_text(
+            items[first].index,
+            0,
+            items[last].index,
+            items[last].text.length(),
+          ),
+          source.select_text(
+            items[first].index,
+            0,
+            items[last].index,
+            items[last].text.length(),
+          ),
+        )
+      }
+    }
+  }
 }
 
 ///|

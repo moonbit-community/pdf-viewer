@@ -775,6 +775,7 @@ pub(all) struct PdfTextLayer {
 pub fn PdfTextLayer::equal(Self, Self) -> Bool
 #deprecated
 pub fn PdfTextLayer::not_equal(Self, Self) -> Bool
+pub fn PdfTextLayer::select_text(Self, Int, Int, Int, Int) -> PdfTextRangeSelection?
 #deprecated
 pub fn PdfTextLayer::to_json(Self) -> Json
 #deprecated
@@ -784,6 +785,7 @@ pub(all) struct PdfTextLayerItem {
   item_index : Int
   text : String
   separator : String
+  quad : PdfQuad
   matrix : Array[Double]
   font_family : String
   font_weight : String

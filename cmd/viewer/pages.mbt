@@ -153,6 +153,7 @@ async fn mount_page(result : @js.Value, current : () -> Bool) -> @dom.Element {
   }
   append_element(page, paint)
   append_element(page, text)
+  text.set_property("pdfTextLayer", value_field(result, "layer"))
   append_element(page, annotations)
   append_element(page, editor_layer(result))
   if accessibility is Some(layer) {
@@ -163,6 +164,11 @@ async fn mount_page(result : @js.Value, current : () -> Bool) -> @dom.Element {
 
 ///|
 async fn page_mounted(page : @dom.Element, current : () -> Bool) -> Unit {
+  if current() && page.query_selector(".text-layer") is Some(text) {
+    cache_selection_page(
+      value_field(@js.Value::cast_from(text), "pdfTextLayer"),
+    )
+  }
   annotations_bind(state.annotations.unwrap(), page)
   native_fonts_ready().wait()
   if !current() {
@@ -187,7 +193,8 @@ async fn page_mounted(page : @dom.Element, current : () -> Bool) -> Unit {
     }
   }
   highlight_search()
-  if state.selection_range is Some(range) {
+  if state.selection_range is Some(range) &&
+    (state.selection_restore || native_selection_range().to_option() is None) {
     restore_selection(range)
   }
 }
@@ -317,7 +324,14 @@ fn initialize_pages() -> Unit {
       (page, current) => {
         @js_async.Promise::from_async(() => page_mounted(page, current))
       },
-      page => annotations_unmount(state.annotations.unwrap(), page),
+      page => {
+        ignore(
+          selection_pages.remove(
+            parse_float(element_data(page, "page")).to_int(),
+          ),
+        )
+        annotations_unmount(state.annotations.unwrap(), page)
+      },
       show_native_error,
       pinned_pages,
       () => state.view_mode == "page",

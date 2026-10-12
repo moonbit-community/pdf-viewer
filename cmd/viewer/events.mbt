@@ -111,10 +111,14 @@ async fn handle(message : Msg) -> Unit {
     JumpSearch(delta) => jump_search(delta)
     Print => print_document_async()
     Download => editor_save()
-    Copy =>
+    Copy => {
+      refresh_copy_selection()
       if state.selection is Some(_) {
         write_clipboard(state.selection_text).wait()
+      } else if state.selection_promise is Some(pending) {
+        native_copy_pending(pending_selection_text(pending)).wait()
       }
+    }
     DownloadAttachment(index, name) => download_attachment(index, name)
     DownloadMetadata => download_metadata()
     DragOver => {

@@ -22,7 +22,7 @@ const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8',
   '.wasm':'application/wasm','.pdf':'application/pdf','.svg':'image/svg+xml'};
 const requests=[],failures=[],checks=[];let browser,page,ok=false,current='initialization';
 const server=createServer(async(request,response)=>{
-  const url=new URL(request.url,'http://localhost');requests.push(url.pathname);
+  const url=new URL(request.url,'http://localhost');
   if(!['GET','HEAD'].includes(request.method))failures.push(request.method+' '+url.pathname);
   if(!url.pathname.startsWith(prefix)){response.writeHead(404).end();return;}
   const path=resolve(root,decodeURIComponent(url.pathname.slice(prefix.length))||'index.html');
@@ -35,7 +35,7 @@ const server=createServer(async(request,response)=>{
   }catch{response.writeHead(404).end();}
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-const base='http://127.0.0.1:'+server.address().port+prefix;
+const base=process.argv[2]||'http://127.0.0.1:'+server.address().port+prefix;
 async function check(name,work){current=name;await work();checks.push(name);console.log('PASS '+name);}
 async function idle(filename){
   await waitForUI(page,filename=>Boolean(
@@ -65,6 +65,7 @@ try{
   }:{})});
   page=await browser.newPage({viewport:{width:1280,height:900},deviceScaleFactor:2,acceptDownloads:true});
   page.setDefaultTimeout(30000);
+  page.context().on('request',request=>{if(/^https?:/.test(request.url()))requests.push(new URL(request.url()).pathname);});
   page.on('request',request=>{
     if(/^https?:/.test(request.url())&&
       (new URL(request.url()).origin!==new URL(base).origin||!['GET','HEAD'].includes(request.method())))
@@ -119,12 +120,39 @@ try{
     await page.waitForFunction(()=>!document.querySelector('#editor-toolbar').hidden&&!document.querySelector('#edit-toggle').disabled);
     assert.equal(await field.inputValue(),'Saved from GitHub Pages');
   });
-  await check('Packaged XFA module and CSS render native readonly fields',async()=>{
-    await page.goto(base);
+  await check('Packaged XFA renders readonly fields and copies pending source ranges',async()=>{
     await page.locator('#file-input').setInputFiles({name:'xfa.pdf',mimeType:'application/pdf',buffer:xfaFixture()});
     await page.waitForFunction(()=>document.querySelector('.xfaLayer input')?.value==='Bound value');
     const input=page.locator('.xfaLayer input').first();
     assert.equal(await input.isEditable(),false);
+    const copy=await page.evaluate(async()=>{
+      const host=await import('./viewer.js'),span=document.querySelector('.xfa-text'),node=span.firstChild;
+      const select=end=>getSelection().setBaseAndExtent(node,0,node,end);
+      select(2);await host.readSelection();
+      const expected=JSON.parse(await pdfViewerHost.pdf.call('select_page_text',[1,+span.dataset.item,0,+span.dataset.item,node.length])).selection.text;
+      const call=pdfViewerHost.pdf.call,write=navigator.clipboard.write,writeText=navigator.clipboard.writeText;
+      let release,requests=0,receive;const copied=new Promise(resolve=>receive=resolve);
+      pdfViewerHost.pdf.call=function(method,...args){
+        if(method==='select_page_text'){requests++;return new Promise(resolve=>release=()=>resolve(call.call(this,method,...args)));}
+        return call.call(this,method,...args);
+      };
+      navigator.clipboard.write=async items=>receive(await (await items[0].getType('text/plain')).text());
+      navigator.clipboard.writeText=text=>{receive(text);return Promise.resolve();};
+      try{
+        select(node.length);document.querySelector('#copy-selection').click();
+        await new Promise(requestAnimationFrame);
+        if(!release)throw Error('XFA copy did not resolve the new source range');
+        release();release=null;
+        const text=await Promise.race([copied,new Promise((_,reject)=>setTimeout(()=>reject(Error('Copy button dropped a pending selection')),1500))]);
+        return {text,expected,requests};
+      }finally{
+        pdfViewerHost.pdf.call=call;navigator.clipboard.write=write;navigator.clipboard.writeText=writeText;
+        release?.();
+      }
+    });
+    assert.equal(copy.requests,1,'XFA retains Worker selection instead of stale indexes from the previous PDF');
+    assert.equal(copy.text,copy.expected,'The copy button waits for the new XFA source range');
+    assert.equal(await page.locator('#error').isVisible(),false);
     assert.ok(requests.includes(prefix+'vendor/xfa/xfa.mjs'));
     assert.ok(requests.includes(prefix+'vendor/xfa/xfa.css'));
   });
@@ -190,6 +218,55 @@ try{
       assert.equal(await page.locator('#error').isVisible(),false);
     }
     assert.deepEqual(failures,[]);
+  });
+  await check('Displayed selection bypasses the Worker and immediate copy uses the current source range',async()=>{
+    await page.locator('#viewer').focus();
+    const result=await page.evaluate(async()=>{
+      const host=await import('./viewer.js'),root=document.querySelector('.page[data-page="6"]');
+      const glyphs=[...root.querySelectorAll('.glyph')],node=index=>glyphs[index].querySelector('.glyph-text').firstChild;
+      const select=end=>getSelection().setBaseAndExtent(node(0),0,node(end),node(end).length);
+      const args=[6,+glyphs[0].dataset.item,0,+glyphs[25].dataset.item,node(25).length];
+      const expected=JSON.parse(await pdfViewerHost.pdf.call('select_page_text',args)).selection;
+      const call=pdfViewerHost.pdf.call,updates=[],pending=[],writeText=navigator.clipboard.writeText;let requests=0;
+      const {PageScheduler}=await import('./page-scheduler.js'),update=PageScheduler.prototype.update;
+      let scheduled=0;PageScheduler.prototype.update=function(...args){scheduled++;return update.apply(this,args);};
+      const listener=event=>{if(event.detail)updates.push(event.detail);};
+      document.querySelector('#viewer').addEventListener('pdf-selection-change',listener);
+      // Hold any selection request as if a synchronous render occupied the
+      // Worker. Mounted text must stay selectable without waiting for it.
+      pdfViewerHost.pdf.call=function(method,...args){
+        if(method==='select_page_text'){requests++;return new Promise(resolve=>pending.push(()=>resolve(call.call(this,method,...args))));}
+        return call.call(this,method,...args);
+      };
+      try{
+        select(5);
+        await Promise.race([host.readSelection(),new Promise((_,reject)=>setTimeout(()=>reject(Error('Displayed selection waited for the PDF Worker')),1000))]);
+        for(let end=6;end<=24;end++){select(end);await new Promise(requestAnimationFrame);}
+        await host.readSelection();
+        const before=updates.at(-1).text;
+        // Copy within the same event turn, before selectionchange can publish
+        // the longer range. Clipboard text and source quads must both be fresh.
+        select(25);const data=new DataTransfer(),event=new ClipboardEvent('copy',{clipboardData:data,cancelable:true,bubbles:true});
+        document.dispatchEvent(event);
+        const actual=updates.at(-1).ranges[0];
+        const buttonCopy=new Promise(resolve=>{navigator.clipboard.writeText=text=>{resolve(text);return Promise.resolve();};});
+        select(24);document.querySelector('#copy-selection').click();
+        const buttonText=await Promise.race([buttonCopy,new Promise((_,reject)=>setTimeout(()=>reject(Error('Copy button waited for the PDF Worker')),1000))]);
+        return {requests,scheduled,before,buttonText,prevented:event.defaultPrevented,text:data.getData('text/plain'),actual,expected};
+      }finally{
+        navigator.clipboard.writeText=writeText;
+        pdfViewerHost.pdf.call=call;PageScheduler.prototype.update=update;
+        document.querySelector('#viewer').removeEventListener('pdf-selection-change',listener);
+        for(const release of pending)release();
+      }
+    });
+    assert.equal(result.requests,0,'Dragging displayed text does not enqueue PDF parsing work');
+    assert.ok(result.scheduled<=1,'Selection changes within a page do not repeatedly reschedule page rendering');
+    assert.notEqual(result.before,result.expected.text);
+    assert.equal(result.buttonText,result.before,'The copy button refreshes a selection changed in the same event turn');
+    assert.equal(result.prevented,true);assert.equal(result.text,result.expected.text);
+    assert.deepEqual(result.actual,result.expected,'Local selection retains the exact Worker source indices and original quads');
+    assert.equal(await page.locator('#error').isVisible(),false);assert.deepEqual(failures,[]);
   });
   ok=true;
 }catch(error){

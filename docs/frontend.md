@@ -68,6 +68,15 @@ finished tiles appear while the remaining tiles are still loading. Cancellation
 removes only that task's partial paint; text, annotation and editing layers
 mount after the page completes.
 
+Mounted text layers retain their original PDF-space glyph quads and resolve
+selection locally through MoonBit's `PdfTextLayer::select_text`, using the same
+UTF-16 validation and separator rules as `PdfPageModel::select_text`. Dragging
+displayed text does not wait behind Worker rendering or reschedule the page for
+every cursor change. Clipboard events and the copy button refresh the current
+native range before copying. Unloaded pages and XFA retain the Worker path;
+unmounting a page releases its local selection index. Nearby page mounting
+preserves an active native drag range.
+
 To compare rendering with the pinned PDF.js checkout, build both static outputs
 as described in [the reference setup](../reference/README.md), then run
 `node tools/render_benchmark.mjs /path/to/document.pdf 1,2,12`.
@@ -77,6 +86,12 @@ timing replay. Reports separate reader startup, Worker payloads, paint time and
 pixel-flush time. `PDF_BENCH_COMPARE_RETAINED=1` also compares native display
 against retained replay and reports both renderers' differences from PDF.js.
 Input files stay local and reports are written only under ignored `_build/`.
+
+`tools/pages_browser_test.mjs` exercises Chromium and WebKit selection while
+holding Worker selection requests, checks immediate copy before a
+`selectionchange` update, and compares local source indices and quads exactly
+with the Worker. Pass a published repository URL to run the same browser flow
+against a deployment after building the local static artifact.
 
 `tools/build_web.mbtx` builds both `cmd/browser` and `cmd/viewer`. Static hosting
 must include both generated modules and the existing codec/XFA assets. Develop

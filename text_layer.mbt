@@ -6,6 +6,8 @@ pub(all) struct PdfTextLayerItem {
   item_index : Int
   text : String
   separator : String
+  /// Original PDF-space geometry, independent of viewport scale and rotation.
+  quad : PdfQuad
   matrix : Array[Double]
   font_family : String
   font_weight : String
@@ -66,6 +68,7 @@ pub fn PdfPageModel::text_layer(
       item_index: text.index,
       text: text.text,
       separator: pdf_text_separator_at(text_items[:], index),
+      quad: text.quad,
       matrix: [
         top_right.x - top_left.x,
         top_right.y - top_left.y,
@@ -132,8 +135,77 @@ pub fn PdfPageModel::select_text(
   end_offset : Int,
 ) -> PdfTextRangeSelection? {
   let items = self.text_content().items
-  let first = items.search_by(item => item.index == start_item)
-  let last = items.search_by(item => item.index == end_item)
+  pdf_select_text_range(
+    self.number,
+    items.length(),
+    position => items[position].index,
+    position => {
+      let item = items[position]
+      (
+        item.index,
+        item.text,
+        pdf_text_separator_at(items[:], position),
+        item.quad,
+      )
+    },
+    start_item,
+    start_offset,
+    end_item,
+    end_offset,
+  )
+}
+
+///|
+/// Resolve a cursor range using the already decoded text layer. It uses the
+/// same UTF-16 validation and original source quads as PdfPageModel::select_text,
+/// without requiring PDF parsing or a request to a rendering Worker.
+pub fn PdfTextLayer::select_text(
+  self : PdfTextLayer,
+  start_item : Int,
+  start_offset : Int,
+  end_item : Int,
+  end_offset : Int,
+) -> PdfTextRangeSelection? {
+  pdf_select_text_range(
+    self.page,
+    self.items.length(),
+    position => self.items[position].item_index,
+    position => {
+      let item = self.items[position]
+      (item.item_index, item.text, item.separator, item.quad)
+    },
+    start_item,
+    start_offset,
+    end_item,
+    end_offset,
+  )
+}
+
+///|
+fn pdf_select_text_range(
+  page : Int,
+  length : Int,
+  item_index : (Int) -> Int,
+  item : (Int) -> (Int, String, String, PdfQuad),
+  start_item : Int,
+  start_offset : Int,
+  end_item : Int,
+  end_offset : Int,
+) -> PdfTextRangeSelection? {
+  let mut first : Int? = None
+  let mut last : Int? = None
+  for position in 0..<length {
+    let index = item_index(position)
+    if index == start_item {
+      first = Some(position)
+    }
+    if index == end_item {
+      last = Some(position)
+    }
+    if first is Some(_) && last is Some(_) {
+      break
+    }
+  }
   guard first is Some(first) && last is Some(last) else { return None }
   let (first, first_offset, last, last_offset) = if first > last ||
     (first == last && start_offset > end_offset) {
@@ -141,39 +213,39 @@ pub fn PdfPageModel::select_text(
   } else {
     (first, start_offset, last, end_offset)
   }
+  let (first_index, first_text, _, _) = item(first)
+  let (last_index, last_text, _, _) = item(last)
   if first_offset < 0 ||
-    first_offset > items[first].text.length() ||
+    first_offset > first_text.length() ||
     last_offset < 0 ||
-    last_offset > items[last].text.length() {
+    last_offset > last_text.length() {
     return None
   }
   let output = StringBuilder()
   let indices : Array[Int] = []
   let quads : Array[PdfQuad] = []
   for position in first..<=last {
-    let item = items[position]
+    let (index, text, separator, quad) = item(position)
     let begin = if position == first { first_offset } else { 0 }
-    let end = if position == last { last_offset } else { item.text.length() }
-    guard item.text.get_view(start=begin, end~) is Some(slice) else {
-      return None
-    }
+    let end = if position == last { last_offset } else { text.length() }
+    guard text.get_view(start=begin, end~) is Some(slice) else { return None }
     if position > first {
-      output.write_string(pdf_text_separator_at(items[:], position))
+      output.write_string(separator)
     }
     output.write_string(slice.to_owned())
     if !slice.is_empty() {
-      indices.push(item.index)
-      quads.push(item.quad)
+      indices.push(index)
+      quads.push(quad)
     }
   }
   Some({
-    page: self.number,
+    page,
     text: output.to_string(),
     item_indices: indices,
     quads,
-    start_item: items[first].index,
+    start_item: first_index,
     start_offset: first_offset,
-    end_item: items[last].index,
+    end_item: last_index,
     end_offset: last_offset,
   })
 }
