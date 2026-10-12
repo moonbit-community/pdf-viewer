@@ -52,13 +52,25 @@ try{
  const opened=Date.now();
  await page.locator('#file-input').setInputFiles({name:'benchmark.pdf',mimeType:'application/pdf',buffer:data});
  await page.waitForFunction(()=>document.querySelector('.page[data-page="1"]')?.dataset.rendered==='true'&&document.querySelector('#viewer').getAttribute('aria-busy')==='false');
- const report={engine,dpr:2,firstReaderMs:Date.now()-opened,pages:[],errors};
+ const report={engine,dpr:2,firstReaderMs:Date.now()-opened,pages:[],navigation:[],errors};
  for(const number of requested){
   if(number!==1){await page.locator('#page-number').fill(String(number));await page.locator('#page-number').press('Enter');}
   await page.waitForFunction(n=>document.querySelector('.page[data-page="'+n+'"]')?.dataset.rendered==='true',number);
  }
  // Finish nearby UI paints and parsing before measuring either renderer.
  await page.waitForFunction(()=>{const worker=pdfViewerHost.pdf.diagnostics();return !window.pdfBenchmark.active&&!worker.active&&!worker.queued;});
+ for(const number of requested){
+  const before=await page.evaluate(n=>{const s=pdfBenchmark;s.navigationCanvas=s.saved.get(n)?.[0];return {paints:s.paints.length,requests:s.worker.filter(r=>r.method==='render_page').length};},number);
+  const start=Date.now();await page.locator('#page-number').fill(String(number));await page.locator('#page-number').press('Enter');
+  await page.waitForFunction(n=>document.querySelector('.page[data-page="'+n+'"]')?.dataset.rendered==='true',number);
+  report.navigation.push(await page.evaluate(({number,before,ms})=>{
+   const s=pdfBenchmark;
+   return {page:number,ms,reusedCanvas:s.navigationCanvas===document.querySelector('.page[data-page="'+number+'"] canvas'),
+    paints:s.paints.length-before.paints,requests:s.worker.filter(r=>r.method==='render_page').length-before.requests};
+  },{number,before,ms:Date.now()-start}));
+ }
+ await page.waitForFunction(()=>{const worker=pdfViewerHost.pdf.diagnostics();return !window.pdfBenchmark.active&&!worker.active&&!worker.queued;});
+ report.cache=await page.evaluate(async()=> (await (await import('./viewer.js')).runtimeDiagnostics()).display_cache);
  await page.evaluate(()=>pdfViewerHost.pdf.close());
  report.worker=await page.evaluate(()=>window.pdfBenchmark.worker);
  report.pdfjs=await page.evaluate(async bytes=>{

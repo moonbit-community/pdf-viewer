@@ -13,7 +13,7 @@ async fn editor_apply_snapshot(changes : Array[Json], generation : Int) -> Bool 
   clear_search()
   cancel_thumbnails()
   editor.selected = Json::null()
-  repaint()
+  repaint(invalidate=true)
   if state.sidebar == Some(Thumbnails) {
     for
       preview in element("sidebar-content")

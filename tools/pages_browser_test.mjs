@@ -220,6 +220,57 @@ try{
     }
     assert.deepEqual(failures,[]);
   });
+  await check('Recent pages reuse their surfaces, unchanged viewports stay cached and eviction releases Canvas storage',async()=>{
+    await page.evaluate(async()=>{
+      const {PageScheduler}=await import('./page-scheduler.js'),update=PageScheduler.prototype.update;
+      const call=pdfViewerHost.pdf.call;
+      const probe=window.pageCacheProbe={canvas:document.querySelector('.page[data-page="6"] canvas'),glyph:document.querySelector('.page[data-page="6"] .glyph-text'),requests:[],update,call};
+      PageScheduler.prototype.update=function(...args){probe.scheduler=this;return update.apply(this,args);};
+      pdfViewerHost.pdf.call=function(method,args,...rest){if(method==='render_page')probe.requests.push(args[0]);return call.call(this,method,args,...rest);};
+    });
+    const navigate=async number=>{
+      await page.locator('#page-number').fill(String(number));await page.locator('#page-number').press('Enter');
+      await page.waitForFunction(n=>document.querySelector('.page[data-page="'+n+'"]')?.dataset.rendered==='true',number);
+    };
+    try{
+      await navigate(3);await navigate(6);
+      const warm=await page.evaluate(async()=>{
+        const p=pageCacheProbe,data=await (await import('./viewer.js')).runtimeDiagnostics();
+        return {sameCanvas:p.canvas===document.querySelector('.page[data-page="6"] canvas'),sameGlyph:p.glyph===document.querySelector('.page[data-page="6"] .glyph-text'),requests:p.requests.filter(n=>n===6).length,cache:data.display_cache};
+      });
+      assert.equal(warm.sameCanvas,true,'Returning to a recent page reuses its completed Canvas');
+      assert.equal(warm.sameGlyph,true,'Returning does not rebuild the native text layer');
+      assert.equal(warm.requests,0,'A cached page needs no Worker rendering request');
+      assert.ok(warm.cache.entries<=warm.cache.max_pages&&warm.cache.bytes<=warm.cache.budget_bytes);
+      await page.setViewportSize({width:1280,height:920});
+      await page.waitForTimeout(250);
+      await page.locator('#zoom').selectOption('fit');
+      await waitForUI(page,()=>document.querySelector('#viewer').getAttribute('aria-busy')==='false');
+      const unchanged=await page.evaluate(()=>({same:pageCacheProbe.canvas===document.querySelector('.page[data-page="6"] canvas'),requests:pageCacheProbe.requests.filter(n=>n===6).length}));
+      assert.equal(unchanged.same,true,'Height-only resize and the same zoom preserve the painted page');assert.equal(unchanged.requests,0);
+      await page.evaluate(()=>{
+        const p=pageCacheProbe;p.maxPages=p.scheduler.maxCachedPages;p.maxBytes=p.scheduler.maxCachedBytes;
+        p.scheduler.maxCachedPages=1;p.scheduler.maxCachedBytes=p.canvas.width*p.canvas.height*4;
+      });
+      await page.locator('#view-mode').selectOption('page');
+      await navigate(3);await navigate(6);
+      const evicted=await page.evaluate(async()=>{
+        const p=pageCacheProbe,data=await (await import('./viewer.js')).runtimeDiagnostics();
+        return {released:p.canvas.width===0&&p.canvas.height===0,requests:p.requests.filter(n=>n===6).length,cache:data.display_cache};
+      });
+      assert.equal(evicted.released,true,'Eviction releases the old Canvas backing store');assert.equal(evicted.requests,1,'An evicted page renders exactly once on return');
+      assert.equal(evicted.cache.entries,1);assert.ok(evicted.cache.evictions>0&&evicted.cache.bytes<=evicted.cache.budget_bytes);
+      assert.equal(await page.locator('#error').isVisible(),false);assert.deepEqual(failures,[]);
+    }finally{
+      await page.evaluate(async()=>{
+        const p=pageCacheProbe,{PageScheduler}=await import('./page-scheduler.js');
+        PageScheduler.prototype.update=p.update;pdfViewerHost.pdf.call=p.call;
+        if(p.maxPages!==undefined){p.scheduler.maxCachedPages=p.maxPages;p.scheduler.maxCachedBytes=p.maxBytes;}
+      });
+      await page.locator('#view-mode').selectOption('scroll');await page.setViewportSize({width:1280,height:900});
+      await page.waitForTimeout(250);
+    }
+  });
   await check('Displayed selection bypasses the Worker and immediate copy uses the current source range',async()=>{
     await page.locator('#viewer').focus();
     const result=await page.evaluate(async()=>{

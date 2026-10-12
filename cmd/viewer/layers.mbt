@@ -27,7 +27,7 @@ async fn layers_update(
     state.layers = value_json(value_field(result, "layers"))
     clear_selection()
     clear_search()
-    repaint(preserve=false)
+    repaint(preserve=false, invalidate=true)
     if generation != state.document_generation {
       return
     }

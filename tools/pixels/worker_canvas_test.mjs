@@ -301,6 +301,7 @@ try {
 // a replacement layout or navigation. Detached stale output must never publish.
 const element = () => ({
   childNodes: [], dataset: {}, style: {}, attributes: {},
+  querySelectorAll() { return []; },
   replaceChildren(...nodes) { this.childNodes = nodes; },
   setAttribute(name, value) { this.attributes[name] = value; },
 });
@@ -339,10 +340,10 @@ assert.deepEqual(page.childNodes, ['fresh Canvas']);
 assert.equal(page.dataset.rendered, 'true');
 assert.equal(mounts, 1);
 scheduler.unload(page);
-assert.equal(unloads, 1);
+assert.equal(unloads, 2, 'navigation also unloads unfinished Canvas output');
 assert.deepEqual(page.childNodes, []);
 scheduler.clear();
-assert.equal(unloads, 2);
+assert.equal(unloads, 3);
 assert.deepEqual(pages.children, []);
 report.tests.push('actual async PageScheduler discards old epoch/navigation Canvas mounts and mounts a fresh result; unloading/clearing invokes annotation cleanup');
 // Thumbnail/print publication is checked against the compiled Rabbita app

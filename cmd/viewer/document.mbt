@@ -165,8 +165,13 @@ extern "js" fn diagnostic_value(
   file : @js.Nullable[@js.Value],
   cache : @js.Value,
   worker : @js.Value,
+  display_cache : @js.Value,
 ) -> @js.Value =
-  #| (pages,documentGeneration,file,cache,worker) => ({pages,documentGeneration,mounted:[...document.getElementById("pages").querySelectorAll('[data-rendered="true"]')].map(page=>Number(page.dataset.page)),source_bytes:file?.size||cache.range?.total_bytes||0,worker,cache})
+  #| (pages,documentGeneration,file,cache,worker,display_cache) => ({pages,documentGeneration,mounted:[...document.getElementById("pages").querySelectorAll('[data-rendered="true"]')].map(page=>Number(page.dataset.page)),source_bytes:file?.size||cache.range?.total_bytes||0,worker,cache,display_cache})
+
+///|
+extern "js" fn display_cache_diagnostics(scheduler : @js.Value) -> @js.Value =
+  #| scheduler => scheduler.diagnostics()
 
 ///|
 pub fn runtime_diagnostics() -> @js_async.Promise[@js.Value] {
@@ -178,6 +183,7 @@ pub fn runtime_diagnostics() -> @js_async.Promise[@js.Value] {
       @js.Nullable::from_option(state.file),
       cache,
       worker_diagnostics(),
+      display_cache_diagnostics(state.scheduler.unwrap()),
     )
   })
 }

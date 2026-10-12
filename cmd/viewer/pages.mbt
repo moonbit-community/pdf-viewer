@@ -252,8 +252,9 @@ extern "js" fn scheduler_layout(
   number : Int,
   scale : Double,
   rotation : Int,
+  invalidate : Bool,
 ) -> Unit =
-  #| (scheduler,number,scale,rotation) => { scheduler.current=number; scheduler.layout(scale,rotation); }
+  #| (scheduler,number,scale,rotation,invalidate) => { scheduler.current=number; scheduler.layout(scale,rotation,{invalidate}); }
 
 ///|
 extern "js" fn scheduler_update(scheduler : @js.Value, number : Int) -> Unit =
@@ -380,7 +381,7 @@ fn go_to_page(number : Int, push? : Bool = false) -> Unit {
 }
 
 ///|
-async fn repaint(preserve? : Bool = true) -> Unit {
+async fn repaint(preserve? : Bool = true, invalidate? : Bool = false) -> Unit {
   if state.count == 0 {
     return
   }
@@ -414,7 +415,13 @@ async fn repaint(preserve? : Bool = true) -> Unit {
       parse_float(state.zoom)
     }
     state.scale = scale
-    scheduler_layout(state.scheduler.unwrap(), number, scale, state.rotation)
+    scheduler_layout(
+      state.scheduler.unwrap(),
+      number,
+      scale,
+      state.rotation,
+      invalidate,
+    )
     apply_view_mode()
     state.status = "正在渲染第 \{number} / \{state.count} 页"
     notify()
