@@ -297,6 +297,25 @@ fn pdf_image_colour_png(
     !embedded_alpha &&
     paints
   let retained_values = Array::make(components, 0.0)
+  // Device bytes with identity Decode already are display samples. Preserve
+  // their exact values without allocating/converting a component vector for
+  // every pixel. Calibrated/ICC, masks and process-ink conversions stay below.
+  let direct_components = if transform is Samples(@pdflite.PdfDeviceRGB) {
+    3
+  } else if transform is Samples(@pdflite.PdfDeviceGray) {
+    1
+  } else {
+    0
+  }
+  let direct_bytes = direct_components == components &&
+    direct_components > 0 &&
+    bits == 8 &&
+    channels == 3 &&
+    alpha is None &&
+    !embedded_alpha &&
+    !has_mask &&
+    (retained_components is None || !retained_process) &&
+    decode.all(range => range == (0.0, 1.0))
   let scanlines = FixedArray::make(
     draw_height * (draw_width * channels + 1),
     b'\x00',
@@ -308,6 +327,27 @@ fn pdf_image_colour_png(
     let row = bytes[source_y * row_bytes:(source_y + 1) * row_bytes]
     for x in 0..<draw_width {
       let source_x = (x.to_double() * width.to_double() / draw_width.to_double()).to_int()
+      if direct_bytes {
+        let offset = source_x * components
+        scanlines[scanline_position] = row[offset]
+        scanlines[scanline_position + 1] = row[offset +
+          (if components == 1 { 0 } else { 1 })]
+        scanlines[scanline_position + 2] = row[offset +
+          (if components == 1 { 0 } else { 2 })]
+        scanline_position += 3
+        if retained_components is Some(retained) &&
+          retained_alpha is Some(opacity) {
+          let pixel = y * draw_width + x
+          opacity[pixel] = b'\xff'
+          for component in 0..<components {
+            let sample = row[offset + component]
+            let position = (pixel * components + component) * 2
+            retained[position] = sample
+            retained[position + 1] = sample
+          }
+        }
+        continue
+      }
       let embedded_opacity = match encoded {
         Some(samples) => samples.embedded_opacity(source_x, source_y)
         None => 1.0

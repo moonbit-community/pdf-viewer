@@ -93,7 +93,7 @@ async function renderTiledPage(canvas,plan,options,width,height,tileSize){
   }finally{
     target.width=target.height=1;
     if(scope&&scope!==options._profileScope)scope.dispose();
-    for(const entry of glyphCache.entries.values())entry.value.close?.();glyphCache.entries.clear();
-    for(const entry of imageCache.entries.values())entry.value.close?.();imageCache.entries.clear();imageCache.bytes=0;
+    for(const entry of glyphCache.entries.values()){if(options.releaseImage)options.releaseImage(entry.value);else entry.value.close?.();}glyphCache.entries.clear();
+    for(const entry of imageCache.entries.values()){if(options.releaseImage)options.releaseImage(entry.value);else entry.value.close?.();}imageCache.entries.clear();imageCache.bytes=0;
   }
 }

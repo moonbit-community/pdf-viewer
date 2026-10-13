@@ -18,7 +18,7 @@ const defaultCanvas = (width,height) => {
   if (typeof document !== 'undefined') return Object.assign(document.createElement('canvas'),{width,height});
   throw new Error('PDF Canvas renderer needs a host createCanvas implementation');
 };
-const defaultLoadImage = async uri => {
+export const loadPdfRaster = async uri => {
   const blob=await (await fetch(uri)).blob();
   if (typeof createImageBitmap !== 'undefined' && blob.type !== 'image/svg+xml') return createImageBitmap(blob);
   const image=new Image(); image.src=uri; await image.decode(); return image;
@@ -94,14 +94,14 @@ export async function renderPdfCanvas(canvas, plan, options = {}) {
   try{return await renderPdfCanvasScoped(canvas,plan,{...options,_profileScope:scope,_glyphCache:glyphCache,_imageCache:imageCache});}
   finally{
     owned?.dispose();
-    if(ownedGlyphCache){for(const entry of glyphCache.entries.values())entry.value.close?.();glyphCache.entries.clear();glyphCache.bytes=0;}
-    if(ownedImageCache){for(const entry of imageCache.entries.values())entry.value.close?.();imageCache.entries.clear();imageCache.bytes=0;}
+    if(ownedGlyphCache){for(const entry of glyphCache.entries.values()){if(options.releaseImage)options.releaseImage(entry.value);else entry.value.close?.();}glyphCache.entries.clear();glyphCache.bytes=0;}
+    if(ownedImageCache){for(const entry of imageCache.entries.values()){if(options.releaseImage)options.releaseImage(entry.value);else entry.value.close?.();}imageCache.entries.clear();imageCache.bytes=0;}
   }
 }
 
 async function renderPdfCanvasScoped(canvas, plan, options = {}) {
   const createCanvas=options.createCanvas || defaultCanvas;
-  const loadImage=options.loadImage || defaultLoadImage;
+  const loadImage=options.loadImage || loadPdfRaster;
   const Path=options.Path2D || globalThis.Path2D;
   if (!Path) throw new Error('PDF Canvas renderer needs a host Path2D implementation');
   if (plan.version !== 1) throw new Error(`Unsupported PDF Canvas plan version: ${plan.version}`);
@@ -166,7 +166,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
   let maskCacheBytes=0,inkImageCache=null,layer=null,shapeLayer=null;
   const imageCache=options._imageCache;
   const images=imageCache.entries,uncachedImages=new Set(),imageLimit=imageCache.limit;
-  const releaseImage=value=>{if(typeof value?.close==='function')value.close();};
+  const releaseImage=value=>{if(options.releaseImage)options.releaseImage(value);else value?.close?.();};
   const glyphImage=async(svg,w,h)=>{
     const key=svg;
     if(glyphCache.entries.has(key)){const entry=glyphCache.entries.get(key);glyphCache.entries.delete(key);glyphCache.entries.set(key,entry);return {value:entry.value,cached:true};}
@@ -695,7 +695,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
             try{
               const rendered=await renderPdfCanvas(target,item.scene,{...options,_nativePageDisabled:!item.native,width:r.width,height:r.height,matrix:localMatrix,
                 maxDepth:(options.maxDepth??32)-(item.native?1:0),
-                _nativeClipBounds:item.native&&item.bounds?[...(options._nativeClipBounds||[]),item.bounds]:options._nativeClipBounds,
+                _nativeClipBounds:[...(options._nativeClipBounds||[]),...(item.nativeClipBounds||[]),...(item.native&&item.bounds?[item.bounds]:[])],
                 transparent:true,_glyphCacheReserved:true,_imageCacheReserved:true,_inheritedWorkingBytes:retainedWorkingBytes()});
               diagnostics.push(...rendered.diagnostics);checkPdfRender(options);
               output.setTransform(1,0,0,1,0,0);output.globalAlpha=item.alpha??1;output.drawImage(target,r.x,r.y);
@@ -704,7 +704,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
         }else{
           environments.paintBounds=paintRegion(item);
           environments.inheritedWorkingBytes=retainedWorkingBytes();
-          clips(output,item.paint);
+          clips(output,item.paint,item.nativeClipBounds||[]);
           if(item.kind==='path')await drawPath(output,item.paint,false);
           else if(item.kind==='image')await drawImage(output,item.paint,false);
           else await drawText(output,item,false);

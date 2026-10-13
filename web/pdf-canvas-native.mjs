@@ -16,16 +16,30 @@ const independentPattern=resource=>{
     return ['path','image'].includes(item.kind)&&!(item.groups||p.group_path||[]).length&&!item.mask&&!p.soft_mask&&!item.pattern&&!p.pattern&&!item.stroke_pattern&&!p.stroke_pattern&&!p.shading_pattern&&!p.fill_overprint&&!p.stroke_overprint&&!p.alpha_is_shape&&['normal','compatible'].includes(p.blend_mode);
   });
 };
-export function singleType3Path(item,page){
+export function nativeType3Paths(item,page){
   const scene=item.type3_plan;
-  if(!scene||scene.version!==1||scene.items.length>1||scene.diagnostics?.length||scene.annotation_svg||scene.annotation_fragments?.length)return null;
+  if(!scene||scene.version!==1||scene.diagnostics?.length||scene.annotation_svg||scene.annotation_fragments?.length)return null;
   if(['origin_x','origin_y','width','height'].some(key=>scene.page[key]!==page[key]))return null;
   if(scene.blend_profile_id||scene.page.blend_profile_id||scene.blend_calibration||scene.page.blend_calibration)return null;
-  if(!scene.items.length)return {...item,kind:'path',paint:{...item.paint,svg_path:'',filled:false,stroked:false}};
-  const child=scene.items[0],p=child.paint;
-  if(child.kind!=='path'||(child.groups||p.group_path||[]).length||child.mask||p.soft_mask||child.pattern||p.pattern||child.stroke_pattern||p.stroke_pattern||p.shading_pattern||!['normal','compatible'].includes(p.blend_mode)||p.fill_alpha!==1||!opaqueColour(p.fill_color)||!p.filled||p.stroked||p.fill_overprint||p.stroke_overprint||p.alpha_is_shape)return null;
-  return {...child,paint:{...p,index:item.paint.index},groups:item.groups||item.paint.group_path||[]};
+  if(!scene.items.length)return [{...item,kind:'path',paint:{...item.paint,svg_path:'',filled:false,stroked:false}}];
+  const paths=[];
+  for(const child of scene.items){
+    const p=child.paint;
+    if(child.kind!=='path'||(child.groups||p.group_path||[]).length||child.mask||p.soft_mask||child.pattern||p.pattern||child.stroke_pattern||p.stroke_pattern||p.shading_pattern||!['normal','compatible'].includes(p.blend_mode)||p.fill_alpha!==1||!opaqueColour(p.fill_color)||!p.filled||p.stroked||p.fill_overprint||p.stroke_overprint||p.alpha_is_shape)return null;
+    paths.push({...child,paint:{...p,index:item.paint.index},groups:item.groups||item.paint.group_path||[]});
+  }
+  return paths;
 }
+export function singleType3Path(item,page){
+  const paths=nativeType3Paths(item,page);
+  return paths?.length===1?paths[0]:null;
+}
+
+// In a knockout group, source-over is equivalent when each elementary
+// object's shape equals its alpha. Restrict this proof to opaque vector paints.
+const opaqueNativePaint=item=>item.kind==='path'&&!item.paint.pattern&&!item.paint.stroke_pattern&&!item.paint.shading_pattern&&
+ (!item.paint.filled||(item.paint.fill_alpha===1&&opaqueColour(item.paint.fill_color)))&&
+ (!item.paint.stroked||(item.paint.stroke_alpha===1&&opaqueColour(item.paint.stroke_color)));
 
 export function prepareNativeCanvasItems(plan,options={}){
   if(options.nativeCanvas===false||options._nativePageDisabled||(options.maxDepth??32)<=1||options.returnPixels!==false||options.proof||options.backdrop||options.returnInks||options.returnGroupComponents||options.outputGroupComponents||options._maskBackdrop||options.fullSurfaceReplay||options.fullSceneReplay)return null;
@@ -35,9 +49,9 @@ export function prepareNativeCanvasItems(plan,options={}){
   for(let i=0;i<plan.items.length;i++){
     const raw=plan.items[i],groups=raw.groups||raw.paint.group_path||[],group=groups[0];
     if(group){
-      // An isolated source-over group can be rendered against transparency
-      // independently, then placed over the native page in its original order.
-      if(!group.isolated||!['normal','compatible'].includes(group.blend_mode)||group.alpha_is_shape)return null;
+      // Independent unit-opacity groups can stay on the page. Other isolated
+      // source-over groups render against transparency before placement.
+      if(!['normal','compatible'].includes(group.blend_mode)||group.alpha_is_shape)return null;
       let end=i+1;
       while(end<plan.items.length&&(plan.items[end].groups||plan.items[end].paint.group_path||[])[0]?.id===group.id)end++;
       const scene={...plan,items:plan.items.slice(i,end),annotation_svg:null,annotation_fragments:[]};
@@ -45,7 +59,17 @@ export function prepareNativeCanvasItems(plan,options={}){
         const groups=(item.groups||item.paint.group_path||[]).slice(1);
         return {...item,groups,paint:{...item.paint,group_path:groups}};
       })};
-      const direct=!group.knockout&&!group.soft_mask&&!group.icc_profile_id&&!group.calibration&&(!group.color_space||group.color_space==='DeviceRGB')&&prepareNativeCanvasItems(children,{...options,maxDepth:(options.maxDepth??32)-1,transparent:true})!==null;
+      const independent=!group.soft_mask&&!group.icc_profile_id&&!group.calibration&&(!group.color_space||group.color_space==='DeviceRGB');
+      const nativeChildren=independent?prepareNativeCanvasItems(children,{...options,maxDepth:(options.maxDepth??32)-1,transparent:true}):null;
+      // Normal unit-opacity groups preserve source-over composition. Flatten
+      // them instead of allocating, reading and uploading a group surface.
+      if(group.alpha===1&&nativeChildren&&(!group.knockout||nativeChildren.every(opaqueNativePaint))){
+        for(const child of nativeChildren)items.push(group.bounds?{
+          ...child,nativeClipBounds:[group.bounds,...(child.nativeClipBounds||[])],
+        }:child);i=end-1;continue;
+      }
+      if(!group.isolated)return null;
+      const direct=!group.knockout&&nativeChildren!==null;
       items.push({kind:'retained',scene:direct?children:scene,native:direct,alpha:direct?group.alpha:1,bounds:direct?group.bounds:null});
       i=end-1;continue;
     }
@@ -67,7 +91,12 @@ export function prepareNativeCanvasItems(plan,options={}){
     if(raw.kind==='text'){
       // With opaque elementary glyphs, shape equals alpha, so text knockout
       // reduces to source-over. Translucent glyphs retain the PDF group path.
-      if(raw.type3_plan){item=singleType3Path(raw,plan.page);if(!item)return null;}
+      if(raw.type3_plan){
+        // Opaque source-over glyph parts have shape == alpha. Outside knockout
+        // groups they can stay vector paths, including multi-path charprocs.
+        const paths=nativeType3Paths(raw,plan.page);if(!paths)return null;
+        for(const path of paths)items.push(path);continue;
+      }
       else{
         const mode=p.rendering_mode,filled=[0,2,4,6].includes(mode),stroked=[1,2,5,6].includes(mode),pen=p.stroke;
         if((filled&&(p.fill_alpha!==1||!opaqueColour(p.fill_color)))||(stroked&&((pen?.stroke_alpha??p.stroke_alpha)!==1||!opaqueColour(p.stroke_color))))return null;

@@ -117,6 +117,20 @@ await test('ordinary display paints and opaque Type3 text avoid pixel readback',
  assert(allocatedPixels<40*40,'There are no full-page scratch surfaces');
  assert.deepEqual(canvas.getContext('2d').getImageData(0,0,40,40).data,control.getContext('2d').getImageData(0,0,40,40).data);
 });
+await test('flattened native groups keep clipping bounds on paths and retained descendants',async()=>{
+ for(const retained of [false,true])for(const fractional of [false,true]){
+  const group={id:'outer',isolated:true,knockout:false,alpha:1,blend_mode:'normal',bounds:{min_x:fractional?5.25:5,min_y:5,max_x:15,max_y:15}};
+  const inner={id:'inner',isolated:true,knockout:true,alpha:0.5,blend_mode:'normal'};
+  const input=plan([path(rect,'#ff0000',{fill_alpha:retained?0.5:1,group_path:retained?[group,inner]:[group]})]);
+  const control=createCanvas(1,1),canvas=createCanvas(1,1);
+  await renderPdfCanvas(control,input,{...options,nativeCanvas:false});
+  const result=await renderPdfCanvas(canvas,input,{...options,returnPixels:false});
+  assert.equal(result.native,true);
+  const a=canvas.getContext('2d').getImageData(0,0,20,20).data,b=control.getContext('2d').getImageData(0,0,20,20).data;
+  for(let i=0;i<a.length;i++)assert(Math.abs(a[i]-b[i])<=1,`clipped group pixel ${i}: ${a[i]} != ${b[i]}`);
+  assert.deepEqual(Array.from(a.slice((2*20+2)*4,(2*20+2)*4+4)),[255,255,255,255]);
+ }
+});
 await test('native display retains isolated groups and their knockout and blend semantics',async()=>{
  const group={id:'mixed',isolated:true,knockout:true,alpha:0.5,blend_mode:'normal',bounds:{min_x:4,min_y:4,max_x:16,max_y:16}};
  const input=plan([path(rect,'#ff0000'),path(rect,'#00ff00',{fill_alpha:0.5,group_path:[group]}),path('M8 0H20V20H8Z','#0000ff',{blend_mode:'multiply',group_path:[group]}),path('M0 0H2V20H0Z','#000')]);
@@ -444,6 +458,23 @@ await test('optional host text outlines resolve only successful ordinary glyph d
  await assert.rejects(()=>renderPdfCanvas(createCanvas(20,20),input,{...options,resolveTextOutline:()=>({fill_path:'M0 0'})}),/pen-local stroke_path/);
  const type3={...text,type3_plan:plan([])};
  await renderPdfCanvas(createCanvas(20,20),plan([type3]),{...options,resolveTextOutline:()=>{throw new Error('Type3 must not call host glyph resolution');}});
+});
+await test('opaque multi-path Type3 glyphs remain vector paints outside knockout groups',async()=>{
+ const glyph={kind:'text',paint:{...path('', '#000000').paint,index:3},
+  type3_plan:plan([path('M2 2H10V10H2Z','#000000'),path('M7 7H17V17H7Z','#000000')])};
+ const group={id:'glyphs',isolated:true,knockout:false,alpha:1,blend_mode:'normal',color_space:'DeviceRGB'};
+ const input=plan([path(rect,'#ff0000'),{...glyph,groups:[group]}]);
+ const control=await renderPdfCanvas(createCanvas(20,20),input,options);
+ const canvas=createCanvas(20,20);let loads=0;
+ await renderPdfCanvas(canvas,input,{...options,returnPixels:false,loadImage:async()=>{loads++;throw Error('Vector glyphs must not decode SVG rasters');}});
+ assert.deepEqual(canvas.getContext('2d').getImageData(0,0,20,20).data,control.data);
+ assert.equal(loads,0);
+ // Knockout retains the glyph as one elementary paint, so its overlapping
+ // parts cannot independently erase the group's initial backdrop.
+ const knockout=plan([path(rect,'#ff0000'),{...glyph,groups:[{...group,knockout:true}]}]);
+ const expected=await renderPdfCanvas(createCanvas(20,20),knockout,options);
+ const actual=createCanvas(20,20);await renderPdfCanvas(actual,knockout,{...options,returnPixels:false});
+ assert.deepEqual(actual.getContext('2d').getImageData(0,0,20,20).data,expected.data);
 });
 patternOptions.paintPattern.dispose();
 console.log(`${count} Canvas replay tests passed`);

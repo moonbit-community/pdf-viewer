@@ -300,6 +300,10 @@ extern "js" fn clear_xfa_fonts() -> Unit =
   #| () => globalThis.pdfViewerHost.clearXfaFonts()
 
 ///|
+extern "js" fn clear_render_assets() -> Unit =
+  #| () => globalThis.pdfViewerHost.clearRenderAssets()
+
+///|
 extern "js" fn output_scale() -> Double =
   #| () => Math.max(1, window.devicePixelRatio || 1)
 

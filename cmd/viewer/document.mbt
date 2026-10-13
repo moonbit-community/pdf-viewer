@@ -2,6 +2,7 @@
 pub fn close_document() -> Unit {
   reset_editor()
   clear_xfa_fonts()
+  clear_render_assets()
   state.document_generation += 1
   state.generation += 1
   close_worker()
@@ -167,7 +168,7 @@ extern "js" fn diagnostic_value(
   worker : @js.Value,
   display_cache : @js.Value,
 ) -> @js.Value =
-  #| (pages,documentGeneration,file,cache,worker,display_cache) => ({pages,documentGeneration,mounted:[...document.getElementById("pages").querySelectorAll('[data-rendered="true"]')].map(page=>Number(page.dataset.page)),source_bytes:file?.size||cache.range?.total_bytes||0,worker,cache,display_cache})
+  #| (pages,documentGeneration,file,cache,worker,display_cache) => ({pages,documentGeneration,mounted:[...document.getElementById("pages").querySelectorAll('[data-rendered="true"]')].map(page=>Number(page.dataset.page)),source_bytes:file?.size||cache.range?.total_bytes||0,worker,cache,display_cache,render_assets:globalThis.pdfViewerHost.renderAssetsDiagnostics()})
 
 ///|
 extern "js" fn display_cache_diagnostics(scheduler : @js.Value) -> @js.Value =
