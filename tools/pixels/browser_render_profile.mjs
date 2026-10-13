@@ -47,6 +47,13 @@ export function installBrowserRenderProfile(){
       if(site){const sites=row.sites||={};const cost=sites[site]||={calls:0,ms:0,pixels:0};cost.calls++;cost.ms+=ms;cost.pixels+=pixels;}
     }
   };
+  const Path=globalThis.Path2D;
+  if(Path)globalThis.Path2D=new Proxy(Path,{construct(Target,args){
+    if(!profile.active)return Reflect.construct(Target,args,Target);
+    const start=performance.now();
+    try{return Reflect.construct(Target,args,Target);}
+    finally{profile.record('Path2D',performance.now()-start);}
+  }});
   const prototypes=new Set([globalThis.CanvasRenderingContext2D?.prototype,globalThis.OffscreenCanvasRenderingContext2D?.prototype].filter(Boolean));
   for(const proto of prototypes)for(const name of ['getImageData','putImageData','drawImage','createImageData','fill','stroke','clip']){
     const original=proto[name];if(typeof original!=='function')continue;

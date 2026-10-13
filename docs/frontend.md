@@ -85,8 +85,19 @@ pattern cells. It releases that
 cache after completion or cancellation. The host's document-owned
 `PdfRenderAssets` keeps shared decoded rasters across pages and zoom, with a
 64 MiB/256-entry LRU budget. Active renders lease each raster; eviction or document
-close releases it after its last consumer finishes. Diagnostics report bytes,
-entries, loads and reuse. These are cache budgets, not process RSS limits.
+close releases it after its last consumer finishes. Independent RGB pattern
+cells also retain prepared colour/coverage bitmaps in a separate 16 MiB/32-entry
+document pool, using the same leases and eviction. Its keys include complete
+cell contents, raster dimensions, sampling and size policies, and host identity,
+so newly parsed viewport objects can reuse unchanged cells. The image loader
+stays stable for the document pool; active paints capture their own pools before
+document replacement. Editing, font and layer invalidation clear both pools.
+Backdrop-dependent, masked and component/proof patterns retain their existing
+per-paint rendering. Transparent cells retain only a coverage classification
+and replay their device-space edges; full-coverage shapes use an opaque rectangle
+instead of uploading an alpha-only pixel buffer.
+Diagnostics report bytes, entries, loads and reuse, with prepared tiles under
+`patterns`. These are cache budgets, not process RSS limits.
 Replay yields to browser events and checks the
 MoonBit task's lifetime before continuing. Pages, thumbnails and printing use
 the same cancellation boundary. The reader keeps
@@ -139,6 +150,10 @@ navigation. Worker round-trip time excludes client queue/startup waiting.
 pixel traffic, nested scene self time, host yields and resource cache activity.
 It also records fresh PDF.js operator-list preparation. Ordinary paint/flush
 samples use the original Canvas modules and prototypes, with no profiler hooks.
+An additional replay clones the Canvas plan, excluding cloning from paint time,
+and verifies its complete RGBA SHA-256 against the ordinary replay. Reports also
+include PDF.js pixel hashes, allowing before/after comparisons to require
+identical reader and reference pixels within each browser engine.
 `node tools/pixels/profile_page_stages.mjs /path/to/document.pdf _build/stages.json 1,2,12`
 profiles the readable release bridge on Node, checks cached Canvas/semantic
 hashes, and separates inclusive stage time from self time. These measurements
@@ -160,7 +175,9 @@ secondary JS modules; ICC/JBIG2 Wasm URLs stay below the repository subpath.
 XFA remains an external dynamic import. Optional `?profile=startup` on the Worker
 URL includes startup timings in its ready message for diagnostic benchmark runs.
 
-`tools/pages_browser_test.mjs` checks page reuse, unchanged viewport resizing,
+`tools/pages_browser_test.mjs` checks document pattern reuse through the actual
+viewer host, cloned-plan pixels, changed cell contents and document invalidation,
+alongside page reuse, unchanged viewport resizing,
 bounded eviction and Canvas release. It exercises Chromium and WebKit selection while
 holding Worker selection requests, checks immediate copy before a
 `selectionchange` update, and compares local source indices and quads exactly

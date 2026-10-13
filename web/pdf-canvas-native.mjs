@@ -1,7 +1,7 @@
 // Plain source-over pages can use Canvas directly. PDF groups, masks and
 // component-space compositing still need the retained transparency renderer.
 const opaqueColour=colour=>/^#[\da-f]{3}(?:[\da-f]{3})?$/i.test(colour);
-const independentPattern=resource=>{
+export const independentPattern=resource=>{
   const tile=resource?.tile_plan||resource?.pattern_plan;
   if(!tile||tile.page.blend_space!=='DeviceRGB'||tile.blend_profile_id||tile.page.blend_profile_id||tile.blend_calibration||tile.page.blend_calibration)return false;
   if(resource.pattern_plan){

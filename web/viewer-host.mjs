@@ -7,13 +7,16 @@ import {makeXfaLayer,clearXfaFonts} from './pdf-xfa-layer.mjs';
 import {installPdfIccEngine} from './pdf-icc.mjs';
 import {renderPdfPage} from './pdf-runtime.mjs';
 import {PdfRenderAssets} from './pdf-render-assets.mjs';
+import {createPatternTileCache} from './pdf-patterns.mjs';
 
 let initialization,measure;
 let renderAssets=new PdfRenderAssets();
+let patternTiles=createPatternTileCache();
+let loadRenderImage=renderAssets.acquire.bind(renderAssets);
 export const viewerHost={
   pdf,makeAccessibilityLayer,makeXfaLayer,clearXfaFonts,
-  clearRenderAssets(){renderAssets.dispose();renderAssets=new PdfRenderAssets();},
-  renderAssetsDiagnostics(){return renderAssets.diagnostics();},
+  clearRenderAssets(){renderAssets.dispose();patternTiles.dispose();renderAssets=new PdfRenderAssets();patternTiles=createPatternTileCache();loadRenderImage=renderAssets.acquire.bind(renderAssets);},
+  renderAssetsDiagnostics(){return {...renderAssets.diagnostics(),patterns:patternTiles.diagnostics()};},
   initializeGraphics(){
     return initialization ||= installPdfIccEngine().then(()=>[],error=>[{
       code:'icc-engine-unavailable',
@@ -25,12 +28,13 @@ export const viewerHost={
     return file.url?open_pdf_url(file.url,encoded):encoded===null?open_pdf(data):open_pdf_with_password(data,encoded);
   },
   paintCanvas(canvas,result,outputScale,isCurrent,convertProcess){
-    const assets=renderAssets;
+    const assets=renderAssets,tiles=patternTiles,loadImage=loadRenderImage;
     return renderPdfPage(canvas,result.canvas,{
       unsupported:'warn',returnPixels:false,outputScale,isCurrent,
       yieldToHost:()=>new Promise(resolve=>setTimeout(resolve,0)),
       convertProcess:values=>convertProcess(...values),
-      loadImage:uri=>assets.acquire(uri),releaseImage:image=>assets.release(image),
+      loadImage,releaseImage:image=>assets.release(image),
+      patternTileCache:tiles,
     });
   },
   createAnnotations(viewer,navigate,sourceURL){return new AnnotationLayer({viewer,navigate,sourceURL});},

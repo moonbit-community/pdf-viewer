@@ -1,6 +1,8 @@
 import { renderPdfCanvas, multiplyMatrix, checkPdfRender } from './pdf-canvas.mjs';
 import { PdfCompositor, premultipliedToRgba8 } from './pdf-compositor.mjs';
 import { PdfInkCompositor } from './pdf-ink-compositor.mjs';
+import {PdfRenderAssets} from './pdf-render-assets.mjs';
+import {independentPattern} from './pdf-canvas-native.mjs';
 
 const inverse = m => {
   const d=m[0]*m[3]-m[1]*m[2];
@@ -10,6 +12,22 @@ const inverse = m => {
 const values=m=>[m.a,m.b,m.c,m.d,m.e,m.f];
 const dom=m=>({a:m[0],b:m[1],c:m[2],d:m[3],e:m[4],f:m[5]});
 
+// Reuse the document raster pool's leases and bounded eviction. The key keeps
+// the complete JSON cell, so newly parsed viewports can reuse identical cells.
+export function createPatternTileCache({maxBytes=16777216,maxEntries=32}={}){
+  const cache=new PdfRenderAssets({maxBytes,maxEntries,
+    estimateBytes:(tile,key)=>tile.bytes+key.length*2,
+    disposeValue:tile=>tile.dispose(),
+  });
+  const hosts=new WeakMap();let nextHost=0;
+  cache.hostKey=value=>{
+    if(typeof value!=='function')return 0;
+    if(!hosts.has(value))hosts.set(value,++nextHost);
+    return hosts.get(value);
+  };
+  return cache;
+}
+
 /** Replay complete pattern-cell plans through the same graphics backend.
  * The lattice is anchored in its content stream's base coordinate system,
  * independent from the CTM used to construct/stroke the selected path. */
@@ -17,7 +35,11 @@ export function createPatternPainter(options={}) {
   const cache=new WeakMap(), fields=new WeakMap(), cacheOrder=new Map();
   const cacheLimit=Math.max(0,Math.min(options.maxPatternCacheBytes??67108864,(options.maxWorkingBytes??536870912)/4));
   let cacheBytes=0;
-  const release=bitmap=>{bitmap.color.width=1;bitmap.shape.width=1;};
+  const tiles=options.returnPixels===false&&!options.proof&&!options.resolveTextOutline?options.patternTileCache:null;
+  const release=bitmap=>{
+    if(bitmap.shared){tiles.release(bitmap.shared);bitmap.shared=null;}
+    else if(!bitmap.poolOwned){if(bitmap.color)bitmap.color.width=bitmap.color.height=1;if(bitmap.shape)bitmap.shape.width=bitmap.shape.height=1;}
+  };
   const remember=(sizes,key,bitmap)=>{
     const bytes=bitmap.replay?0:bitmap.color.width*bitmap.color.height*8;
     if(bitmap.replay)release(bitmap);
@@ -30,7 +52,11 @@ export function createPatternPainter(options={}) {
   };
   const point=(m,x,y)=>[m[0]*x+m[2]*y+m[4],m[1]*x+m[3]*y+m[5]];
   const shapeCanvas=(shape,width,height,env)=>{
-    const canvas=env.createCanvas(width,height),ctx=canvas.getContext('2d'),data=ctx.createImageData(width,height);
+    const canvas=env.createCanvas(width,height),ctx=canvas.getContext('2d');
+    // Full coverage is an opaque black rectangle. Avoid allocating and
+    // uploading an alpha-only ImageData array for these common image cells.
+    if(shape.every(value=>value===1)){ctx.fillStyle='#000';ctx.fillRect(0,0,width,height);return canvas;}
+    const data=ctx.createImageData(width,height);
     for(let p=0;p<shape.length;p++)data.data[p*4+3]=Math.round(shape[p]*255);
     ctx.putImageData(data,0,0);return canvas;
   };
@@ -187,20 +213,39 @@ export function createPatternPainter(options={}) {
     let bitmap=sizes.get(key);
     if(bitmap){const entry=cacheOrder.get(bitmap);cacheOrder.delete(bitmap);cacheOrder.set(bitmap,entry);}
     if(!bitmap){
-      const tile=env.createCanvas(tileWidth,tileHeight);
-      const rendered=await renderPdfCanvas(tile,resource.tile_plan,{...options,createCanvas:env.createCanvas,loadImage:env.loadImage,Path2D:env.Path2D,width:tileWidth,height:tileHeight,matrix:[tileWidth/(b.max_x-b.min_x),0,0,tileHeight/(b.max_y-b.min_y),0,0],transparent:true,outputGroupComponents:true,_profileScope:env.profileScope,_glyphCache:env.glyphCache,_glyphCacheReserved:!!env.glyphCache,_imageCache:env.imageCache,_imageCacheReserved:!!env.imageCache,paintPattern,_resourceDepth:(env.resourceDepth||0)+1,_inheritedWorkingBytes:env.inheritedWorkingBytes||0});
-      env.diagnostics?.push(...rendered.diagnostics);
-      const tileShape=shapeCanvas(rendered.shape,tileWidth,tileHeight,env);
-      bitmap={color:env.createCanvas(width,height),shape:env.createCanvas(width,height),replay:rendered.shape.some(value=>value<1)};const target=bitmap.color.getContext('2d'),shapeTarget=bitmap.shape.getContext('2d');
-      target.imageSmoothingEnabled=true;
-      const nx0=Math.floor(-b.max_x/stepX)+1,nx1=Math.ceil((stepX-b.min_x)/stepX)-1;
-      const ny0=Math.floor(-b.max_y/stepY)+1,ny1=Math.ceil((stepY-b.min_y)/stepY)-1;
-      if((nx1-nx0+1)*(ny1-ny0+1)>4096)throw new RangeError('PDF overlapping pattern cell budget exceeded');
-      for(let ny=ny0;ny<=ny1;ny++)for(let nx=nx0;nx<=nx1;nx++){
-        const args=[(b.min_x+nx*stepX)*rx,(stepY-b.max_y-ny*stepY)*ry,(b.max_x-b.min_x)*rx,(b.max_y-b.min_y)*ry];
-        target.drawImage(tile,...args);shapeTarget.drawImage(tileShape,...args);
-      }
-      tile.width=1;tileShape.width=1;
+      const build=async()=>{
+        const tile=env.createCanvas(tileWidth,tileHeight);let tileShape,value;
+        try{
+          const rendered=await renderPdfCanvas(tile,resource.tile_plan,{...options,createCanvas:env.createCanvas,loadImage:env.loadImage,Path2D:env.Path2D,width:tileWidth,height:tileHeight,matrix:[tileWidth/(b.max_x-b.min_x),0,0,tileHeight/(b.max_y-b.min_y),0,0],transparent:true,outputGroupComponents:true,_profileScope:env.profileScope,_glyphCache:env.glyphCache,_glyphCacheReserved:!!env.glyphCache,_imageCache:env.imageCache,_imageCacheReserved:!!env.imageCache,paintPattern,_resourceDepth:(env.resourceDepth||0)+1,_inheritedWorkingBytes:env.inheritedWorkingBytes||0});
+          const nx0=Math.floor(-b.max_x/stepX)+1,nx1=Math.ceil((stepX-b.min_x)/stepX)-1;
+          const ny0=Math.floor(-b.max_y/stepY)+1,ny1=Math.ceil((stepY-b.min_y)/stepY)-1;
+          if((nx1-nx0+1)*(ny1-ny0+1)>4096)throw new RangeError('PDF overlapping pattern cell budget exceeded');
+          const replay=rendered.shape.some(value=>value<1);
+          // Replay markers need no repeating colour/shape texture. Those
+          // canvases were immediately discarded after coverage classification.
+          value={replay,color:null,shape:null,diagnostics:rendered.diagnostics,bytes:128,
+            dispose(){if(this.color)this.color.width=this.color.height=1;if(this.shape)this.shape.width=this.shape.height=1;}};
+          if(replay)return value;
+          tileShape=shapeCanvas(rendered.shape,tileWidth,tileHeight,env);
+          value.color=env.createCanvas(width,height);value.shape=env.createCanvas(width,height);value.bytes+=width*height*8;
+          const target=value.color.getContext('2d'),shapeTarget=value.shape.getContext('2d');target.imageSmoothingEnabled=true;
+          for(let ny=ny0;ny<=ny1;ny++)for(let nx=nx0;nx<=nx1;nx++){
+            const args=[(b.min_x+nx*stepX)*rx,(stepY-b.max_y-ny*stepY)*ry,(b.max_x-b.min_x)*rx,(b.max_y-b.min_y)*ry];
+            target.drawImage(tile,...args);shapeTarget.drawImage(tileShape,...args);
+          }
+          return value;
+        }catch(error){value?.dispose();throw error;}
+        finally{tile.width=tile.height=1;if(tileShape)tileShape.width=tileShape.height=1;}
+      };
+      const share=tiles&&independentPattern(resource);
+      const sharedKey=share?key+':'+JSON.stringify({bbox:b,x_step:resource.x_step,y_step:resource.y_step,tile_plan:resource.tile_plan,
+        depth:env.resourceDepth||0,maxDepth:options.maxDepth??32,budget:options.maxWorkingBytes??536870912,
+        pixelRatio:options.devicePixelRatio||1,maxPixels:options.maxPixels||16777216,
+        canvasHost:tiles.hostKey(env.createCanvas),pathHost:tiles.hostKey(env.Path2D),imageHost:tiles.hostKey(env.loadImage),unsupported:options.unsupported||'error',
+        fullSurface:!!options.fullSurfaceReplay,fullScene:!!options.fullSceneReplay,fullShading:!!options.fullShadingReplay}):null;
+      const value=share?await tiles.acquire(sharedKey,{loadImage:build,sharePending:false}):await build();
+      env.diagnostics?.push(...value.diagnostics);
+      bitmap={color:value.color,shape:value.shape,replay:value.replay,shared:share?value:null,poolOwned:!!share};
       remember(sizes,key,bitmap);
     }
     // Transparent cell edges need one device-space coverage evaluation. A

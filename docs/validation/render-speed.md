@@ -1,6 +1,6 @@
 # Render speed investigation
 
-Measured on 2026-10-13 against PDF.js revision
+Measured on 2026-10-13 and 2026-10-14 against PDF.js revision
 `89b500f5e1d98ed89bb90211e45b28730b2d99ac` (generic build 6.5.1),
 Playwright 1.58.2 and a local 13-page PDF. The input and detailed reports stay in
 ignored `_build/`; no document text, images or input bytes are published here.
@@ -31,6 +31,11 @@ added together. Node stage timings describe the readable release bridge and
 must not be compared directly with browser timing. PDF.js operator lists are
 prepared with a fresh document after rendering measurements; these timings
 exclude Canvas paint and DOM text layers.
+
+Ordinary and freshly cloned Canvas plans also produce complete RGBA SHA-256
+hashes. Before/after runs check identical input bytes, reference revision,
+browser engine, DPR, output dimensions, reader pixels and reference pixels.
+Cloning and hashing run outside the reported paint/flush measurements.
 
 ## Fixed: semantic work repeated on cached pages
 
@@ -83,11 +88,69 @@ deadline; a fresh, separate Chromium run passed all eight checks. Published
 Worker bytes match the local artifact. These checks verify the deployed build,
 but do not establish that intermittent startup waiting has been eliminated.
 
+## Fixed: rebuilding independent pattern bitmaps on every redraw
+
+The per-render pattern painter discarded its colour and coverage bitmaps after
+each page paint. The document image cache avoided decoding those photos again,
+but nine opaque image patterns on page 12 still rebuilt about 3 MiB of repeating
+surfaces on every redraw. Path construction was smaller: 878 `Path2D` calls took
+about 1 ms in the diagnostic run.
+
+The viewer now retains independent RGB cell bitmaps in a document-owned
+16 MiB/32-entry pool. It reuses the existing raster pool's lease and eviction
+logic, with the complete cell payload, raster dimensions, sampling/size policies
+and host identities in the key. Newly parsed objects can reuse identical cells;
+changed contents, limits and sampling policies cannot. Document, editing, font
+and layer invalidation clear the pool. Concurrent pending builders stay separate
+so cancelling one render cannot cancel another. Active consumers release retired
+surfaces after their last lease. Transparent cells retain only their coverage
+classification and preserve device-space replay; backdrop-dependent and proof
+patterns keep the existing retained rendering.
+
+Full-coverage shape masks now use an opaque rectangle instead of allocating and
+uploading alpha-only pixel buffers. Partial-coverage masks retain their original
+pixels. This also avoids creating repeating textures that transparent replay
+immediately discarded.
+
+The final sequential A/B runs compare the previous build `2aeac95` with this
+change. Warm medians include forced pixel flush and use three ordinary samples;
+the cloned-plan column is a separate replay at the same physical dimensions.
+
+| Browser / page | Warm before | Warm after | Cloned plan before / after | PDF.js warm after |
+| --- | ---: | ---: | ---: | ---: |
+| Chromium / 12 | 54.9 ms | 26.8 ms | 52.3 / 28.0 ms | 24.8 ms |
+| WebKit / 12 | 147 ms | 90 ms | 89 / 44 ms | 19 ms |
+| Chromium / 2 | 19.7 ms | 22.3 ms | 19.5 / 19.8 ms | 22.5 ms |
+| WebKit / 2 | 16 ms | 17 ms | 13 / 11 ms | 17 ms |
+
+Every before/after reader and cloned-plan pixel hash matches exactly within each
+engine, and differences from PDF.js are unchanged. On page 12 the ordinary pool
+records 15 loads and 36 hits, with no active leases after replay. WebKit samples
+vary substantially (117–162 ms before, 54–93 ms after); earlier paired runs also
+showed 114 → 43 ms. These are repeated drawings at a matching raster size,
+not complete open/zoom latency. The first page-12 paint recorded during these
+navigation runs remains about 111 ms in Chromium and 171 ms in WebKit; this
+change mainly benefits warm redraws.
+
+Page-12 diagnostic traffic falls from **50 reads / 54 uploads to 24 reads /
+36 uploads**. Read pixels fall from 798,298 to 31,636, and upload pixels from
+812,236 to 47,454. The remaining transfers come from six shading-pattern scenes,
+which still rasterize colour and coverage, convert Float32 components and create
+scene bitmaps. The next drawing target is this retained shading path, especially
+the cost of small repeated uploads in WebKit.
+
+Focused checks cover affine placement, complete-cell content changes, sampling
+changes, decoded-image limits, transparent coverage, bounded eviction, active
+and pending document disposal, concurrent cancellation and failed builders.
+Packaged Chromium/WebKit checks exercise the actual viewer loader across cloned
+plans and document invalidation, preventing per-paint callback identity from
+silently defeating reuse.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |
 | --- | --- | --- |
-| Complex-page warm drawing | Page 12 needs 50 Canvas pixel reads and 54 uploads; PDF.js warm drawing needs neither. | Avoid repeated colour/shape rasterization of independent pattern cells and shading scenes. |
+| Complex-page warm drawing | Page 12 still needs 24 Canvas pixel reads and 36 uploads; PDF.js warm drawing needs neither. | Avoid repeated colour/shape conversion and scene bitmap creation for independent shading patterns. |
 | Cold image preparation | Node page 12 takes about 409 ms overall: colour processing has 115 ms self time, PNG encoding 46 ms, font loading 51 ms and Flate decoding 37 ms. | Reuse decoded image/font resources and avoid encoding pixels that the host can consume directly. |
 | New viewport payloads | Page 12 still sends about 2.13 million JSON characters. Its Canvas plan contains about 709,000 path characters and 138,000 clip-path characters. | Intern repeated immutable geometry/resources and reuse prepared plans between viewports. |
 | Worker startup | A diagnostic WebKit run of the bundled entry spends about 150 ms loading/evaluating code and 10 ms initializing the colour/JBIG2 adapters. The Worker is about 7.4 MiB. | Reduce initial code evaluation; codec initialization is a smaller cost on this input. |
@@ -96,13 +159,16 @@ The pixel traffic comes from the retained source colour/shape pass, pattern
 shape surfaces, CPU shading output and retained scene bitmaps. The document
 raster cache is effective: warm runs add no image decodes. It does not cache
 these temporary colour/shape surfaces. WebKit spends much more time in pixel
-reads/uploads than Chromium for the same calls.
+reads/uploads than Chromium for the same calls. Prepared independent pattern
+surfaces now have their own document pool; retained shading scenes remain
+temporary.
 
-In one final run, page 12 warm paint plus forced flush has medians of **134 ms
-versus 18.5 ms** for WebKit, and **69 ms versus 28.5 ms** for Chromium. Page 2 remains
+Before the prepared-pattern change, one run had page-12 warm paint plus forced
+flush medians of **134 ms versus 18.5 ms** for WebKit, and **69 ms versus 28.5 ms**
+for Chromium. Page 2 remains
 close to PDF.js. These are host-dependent samples; scheduling, raster flush and
-background load explain variation between runs. The semantic fix leaves these
-drawing calls unchanged, so it does not close this part of the gap.
+background load explain variation between runs. The earlier semantic fix left
+these drawing calls unchanged, so it did not close this part of the gap.
 
 A diagnostic experiment bypassed the preliminary pattern colour/shape pass. It
 removed many pixel transfers, but changed affine pattern coverage and some

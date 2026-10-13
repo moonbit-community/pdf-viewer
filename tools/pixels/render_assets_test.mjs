@@ -23,4 +23,9 @@ const value=await acquisition;assert.equal(closes,4);pending.release(value);asse
 assert.equal(pending.entries.size,0);assert.equal(pending.bytes,0);
 const failed=new PdfRenderAssets({loadImage:async()=>{throw Error('Decode failed');}});
 await assert.rejects(failed.acquire('bad'),/Decode failed/);assert.equal(failed.entries.size,0);
+await assert.rejects(failed.acquire('sync',{loadImage:()=>{throw Error('Synchronous failure');}}),/Synchronous failure/);
+assert.equal(failed.entries.size,0,'A synchronous builder failure must not leave an unusable pending entry');
+let metadataClosed=0;
+const metadata=new PdfRenderAssets({loadImage:async()=>({close(){metadataClosed++;}}),estimateBytes:()=>{throw Error('Bad byte metadata');}});
+await assert.rejects(metadata.acquire('bad'),/Bad byte metadata/);assert.equal(metadataClosed,1);assert.equal(metadata.entries.size,0);
 console.log('Render assets: shared acquisition, reuse, accounting, bounded eviction, active and pending disposal passed.');

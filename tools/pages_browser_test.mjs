@@ -211,6 +211,40 @@ try{
     assert.deepEqual(failures,[]);
     assert.ok(requests.length>10&&requests.every(path=>path.startsWith(prefix)));
   });
+  await check('Document pattern tiles reuse cloned plans and reset after document invalidation',async()=>{
+    await waitForUI(page,()=>document.querySelector('#viewer').getAttribute('aria-busy')==='false');
+    const result=await page.evaluate(async()=>{
+      const pageInfo={number:1,origin_x:0,origin_y:0,width:20,height:20,blend_space:'DeviceRGB'};
+      const viewport={width:20,height:20,matrix:[1,0,0,-1,0,20]};
+      const path={svg_path:'M0 0H20V20H0Z',filled:true,stroked:false,fill_alpha:1,blend_mode:'normal',clips:[]};
+      const cell={name:'P',bbox:{min_x:0,min_y:0,max_x:20,max_y:20},x_step:20,y_step:20,matrix:[1,0,0,1,0,0],
+        tile_plan:{version:1,page:pageInfo,viewport,items:[{kind:'path',paint:{...path,fill_color:'#ff0000'}}]}};
+      const plan={version:1,page:pageInfo,viewport,items:[{kind:'path',paint:{...path,pattern:cell}}]};
+      const paint=async input=>{
+        const canvas=document.createElement('canvas');
+        await pdfViewerHost.paintCanvas(canvas,{canvas:input},1,()=>true,()=>[0,0,0]);
+        return [...canvas.getContext('2d').getImageData(0,0,20,20).data];
+      };
+      pdfViewerHost.clearRenderAssets();
+      try{
+        const first=await paint(plan),cloned=await paint(structuredClone(plan));
+        const warm=pdfViewerHost.renderAssetsDiagnostics().patterns;
+        const changed=structuredClone(plan);changed.items[0].paint.pattern.tile_plan.items[0].paint.fill_color='#00ff00';
+        const green=await paint(changed),modified=pdfViewerHost.renderAssetsDiagnostics().patterns;
+        pdfViewerHost.clearRenderAssets();
+        const cleared=pdfViewerHost.renderAssetsDiagnostics().patterns;
+        const reset=await paint(plan),rebuilt=pdfViewerHost.renderAssetsDiagnostics().patterns;
+        return {same:first.every((value,index)=>value===cloned[index]&&value===reset[index]),
+          red:first.slice(840,844),green:green.slice(840,844),warm,modified,cleared,rebuilt};
+      }finally{pdfViewerHost.clearRenderAssets();}
+    });
+    assert.equal(result.same,true,'Fresh viewport JSON and document rebuild preserve every pixel');
+    assert.deepEqual(result.red,[255,0,0,255]);assert.deepEqual(result.green,[0,255,0,255]);
+    assert.equal(result.warm.loads,1);assert.equal(result.warm.hits,1,'The actual viewer loader is stable across paints');
+    assert.equal(result.modified.loads,2);assert.equal(result.warm.leased_entries,0);
+    assert.equal(result.cleared.entries,0);assert.equal(result.cleared.bytes,0);
+    assert.equal(result.rebuilt.loads,1);assert.equal(result.rebuilt.hits,0);
+  });
   await check('Scrolling during Retina rendering cancels old pages and keeps controls responsive',async()=>{
     await page.goto(base);
     await page.evaluate(()=>{

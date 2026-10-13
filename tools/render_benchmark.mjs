@@ -142,7 +142,7 @@ try{
  if(profileEnabled)assert(report.workerStartup.length&&report.workerStartup.every(startup=>startup.benchmark),'Worker startup diagnostics are missing');
  report.build={};
  for(const file of ['_generated/pdf.js','_generated/viewer.js','pdf-worker.js','pdf-client.js','viewer-host.mjs','pdf-graphics.mjs',
-  'pdf-runtime.mjs','pdf-canvas.mjs','pdf-patterns.mjs','pdf-xfa.mjs','pdf-xfa-layer.mjs','vendor/xfa/xfa.mjs']){
+  'pdf-runtime.mjs','pdf-canvas.mjs','pdf-canvas-native.mjs','pdf-patterns.mjs','pdf-render-assets.mjs','pdf-shading.mjs','pdf-xfa.mjs','pdf-xfa-layer.mjs','vendor/xfa/xfa.mjs']){
   const bytes=await readFile(resolve(roots.viewer,file)).catch(error=>{if(file==='pdf-graphics.mjs'&&error.code==='ENOENT')return null;throw error;});
   report.build[file]=bytes?{bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')}:null;
  }
@@ -182,8 +182,13 @@ try{
     for(let i=0;i<actual.length;i+=4){let delta=0;for(let c=0;c<3;c++){const d=Math.abs(reference[i+c]-actual[i+c]);absolute+=d;delta=Math.max(delta,d);}if(delta>8)above8++;if(Math.min(actual[i],actual[i+1],actual[i+2])<240)ink++;}
     return {meanAbsoluteError:absolute/(actual.length/4*3),pixelsAbove8:above8,ink};
    };
+   const hash=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),byte=>byte.toString(16).padStart(2,'0')).join('');
+   const cloneStart=performance.now(),cloned={...args[1],canvas:structuredClone(args[1].canvas)},cloneMs=performance.now()-cloneStart;
+   const {pixels:clonePixels,...cloneReplay}=await measure(()=>state.paint(canvas,cloned,args[2],()=>true,args[4]));
+   const rgbaSha256=await hash(actual),cloneSha256=await hash(clonePixels);
+   if(cloneSha256!==rgbaSha256)throw Error('Freshly parsed immutable cell objects must retain identical pixels');
    const comparison=compare(expected,actual),result={page:number,dimensions,
-    ours:{readerPaintMs:state.paints.find(p=>p.page===number)?.ms,replay:warm,assetsBefore,assetsAfter:pdfViewerHost.renderAssetsDiagnostics()},pdfjs:{first:times[0],replay:times.slice(1)},versusPdfjs:comparison};
+    ours:{readerPaintMs:state.paints.find(p=>p.page===number)?.ms,replay:warm,rgbaSha256,cloneReplay:{...cloneReplay,cloneMs,rgbaSha256:cloneSha256},assetsBefore,assetsAfter:pdfViewerHost.renderAssetsDiagnostics()},pdfjs:{first:times[0],replay:times.slice(1),rgbaSha256:await hash(expected)},versusPdfjs:comparison};
    if(profileEnabled){
     const {renderPdfPage}=await import('/pdf-runtime.mjs'),{prepareNativeCanvasItems}=await import('/pdf-canvas-native.mjs');
     const summarize=(0,eval)('('+summarizeSource+')');
