@@ -1,4 +1,3 @@
-import { XfaLayer } from './vendor/xfa/xfa.mjs';
 
 const faces=new Map();
 let generation=0;
@@ -6,6 +5,8 @@ export function clearXfaFonts(){generation++;for(const face of faces.values())do
 
 export async function makeXfaLayer(result, intent='display') {
   const epoch=generation, aliases=new Map();
+  const {XfaLayer}=await import('./vendor/xfa/xfa.mjs');
+  if(epoch!==generation)return document.createElement('div');
   for(const font of result.xfa.fonts){
     const resource=font.resource, base=font.family.replace(/[-,](?:Bold|Italic|Oblique|Regular|Roman).*$/i,'');
     if(!resource.data_uri) continue;

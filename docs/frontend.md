@@ -150,6 +150,11 @@ collecting PDF text or reading fonts again. Font, layer, document and editor
 changes invalidate the page cache. Range hydration invalidates semantic metadata
 while preserving completed page geometry. Failed semantic reads are retried.
 
+The Worker starts through `pdf-graphics.mjs`, which initializes the synchronous
+ICC/JBIG2 adapters without importing Canvas, pattern or shading renderers. XFA
+binding and its DOM renderer load only when an XFA document requires them.
+Document replacement cancels a pending XFA DOM import before mounting its layer.
+
 `tools/pages_browser_test.mjs` checks page reuse, unchanged viewport resizing,
 bounded eviction and Canvas release. It exercises Chromium and WebKit selection while
 holding Worker selection requests, checks immediate copy before a

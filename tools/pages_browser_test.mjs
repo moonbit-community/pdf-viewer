@@ -15,7 +15,7 @@ const {chromium,webkit}=require('playwright');
 const engine=process.env.PDF_BROWSER||'chromium';
 assert.ok(['chromium','webkit'].includes(engine),'PDF_BROWSER must be chromium or webkit');
 const launcher=engine==='webkit'?webkit:chromium;
-const root=resolve('_build/pages'),prefix='/pdf-viewer/';
+const root=resolve(process.env.PDF_PAGES_ROOT||'_build/pages'),prefix='/pdf-viewer/';
 const output=resolve('_build/pages-test-'+engine+'-'+Date.now());await mkdir(output,{recursive:true});
 const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8',
   '.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8',
@@ -84,10 +84,15 @@ try{
     await stat(resolve(root,'.nojekyll'));
     await stat(resolve(root,'licenses/liberation-fonts.txt'));
     assert.equal(requests.includes(prefix+'_generated/pdf.js'),false,'The main thread loads only the UI; the full parser belongs to the Worker');
+    assert.equal(requests.includes(prefix+'vendor/xfa/xfa.mjs'),false,'The XFA engine loads only when an XFA document needs it');
   });
   await check('Packaged Worker paints a local PDF without network uploads',async()=>{
+    const startupRequestStart=requests.length;
     await page.locator('#file-input').setInputFiles({name:'local.pdf',mimeType:'application/pdf',buffer:layerFixture()});
     await idle('local.pdf');
+    const startupRequests=requests.slice(startupRequestStart);
+    for(const asset of ['pdf-runtime.mjs','pdf-canvas.mjs','pdf-patterns.mjs','pdf-shading.mjs','pdf-xfa.mjs','vendor/xfa/xfa.mjs'])
+      assert.ok(!startupRequests.some(path=>path.endsWith('/'+asset)),'Ordinary PDF startup must not load '+asset);
     assert.equal(await page.locator('#page-count').innerText(),'/ 2');
     const painted=await page.locator('#pages .page[data-page="1"] canvas').evaluate(canvas=>{
       const ctx=canvas.getContext('2d'),bytes=ctx.getImageData(0,0,canvas.width,canvas.height).data;
@@ -156,6 +161,13 @@ try{
     assert.equal(await page.locator('#error').isVisible(),false);
     assert.ok(requests.includes(prefix+'vendor/xfa/xfa.mjs'));
     assert.ok(requests.includes(prefix+'vendor/xfa/xfa.css'));
+    const cancelledChildren=await page.evaluate(async()=>{
+      const data=JSON.parse(await pdfViewerHost.pdf.call('render_page',[1,1,0]));
+      const pending=pdfViewerHost.makeXfaLayer({...data,xfa:{...data.xfa,fonts:[]}});
+      pdfViewerHost.clearXfaFonts();
+      return (await pending).childElementCount;
+    });
+    assert.equal(cancelledChildren,0,'A document reset while the lazy XFA import resolves must discard the old layer');
   });
   await check('All codec assets load with Wasm MIME types below the subpath',async()=>{
     for(const asset of ['vendor/jbig2/jbig2.wasm','vendor/lcms-wasm/lcms.wasm']){

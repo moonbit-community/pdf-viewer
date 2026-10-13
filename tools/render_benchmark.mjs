@@ -135,8 +135,10 @@ try{
  report.worker=await page.evaluate(()=>window.pdfBenchmark.worker);
  report.workerStartup=await page.evaluate(()=>window.pdfBenchmarkWorkerStartup);
  report.build={};
- for(const file of ['_generated/pdf.js','_generated/viewer.js','pdf-canvas.mjs','pdf-patterns.mjs']){
-  const bytes=await readFile(resolve(roots.viewer,file));report.build[file]={bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};
+ for(const file of ['_generated/pdf.js','_generated/viewer.js','pdf-worker.js','pdf-client.js','viewer-host.mjs','pdf-graphics.mjs',
+  'pdf-runtime.mjs','pdf-canvas.mjs','pdf-patterns.mjs','pdf-xfa.mjs','pdf-xfa-layer.mjs','vendor/xfa/xfa.mjs']){
+  const bytes=await readFile(resolve(roots.viewer,file)).catch(error=>{if(file==='pdf-graphics.mjs'&&error.code==='ENOENT')return null;throw error;});
+  report.build[file]=bytes?{bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')}:null;
  }
  report.workerTransport=await page.evaluate(()=>window.pdfBenchmarkWorkerMessages);
  for(const request of report.worker){const posted=report.workerTransport.find(r=>r.id===request.id);if(posted){request.transportMs=posted.ms;request.queueMs=Math.max(0,request.ms-posted.ms);}}

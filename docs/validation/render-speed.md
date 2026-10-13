@@ -51,6 +51,24 @@ Regression checks cover original semantics across zoom/rotation, layer and font
 invalidation, document close, metadata-only hydration and budget exhaustion.
 The Range acceptance checks retain tagged semantics as new objects arrive.
 
+## Fixed: unnecessary startup dependencies
+
+Live acceptance also caught Worker startup timeouts before any PDF parsing on
+both browser engines. The deployed parser bytes matched the local build. This
+does not establish a specific CDN failure mechanism, but exposed avoidable work:
+the Worker imported the complete display runtime and XFA engine for every PDF.
+
+`pdf-graphics.mjs` now isolates the unchanged synchronous graphics initialization.
+The Worker retains both ICC and JBIG2 readiness before accepting messages, while
+ordinary startup fetches **8 resources instead of 22**, including the two Wasm
+files. XFA binding and DOM rendering load on demand. The legacy runtime export
+remains compatible, and an XFA DOM import completed after document replacement
+returns an empty layer. The 15-second startup deadline is unchanged.
+
+Packaged acceptance rejects unnecessary startup fetches and checks XFA rendering,
+editing and cancellation. Removing these dependencies reduces requests and module
+evaluation; recovery from an external network timeout requires separate live checks.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |

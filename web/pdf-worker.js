@@ -1,6 +1,5 @@
 import * as bridge from "./_generated/pdf.js";
-import { initializePdfGraphics } from "./pdf-runtime.mjs";
-import { createXfaDocument } from "./pdf-xfa.mjs";
+import { initializePdfGraphics } from "./pdf-graphics.mjs";
 import { PdfRangeSource, PdfRangeDocument } from "./pdf-range.mjs";
 
 let xfa = null;
@@ -126,6 +125,7 @@ async function handleMessage(event) {
         }
         if (!data.ok) throw Error(data.error);
         if (data.packets.length && (data.needs_rendering || !opened.pages)) {
+          const {createXfaDocument}=await import("./pdf-xfa.mjs");
           xfa = await createXfaDocument(data, bridge);
           result = JSON.stringify({...opened,pages:xfa.count,labels:[],xfa:true});
         }
