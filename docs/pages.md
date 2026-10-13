@@ -19,11 +19,12 @@ the actual URL, including a custom domain if one is configured.
 The [Pages workflow](../.github/workflows/pages.yml) builds and verifies the
 website on pushes to `master`, pull requests and manual runs. It uses the
 repository's verified MoonBit toolchain and locked npm assets, compiles both
-MoonBit browser packages, minifies their generated modules with the existing
-locked esbuild, and tests the published directory in Chromium and
+MoonBit browser packages, minifies their generated modules and bundles the
+parser Worker with the existing locked esbuild, and tests the published directory in Chromium and
 WebKit at 2× pixel density under `/pdf-viewer/`. The checks exercise actual Worker
 paint, search, layer switching, form editing/save/reopen, XFA layout and the
-packaged Wasm files. A six-page image and text fixture also checks scrolling
+packaged Wasm files, including actual JBIG2 black/white and ICC profile pixels.
+A six-page image and text fixture also checks scrolling
 during loading, cancellation, responsive controls and nonblank page pixels.
 They do not require the local PDF.js comparison checkout.
 

@@ -154,6 +154,11 @@ The Worker starts through `pdf-graphics.mjs`, which initializes the synchronous
 ICC/JBIG2 adapters without importing Canvas, pattern or shading renderers. XFA
 binding and its DOM renderer load only when an XFA document requires them.
 Document replacement cancels a pending XFA DOM import before mounting its layer.
+The Pages build bundles the parser, Range loader and graphics adapters into one
+Worker entry with the existing locked esbuild. Ordinary Worker startup needs no
+secondary JS modules; ICC/JBIG2 Wasm URLs stay below the repository subpath.
+XFA remains an external dynamic import. Optional `?profile=startup` on the Worker
+URL includes startup timings in its ready message for diagnostic benchmark runs.
 
 `tools/pages_browser_test.mjs` checks page reuse, unchanged viewport resizing,
 bounded eviction and Canvas release. It exercises Chromium and WebKit selection while

@@ -9,7 +9,9 @@ export function initializePdfGraphics(options={}){
     let icc=null,jbig2=null;
     try{icc=await installPdfIccEngine(options.icc);}
     catch(error){diagnostics.push({code:'icc-engine-unavailable',message:`ICC profiles use their PDF Alternate colour space: ${error.message}`});}
-    try{jbig2=await installJbig2Decoder(options.jbig2);}
+    // Resolve from this root adapter so the published Worker can bundle the
+    // codec without changing its Wasm asset location under repository paths.
+    try{jbig2=await installJbig2Decoder({wasmUrl:new URL('./vendor/jbig2/jbig2.wasm',import.meta.url),...options.jbig2});}
     catch(error){diagnostics.push({code:'jbig2-engine-unavailable',message:`JBIG2 images cannot decode: ${error.message}`});}
     return {icc,jbig2,diagnostics};
   })();

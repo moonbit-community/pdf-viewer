@@ -40,7 +40,9 @@ const server=createServer(async(req,res)=>{
  try{
   let bytes=await readFile(target);
   if(profileEnabled&&!reference&&path==='/pdf-canvas.mjs')bytes=instrumentCanvasModule(bytes.toString());
-  if(profileEnabled&&!reference&&path==='/pdf-worker.js')bytes=bytes.toString()
+  // Older readable artifacts predate the opt-in Worker startup diagnostic.
+  // New bundled entries report through the protocol instead of source edits.
+  if(profileEnabled&&!reference&&path==='/pdf-worker.js'&&bytes.toString().includes('async function start() {')&&!bytes.toString().includes('profileStartup'))bytes=bytes.toString()
    .replace('async function start() {','const benchmarkModuleReady=performance.now();\nasync function start() {')
    .replace('const graphics = await initializePdfGraphics();','const initializeStart=performance.now();\n  const graphics = await initializePdfGraphics();')
    .replace('self.postMessage({ type: "ready", graphics: {','self.postMessage({ type: "ready", benchmark: {moduleReadyMs:benchmarkModuleReady,graphicsMs:performance.now()-initializeStart,resources:performance.getEntriesByType("resource").map(r=>({name:new URL(r.name).pathname,duration:r.duration,bytes:r.transferSize}))}, graphics: {');
@@ -54,11 +56,14 @@ try{
  browser=await launcher.launch({headless:true});
  const page=await browser.newPage({viewport:{width:1280,height:900},deviceScaleFactor:2});
  const errors=[];page.on('pageerror',error=>errors.push(String(error)));page.setDefaultTimeout(60000);
- await page.addInitScript(()=>{
+ await page.addInitScript(({profileEnabled})=>{
   window.pdfBenchmarkWorkerStartup=[];
   window.pdfBenchmarkWorkerMessages=[];
   const original=window.Worker;
   window.Worker=new Proxy(original,{construct(Target,args){
+   if(profileEnabled){
+    const url=new URL(args[0],document.baseURI);url.searchParams.set('profile','startup');args=[url,...args.slice(1)];
+   }
    const start=performance.now(),worker=new Target(...args),posted=new Map(),post=worker.postMessage;
    worker.postMessage=function(message,...rest){
     if(message?.id!=null)posted.set(message.id,{method:message.method,page:message.method?.startsWith('render_')?message.args[0]:null,start:performance.now()});
@@ -72,7 +77,7 @@ try{
    });
    return worker;
   }});
- });
+ },{profileEnabled});
  await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'networkidle'});
  await page.locator('#open-empty').waitFor({state:'visible'});
  if(profileEnabled)await page.evaluate(installBrowserRenderProfile);
@@ -134,6 +139,7 @@ try{
  await page.evaluate(()=>pdfViewerHost.pdf.close());
  report.worker=await page.evaluate(()=>window.pdfBenchmark.worker);
  report.workerStartup=await page.evaluate(()=>window.pdfBenchmarkWorkerStartup);
+ if(profileEnabled)assert(report.workerStartup.length&&report.workerStartup.every(startup=>startup.benchmark),'Worker startup diagnostics are missing');
  report.build={};
  for(const file of ['_generated/pdf.js','_generated/viewer.js','pdf-worker.js','pdf-client.js','viewer-host.mjs','pdf-graphics.mjs',
   'pdf-runtime.mjs','pdf-canvas.mjs','pdf-patterns.mjs','pdf-xfa.mjs','pdf-xfa-layer.mjs','vendor/xfa/xfa.mjs']){

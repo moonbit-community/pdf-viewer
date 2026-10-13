@@ -59,6 +59,23 @@ function readingFixture(profile){
   }
   return makePdf(objects);
 }
+function codecFixture(profile){
+  const u32=value=>[value>>>24,value>>>16&255,value>>>8&255,value&255];
+  const image=black=>{
+    const payload=[...u32(8),...u32(8),...u32(72),...u32(72),black?4:0,0,0];
+    return stream('/Type /XObject /Subtype /Image /Width 8 /Height 8 /BitsPerComponent 1 /ColorSpace /DeviceGray /Filter /JBIG2Decode',
+      Buffer.from([...u32(1),48,0,1,...u32(payload.length),...payload]));
+  };
+  return makePdf([
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] /MediaBox [0 0 32 32] >>',
+    '<< /Type /Page /Parent 2 0 R /Resources << /XObject << /Black 5 0 R /White 6 0 R >> >> /Contents 8 0 R >>',
+    '<< /Type /Page /Parent 2 0 R /Resources << /ColorSpace << /ICC [/ICCBased 7 0 R] >> >> /Contents 9 0 R >>',
+    image(true),image(false),stream('/N 3 /Alternate /DeviceRGB',profile),
+    stream('','q 16 0 0 32 0 0 cm /Black Do Q q 16 0 0 32 16 0 cm /White Do Q'),
+    stream('','/ICC cs .25 .5 .75 scn 0 0 32 32 re f'),
+  ]);
+}
 try{
   browser=await launcher.launch({headless:true,...(engine==='chromium'?{
     executablePath:process.env.PDF_CHROMIUM||chromium.executablePath(),args:['--no-sandbox'],
@@ -91,8 +108,10 @@ try{
     await page.locator('#file-input').setInputFiles({name:'local.pdf',mimeType:'application/pdf',buffer:layerFixture()});
     await idle('local.pdf');
     const startupRequests=requests.slice(startupRequestStart);
-    for(const asset of ['pdf-runtime.mjs','pdf-canvas.mjs','pdf-patterns.mjs','pdf-shading.mjs','pdf-xfa.mjs','vendor/xfa/xfa.mjs'])
+    for(const asset of ['_generated/pdf.js','pdf-graphics.mjs','pdf-range.mjs','pdf-runtime.mjs','pdf-canvas.mjs','pdf-patterns.mjs','pdf-shading.mjs','pdf-xfa.mjs','vendor/xfa/xfa.mjs'])
       assert.ok(!startupRequests.some(path=>path.endsWith('/'+asset)),'Ordinary PDF startup must not load '+asset);
+    const graphics=await page.evaluate(()=>pdfViewerHost.pdf.diagnostics().graphics);
+    assert.deepEqual(graphics,{icc:true,jbig2:true,diagnostics:[]},'Both codecs must initialize from bundled Worker asset URLs');
     assert.equal(await page.locator('#page-count').innerText(),'/ 2');
     const painted=await page.locator('#pages .page[data-page="1"] canvas').evaluate(canvas=>{
       const ctx=canvas.getContext('2d'),bytes=ctx.getImageData(0,0,canvas.width,canvas.height).data;
@@ -102,7 +121,6 @@ try{
     await page.locator('#search-query').fill('Alpha');
     await page.waitForFunction(()=>document.querySelector('#search-status').textContent==='1 / 1');
     assert.ok(requests.includes(prefix+'pdf-worker.js'));
-    assert.ok(requests.includes(prefix+'_generated/pdf.js'));
     assert.ok(requests.includes(prefix+'_generated/viewer.js'));
   });
   await check('Static viewer edits downloads and reopens a form',async()=>{
@@ -169,7 +187,7 @@ try{
     });
     assert.equal(cancelledChildren,0,'A document reset while the lazy XFA import resolves must discard the old layer');
   });
-  await check('All codec assets load with Wasm MIME types below the subpath',async()=>{
+  await check('Bundled Worker decodes JBIG2 and ICC pixels with Wasm assets below the subpath',async()=>{
     for(const asset of ['vendor/jbig2/jbig2.wasm','vendor/lcms-wasm/lcms.wasm']){
       const response=await fetch(base+asset);assert.equal(response.status,200);
       assert.equal(response.headers.get('content-type'),'application/wasm');
@@ -177,6 +195,19 @@ try{
     }
     const licenses=await fetch(base+'vendor/jbig2/LICENSE_JBIG2');assert.equal(licenses.status,200);
     assert.ok((await licenses.text()).length>100);
+    await page.locator('#file-input').setInputFiles({name:'codecs.pdf',mimeType:'application/pdf',
+      buffer:codecFixture(await readFile(resolve('assets/icc/rgb-gamma22.icc')))});
+    await idle('codecs.pdf');
+    const sample=(number,x)=>page.locator(`.page[data-page="${number}"] canvas`).evaluate((canvas,x)=>
+      [...canvas.getContext('2d').getImageData(Math.floor(canvas.width*x),Math.floor(canvas.height/2),1,1).data],x);
+    assert.deepEqual(await sample(1,.25),[0,0,0,255],'Bundled Worker must decode the black JBIG2 image');
+    assert.deepEqual(await sample(1,.75),[255,255,255,255],'Bundled Worker must decode the white JBIG2 image');
+    await page.locator('#page-number').fill('2');await page.locator('#page-number').press('Enter');
+    await page.waitForFunction(()=>document.querySelector('.page[data-page="2"]')?.dataset.rendered==='true');
+    const icc=await sample(2,.5);
+    assert.equal(icc[3],255);
+    assert.ok(icc.slice(0,3).some((value,index)=>Math.abs(value-[.25,.5,.75][index]*255)>2),
+      'ICC pixels must use the actual profile rather than the DeviceRGB Alternate');
     assert.deepEqual(failures,[]);
     assert.ok(requests.length>10&&requests.every(path=>path.startsWith(prefix)));
   });

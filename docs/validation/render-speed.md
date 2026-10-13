@@ -65,9 +65,19 @@ files. XFA binding and DOM rendering load on demand. The legacy runtime export
 remains compatible, and an XFA DOM import completed after document replacement
 returns an empty layer. The 15-second startup deadline is unchanged.
 
-Packaged acceptance rejects unnecessary startup fetches and checks XFA rendering,
-editing and cancellation. Removing these dependencies reduces requests and module
-evaluation; recovery from an external network timeout requires separate live checks.
+Subsequent live Chromium acceptance passed, while WebKit still timed out waiting
+for secondary Worker module requests. The Pages build now uses the existing
+locked esbuild to bundle the parser, Range loader and graphics adapters into
+one Worker entry, followed by the two Wasm files. XFA remains an external dynamic
+import; there are no shared chunks that import the entry again. Development
+modules remain readable. JBIG2 resolves its Wasm URL from the root graphics
+adapter, preserving repository subpath hosting after bundling.
+
+Packaged acceptance rejects secondary startup JS requests and checks both
+adapter readiness and actual JBIG2/ICC pixels, alongside XFA rendering, editing
+and cancellation. The new startup request check fails against the previous
+unbundled artifact. This removes the module fetch waterfall; recovery from the
+observed live timeout still requires a deployment check.
 
 ## Remaining costs
 
@@ -76,7 +86,7 @@ evaluation; recovery from an external network timeout requires separate live che
 | Complex-page warm drawing | Page 12 needs 50 Canvas pixel reads and 54 uploads; PDF.js warm drawing needs neither. | Avoid repeated colour/shape rasterization of independent pattern cells and shading scenes. |
 | Cold image preparation | Node page 12 takes about 409 ms overall: colour processing has 115 ms self time, PNG encoding 46 ms, font loading 51 ms and Flate decoding 37 ms. | Reuse decoded image/font resources and avoid encoding pixels that the host can consume directly. |
 | New viewport payloads | Page 12 still sends about 2.13 million JSON characters. Its Canvas plan contains about 709,000 path characters and 138,000 clip-path characters. | Intern repeated immutable geometry/resources and reuse prepared plans between viewports. |
-| Worker startup | A diagnostic WebKit run spends about 132 ms loading/evaluating modules and 9 ms initializing the colour/JBIG2 adapters. The packaged bridge is about 7.5 MiB. | Reduce initial module evaluation; codec initialization is a smaller cost on this input. |
+| Worker startup | A diagnostic WebKit run of the bundled entry spends about 150 ms loading/evaluating code and 10 ms initializing the colour/JBIG2 adapters. The Worker is about 7.4 MiB. | Reduce initial code evaluation; codec initialization is a smaller cost on this input. |
 
 The pixel traffic comes from the retained source colour/shape pass, pattern
 shape surfaces, CPU shading output and retained scene bitmaps. The document

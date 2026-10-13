@@ -2,6 +2,8 @@ import * as bridge from "./_generated/pdf.js";
 import { initializePdfGraphics } from "./pdf-graphics.mjs";
 import { PdfRangeSource, PdfRangeDocument } from "./pdf-range.mjs";
 
+const profileStartup = new URL(import.meta.url).searchParams.get("profile") === "startup";
+const moduleReadyMs = profileStartup ? performance.now() : 0;
 let xfa = null;
 let rangeDocument = null;
 let rangeSource = null;
@@ -151,9 +153,16 @@ async function handleMessage(event) {
 async function start() {
   // These adapters install synchronous hooks consumed while the bridge parses
   // images and colours. Never accept PDF work before both attempts finish.
+  const initializeStart = profileStartup ? performance.now() : 0;
   const graphics = await initializePdfGraphics();
   self.addEventListener("message", handleMessage);
-  self.postMessage({ type: "ready", graphics: {
+  self.postMessage({ type: "ready", ...(profileStartup ? { benchmark: {
+    moduleReadyMs, graphicsMs: performance.now() - initializeStart,
+    resources: performance.getEntriesByType("resource").map(resource => ({
+      name: new URL(resource.name).pathname, duration: resource.duration,
+      bytes: resource.transferSize,
+    })),
+  } } : {}), graphics: {
     icc: Boolean(graphics.icc), jbig2: Boolean(graphics.jbig2),
     diagnostics: graphics.diagnostics,
   } });
