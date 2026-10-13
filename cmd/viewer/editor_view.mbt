@@ -14,6 +14,7 @@ fn editor_view(model : EditorModel, emit : @cmd.Emit[Msg]) -> @html.Html {
               ("select", "Select"),
               ("text", "Text"),
               ("highlight", "Highlight"),
+              ("highlight-selection", "Highlight selected text"),
               ("ink", "Ink"),
               ("signature", "Handwritten signature"),
               ("image", "Image signature"),

@@ -34,9 +34,11 @@ fn clear_width_cache() -> Unit {
 fn make_text_layer(layer : @js.Value) -> @dom.Element {
   let node = make_element("div", class_name="text-layer")
   set_data(node, "page", value_int(layer, "page").to_string())
+  let mut source_offset = 0
   for item in value_array(value_field(layer, "items")) {
     let matrix = value_numbers(value_field(item, "matrix"))
     let separator = value_string(item, "separator")
+    source_offset += separator.length()
     let index = value_int(item, "item_index")
     if separator != "" {
       let tag = if separator == "\n" { "br" } else { "span" }
@@ -78,6 +80,8 @@ fn make_text_layer(layer : @js.Value) -> @dom.Element {
     set_style(glyph, "fontWeight", weight)
     set_style(glyph, "fontStyle", font_style)
     let text = value_string(item, "text")
+    set_data(glyph, "sourceStart", source_offset.to_string())
+    source_offset += text.length()
     let content = make_element("span", class_name="glyph-text")
     set_text(content, text)
     let measured = measure_width(text, family, weight, font_style) * height

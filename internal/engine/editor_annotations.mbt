@@ -239,11 +239,30 @@ fn pdf_edit_annotation(
     if adding ||
       pdf_edit_entry(patch, "size") != Json::null() ||
       pdf_edit_entry(patch, "color") != Json::null() {
+      let previous_da = pdf_annotation_default(document, original, "/DA")
+        .bind(value => pdf_annotation_field_scalar(document, value))
+        .unwrap_or("")
+      let previous_ops = @pdflite.pdf_parse_content_ops_from_bytes(
+        @utf8.encode(previous_da),
+      ) catch {
+        _ => []
+      }
+      let mut name = pdf_name_key("/Helv")
+      for op in previous_ops {
+        if op is @content.Op_Tf(font, _) {
+          name = font
+        }
+      }
+      let name_text = @utf8.decode(
+        @pdflite.pdf_write_object(@syntax.PdfNameObject(name)),
+      ) catch {
+        _ => raise @core.SoftError("Invalid annotation font name")
+      }
       object = object.add_dict_entry(
         pdf_name_key("/DA"),
         @syntax.PdfString(
           @utf8.encode(
-            "/Helv \{size} Tf \{color[0]} \{color[1]} \{color[2]} rg",
+            "\{name_text} \{size} Tf \{color[0]} \{color[1]} \{color[2]} rg",
           ),
         ),
       )
@@ -254,47 +273,37 @@ fn pdf_edit_annotation(
       pdf_edit_entry(patch, "color") != Json::null() ||
       document.lookup_direct(pdf_name_key("/AP"), object) is None {
       object = object.remove_dict_entry(pdf_name_key("/AP"))
-      appearance = pdf_annotation_generated_appearance(document, object, {
-        min_x: bounds.min_x,
-        min_y: bounds.min_y,
-        max_x: bounds.max_x,
-        max_y: bounds.max_y,
-      })
+      appearance = pdf_annotation_generated_appearance(
+        document,
+        object,
+        {
+          min_x: bounds.min_x,
+          min_y: bounds.min_y,
+          max_x: bounds.max_x,
+          max_y: bounds.max_y,
+        },
+        require_encoding=pdf_edit_entry(patch, "image") != Json::null(),
+      )
     }
   }
   let w = bounds.max_x - bounds.min_x
   let h = bounds.max_y - bounds.min_y
   if subtype == "Highlight" {
-    let old_quads = if adding {
-      []
-    } else {
-      pdf_annotation_quad_points(document, original)
-    }
+    let areas = pdf_edit_highlight_quads(
+      document, original, patch, adding, bounds, old_bounds,
+    )
     let quads : Array[Double] = []
-    let areas : Array[Array[Double]] = []
-    if old_quads.is_empty() {
-      areas.push([bounds.min_x, bounds.min_y, bounds.max_x, bounds.max_y])
-    } else if old_bounds is Some(old) {
-      for quad in old_quads {
-        areas.push([
-          bounds.min_x + (quad.p0.x - old.min_x) * w / (old.max_x - old.min_x),
-          bounds.min_y + (quad.p0.y - old.min_y) * h / (old.max_y - old.min_y),
-          bounds.min_x + (quad.p2.x - old.min_x) * w / (old.max_x - old.min_x),
-          bounds.min_y + (quad.p2.y - old.min_y) * h / (old.max_y - old.min_y),
-        ])
-      }
-    }
     for area in areas {
       for
         n in [
-          area[0],
-          area[3],
-          area[2],
-          area[3],
-          area[0],
-          area[1],
-          area[2],
-          area[1],
+          area.p1.x,
+          area.p1.y,
+          area.p2.x,
+          area.p2.y,
+          area.p0.x,
+          area.p0.y,
+          area.p3.x,
+          area.p3.y,
         ] {
         quads.push(n)
       }
@@ -330,15 +339,14 @@ fn pdf_edit_annotation(
     ]
     for area in areas {
       ops.push(
-        @content.Op_re(
-          area[0] - bounds.min_x,
-          area[1] - bounds.min_y,
-          area[2] - area[0],
-          area[3] - area[1],
-        ),
+        @content.Op_m(area.p1.x - bounds.min_x, area.p1.y - bounds.min_y),
       )
-      ops.push(@content.Op_f)
+      for point in [area.p2, area.p3, area.p0] {
+        ops.push(@content.Op_l(point.x - bounds.min_x, point.y - bounds.min_y))
+      }
+      ops.push(@content.Op_h)
     }
+    ops.push(@content.Op_f)
     ops.push(@content.Op_Q)
     appearance = Some(
       pdf_edit_form(
@@ -423,7 +431,8 @@ fn pdf_edit_annotation(
     ops.push(@content.Op_Q)
     appearance = Some(pdf_edit_form(w, h, @syntax.pdf_dictionary([]), ops))
   }
-  if pdf_edit_entry(patch, "image") != Json::null() {
+  if pdf_edit_entry(patch, "image") != Json::null() &&
+    (subtype != "FreeText" || appearance is None) {
     appearance = Some(
       pdf_edit_image_appearance(
         document,

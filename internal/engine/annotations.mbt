@@ -323,9 +323,8 @@ fn pdf_annotation_points_array(
 }
 
 ///|
-/// Normalize one `/QuadPoints` group in the same way as pdf.js. PDF producers
-/// disagree about the input order, so using the axis-aligned extrema gives a
-/// stable quad for highlighting and text-markup annotations.
+/// Preserve affine geometry while adapting Adobe Z-order and ISO perimeter
+/// order to the text model's bottom-left, top-left, top-right, bottom-right order.
 fn pdf_annotation_quad_points(
   document : @pdflite.PdfDocument,
   rest : @syntax.PdfObject,
@@ -348,24 +347,25 @@ fn pdf_annotation_quad_points(
         },
       )
     }
-    let mut min_x = numbers[0]
-    let mut max_x = numbers[0]
-    let mut min_y = numbers[1]
-    let mut max_y = numbers[1]
-    for point_index in 1..<4 {
-      let x = numbers[point_index * 2]
-      let y = numbers[point_index * 2 + 1]
-      min_x = min_x.min(x)
-      max_x = max_x.max(x)
-      min_y = min_y.min(y)
-      max_y = max_y.max(y)
+    let points : Array[PdfPoint] = [
+      for n in 0..<4 => { x: numbers[n * 2], y: numbers[n * 2 + 1], }
+    ]
+    // Adobe's usual QuadPoints order is top-left, top-right, bottom-left,
+    // bottom-right. The ISO perimeter order is also present in real files.
+    // A crossing polygon distinguishes the two without axis-aligning it.
+    fn side(a : PdfPoint, b : PdfPoint, c : PdfPoint) -> Double {
+      (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
     }
-    output.push({
-      p0: { x: min_x, y: min_y, },
-      p1: { x: max_x, y: min_y, },
-      p2: { x: max_x, y: max_y, },
-      p3: { x: min_x, y: max_y, },
-    })
+    let crossed = side(points[0], points[1], points[2]) *
+      side(points[1], points[2], points[3]) <
+      0.0
+    output.push(
+      if crossed {
+        { p0: points[2], p1: points[0], p2: points[1], p3: points[3], }
+      } else {
+        { p0: points[0], p1: points[3], p2: points[2], p3: points[1], }
+      },
+    )
     index += 8
   }
   output

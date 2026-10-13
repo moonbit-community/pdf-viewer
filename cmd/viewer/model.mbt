@@ -30,6 +30,11 @@ struct TextRange {
 struct SearchHit {
   page : Int
   items : Array[Int]
+  index : Int
+  length : Int
+  xfa : Bool
+  start_offset : Int
+  end_offset : Int
 }
 
 ///|

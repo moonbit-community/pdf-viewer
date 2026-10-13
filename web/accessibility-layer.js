@@ -4,7 +4,10 @@ const roles = {
   P: "paragraph", L: "list", LI: "listitem", Table: "table", TR: "row",
   TH: "columnheader", TD: "cell", THead: "rowgroup", TBody: "rowgroup", TFoot: "rowgroup",
   Caption: "caption", Em: "emphasis", Strong: "strong", Code: "code",
+  Formula: "math",
 };
+const mathNamespace='http://www.w3.org/1998/Math/MathML';
+const mathTags=new Set(['math','mrow','mi','mn','mo','mtext','ms','mspace','msup','msub','msubsup','mfrac','msqrt','mroot','mover','munder','munderover','mtable','mtr','mtd','mfenced','menclose','mstyle','mpadded','mphantom','semantics','annotation']);
 
 function sources(node) {
   if (node.type === "content") return (node.groups || []).flatMap(group => group.items);
@@ -23,6 +26,18 @@ function annotationIndices(node) {
   return (node.children || []).flatMap(annotationIndices);
 }
 
+function mathElement(node){
+  if(node.type==='content')return document.createTextNode(text(node));
+  const tag=mathTags.has(node.tag)?node.tag:'mrow';
+  const element=document.createElementNS(mathNamespace,tag);
+  const items=sources(node);if(items.length)element.setAttribute('data-source-items',items.join(' '));
+  if(node.lang)element.setAttribute('lang',node.lang);
+  if(node.alt)element.setAttribute('aria-label',node.alt);
+  if(typeof node.actual_text==='string')element.textContent=node.actual_text;
+  else for(const child of node.children||[])element.append(mathElement(child));
+  return element;
+}
+
 // This narrative contains plain text and native ARIA semantics. The geometric
 // glyph layer stays available for mouse selection but is excluded from AX to
 // avoid reading every glyph twice. Its source indices are never renumbered.
@@ -38,6 +53,11 @@ export function makeAccessibilityLayer(data, annotationLayer) {
   if (data.lang) layer.lang = data.lang;
 
   const walk = node => {
+    if(node.namespace===mathNamespace){
+      const content=mathElement(node);
+      if(node.tag==='math')return content;
+      const root=document.createElementNS(mathNamespace,'math');root.append(content);return root;
+    }
     const element = document.createElement("div");
     const items = sources(node);
     if (items.length) element.dataset.sourceItems = items.join(" ");
@@ -65,6 +85,9 @@ export function makeAccessibilityLayer(data, annotationLayer) {
       return element;
     } else if (Object.hasOwn(roles, node.tag)) {
       element.setAttribute("role", node.tag === "TH" && node.scope === "Row" ? "rowheader" : roles[node.tag]);
+    }
+    if(node.tag==='Formula'&&(node.actual_text??node.alt)){
+      element.setAttribute('aria-label',node.actual_text??node.alt);return element;
     }
     if (["TH", "TD"].includes(node.tag)) {
       if (node.row_span > 1) element.setAttribute("aria-rowspan", node.row_span);

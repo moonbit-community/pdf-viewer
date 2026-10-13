@@ -71,6 +71,9 @@ async fn mount_page(result : @js.Value, current : () -> Bool) -> @dom.Element {
 
 ///|
 async fn page_mounted(page : @dom.Element, current : () -> Bool) -> Unit {
+  if current() && state.xfa {
+    editor_refresh_xfa_fields()
+  }
   if current() && page.query_selector(".text-layer") is Some(text) {
     cache_selection_page(
       value_field(@js.Value::cast_from(text), "pdfTextLayer"),

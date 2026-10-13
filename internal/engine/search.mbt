@@ -99,54 +99,24 @@ pub fn PdfViewerDocument::search(
     let page = self.page(page_number).unwrap()
     let content = page.text_content()
     let source = content.text
-    let normalized_source = pdf_search_normalized(source, options)
     let starts = pdf_search_item_starts(content.items[:])
-    let mut cursor = 0
-    while cursor + normalized_query.length() <= normalized_source.text.length() {
-      let candidate_end = cursor + normalized_query.length()
-      match normalized_source.text.get_view(start=cursor, end=candidate_end) {
-        Some(candidate) if candidate.to_owned() == normalized_query => {
-          let (source_start, source_end) = pdf_search_source_range(
-            normalized_source, cursor, candidate_end,
-          )
-          let complete_diacritics = !options.diacritic_sensitive ||
-            !normalized_source.text
-            .get_char(candidate_end)
-            .map(pdf_search_mark)
-            .unwrap_or(false)
-          if complete_diacritics &&
-            (
-              !options.whole_word ||
-              pdf_search_boundary_word(source, source_start, source_end)
-            ) {
-            let (indices, bounds) = pdf_search_result_items(
-              content.items[:],
-              starts[:],
-              source_start,
-              source_end,
-            )
-            match bounds {
-              Some(bounds) => {
-                let text = source.get_view(start=source_start, end=source_end)
-                match text {
-                  Some(text) =>
-                    output.push({
-                      page: page_number,
-                      index: source_start,
-                      length: source_end - source_start,
-                      text: text.to_owned(),
-                      bounds,
-                      item_indices: indices,
-                    })
-                  None => ()
-                }
-              }
-              None => ()
-            }
-          }
-          cursor = candidate_end.max(cursor + 1)
-        }
-        _ => cursor += 1
+    for (source_start, source_end) in options.find_matches(source, query) {
+      let (indices, bounds) = pdf_search_result_items(
+        content.items[:],
+        starts[:],
+        source_start,
+        source_end,
+      )
+      if bounds is Some(bounds) &&
+        source.get_view(start=source_start, end=source_end) is Some(text) {
+        output.push({
+          page: page_number,
+          index: source_start,
+          length: source_end - source_start,
+          text: text.to_owned(),
+          bounds,
+          item_indices: indices,
+        })
       }
     }
   }

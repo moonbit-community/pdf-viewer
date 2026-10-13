@@ -505,6 +505,7 @@ pub(all) struct PdfSearchOptions {
   whole_word : Bool
   diacritic_sensitive : Bool
 } derive(Eq, ToJson, @debug.Debug)
+pub fn PdfSearchOptions::find_matches(Self, String, String) -> Array[(Int, Int)]
 
 pub(all) struct PdfSearchResult {
   page : Int
@@ -1037,7 +1038,7 @@ pub fn PdfViewerDocument::pages(Self, optional_content_intent? : PdfOptionalCont
 pub fn PdfViewerDocument::reader_diagnostics(Self) -> Array[PdfReaderDiagnostic]
 pub fn PdfViewerDocument::render_svg(Self, Int, scale? : Double) -> String? raise @core.PdfError
 pub fn PdfViewerDocument::render_svg_with_rotation(Self, Int, Int, scale? : Double) -> String? raise @core.PdfError
-pub fn PdfViewerDocument::save_bytes(Self, aes_iv_provider? : (Int, Int, Int) -> Bytes raise @core.PdfError) -> Bytes raise @core.PdfError
+pub fn PdfViewerDocument::save_bytes(Self, aes_iv_provider? : (Int, Int, Int) -> Bytes raise @core.PdfError, incremental? : Bool) -> Bytes raise @core.PdfError
 pub fn PdfViewerDocument::search(Self, String, options? : PdfSearchOptions, page? : Int?) -> Array[PdfSearchResult] raise @core.PdfError
 pub fn PdfViewerDocument::select(Self, Int, PdfBounds) -> PdfSelection? raise @core.PdfError
 pub fn PdfViewerDocument::source_length(Self) -> Int
@@ -1053,6 +1054,7 @@ pub fn PdfViewerDocument::with_font_fallbacks(Self, Array[PdfFontFallback]) -> S
 pub fn PdfViewerDocument::with_optional_content_config(Self, Int?) -> Self raise @core.PdfError
 pub fn PdfViewerDocument::with_optional_content_state(Self, PdfOptionalContentState) -> Self
 pub fn PdfViewerDocument::with_optional_content_visibility(Self, Int, Bool) -> Self raise @core.PdfError
+pub fn PdfViewerDocument::with_xfa_packets(Self, Array[PdfXfaPacket]) -> Self raise @core.PdfError
 pub fn PdfViewerDocument::xfa_font_glyphs_json(Self, String, String) -> Json raise @core.PdfError
 pub fn PdfViewerDocument::xfa_fonts_json(Self) -> Json
 pub fn PdfViewerDocument::xfa_needs_rendering(Self) -> Bool

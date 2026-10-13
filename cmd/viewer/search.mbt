@@ -18,20 +18,79 @@ fn clear_search() -> Unit {
 ///|
 fn highlight_search() -> Unit {
   let matches : Map[String, Bool] = Map([])
+  let ranges : Array[@js.Value] = []
+  let active_ranges : Array[@js.Value] = []
+  let glyphs = element("pages").query_selector_all(".glyph, .xfa-text")
   for index, result in state.search_results {
     for item in result.items {
       let key = "\{result.page}:\{item}"
       matches[key] = matches.get(key).unwrap_or(false) ||
         index == state.search_active
     }
+    guard page_element(result.page) is Some(page) else { continue }
+    for item in result.items {
+      guard page.query_selector("[data-item=\"\{item}\"]") is Some(glyph) else {
+        continue
+      }
+      let content = glyph.query_selector(".glyph-text").unwrap_or(glyph)
+      let start = if result.xfa {
+        0
+      } else {
+        parse_float(element_data(glyph, "sourceStart")).to_int()
+      }
+      let first = if result.xfa {
+        result.start_offset
+      } else {
+        (result.index - start).max(0)
+      }
+      let last = if result.xfa {
+        result.end_offset
+      } else {
+        (result.index + result.length - start).min(
+          node_length(@js.Value::cast_from(content)),
+        )
+      }
+      if last > first &&
+        search_native_range(content, first, last).to_option() is Some(range) {
+        ranges.push(range)
+        if index == state.search_active {
+          active_ranges.push(range)
+        }
+      }
+    }
   }
-  for glyph in element("pages").query_selector_all(".glyph, .xfa-text").iter() {
+  set_data(
+    element("pages"),
+    "searchRanges",
+    search_publish_ranges(
+      FixedArray::from_array(ranges[:]),
+      FixedArray::from_array(active_ranges[:]),
+    ).to_string(),
+  )
+  for glyph in glyphs.iter() {
     let page = glyph.closest(".page").unwrap()
     let key = "\{element_data(page, "page")}:\{element_data(glyph, "item")}"
     toggle_class(glyph, "pdf-search-hit", matches.contains(key))
     toggle_class(glyph, "pdf-search-active", matches.get(key).unwrap_or(false))
   }
 }
+
+///|
+// Native ranges paint exact UTF-16 intervals without replacing text nodes or
+// disturbing a user's selection. Search state and source mapping stay in MoonBit.
+extern "js" fn search_native_range(
+  content : @dom.Element,
+  first : Int,
+  last : Int,
+) -> @js.Nullable[@js.Value] =
+  #| (content,first,last) => {const text=content.firstChild;if(!text||text.nodeType!==3||first<0||last>text.length||last<=first)return null;const range=document.createRange();range.setStart(text,first);range.setEnd(text,last);return range;}
+
+///|
+extern "js" fn search_publish_ranges(
+  ranges : FixedArray[@js.Value],
+  active : FixedArray[@js.Value],
+) -> Bool =
+  #| (ranges,active) => {if(!globalThis.CSS?.highlights||typeof Highlight!=='function')return false;const hits=new Highlight(),selected=new Highlight();for(const range of ranges)hits.add(range);for(const range of active)selected.add(range);selected.priority=1;CSS.highlights.set('pdf-search-hit',hits);CSS.highlights.set('pdf-search-active',selected);return true;}
 
 ///|
 async fn scroll_search() -> Unit {
@@ -112,6 +171,11 @@ async fn search_document() -> Unit {
       .iter()
       .map(value => {
         page: value_int(value, "page"),
+        index: value_int(value, "index"),
+        length: value_int(value, "length"),
+        xfa: value_string(value, "source_kind") == "xfa",
+        start_offset: value_int(value, "start_offset"),
+        end_offset: value_int(value, "end_offset"),
         items: value_array(value_field(value, "item_indices"))
         .iter()
         .map(value => @js.Value::cast(value))

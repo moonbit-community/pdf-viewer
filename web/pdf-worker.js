@@ -85,7 +85,6 @@ async function handleMessage(event) {
       rangeDocument = rangeSource = null;
     }
     if (["editor_info", "apply_edits", "save_pdf"].includes(method)) {
-      if (xfa) throw Object.assign(new Error("Editing and saving dynamic XFA documents is not supported yet"), {code:"edit-unavailable"});
       // A writer needs every indirect object, including objects never visited
       // by lazy page rendering. Complete and re-open the source once before
       // entering the editor, retaining the HTTP validator checks.
@@ -105,12 +104,16 @@ async function handleMessage(event) {
         clearRenders();
       }
     }
-    let result = rangeDocument && !xfa && method === "search_pdf" ? await searchRanges(args) : xfa && ["render_page", "render_print_page"].includes(method)
+    let result = xfa && method === "apply_edits" ? xfa.apply(JSON.parse(args[0])) : rangeDocument && !xfa && method === "search_pdf" ? await searchRanges(args) : xfa && ["render_page", "render_print_page"].includes(method)
       ? xfa.render(...args) : xfa && method === "page_layouts"
       ? JSON.stringify({ok:true,layouts:xfa.layouts}) : xfa && method === "select_page_text"
       ? xfa.select(...args) : xfa && method === "search_pdf"
       ? xfa.search(...args) : ["render_page", "render_print_page"].includes(method)
       ? render(method, args) : method === "open_pdf_url" ? await openURL(...args) : bridge[method](...args);
+    if(xfa&&method==='editor_info'){
+      const permissions=JSON.parse(result);
+      result=JSON.stringify({...permissions,annotations:false,editable:permissions.forms===true});
+    }
     if (["open_pdf", "open_pdf_url", "open_pdf_with_password"].includes(method)) {
       xfa?.dispose();
       xfa = null;

@@ -145,21 +145,21 @@ fn pdf_svg_annotation(
             quad.p0
           } else if annotation.subtype == "strikeout" {
             {
-              x: (quad.p0.x + quad.p3.x) / 2.0,
-              y: (quad.p0.y + quad.p3.y) / 2.0,
+              x: (quad.p0.x + quad.p1.x) / 2.0,
+              y: (quad.p0.y + quad.p1.y) / 2.0,
             }
           } else {
             quad.p0
           }
           let second = if annotation.subtype == "underline" {
-            quad.p1
+            quad.p3
           } else if annotation.subtype == "strikeout" {
             {
-              x: (quad.p1.x + quad.p2.x) / 2.0,
-              y: (quad.p1.y + quad.p2.y) / 2.0,
+              x: (quad.p3.x + quad.p2.x) / 2.0,
+              y: (quad.p3.y + quad.p2.y) / 2.0,
             }
           } else {
-            quad.p1
+            quad.p3
           }
           if annotation.subtype == "squiggly" {
             pdf_svg_annotation_squiggly(

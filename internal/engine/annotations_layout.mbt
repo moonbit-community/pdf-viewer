@@ -180,6 +180,7 @@ priv struct PdfFieldGlyph {
   width : Double
   whitespace : Bool
   newline : Bool
+  encoded : Bool
 }
 
 ///|
@@ -256,6 +257,7 @@ fn pdf_annotation_field_glyphs(
       },
       whitespace: char == ' ' || char == '\t',
       newline,
+      encoded: newline || codes.contains(char.to_string()),
     })
   }
   output
@@ -303,6 +305,7 @@ fn pdf_annotation_generated_appearance(
   document : @pdflite.PdfDocument,
   object : @syntax.PdfObject,
   rectangle : @geometry.PdfRectangle,
+  require_encoding? : Bool = false,
 ) -> @syntax.PdfObject? {
   let subtype = document.lookup_direct(pdf_name_key("/Subtype"), object)
   let free_text = subtype ==
@@ -430,6 +433,9 @@ fn pdf_annotation_generated_appearance(
   let (ascent, descent) = pdf_annotation_font_vertical_metrics(font)
   let line_height = (ascent - descent).max(1.0) * 1.2
   let glyphs = pdf_annotation_field_glyphs(document, font, font_object, text)
+  if require_encoding && glyphs.any(glyph => !glyph.encoded) {
+    return None
+  }
   if size == 0.0 {
     size = (usable_height / line_height)
       .min(if multiline || listbox { 12.0 } else { 300.0 })

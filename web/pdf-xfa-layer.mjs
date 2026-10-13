@@ -24,10 +24,16 @@ export async function makeXfaLayer(result, intent='display') {
   const rewrite=node=>{
     const style=node.attributes?.style;
     if(style?.fontFamily)for(const [family,alias]of aliases)style.fontFamily=style.fontFamily.replaceAll(family,alias);
+    const attributes=node.attributes,stored=result.xfa.values?.[attributes?.dataId];
+    if(node.name==='input'&&['checkbox','radio'].includes(attributes.type)&&stored){
+      if(stored.value===attributes.xfaOn)attributes.checked=true;
+      else delete attributes.checked;
+    }
     node.children?.forEach(rewrite);
   };rewrite(html);
   const div=document.createElement('div');
-  const {textDivs}=XfaLayer.render({div,xfaHtml:html,viewport:{transform:result.layer.viewport.matrix},intent,
+  const annotationStorage={getValue(id,fallback){return result.xfa.values?.[id]??fallback;},setValue(){}};
+  const {textDivs}=XfaLayer.render({div,xfaHtml:html,annotationStorage,viewport:{transform:result.layer.viewport.matrix},intent,
     linkService:{addLinkAttributes(anchor,href){try{const url=new URL(href,location.href);if(['https:','http:','mailto:'].includes(url.protocol)){anchor.href=url.href;anchor.target='_blank';anchor.rel='noopener noreferrer';}}catch{}}}});
   let item=0;
   for(const text of textDivs){
@@ -36,6 +42,8 @@ export async function makeXfaLayer(result, intent='display') {
     text.replaceWith(span);span.append(text);
   }
   for(const control of div.querySelectorAll('input,textarea,select,button')){
+    control.dataset.xfaReadonly=String(control.dataset.xfaReadonly==='true'||control.readOnly||control.disabled||
+      !!control.closest('.xfaReadOnly,.xfaDisabled,.xfaNonInteractive'));
     if(control.matches('textarea,input:not([type=checkbox]):not([type=radio]):not([type=button])'))control.readOnly=true;
     else control.disabled=true;
     control.setAttribute('aria-readonly','true');

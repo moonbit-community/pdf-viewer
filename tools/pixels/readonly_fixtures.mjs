@@ -50,16 +50,29 @@ export function annotationFixture(){
     '<< /Subtype /Squiggly /Rect [10 12 180 24] /QuadPoints [10 24 180 24 10 12 180 12] /C [1 0 0] /F 4 >>',
   ]);
 }
-export function xfaFixture(dynamic=true){
+export function xfaFixture(dynamic=true,{extraFields='',extraData=''}={}){
   const xml=`<xdp:xdp xmlns:xdp="http://ns.adobe.com/xdp/">
 <template xmlns="http://www.xfa.org/schema/xfa-template/3.3/"><subform name="form" layout="tb">
 <pageSet><pageArea><medium short="200pt" long="300pt"/><contentArea x="10pt" y="10pt" w="180pt" h="280pt"/></pageArea></pageSet>
 <draw w="170pt" h="20pt"><value><text>Readonly XFA heading</text></value><font typeface="Helvetica" size="12pt"/></draw>
-<field name="customer" w="170pt" h="24pt"><ui><textEdit/></ui><font typeface="Helvetica" size="12pt"/><bind ref="$record.customer"/></field>
+<field name="customer" w="170pt" h="24pt"><ui><textEdit/></ui><font typeface="Helvetica" size="12pt"/><bind ref="$record.customer"/></field>${extraFields}
 <draw w="170pt" h="240pt"><value><text>First page content</text></value></draw>
 <draw w="170pt" h="30pt"><value><text>Second page content</text></value></draw>
-</subform></template><xfa:datasets xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><xfa:data><form><customer>Bound value</customer></form></xfa:data></xfa:datasets></xdp:xdp>`;
+</subform></template><xfa:datasets xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><xfa:data><form><customer>Bound value</customer>${extraData}</form></xfa:data></xfa:datasets></xdp:xdp>`;
   return makePdf(['<< /Type /Catalog /Pages 2 0 R /AcroForm 4 0 R '+(dynamic?'/NeedsRendering true':'')+' >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] >>',
     '<< /XFA 5 0 R >>',stream('',xml)]);
+}
+
+export function xfaAccessFixture({multi='A',legacy='Existing legacy value'}={}){
+ const textField=(name,access,bind)=>`<field name="${name}" access="${access}" w="170pt" h="24pt"><ui><textEdit/></ui><bind ${bind}/><value><text>Initial ${name}</text></value></field>`;
+ return xfaFixture(true,{extraFields:
+  textField('unbound','open','match="none"')+
+  textField('locked','readOnly','ref="$record.locked"')+
+  textField('protected','protected','ref="$record.protected"')+
+  '<field name="multi" w="170pt" h="28pt"><ui><choiceList open="multiSelect"/></ui><items><text>A</text><text>B</text></items><bind ref="$record.multi"/></field>'+
+  '<field name="legacy" w="170pt" h="28pt"><ui><choiceList/></ui><items><text>A</text><text>B</text></items><bind ref="$record.legacy"/></field>'+
+  '<exclGroup name="choice" layout="tb" w="170pt" h="48pt"><bind ref="$record.choice"/>'+
+  ['A','B'].map(value=>`<field name="choice${value}" w="170pt" h="24pt"><ui><checkButton shape="round"/></ui><items><text>${value}</text><text>Off</text></items></field>`).join('')+'</exclGroup>',
+  extraData:`<locked>Initial locked</locked><protected>Initial protected</protected><multi>${multi}</multi><legacy>${legacy}</legacy><choice>B</choice>`});
 }

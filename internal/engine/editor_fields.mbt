@@ -223,7 +223,15 @@ fn pdf_edit_field(
       } else {
         object = object.remove_dict_entry(pdf_name_key("/AP"))
         let rectangle = document.read_annotation(object).rectangle
-        let ap = if pdf_edit_entry(patch, "image") != Json::null() &&
+        let native = pdf_annotation_generated_appearance(
+          document,
+          object,
+          rectangle,
+          require_encoding=pdf_edit_entry(patch, "image") != Json::null(),
+        )
+        let ap = if native is Some(native) {
+          native
+        } else if pdf_edit_entry(patch, "image") != Json::null() &&
           field_type == "Tx" {
           pdf_edit_image_appearance(document, pdf_edit_entry(patch, "image"), {
             min_x: rectangle.min_x,
@@ -232,10 +240,7 @@ fn pdf_edit_field(
             max_y: rectangle.max_y,
           })
         } else {
-          pdf_annotation_generated_appearance(document, object, rectangle).unwrap_or_else(() => {
-              raise @core.SoftError("Unable to generate field appearance")
-            },
-          )
+          raise @core.SoftError("Unable to generate field appearance")
         }
         object = object.add_dict_entry(
           pdf_name_key("/AP"),

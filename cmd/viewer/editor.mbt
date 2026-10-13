@@ -28,6 +28,11 @@ async fn editor_apply_snapshot(changes : Array[Json], generation : Int) -> Bool 
 
 ///|
 async fn editor_commit(patch : Json) -> Unit {
+  editor_commit_batch([patch])
+}
+
+///|
+async fn editor_commit_batch(patches : Array[Json]) -> Unit {
   let generation = state.document_generation
   while editor.applying {
     native_frame().wait()
@@ -35,48 +40,51 @@ async fn editor_commit(patch : Json) -> Unit {
       return
     }
   }
-  if state.count == 0 {
+  if state.count == 0 || patches.is_empty() {
     return
   }
   editor.applying = true
   state.error = ""
   notify()
   try {
-    let id = json_string_field(patch, "id")
-    let previous = editor_changes()
-      .filter(entry => json_string_field(entry, "id") == id)
-      .get(0)
-    let field_name = json_string_field(patch, "field_name")
-    let next = editor_changes().filter(entry => {
-      json_string_field(entry, "id") != id &&
-      !(json_string_field(patch, "kind") == "field" &&
-      field_name != "" &&
-      json_string_field(entry, "kind") == "field" &&
-      json_string_field(entry, "field_name") == field_name)
-    })
-    let patch = if previous is Some(previous) &&
-      (
-        json_string_field(previous, "kind") == "add" ||
+    let mut next = editor_changes()
+    for patch in patches {
+      let id = json_string_field(patch, "id")
+      let previous = next
+        .filter(entry => json_string_field(entry, "id") == id)
+        .get(0)
+      let field_name = json_string_field(patch, "field_name")
+      next = next.filter(entry => {
+        json_string_field(entry, "id") != id &&
+        !(json_string_field(patch, "kind") == "field" &&
+        field_name != "" &&
+        json_string_field(entry, "kind") == "field" &&
+        json_string_field(entry, "field_name") == field_name)
+      })
+      let patch = if previous is Some(previous) &&
         (
-          json_string_field(previous, "kind") == "update" &&
-          json_string_field(patch, "kind") == "update"
-        )
-      ) {
-      let mut merged = previous
-      if patch is Object(fields) {
-        for key, value in fields {
-          merged = json_put(merged, key, value)
+          json_string_field(previous, "kind") == "add" ||
+          (
+            json_string_field(previous, "kind") == "update" &&
+            json_string_field(patch, "kind") == "update"
+          )
+        ) {
+        let mut merged = previous
+        if patch is Object(fields) {
+          for key, value in fields {
+            merged = json_put(merged, key, value)
+          }
         }
+        json_put(merged, "kind", json_field(previous, "kind"))
+      } else {
+        patch
       }
-      json_put(merged, "kind", json_field(previous, "kind"))
-    } else {
-      patch
+      if !(json_string_field(patch, "kind") == "add" &&
+        json_string_field(patch, "delete") == "true") {
+        next.push(patch)
+      }
     }
-    if !(json_string_field(patch, "kind") == "add" &&
-      json_string_field(patch, "delete") == "true") {
-      next.push(patch)
-    }
-    state.current_page = json_number(json_field(patch, "page")).to_int()
+    state.current_page = json_number(json_field(patches[0], "page")).to_int()
     if editor_apply_snapshot(next, generation) {
       editor.history = editor.history[:editor.cursor + 1].to_owned()
       editor.history.push(next)
@@ -187,11 +195,6 @@ async fn editor_handle(action : EditorAction) -> Unit {
   match action {
     Toggle => {
       if !editor.enabled {
-        if state.xfa {
-          raise ViewerError(
-            "edit-unavailable", "Editing and saving dynamic XFA documents is not supported yet",
-          )
-        }
         let generation = state.document_generation
         editor.applying = true
         editor.status = "Preparing document for editing"
@@ -231,6 +234,10 @@ async fn editor_handle(action : EditorAction) -> Unit {
     }
     Tool(tool) => {
       if !editor.annotations && tool != "select" {
+        return
+      }
+      if tool == "highlight-selection" {
+        editor_highlight_selection()
         return
       }
       if tool == "ink" || tool == "signature" {
@@ -361,4 +368,4 @@ fn editor_flush_field() -> Unit {
 
 ///|
 extern "js" fn native_blur_field() -> Unit =
-  #| () => {const active=document.activeElement;if(active?.matches('.editor-field')) active.blur();}
+  #| () => {const active=document.activeElement;if(active?.matches('.editor-field, .xfa-editor-field')) active.blur();}

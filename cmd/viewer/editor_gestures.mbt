@@ -300,6 +300,28 @@ async fn editor_pointer_up(event : @dom.PointerEvent) -> Unit {
       })
       patch = json_put(patch, "paths", ToJson::to_json(paths))
     }
+    if previous is Some(previous) &&
+      json_field(previous, "quads") is Array(quads) {
+      let old = json_array(json_field(gesture.entry, "bounds")).map(json_number)
+      let quads = quads.map(quad => {
+        let mut mapped = quad
+        for key in ["p0", "p1", "p2", "p3"] {
+          let point = json_field(quad, key)
+          mapped = json_put(mapped, key, {
+            "x": bounds[0] +
+            (json_number(json_field(point, "x")) - old[0]) *
+            (bounds[2] - bounds[0]) /
+            (old[2] - old[0]),
+            "y": bounds[1] +
+            (json_number(json_field(point, "y")) - old[1]) *
+            (bounds[3] - bounds[1]) /
+            (old[3] - old[1]),
+          })
+        }
+        mapped
+      })
+      patch = json_put(patch, "quads", ToJson::to_json(quads))
+    }
   }
   editor_commit(patch)
 }

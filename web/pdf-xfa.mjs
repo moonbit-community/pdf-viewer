@@ -1,6 +1,7 @@
 // Only XFA XML binding/pagination comes from PDF.js. PDF objects, streams,
 // embedded font assets and glyph widths are read by the MoonBit bridge.
-import { XFAFactory, PageViewport, XfaText } from './vendor/xfa/xfa.mjs';
+import { XFAFactory, PageViewport, XfaText, xfaFields } from './vendor/xfa/xfa.mjs';
+import {xfaPacketUpdates,xfaFieldDefaults} from './pdf-xfa-edit.mjs';
 
 function packetText(base64) {
   const binary = atob(base64);
@@ -59,17 +60,37 @@ export async function createXfaDocument(data, bridge) {
     return { page: index + 1, width, height, rotation: 0 };
   });
   const pages = (await factory.getPages()).children;
+  const fields=xfaFields(factory),defaults=xfaFieldDefaults(pages,fields);
+  let storage=new Map(defaults);
   const blobs=new Set();
   const collect=node=>{const src=node.attributes?.src;if(src?.startsWith('blob:'))blobs.add(src);node.children?.forEach(collect);};pages.forEach(collect);
   const texts = pages.map(page => XfaText.textContent(page).items.map(item => item.str));
   return {
     count, layouts,
+    apply(changes){
+      if(!Array.isArray(changes)||changes.length>10000)throw Error('Invalid XFA edit snapshot');
+      const next=new Map(defaults),edits=new Map();
+      for(const patch of changes){
+        const id=patch.data_id;
+        if(patch.kind!=='xfa'||!defaults.get(id)?.editable||typeof patch.value!=='string'||patch.value.length>65536)throw Error('Invalid XFA field value');
+        next.set(id,{value:patch.value});
+        edits.set(id,{value:patch.value});
+      }
+      // The upstream serializer mutates bound nodes. Restore their original
+      // content, then serialize only explicit edits; untouched values may not
+      // be representable by their HTML control (for example a legacy choice).
+      for(const field of fields.values())field.reset();
+      const datasets=factory.serializeData(edits);
+      const result=bridge.apply_xfa_packets(JSON.stringify(xfaPacketUpdates(data.packets,datasets)));
+      if(JSON.parse(result).ok)storage=next;
+      return result;
+    },
     dispose(){for(const url of blobs)URL.revokeObjectURL(url);blobs.clear();},
     render(number, scale, rotation) {
       const layout = layouts[number - 1];
       if (!layout) throw Error('Page does not exist');
       const viewport = new PageViewport({viewBox:[0,0,layout.width,layout.height],userUnit:1,scale,rotation,dontFlip:true});
-      return JSON.stringify({ok:true,page:number,xfa:{html:pages[number - 1],fonts:assets},
+      return JSON.stringify({ok:true,page:number,xfa:{html:pages[number - 1],fonts:assets,values:Object.fromEntries(storage)},
         layer:{page:number,items:[],viewport:{...layout,width:viewport.width,height:viewport.height,
           matrix:viewport.transform,scale,rotation}},canvas:null,annotations:[]});
     },
@@ -86,16 +107,12 @@ export async function createXfaDocument(data, bridge) {
         selection:{page:number,text:selected.join('\n'),source_kind:'xfa',items:[],byte_ranges:[]}});
     },
     search(query, caseSensitive, wholeWord, diacriticSensitive) {
-      const normalize = value => {
-        if (!diacriticSensitive) value=value.normalize('NFD').replace(/\p{M}/gu,'');
-        return caseSensitive?value:value.toLocaleLowerCase();
-      };
-      const needle=normalize(query),results=[];
-      if (needle) texts.forEach((items,index)=>items.forEach((text,item)=>{
-        const haystack=normalize(text);
-        for(let pos=0;(pos=haystack.indexOf(needle,pos))>=0;pos+=needle.length){
-          if(wholeWord&&(/[\p{L}\p{N}_]/u.test(haystack[pos-1]||'')||/[\p{L}\p{N}_]/u.test(haystack[pos+needle.length]||'')))continue;
-          results.push({page:index+1,item_indices:[item],text,start_offset:pos,end_offset:pos+needle.length,source_kind:'xfa'});
+      const results=[];
+      texts.forEach((items,index)=>items.forEach((text,item)=>{
+        const response=JSON.parse(bridge.search_text(text,query,caseSensitive,wholeWord,diacriticSensitive));
+        for(const match of response.matches){
+          results.push({page:index+1,item_indices:[item],text:text.slice(match.index,match.index+match.length),
+            start_offset:match.index,end_offset:match.index+match.length,source_kind:'xfa'});
         }
       }));
       return JSON.stringify({ok:true,results});

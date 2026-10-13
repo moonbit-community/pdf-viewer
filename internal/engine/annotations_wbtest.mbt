@@ -102,7 +102,7 @@ test "markup quads survive popup children and malformed siblings" {
   assert_eq(page.annotations.length(), 2)
   assert_eq(page.annotations[0].subtype, "highlight")
   assert_eq(page.annotations[0].quad_points.length(), 2)
-  assert_eq(page.annotations[0].quad_points[0].p3, { x: 10.0, y: 40.0, })
+  assert_eq(page.annotations[0].quad_points[0].p1, { x: 10.0, y: 40.0, })
   assert_eq(page.annotations[1].line_points, [
     { x: 10.0, y: 50.0, },
     { x: 90.0, y: 60.0, },

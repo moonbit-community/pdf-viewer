@@ -24,6 +24,34 @@ test "annotation squiggly produces a wave rather than a dashed underline" {
   let svg = page.render_svg()
   assert_true(svg.contains("data-pdf-markup=\"squiggly\""))
   assert_true(!svg.contains("stroke-dasharray"))
+  assert_true(svg.contains("d=\"M 10 190"))
+  assert_true(svg.contains(" L 90 190\""))
+}
+
+///|
+test "affine markup keeps Adobe and ISO baselines for underline strikeout and squiggly" {
+  let adobe = "/QuadPoints [25 40 85 50 20 20 80 30]"
+  let iso = "/QuadPoints [20 20 80 30 85 50 25 40]"
+  let page = annotation_test_page([
+    "<< /Subtype /Underline /Rect [20 20 85 50] \{adobe} /C [1 0 0] >>",
+    "<< /Subtype /Underline /Rect [20 20 85 50] \{iso} /C [1 0 0] >>",
+    "<< /Subtype /StrikeOut /Rect [20 20 85 50] \{adobe} /C [1 0 0] >>",
+    "<< /Subtype /Squiggly /Rect [20 20 85 50] \{adobe} /C [1 0 0] >>",
+  ])
+  let quad : PdfQuad = {
+    p0: { x: 20.0, y: 20.0, },
+    p1: { x: 25.0, y: 40.0, },
+    p2: { x: 85.0, y: 50.0, },
+    p3: { x: 80.0, y: 30.0, },
+  }
+  for annotation in page.annotations {
+    assert_eq(annotation.quad_points, [quad])
+  }
+  let svg = page.render_svg()
+  assert_true(svg.contains("x1=\"20\" y1=\"180\" x2=\"80\" y2=\"170\""))
+  assert_true(svg.contains("x1=\"22.5\" y1=\"170\" x2=\"82.5\" y2=\"160\""))
+  assert_true(svg.contains("d=\"M 20 180"))
+  assert_true(svg.contains(" L 80 170\""))
 }
 
 ///|

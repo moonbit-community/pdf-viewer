@@ -28,6 +28,9 @@ fn pdf_search_fold_scalar(char : Char, options : PdfSearchOptions) -> String {
   if !options.case_sensitive && source == "ß" {
     return "ss"
   }
+  if !options.case_sensitive && source == "ς" {
+    return "σ"
+  }
   if !options.diacritic_sensitive {
     match source {
       "æ" => return "ae"

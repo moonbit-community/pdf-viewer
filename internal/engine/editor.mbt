@@ -145,11 +145,13 @@ pub fn PdfViewerDocument::with_editor_changes(
 }
 
 ///|
-/// Serialize edited objects with pdflite's writer. Saving intentionally produces
-/// a complete PDF, with explicit annotation appearances for other readers.
+/// Serialize edited objects with pdflite's writer. Incremental saving retains
+/// the original bytes and appends changed objects and a new xref revision.
+/// Recovered inputs without a validated original xref use a complete rewrite.
 pub fn PdfViewerDocument::save_bytes(
   self : PdfViewerDocument,
   aes_iv_provider? : (Int, Int, Int) -> Bytes raise @core.PdfError,
+  incremental? : Bool = true,
 ) -> Bytes raise @core.PdfError {
   self.pdf_edit_require_unlocked()
   let document = match (self.document.saved_encryption, self.editor_security) {
@@ -169,6 +171,21 @@ pub fn PdfViewerDocument::save_bytes(
           )
       }
     _ => self.document
+  }
+  if incremental && !self.source_bytes.is_empty() {
+    // Recovery can open files without a usable original xref. Such files must
+    // be rewritten rather than appending an invalid /Prev chain.
+    let previous = @reader.pdf_read_startxref_position(self.source_bytes) catch {
+      _ => -1
+    }
+    if previous > 0 &&
+      previous < self.source_bytes.length() &&
+      self.document.first_xref() == previous {
+      return @pdflite.pdf_write_document_incremental_update(
+        self.source_bytes,
+        document,
+      )
+    }
   }
   @pdflite.pdf_write_document(document)
 }

@@ -384,24 +384,11 @@ fn PdfAccessibilityTree::walk(
             .lookup_immediate(pdf_name_key("/K"))
             .map(children => self.walk(children, page, owner, depth + 1))
             .unwrap_or([])
-          let mut tag = match
-            document.lookup_direct(pdf_name_key("/S"), dictionary) {
-            Some(@syntax.PdfNameObject(name)) => pdf_accessibility_name(name)
-            _ => "NonStruct"
-          }
-          let roles : Map[String, Bool] = Map([])
-          for _ in 0..<16 {
-            if roles.contains(tag) {
-              break
-            }
-            roles[tag] = true
-            match
-              document.lookup_direct(pdf_name_key("/" + tag), self.role_map) {
-              Some(@syntax.PdfNameObject(name)) =>
-                tag = pdf_accessibility_name(name)
-              _ => break
-            }
-          }
+          let (tag, role_namespace) = pdf_accessibility_role(
+            document,
+            dictionary,
+            self.role_map,
+          )
           let alt = pdf_annotation_layer_string(document, dictionary, "/Alt")
           let actual = pdf_annotation_layer_string(
             document, dictionary, "/ActualText",
@@ -438,6 +425,7 @@ fn PdfAccessibilityTree::walk(
             {
               "type": "element",
               "tag": tag,
+              "namespace": pdf_annotation_layer_optional(role_namespace),
               "children": children,
               "lang": pdf_annotation_layer_optional(
                 pdf_annotation_layer_string(document, dictionary, "/Lang"),

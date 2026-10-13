@@ -19,6 +19,7 @@ fn editor_refresh_layers() -> Unit {
   }
   set_data(element("pages"), "editing", editor.enabled.to_string())
   set_data(element("pages"), "editTool", editor.tool)
+  editor_refresh_xfa_fields()
 }
 
 ///|

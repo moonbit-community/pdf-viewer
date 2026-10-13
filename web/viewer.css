@@ -395,6 +395,23 @@ main:focus-visible {
   background: #f59e0b99;
   outline: 1px solid #d97706;
 }
+#pages[data-search-ranges="true"] .pdf-search-hit,
+#pages[data-search-ranges="true"] .pdf-search-active {
+  background: transparent;
+  outline: none;
+}
+::highlight(pdf-search-hit) {
+  background-color: #facc1555;
+  color: transparent;
+}
+::highlight(pdf-search-active) {
+  background-color: #f59e0b99;
+  color: transparent;
+}
+.xfaLayer ::highlight(pdf-search-hit),
+.xfaLayer ::highlight(pdf-search-active) {
+  color: inherit;
+}
 #empty-state {
   text-align: center;
   color: #607087;
