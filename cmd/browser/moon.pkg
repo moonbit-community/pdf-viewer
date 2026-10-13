@@ -6,6 +6,10 @@ import {
   "moonbitlang/pdflite/core",
 }
 
+import {
+  "moonbitlang/core/encoding/utf8",
+} for "wbtest"
+
 supported_targets = "js"
 
 options(

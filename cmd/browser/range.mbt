@@ -103,6 +103,8 @@ pub fn range_document() -> String {
       // Hydration only adds objects from the same validated source. Completed
       // page models are independent snapshots and remain valid in the bounded
       // page cache, including when their encoded streams have been evicted.
+      // New structure-tree objects may complete semantic metadata for a page.
+      browser_clear_page_accessibility()
       current_document.val = Some(view)
       ({ "ok": true, "pages": view.page_count() } : Json).stringify()
     }

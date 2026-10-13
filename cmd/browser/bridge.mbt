@@ -298,13 +298,7 @@ fn browser_render_page(
       "accessibility": if printing {
         Json::null()
       } else {
-        match current_document.val {
-          Some(document) =>
-            (document.accessibility_page_json(number, page_model=Some(page)) catch {
-              _ => None
-            }).unwrap_or(Json::null())
-          None => Json::null()
-        }
+        browser_page_accessibility(number, page)
       },
       "intent": if printing {
         "print"
