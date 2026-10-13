@@ -1,16 +1,16 @@
 ///|
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/process",
-  "moonbitlang/async/shell",
-  "moonbitlang/async/http",
-  "moonbitlang/async/websocket",
+  "moonbitlang/async@0.22.4",
+  "moonbitlang/async@0.22.4/fs",
+  "moonbitlang/async@0.22.4/process",
+  "moonbitlang/async@0.22.4/shell",
+  "moonbitlang/async@0.22.4/http",
+  "moonbitlang/async@0.22.4/websocket",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/base64",
   "moonbitlang/core/encoding/utf8",
-  "moonbitlang/pdflite",
+  "moonbitlang/pdflite@0.2.2",
 }
 
 ///|

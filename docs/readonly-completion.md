@@ -86,6 +86,10 @@ native tests require real LittleCMS and JBIG2 capabilities; unsupported hosts
 assert their explicit fallback instead of unwrapping missing engines.
 [Toolchain pins](../tools/ci/toolchain.json) include official archive checksums,
 MoonBit/core, Node, Playwright, codec packages and the PDF.js source revision.
+Standalone `.mbtx` tools also pin dependency imports to the project's versions;
+the scope gate rejects missing pins and version drift. Script mode resolves its
+own dependency graph, so an unversioned import can otherwise pick a newly
+published library incompatible with the fixed compiler on a clean runner.
 The official versioned MoonBit archives expire on 2026-11-20; update the pins
 and checksums before that date. The installer rejects an existing destination.
 

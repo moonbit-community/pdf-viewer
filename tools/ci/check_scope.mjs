@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,readdirSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 const read=path=>JSON.parse(readFileSync(path,'utf8'));
 const todo=readFileSync('docs/TODO.md','utf8');
@@ -15,7 +15,18 @@ const gaps=[...gapTable.matchAll(/^\|[^\n]*\| (\d+) \| (?:—|[^|]+) \|$/gm)];
 assert.equal(gaps.length,14,'Capability table must cover 14 domains');
 assert.equal(gaps.reduce((sum,row)=>sum+Number(row[1]),0),0,'Remaining domain counts disagree with the checklist');
 const pins=read('tools/ci/toolchain.json'),revision=pins.pdfjs_reference;
-assert.ok(readFileSync('moon.mod','utf8').includes(`"moonbit-community/rabbita@${pins.rabbita}"`),'Frontend dependency and toolchain pins disagree');
+const moduleSource=readFileSync('moon.mod','utf8');
+assert.ok(moduleSource.includes(`"moonbit-community/rabbita@${pins.rabbita}"`),'Frontend dependency and toolchain pins disagree');
+const dependencies=new Map([...moduleSource.match(/^import \{([\s\S]*?)^\}/m)[1].matchAll(/"([^"@]+)@([^"]+)"/g)].map(match=>[match[1],match[2]]));
+for(const file of readdirSync('tools').filter(file=>file.endsWith('.mbtx'))){
+  const imports=readFileSync('tools/'+file,'utf8').match(/^import \{([\s\S]*?)^\}/m)?.[1]||'';
+  for(const match of imports.matchAll(/"([^/"@]+\/[^/"@]+)(?:@([^/"]+))?(?:\/[^"]+)?"/g)){
+    const [,name,version]=match;
+    if(name==='moonbitlang/core'||name==='moonbit-community/pdf-viewer')continue;
+    assert.ok(version,`${file}: unpinned script dependency ${name}`);
+    if(dependencies.has(name))assert.equal(version,dependencies.get(name),`${file}: dependency differs from moon.mod`);
+  }
+}
 assert.equal(read('tools/ci/corpus.json').reference_revision,revision);
 assert.equal(read('tools/ci/visual_cases.json').reference_revision,revision);
 for(const path of ['tools/ci/visual_baseline.json','tools/ci/visual_baseline_linux.json'])assert.equal(read(path).reference_revision,revision);
@@ -30,4 +41,4 @@ for(const item of provenance.authored_pdfs){
 }
 const jpeg=readFileSync('internal/engine/image_jpeg_wbtest.mbt','utf8').split('test "single-component JPEG sampling factors preserve raster block order"')[1].match(/@base64\.decode\(\s*"([^"]+)"/)[1];
 assert.equal(createHash('sha256').update(Buffer.from(jpeg,'base64')).digest('hex'),provenance.gray_jpeg.sha256);
-console.log('50 readonly IDs, fixed reference versions, authored fixtures and vendored licenses/checksums verified.');
+console.log('50 readonly IDs, script dependency pins, fixed reference versions, authored fixtures and vendored licenses/checksums verified.');

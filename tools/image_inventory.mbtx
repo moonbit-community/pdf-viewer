@@ -1,12 +1,12 @@
 ///|
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+  "moonbitlang/async@0.22.4",
+  "moonbitlang/async@0.22.4/fs",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/env",
-  "moonbitlang/pdflite",
-  "moonbitlang/pdflite/core",
-  "moonbitlang/pdflite/syntax",
+  "moonbitlang/pdflite@0.2.2",
+  "moonbitlang/pdflite@0.2.2/core",
+  "moonbitlang/pdflite@0.2.2/syntax",
 }
 
 ///|

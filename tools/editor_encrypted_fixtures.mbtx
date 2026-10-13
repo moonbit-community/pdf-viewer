@@ -1,10 +1,10 @@
 ///|
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+  "moonbitlang/async@0.22.4",
+  "moonbitlang/async@0.22.4/fs",
   "moonbitlang/core/env",
-  "moonbitlang/pdflite",
-  "moonbitlang/pdflite/crypt_core",
+  "moonbitlang/pdflite@0.2.2",
+  "moonbitlang/pdflite@0.2.2/crypt_core",
 }
 
 ///|
