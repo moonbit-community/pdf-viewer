@@ -296,6 +296,27 @@ fn pdf_image_colour_png(
     alpha is None &&
     !embedded_alpha &&
     paints
+  if cache_bytes &&
+    components == 3 &&
+    draw_width == width &&
+    draw_height == height &&
+    transform is Icc(Some(icc), alternate, icc_ranges) {
+    return Some(
+      (
+        width,
+        height,
+        pdf_png_of_scanline_bytes(
+          width,
+          height,
+          2,
+          pdf_image_icc_rgb_rows(
+            bytes, width, height, row_bytes, decode, ranges, icc, alternate, icc_ranges,
+          ),
+        ),
+        false,
+      ),
+    )
+  }
   let retained_values = Array::make(components, 0.0)
   // Device bytes with identity Decode already are display samples. Preserve
   // their exact values without allocating/converting a component vector for
@@ -325,6 +346,21 @@ fn pdf_image_colour_png(
     scanline_position += 1
     let source_y = (y.to_double() * height.to_double() / draw_height.to_double()).to_int()
     let row = bytes[source_y * row_bytes:(source_y + 1) * row_bytes]
+    if direct_bytes &&
+      components == 3 &&
+      draw_width == width &&
+      retained_components is None {
+      // Identity RGB rows already contain the exact output bytes. Use the
+      // core byte copy instead of coordinate math and three stores per pixel.
+      scanlines.blit_from_bytes(
+        scanline_position,
+        bytes,
+        source_y * row_bytes,
+        draw_width * 3,
+      )
+      scanline_position += draw_width * 3
+      continue
+    }
     for x in 0..<draw_width {
       let source_x = (x.to_double() * width.to_double() / draw_width.to_double()).to_int()
       if direct_bytes {

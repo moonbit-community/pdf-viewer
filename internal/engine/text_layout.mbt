@@ -4,10 +4,11 @@ fn pdf_apply_extgstate_font_for_viewer(
   document : @pdflite.PdfDocument,
   state : @pdflite.PdfContentOperatorState,
   extgstate : @syntax.PdfObject,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> @pdflite.PdfContentOperatorState raise @core.PdfError {
   match document.lookup_direct(pdf_name_key("/Font"), extgstate) {
     Some(@syntax.PdfArray([@syntax.PdfIndirect(number) as object, size])) => {
-      let font = pdf_read_font_for_viewer(document, object)
+      let font = pdf_read_font_for_viewer(document, object, resource_context~)
       let font_size = document.get_number(size) catch {
         _ => state.text_state.font_size
       }
@@ -34,6 +35,7 @@ fn pdf_apply_op_for_viewer(
   resources : @syntax.PdfObject,
   op : @content.PdfContentOp,
   font_object : @syntax.PdfObject?,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> (
   @pdflite.PdfContentOperatorResourceResult,
   Array[@pdflite.PdfContentTextGlyphPlacement],
@@ -45,24 +47,20 @@ fn pdf_apply_op_for_viewer(
   match op {
     @content.Op_Tf(_, _) => {
       let text_state = state.text_state.content_apply_text_state_op(op)
+      // Always resolve the current resource binding: a recovered unmatched Q
+      // can restore a parent's name cache inside a different Form dictionary.
+      // The page context shares indirect fonts by object number instead.
       let current_font = match
         pdf_viewer_ttf_font_object(document, resources, text_state.font) {
-        Some(object) => pdf_read_font_for_viewer(document, object)
+        Some(object) =>
+          pdf_read_font_for_viewer(document, object, resource_context~)
         None => state.text_state.current_font
       }
-      (
-        {
-          state: {
-            ..state,
-            text_state: text_state.content_cache_font(
-              text_state.font,
-              current_font,
-            ),
-          },
-          entries: [],
-        },
-        [],
+      let text_state = text_state.content_cache_font(
+        text_state.font,
+        current_font,
       )
+      ({ state: { ..state, text_state, }, entries: [], }, [])
     }
     @content.Op_Tj(_)
     | @content.Op_TJ(_)

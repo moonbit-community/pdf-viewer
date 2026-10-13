@@ -1,4 +1,165 @@
 ///|
+#cfg(target="js")
+extern "js" fn font_recovery_same_instance(
+  left : @pdflite.PdfFont,
+  right : @pdflite.PdfFont,
+) -> Bool =
+  #| (left, right) => left === right
+
+///|
+#cfg(target="js")
+test "indirect font aliases share one page build and release with its context" {
+  let viewer = type1_test_clip_document("")
+  let context = pdf_resource_build_context()
+  let first = pdf_read_font_for_viewer(
+    viewer.document,
+    @syntax.PdfIndirect(5),
+    resource_context=Some(context),
+  )
+  let second = pdf_read_font_for_viewer(
+    viewer.document,
+    @syntax.PdfIndirect(5),
+    resource_context=Some(context),
+  )
+  assert_true(font_recovery_same_instance(first, second))
+  let other = pdf_read_font_for_viewer(
+    viewer.document,
+    @syntax.PdfIndirect(5),
+    resource_context=Some(pdf_resource_build_context()),
+  )
+  assert_true(!font_recovery_same_instance(first, other))
+  assert_eq(context.font_cache.length(), 1)
+  // A full context still parses new fonts, without retaining more entries.
+  context.font_cache.clear()
+  for number in 100..<228 {
+    context.font_cache[number] = first
+  }
+  let uncached = pdf_read_font_for_viewer(
+    viewer.document,
+    @syntax.PdfIndirect(5),
+    resource_context=Some(context),
+  )
+  assert_eq(uncached, first)
+  assert_true(!font_recovery_same_instance(first, uncached))
+  assert_eq(context.font_cache.length(), 128)
+  assert_true(!context.font_cache.contains(5))
+}
+
+///|
+#cfg(target="js")
+test "repeated Tf reuses its recovered font while changing text size" {
+  let viewer = type1_test_clip_document("")
+  let document = viewer.document
+  let resources = document
+    .lookup_direct(
+      pdf_name_key("/Resources"),
+      document.lookup_object_or_null(3),
+    )
+    .unwrap()
+  let context = pdf_resource_build_context()
+  let initial = @pdflite.pdf_content_initial_operator_state(0, 0, 200, 200)
+  let (first, _) = pdf_apply_op_for_viewer(
+    document,
+    initial,
+    resources,
+    @content.Op_Tf(pdf_name_key("/F1"), 12.0),
+    None,
+    resource_context=Some(context),
+  )
+  let (second, _) = pdf_apply_op_for_viewer(
+    document,
+    first.state,
+    resources,
+    @content.Op_Tf(pdf_name_key("/F1"), 24.0),
+    None,
+    resource_context=Some(context),
+  )
+  assert_true(
+    font_recovery_same_instance(
+      first.state.text_state.current_font,
+      second.state.text_state.current_font,
+    ),
+  )
+  assert_eq(second.state.text_state.font_size, 24.0)
+  assert_eq(second.state.text_state.font_cache.length(), 1)
+}
+
+///|
+test "missing Tf always inherits the currently active font" {
+  let page = annotation_test_page(
+    [],
+    contents="BT /F1 10 Tf /Missing 10 Tf 20 100 Td (A) Tj /F2 10 Tf /Missing 10 Tf (A) Tj /F1 20 Tf (A) Tj ET",
+    resources="<< /Font << /F1 5 0 R /F2 6 0 R >> >>",
+    extra=[
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>",
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    ],
+  )
+  let text = page.text_content().items
+  assert_eq(text.length(), 3)
+  assert_eq(text[0].advance_x, 6.0)
+  assert_true((text[1].advance_x - 6.67).abs() < 0.000001)
+  assert_eq(text[2].advance_x, 12.0)
+}
+
+///|
+test "repeated Tf keeps same-named Form resources separate" {
+  let page = annotation_test_page(
+    [],
+    contents="BT /F1 10 Tf 20 100 Td (A) Tj /F1 20 Tf (A) Tj ET /Fm Do BT /F1 10 Tf 20 80 Td (A) Tj ET",
+    resources="<< /Font << /F1 5 0 R >> /XObject << /Fm 6 0 R >> >>",
+    extra=[
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>",
+      annotation_test_stream(
+        "/Type /XObject /Subtype /Form /BBox [0 0 200 200] /Resources << /Font << /F1 7 0 R >> >>",
+        "BT /F1 10 Tf 20 60 Td (A) Tj /F1 20 Tf (A) Tj ET",
+      ),
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    ],
+  )
+  let text = page.items.filter_map(item => {
+    match item {
+      Text(text) => Some(text)
+      _ => None
+    }
+  })
+  assert_eq(text.length(), 5)
+  assert_eq(text[0].advance_x, 6.0)
+  assert_eq(text[1].advance_x, 12.0)
+  assert_true((text[2].advance_x - 6.67).abs() < 0.000001)
+  assert_true((text[3].advance_x - 13.34).abs() < 0.000001)
+  assert_eq(text[4].advance_x, 6.0)
+}
+
+///|
+test "Form unmatched Q recovery cannot reuse an outer same-named font" {
+  let page = annotation_test_page(
+    [],
+    contents="BT /F1 10 Tf 20 100 Td (A) Tj ET /Fm Do BT /F1 10 Tf 20 80 Td (A) Tj ET",
+    resources="<< /Font << /F1 5 0 R >> /XObject << /Fm 6 0 R >> >>",
+    extra=[
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>",
+      annotation_test_stream(
+        "/Type /XObject /Subtype /Form /BBox [0 0 200 200] /Resources << /Font << /F1 7 0 R >> >>",
+        "BT /F1 10 Tf (A) Tj Q /F1 10 Tf (A) Tj ET",
+      ),
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    ],
+  )
+  let text = page.items.filter_map(item => {
+    match item {
+      Text(text) => Some(text)
+      _ => None
+    }
+  })
+  assert_eq(text.length(), 4)
+  assert_eq(text[0].advance_x, 6.0)
+  assert_true((text[1].advance_x - 6.67).abs() < 0.000001)
+  assert_true((text[2].advance_x - 6.67).abs() < 0.000001)
+  assert_eq(text[3].advance_x, 6.0)
+}
+
+///|
 test "missing CID descriptors recover text and widths without changing source objects" {
   let document = annotation_test_document([
     "<< /Type /Catalog /Pages 2 0 R >>",

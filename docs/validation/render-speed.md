@@ -15,6 +15,8 @@ PDF_BENCH_PROFILE=1 node tools/render_benchmark.mjs /path/to/document.pdf 1,2,12
 PDF_BROWSER=chromium PDF_BENCH_PROFILE=1 node tools/render_benchmark.mjs /path/to/document.pdf 1,2,12
 PDF_BENCH_REPLAYS=9 PDF_BENCH_PROFILE=1 node tools/render_benchmark.mjs /path/to/document.pdf 2,12
 node tools/pixels/profile_page_stages.mjs /path/to/document.pdf _build/stages.json 1,2,12
+PDF_BENCH_BASELINE_ROOT=/path/to/previous/static-build PDF_BENCH_SAMPLES=6 node tools/first_load_benchmark.mjs /path/to/document.pdf
+PDF_BROWSER=chromium PDF_BENCH_BASELINE_ROOT=/path/to/previous/static-build PDF_BENCH_SAMPLES=6 node tools/first_load_benchmark.mjs /path/to/document.pdf
 ```
 
 Browser runs use DPR 2 and matching Canvas dimensions (2432 x 3436 for this
@@ -37,6 +39,75 @@ Ordinary and freshly cloned Canvas plans also produce complete RGBA SHA-256
 hashes. Before/after runs check identical input bytes, reference revision,
 browser engine, DPR, output dimensions, reader pixels and reference pixels.
 Cloning and hashing run outside the reported paint/flush measurements.
+
+## First-page measurement
+
+`first_load_benchmark.mjs` opens the unchanged packaged reader through its
+ordinary file input, with a fresh browser context and Worker for every sample.
+The reader shell and PDF.js module finish loading before timing. Both sides
+start from a `File` read, with document parsing, Worker startup and the first
+page's resource preparation included. Complete Canvas output is followed by
+a one-pixel flush and two animation frames; full-page hashing happens afterwards.
+
+When `PDF_BENCH_BASELINE_ROOT` is set, old and new artifacts run sequentially in
+alternating order within each sample. The tool records module hashes, matching
+Canvas dimensions, individual samples and medians. It rejects any changed
+reader pixel, input or reference revision. The separate reader-ready marker
+means the page, text, annotations and fonts have mounted and the reader is no
+longer busy; document metadata may still be pending. PDF.js uses its Canvas API
+without its viewer UI or text/annotation layers. These measurements assess
+first-page Canvas visibility rather than complete reader feature parity or
+cold OS/browser caches. They exclude downloading the input PDF and application
+shell from a remote host.
+
+Six paired fresh opens compare `87efa0c` with the font and image-row changes
+below. These are medians from each browser's same sequential A/B batch, including
+the first page's pixel flush and two animation frames.
+
+| Browser | Before | After | Reduction | PDF.js Canvas API |
+| --- | ---: | ---: | ---: | ---: |
+| WebKit 26.0 | 1304.5 ms | 1185.5 ms | 9.1% | 330.0 ms |
+| Chromium 145.0.7632.6 | 948.9 ms | 863.6 ms | 9.0% | 168.0 ms |
+
+Every WebKit pair is faster; five of six Chromium pairs are faster. This input
+still opens substantially slower than the PDF.js Canvas reference. The reference
+does not mount reader UI, text or annotation layers. These results use pinned
+Playwright engines, rather than the user's installed Safari. Complete before/
+after first-page RGBA hashes match within each engine.
+
+## Fixed: repeated font parsing and RGB pixel work on first open
+
+Indirect fonts previously ran the recovery/Unicode reader again at every `Tf`
+and ExtGState font binding. The page's existing resource context now shares
+successful parsed fonts by indirect object number, capped at 128 entries and
+discarded after the build. This also spans nested Forms, patterns, masks and
+Type3 scenes. Each binding still resolves the current resource dictionary,
+including after unmatched `Q` recovery; direct font dictionaries retain the
+original reader path. Failed reads are not retained, and font, editing,
+document and Range retries receive fresh page contexts.
+
+On this input's first page, the expensive font recovery reader runs 57 times
+instead of 148. Font sharing and RGB row copies alone did not produce a stable
+first-page gain in paired browser runs; the reported speedup includes the
+compact ICC loop below.
+
+Opaque 8-bit identity RGB images already have exact display bytes. When the
+horizontal source size is unchanged and process samples are not retained,
+the image converter copies each row with the core byte primitive instead of
+repeating coordinate arithmetic and channel stores for every pixel. Row
+padding and the source row stride remain separate from PNG row filters.
+Masks, changed Decode arrays, calibrated/ICC colours, horizontal resampling
+and retained process components continue through their original sample rules.
+
+The two large opaque ICC RGB images on the first page contain about 1.56 million
+pixels. The existing colour cache already limited CMM calls to 2584, but every
+pixel still traversed the generic image converter's coordinate, state and
+component-key branches. A compact loop now keeps only exact packed output RGB
+bytes for these unscaled 8-bit images. Its 4096-entry palette uses the same
+Decode, source/ICC range clipping, LittleCMS and byte rounding. Failed transforms
+use the same Alternate conversion without retaining it as a successful colour;
+masks, alpha, retained components and resizing keep the general converter.
+Both complete PNG bytes and all 13 page render payloads remain byte-identical.
 
 ## Fixed: semantic work repeated on cached pages
 

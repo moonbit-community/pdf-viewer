@@ -522,6 +522,7 @@ fn pdf_collected_entries_of_ops(
               resources,
               op,
               text_source_scope.bind(scope => scope.font_object),
+              resource_context=Some(resource_context),
             )
             let mut glyph_index = 0
             for entry in result.entries {
@@ -621,7 +622,9 @@ fn pdf_collected_entries_of_ops(
         state = result.state
       }
       @content.Op_gs(name) => {
-        state = pdf_apply_extgstate_for_viewer(document, state, resources, name)
+        state = pdf_apply_extgstate_for_viewer(
+          document, state, resources, name, resource_context,
+        )
         soft_mask = pdf_update_soft_mask_for_viewer(
           document,
           resources,
@@ -704,6 +707,7 @@ fn pdf_collected_entries_of_ops(
           resources,
           op,
           text_source_scope.bind(scope => scope.font_object),
+          resource_context=Some(resource_context),
         )
         if op is @content.Op_BT {
           pending_text_clip.clear()
@@ -1612,6 +1616,7 @@ fn pdf_apply_extgstate_for_viewer(
   state : @pdflite.PdfContentOperatorState,
   resources : @syntax.PdfObject,
   name : @core.PdfName,
+  resource_context : PdfResourceBuildContext,
 ) -> @pdflite.PdfContentOperatorState raise @core.PdfError {
   let extgstate_name = @core.pdf_name_of_bytes(@utf8.encode("/ExtGState"))
   match document.lookup_direct(extgstate_name, resources) {
@@ -1624,7 +1629,10 @@ fn pdf_apply_extgstate_for_viewer(
           )
           output = document.content_apply_extgstate_dash_op(output, extgstate)
           output = pdf_apply_extgstate_font_for_viewer(
-            document, output, extgstate,
+            document,
+            output,
+            extgstate,
+            resource_context=Some(resource_context),
           )
           output = document.content_apply_extgstate_overprint_op(
             output, extgstate,

@@ -24,7 +24,7 @@ const patterns=[
  ['encoded image decoding',/pdf__image__encoded__samples$/],
  ['PNG encoding',/pdf__png__of__scanline__bytes$/],
  ['Flate decoding',/pdf__flate__decode__prefix__limited$/],
- ['font loading',/pdf__read__font__for__viewer$/],
+ ['font loading',/pdf__read__font__for__viewer(?:_2einner)?$/],
  ['Type3 lowering',/pdf__type3__outline__of__glyph$/],
  ['Canvas plan',/pdf__canvas__plan$/],
  ['text layer',/PdfPageModel\d+text__layer_2einner$/],
@@ -38,7 +38,11 @@ const patterns=[
  ['JSON stringify',/Json\d+stringify_2einner$/],
 ];
 const names=[...original.matchAll(/^function ([$\w]+)\(/gm)].map(m=>m[1]);
-const selected=names.flatMap(name=>patterns.filter(([,pattern])=>pattern.test(name)).map(([stage])=>({name,stage})));
+// Prefer the throwing implementation when the compiler emits a result wrapper;
+// internal callers can bypass that wrapper, and timing both double-counts work.
+const matched=names.flatMap(name=>patterns.filter(([,pattern])=>pattern.test(name)).map(([stage])=>({name,stage})));
+const selected=matched.filter(({name,stage})=>name.endsWith('_2einner')||
+ !matched.some(candidate=>candidate.stage===stage&&candidate.name.endsWith('_2einner')));
 assert(selected.some(x=>x.stage==='page model')&&selected.some(x=>x.stage==='Canvas plan'),'Compiler names changed: update profiler');
 const unmatched=patterns.filter(([stage])=>!selected.some(x=>x.stage===stage)).map(([stage])=>stage);
 assert.deepEqual(unmatched,[],'Compiler stage names changed: update the profiler before interpreting missing calls');

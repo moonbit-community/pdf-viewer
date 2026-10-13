@@ -85,10 +85,20 @@ actually drawn, including nested tiles and annotation-bearing scenes, still
 produce their normal Canvas output.
 
 Page images use the existing MoonBit Flate whole-buffer encoder and checksum
-library for PNG output. A simple pattern's compatibility SVG borrows images
-already converted for its cell, preserving its original resource indices and
-colour policy. Tagged pages retain at most 16,384 text-source entries for one
-semantic projection, so accessibility does not repeat the content interpreter.
+library for PNG output. Opaque identity RGB rows use the core byte copy when
+their horizontal size is unchanged; decoded masks, calibrated colours and
+retained process samples keep their existing conversion rules. Opaque, unscaled
+8-bit ICC RGB images use an exact 4096-colour byte palette and a compact row
+loop, retaining the same LittleCMS, Decode, clipping and rounding. Failed
+transforms keep retryable Alternate recovery. Indirect fonts
+share at most 128 successful parses within one page build, including nested
+resources. Every binding still resolves its current resource dictionary;
+direct dictionaries follow the original font reader, and page, document,
+editing and Range retries receive fresh contexts. A simple pattern's
+compatibility SVG borrows images already converted for its cell, preserving its
+original resource indices and colour policy. Tagged pages retain at most 16,384
+text-source entries for one semantic projection, so accessibility does not repeat
+the content interpreter.
 Font or layer view changes discard that provenance; uncached projections retain
 the normal collector path.
 
@@ -170,6 +180,16 @@ An additional replay clones the Canvas plan, excluding cloning from paint time,
 and verifies its complete RGBA SHA-256 against the ordinary replay. Reports also
 include PDF.js pixel hashes, allowing before/after comparisons to require
 identical reader and reference pixels within each browser engine.
+`PDF_BENCH_SAMPLES=6 node tools/first_load_benchmark.mjs /path/to/document.pdf`
+measures file opening through the ordinary reader input with fresh browser
+contexts and Workers. `PDF_BENCH_BASELINE_ROOT=/path/to/previous/static-build`
+adds sequential before/after pairs in alternating order. Timing starts after
+the application shell has loaded and ends after the complete first-page Canvas,
+a pixel flush and two animation frames. Full-page hashes are checked afterwards;
+the separate reader-ready marker includes mounted text, annotations and fonts
+but may precede document metadata completion. The PDF.js reference uses its
+Canvas API without reader UI. Both tools use local files and keep their detailed
+reports under ignored `_build/`.
 `node tools/pixels/profile_page_stages.mjs /path/to/document.pdf _build/stages.json 1,2,12`
 profiles the readable release bridge on Node, checks cached Canvas/semantic
 hashes, and separates inclusive stage time from self time. These measurements

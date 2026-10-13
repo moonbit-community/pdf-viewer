@@ -3,6 +3,9 @@
 priv struct PdfResourceBuildContext {
   /// The document view's host policy follows nested pattern/mask resources.
   font_fallbacks : Array[PdfFontFallback]
+  /// Parsed indirect fonts share one page build, including nested resources.
+  /// Direct dictionaries follow the original font reader on every binding.
+  font_cache : Map[Int, @pdflite.PdfFont]
   icc_profiles : Array[PdfIccProfile]
   icc_profile_keys : Array[(@syntax.PdfObject, Int, String?)]
   mut icc_profile_bytes : Int
@@ -25,6 +28,7 @@ fn pdf_resource_build_context(
     font_fallbacks: [
       for fallback in font_fallbacks => fallback
     ],
+    font_cache: Map([]),
     icc_profiles: [],
     icc_profile_keys: [],
     icc_profile_bytes: 0,

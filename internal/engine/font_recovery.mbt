@@ -5,8 +5,29 @@
 fn pdf_read_font_for_viewer(
   document : @pdflite.PdfDocument,
   object : @syntax.PdfObject,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> @pdflite.PdfFont raise @core.PdfError {
-  pdf_font_unicode_for_viewer(pdf_read_font_recovery_result(document, object).0)
+  match (resource_context, object) {
+    (Some(context), @syntax.PdfIndirect(number)) => {
+      if context.font_cache.get(number) is Some(font) {
+        return font
+      }
+      let font = pdf_font_unicode_for_viewer(
+        pdf_read_font_recovery_result(document, object).0,
+      )
+      // The context belongs to this page build and is discarded afterwards.
+      // Never retain failures or share indirect object numbers across pages,
+      // documents, editor revisions or Range hydration retries.
+      if context.font_cache.length() < 128 {
+        context.font_cache[number] = font
+      }
+      font
+    }
+    _ =>
+      pdf_font_unicode_for_viewer(
+        pdf_read_font_recovery_result(document, object).0,
+      )
+  }
 }
 
 ///|

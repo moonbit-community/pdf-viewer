@@ -35,6 +35,140 @@ fn colour_image_scanlines(resource : PdfImageResource) -> Array[Int] raise {
 }
 
 ///|
+test "identity RGB row copies preserve row filters and exclude Decode changes" {
+  let resource = colour_image_fixture(
+    "/DeviceRGB",
+    8,
+    "0102037D7EFF80FEFFFF0080",
+    width=2,
+    height=2,
+  )
+  assert_eq(colour_image_scanlines(resource), [
+    0, 1, 2, 3, 125, 126, 255, 0, 128, 254, 255, 255, 0, 128,
+  ])
+  let reversed = colour_image_fixture(
+    "/DeviceRGB",
+    8,
+    "0102037D7EFF80FEFFFF0080",
+    width=2,
+    height=2,
+    extra="/Decode [1 0 1 0 1 0]",
+  )
+  assert_eq(colour_image_scanlines(reversed), [
+    0, 254, 253, 252, 130, 129, 0, 0, 127, 1, 0, 0, 255, 127,
+  ])
+}
+
+///|
+test "opaque ICC rows reuse exact bytes and preserve source row padding" {
+  let calls = Ref(0)
+  let icc : PdfIccTransform = {
+    convert: values => {
+      calls.val += 1
+      (values[0], values[1], values[2])
+    },
+  }
+  let result = pdf_image_icc_rgb_rows(
+    b"\x00\x7F\xFF\x00\x7F\xFF\xCC\xCC\xFF\x00\x40\xFF\x00\x40\xBB\xBB",
+    2,
+    2,
+    8,
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+    icc,
+    Samples(@pdflite.PdfDeviceRGB),
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+  )
+  assert_eq(result, b"\x00\x00\x7F\xFF\x00\x7F\xFF\x00\xFF\x00\x40\xFF\x00\x40")
+  assert_eq(calls.val, 2)
+}
+
+///|
+test "opaque ICC rows apply Decode then source and ICC ranges" {
+  let observed : Ref[Array[Double]] = Ref([])
+  let icc : PdfIccTransform = {
+    convert: values => {
+      observed.val = [ for value in values => value ]
+      (values[0], values[1], values[2])
+    },
+  }
+  let result = pdf_image_icc_rgb_rows(
+    b"\x00\x7F\xFF",
+    1,
+    1,
+    3,
+    [(1.0, 0.0), (0.2, 0.8), (-1.0, 2.0)],
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+    icc,
+    Samples(@pdflite.PdfDeviceRGB),
+    [(0.1, 0.9), (0.3, 0.4), (0.05, 0.95)],
+  )
+  assert_eq(observed.val, [0.9, 0.4, 0.95])
+  assert_eq(result, b"\x00\xE6\x66\xF2")
+}
+
+///|
+test "opaque ICC rows retry failed transforms and cache only successful colours" {
+  let calls = Ref(0)
+  let icc : PdfIccTransform = {
+    convert: _ => {
+      calls.val += 1
+      if calls.val == 1 {
+        (0.0 / 0.0, 0.0, 0.0)
+      } else {
+        (0.1, 0.2, 0.3)
+      }
+    },
+  }
+  let result = pdf_image_icc_rgb_rows(
+    b"\x00\x7F\xFF\x00\x7F\xFF\x00\x7F\xFF",
+    3,
+    1,
+    9,
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+    icc,
+    Samples(@pdflite.PdfDeviceRGB),
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+  )
+  assert_eq(result, b"\x00\x00\x7F\xFF\x1A\x33\x4D\x1A\x33\x4D")
+  assert_eq(calls.val, 2)
+}
+
+///|
+test "opaque ICC row palettes remain bounded and retain earlier successes" {
+  let width = 4099
+  let data = FixedArray::make(width * 3, b'\x00')
+  for x in 0..<width {
+    let key = if x == 4097 { 4096 } else if x == 4098 { 0 } else { x }
+    data[x * 3] = (key >> 16).to_byte()
+    data[x * 3 + 1] = ((key >> 8) & 255).to_byte()
+    data[x * 3 + 2] = (key & 255).to_byte()
+  }
+  let calls = Ref(0)
+  let icc : PdfIccTransform = {
+    convert: values => {
+      calls.val += 1
+      (values[0], values[1], values[2])
+    },
+  }
+  let result = pdf_image_icc_rgb_rows(
+    Bytes::from_array(data),
+    width,
+    1,
+    width * 3,
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+    icc,
+    Samples(@pdflite.PdfDeviceRGB),
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+  )
+  assert_eq(calls.val, 4098)
+  assert_eq(result.length(), width * 3 + 1)
+  assert_eq(result[1:], Bytes::from_array(data))
+}
+
+///|
 test "raw CalGray images preserve gamma through PDF filters and PNG pixels" {
   let resource = colour_image_fixture(
     "[/CalGray << /WhitePoint [1 1 1] /Gamma 2 >>]",
