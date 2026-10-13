@@ -77,7 +77,11 @@ Packaged acceptance rejects secondary startup JS requests and checks both
 adapter readiness and actual JBIG2/ICC pixels, alongside XFA rendering, editing
 and cancellation. The new startup request check fails against the previous
 unbundled artifact. This removes the module fetch waterfall; recovery from the
-observed live timeout still requires a deployment check.
+observed live timeout needs separate evidence. After deployment, all eight live
+WebKit checks passed. The first concurrent Chromium check still hit the startup
+deadline; a fresh, separate Chromium run passed all eight checks. Published
+Worker bytes match the local artifact. These checks verify the deployed build,
+but do not establish that intermittent startup waiting has been eliminated.
 
 ## Remaining costs
 
