@@ -222,10 +222,10 @@ A1 独立收尾记录为四后端 374 个测试通过及 39 项浏览器交互�
 - [x] U-04 / P1：库层 `PdfViewerDocument::search()` 返回页码、源 UTF-16 offset/length、原文、bounds 和 item indices；支持大小写、Unicode 分类的整词与 NFKD 归一化/变音符号折叠，并以源字符区间映射展开折叠后的长度。浏览器桥接暴露 `search_pdf`，搜索栏支持选项、结果计数、上下结果、滚动定位和 item 级高亮；空查询、重新打开文件和缩放/旋转后的重绘都会清理或重投影状态。209 个四后端测试和 33 项 Chromium 检查通过，变音符号映射回归见 [validation.md](validation.md#text-search)。A1 已接入 Unicode 16 NFKD，7 项新增搜索回归覆盖连字、兼容字符、canonical mark 重排、supplementary offset 和独立组合符号；复杂阅读顺序/bidi 主路径由 T-01 验证。宿主搜索现在异步运行于 Worker；完整 locale/case-fold 策略和跨 item 的精确字符高亮仍未完成。
 - [x] U-05 / P1：缩略图、连续/单页模式和 `#page=N` 历史保留；轻量页面尺寸不解释内容，正文与缩略图只挂载可见邻近项，缩放/旋转取消旧任务。跨页/全选复制通过来源 API 读取未挂载页，仅保留选区端点附近 DOM。工具栏和 Ctrl/Cmd+P 按原始尺寸准备全部页面、等待字体/图片并在 afterprint 释放；真实导出验证 200 页及 Rotate/UserUnit，重复打印与文档替换无旧结果覆盖。浏览器菜单的直接打印需先走该入口；批注/链接 DOM 和屏幕/打印切换已由 A-04 接通。见 [浏览器宿主验证](validation.md#browser-host-lifecycle-scheduling-and-pressure)。
 - [x] X-01 / P1：`accessibility_page_json(n)` 关联页级 MCID、stream/Form 调用、ParentTree、RoleMap、语言/Alt/ActualText 和批注 OBJR；几何段落保留未关联的可见文字。独立 DOM/ARIA 层按结构树顺序暴露标题、段落、列表、表格及原生批注控件，装饰内容和 glyph 重复旁白被排除，source indices 不重编号。真实 `structure_simple.pdf`、`issue6782.pdf`、Unicode fallback 和自建两页 fixture 的 Chromium AX、键盘分页、复制、重绘/替换检查通过；循环/深度和跨页/重复 Form 隔离有四后端回归。逐页旁白随虚拟化挂载，复制/搜索仍使用 A1 来源顺序；PDF/UA、人工 VoiceOver/NVDA 验收及 namespace/MathML 扩展不在本次主路径结论内。见 [可访问性验收](validation.md#tagged-page-accessibility-and-source-association)。
-- [x] X-02 / P2：复用固定 PDF.js 纯 XFA 组件，支持模板/数据绑定、字体适配、分页、只读原生控件、来源选择/搜索和全页打印；static XFA 保留 PDF 外观。真实 7 页文档通过，脚本/编辑和外部图像引用不执行。见 [收尾验收](readonly-completion.md#dynamic-xfa)。
+- [x] X-02 / P2：复用固定 PDF.js 纯 XFA 组件，支持模板/数据绑定、字体适配、分页、只读原生控件、来源选择/搜索和全页打印；static XFA 保留 PDF 外观。真实 7 页文档通过，脚本和外部图像引用不执行；绑定字段编辑另见 [编辑验收](editor.md)。见 [收尾验收](readonly-completion.md#dynamic-xfa)。
 - [x] V-01 / P0：`tools/visual_test.mbtx` 使用固定 PDF.js 版本和同一 Chromium，测量清单内全部页面/旋转；历史基线在 `_build/visual-test-1791598324155/` 完成 57/57 个组合测量，0 个失败，55 个存在像素或文本差异，2 个在记录的容差内；包含 `/UserUnit 72` 的 `issue19176.pdf` 与 PDF.js 得到 0 像素差异。`standard_fonts.pdf` 14 页以及 CalGray/CalRGB/Lab、DeviceN 和 color-key mask 均已测量；色块的定向抽样保留为额外诊断，整页差异照常计数。`--strict` 会拒绝差异，输入或渲染失败计入失败数。7 个分类器测试和独立 runner 合约检查覆盖正确匹配、明显错位、漏画及缺失输入。具体结果和限制见 [validation.md](validation.md#automated-pdfjs-visual-baseline)。后续每个渲染功能都要扩大这份基线。
 - [x] V-02 / P1：Worker 页面模型 LRU 限 8 页/估算 32 MiB，字体/图片随模型驱逐；Canvas plan/SVG/text-layer 序列化缓存限 12 项/24 MiB，宿主字体宽度缓存限 4,096 项。`runtimeDiagnostics()` 暴露队列、取消、缓存及挂载页。上游独立验收的 53 项 Chromium 检查含 200 页与 12 MiB raw 图片压力、冷热渲染、搜索响应、驱逐、快速重绘和关闭/替换；记录耗时、CDP 主线程/Worker 堆采样峰值及 GC 后保留量。预算限制缓存，原始文档、临时解码、浏览器字体/图片与全页打印不计入其中，不承诺进程 RSS 上限；上述压力数据尚未在 A2 合并后复跑，自然大文件覆盖继续扩充。见 [浏览器宿主验证](validation.md#browser-host-lifecycle-scheduling-and-pressure)。
-- [x] V-03 / P1：四 Moon 后端（含 Linux 必需 native 引擎与 macOS fallback）、26 份固定 SHA corpus、12 个 Canvas 视觉组合、104 项浏览器及差距表检查已接入 CI；锁定工具链/依赖/对照源码，保留许可与输出 artifacts，已知视觉差异有显式门槛。见 [收尾验收](readonly-completion.md#continuous-checks)。
+- [x] V-03 / P1：四 Moon 后端（含 Linux 必需 native 引擎与 macOS fallback）、28 份固定 SHA corpus、12 个 Canvas 视觉组合、110 项阅读器、25 项编辑、11 项图层及 Chromium/WebKit 各 6 项文本交互检查已接入 CI；锁定工具链/依赖/对照源码，保留许可与输出 artifacts，已知视觉差异有显式门槛。见 [收尾验收](readonly-completion.md#continuous-checks)。
 
 ## 推荐推进顺序
 
@@ -243,14 +243,16 @@ A1 独立收尾记录为四后端 374 个测试通过及 39 项浏览器交互�
 
 | 能力 | 已复用 | 已接入与验收 |
 | --- | --- | --- |
-| 批注编辑与保存 | pdflite 批注/对象模型、content ops 与 `pdf_write_document`；DOM/Pointer Events | FreeText/Highlight/Ink/Stamp 新增、文本/样式修改、移动/缩放/删除与撤销/重做；下载重开和 PDF.js 实际绘制 AP |
+| 批注编辑与保存 | pdflite 批注/对象模型、content ops 与增量 writer；DOM/Pointer Events | FreeText/Highlight/Ink/Stamp 新增、文本/样式修改、移动/缩放/删除与撤销/重做；选中文字保留 affine quads，跨页一次撤销；下载重开和 PDF.js 实际绘制 AP |
 | 表单填写与保存 | 原生 input/textarea/select、pdflite 字段模型、外观布局与 writer | Tx/Ch/Btn、跨页共享继承字段、export/display 与重复值索引、radio V/AS、只读/MaxLen；活动输入 Ctrl/Cmd+S 与真实 PDF.js fixture 保存重开 |
 | 手写/图片签名 | Canvas/Pointer Events、既有图像/路径与批注 AP | 多笔画签名、逐笔撤销、透明图片采集、放置/移动/缩放；Ink/Stamp 持久化和 PDF.js 重开绘制 |
+| 动态 XFA 填写与保存 | 固定 XFA binder/XML serializer、pdflite packet/对象模型 | 绑定控件、Unicode/XML 转义、撤销/重做、活动输入保存和重开；保留原模板及无关对象，脚本不执行 |
 
-浏览器下载在有修改时返回完整重写的 PDF；无修改时保留原文件。
+浏览器下载在有修改时默认追加增量 revision；无修改时保留原文件。
 核心采用原文档副本和完整编辑快照，失败不修改原文档；HTTP Range 编辑先完成来源下载，
-保留未访问对象。没有另造 serializer，也未接增量写入。
-14 项核心编辑回归与 25 项 Chromium 编辑检查进入 CI。
+保留未访问对象。复用 pdflite 增量 writer，原始 xref 无法验证时全量重写；
+增量写入保留原字节，不据此保证已有证书签名有效。
+核心编辑回归与 25 项 Chromium 编辑检查进入 CI，新增 6 项文本/XFA/语义检查同时覆盖 Chromium 和 WebKit。
 密码解锁后的 RC4/AES 编辑和保存已接入 pdflite 的 recrypt 接口，保留原密码、
 文件 ID、metadata 加密标志与权限；用户密码受批注/表单权限限制，所有者密码可编辑。
 AES 保存使用浏览器 CSPRNG 提供新 IV，测试确定性 provider 仅用于 fixture。
@@ -260,9 +262,19 @@ AES 保存使用浏览器 CSPRNG 提供新 IV，测试确定性 provider 仅用�
 活动输入先提交，编辑撤销／重做和 Range 补全保留选择。8 项核心与 11 项 Chromium
 回归覆盖作者 fixture 和两份真实 PDF.js 样本；具体边界见 [图层验收](layers.md)。
 
-仍待完成：动态 XFA 编辑、证书/CMS 数字签名、
+搜索已用 CSS Custom Highlights 精确显示原始 UTF-16 子串，保留原 text node 和用户选择；
+PDF/XFA 共用 MoonBit 的 Unicode normalization 与来源区间。无 API 的浏览器回退为 item 高亮。
+原字体可以编码新字符时保留字体与文本 AP，不能编码时才使用浏览器字体的栅格回退。
+namespace RoleMapNS、Formula 与原生 MathML 已接入语义层，XFA 无显式 label 时使用模板字段名。
+
+性能主路径增加普通 RGB/灰度图片直接转换、多 path Type3 轮廓、可独立合成的单位透明度组，
+以及按文档复用的 64 MiB/256 项 decoded raster 缓存；活跃绘制持有 lease，关闭后释放。
+同一私有 13 页 PDF 的 WebKit 第 12 页热缓存 paint/flush 中位数从约 265 ms 降到 118 ms，
+PDF.js 为约 19 ms；此数据不代表首次载入或所有 PDF 的速度，原文件不进入仓库。
+
+仍待完成：证书/CMS 数字签名、
 字段脚本/计算、rich-text 编辑和人工辅助技术验收。图层的缩放／语言／用户环境规则未执行。
-中文新内容保留 Unicode 值，外观可用浏览器字体的栅格回退，不能承诺原字体排版。
+未标记复杂文档的作者阅读顺序、任意字体子集的新字符排版和首次打开速度仍有边界。
 既有整页视觉差异仍保留，不能据此宣称全面对齐 PDF.js。
 
 ## 扩展项与维护

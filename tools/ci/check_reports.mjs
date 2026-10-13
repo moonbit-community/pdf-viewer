@@ -102,6 +102,22 @@ export function checkLayers(report){
   assert.equal(expected.size,0);
 }
 
+export const requiredTextInteractionChecks=[
+  'Search paints precise ranges across a multi-character glyph and another item',
+  'Selected text becomes affine highlight geometry and downloads incrementally',
+  'Cross-page selected highlights undo and redo as one change with rotated page geometry',
+  'Dynamic XFA fills Unicode data with undo redo focused saving and fresh reopen',
+  'XFA access keeps unsupported and locked fields readonly and radio edits survive remount print and reopen',
+  'Tagged PDF namespace headings formulas and MathML expose native accessibility semantics',
+];
+export function checkTextInteraction(report,engine){
+  assert.equal(report.engine,engine,'Wrong browser acceptance report');
+  assert.deepEqual(report.errors,[],'Text interaction raised a browser error');
+  const names=report.checks.map(check=>{assert.equal(check.ok,true,check.name);return check.name;});
+  assert.equal(new Set(names).size,names.length,'Duplicate text interaction checks');
+  for(const name of requiredTextInteractionChecks)assert.ok(names.includes(name),'Missing text interaction regression: '+name);
+}
+
 if(process.argv[1]?.endsWith('/check_reports.mjs')){
   const corpus=latest('reader-corpus-'),visual=latest('visual-test-'),browser=latest('browser-test-');
   checkCorpus(read(`${corpus}/report.json`),read('tools/ci/corpus.json'));
@@ -126,5 +142,8 @@ if(process.argv[1]?.endsWith('/check_reports.mjs')){
   checkEditor(read(editor+'/report.json'));
   const layers=latest('layers-test-');
   checkLayers(read(layers+'/report.json'));
-  console.log(`Accepted corpus, browser, editor, layers and visual reports: ${corpus}, ${browser}, ${editor}, ${layers}, ${visual}. Visual differences remain recorded.`);
+  for(const engine of ['chromium','webkit']){
+    checkTextInteraction(read(latest('text-interaction-'+engine+'-')+'/report.json'),engine);
+  }
+  console.log(`Accepted corpus, browser, editor, layers, text interaction and visual reports: ${corpus}, ${browser}, ${editor}, ${layers}, ${visual}. Visual differences remain recorded.`);
 }

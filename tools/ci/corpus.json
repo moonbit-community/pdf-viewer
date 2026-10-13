@@ -182,6 +182,20 @@
       "expected_passed": true,
       "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/xfa_filled_imm1344e.pdf",
       "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "rotated_ink.pdf",
+      "sha256": "d6c0c27b6adce8fadbcf9b2255daad588c93fd952f006d35397a53dc7b5fd280",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/rotated_ink.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
+    },
+    {
+      "file": "tracemonkey_with_annotations.pdf",
+      "sha256": "4271377f0efc94e1405b0d2a5ce008daa697faf25d8fdfba2e22793d087d9862",
+      "expected_passed": true,
+      "source": "https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/test/pdfs/tracemonkey_with_annotations.pdf",
+      "license": "PDF.js test fixture; retain per-file notices and PDF.js LICENSE. Original document copyright is not reassigned."
     }
   ]
 }

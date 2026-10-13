@@ -18,12 +18,12 @@ tests in [`tests/api/`](tests/api/). See [package boundaries](docs/architecture.
 - Navigate documents with page controls, thumbnails, outlines, and page labels.
 - Toggle PDF layers and configurations, respecting radio groups, locks and display/print usage.
 - Follow PDF links and open readonly annotation comments with mouse or keyboard.
-- Read tagged headings, lists, tables, and alternative text through a page-local DOM/ARIA layer.
-- Zoom, rotate, select and copy text, and search across pages.
+- Read tagged headings, lists, tables, formulas and MathML through a page-local DOM/ARIA layer.
+- Zoom, rotate, select and copy text, and search with exact substring highlights across pages.
 - Decode in a browser Worker, mount nearby pages/thumbnails, and retain bounded page/render caches.
 - Print the complete document at its original page sizes using the toolbar or Ctrl/Cmd+P.
-- Create text annotations, highlights and ink; move, resize, delete, undo and redo edits.
-- Fill AcroForm text, choice, checkbox and radio fields, then download and reopen the edited PDF.
+- Create text annotations, selected-text highlights and ink; move, resize, delete, undo and redo edits.
+- Fill AcroForm and bound dynamic XFA fields, then incrementally save and reopen the edited PDF.
 - Add handwritten or image signatures with portable PDF annotation appearances.
 - Open password-protected documents and inspect document information and attachments.
 - Export native page plans for Canvas rendering, or SVG compatibility output.

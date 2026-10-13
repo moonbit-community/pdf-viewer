@@ -28,8 +28,9 @@ The editor follows the same boundary: `editor_model.mbt` defines its typed state
 undo/redo and saving. Native field mounting and PDF-space pointer geometry live in
 `editor_layers.mbt` and `editor_gestures.mbt`. `editor_platform.mbt` binds pixel
 acquisition, Canvas previews and native control properties. It contains no
-JavaScript editor state or application controller. The root editor package reuses
-pdflite objects, content operations and its complete-document writer; there is no
+JavaScript editor state or application controller. Selection highlights and XFA
+field events live in `editor_selection.mbt` and `editor_xfa.mbt`. The engine reuses
+pdflite objects, content operations and its incremental/complete-document writers; there is no
 second PDF serializer.
 
 Rabbita owns the application DOM. The empty `#pages`, `#print-pages` and thumbnail
@@ -54,8 +55,11 @@ exports still include SVG by default; their optional fourth argument enables
 `omit_svg` and preserves all other page payloads.
 
 Display rendering (`returnPixels: false`) paints ordinary RGB source-over pages
-directly through Canvas2D. Opaque Type3 glyphs containing one filled path reuse
-that path, and empty charprocs skip painting. Isolated normal groups render into
+directly through Canvas2D. Opaque fill-only Type3 glyphs reuse their vector paths,
+including multi-path charprocs; empty charprocs skip painting. Independent
+normal RGB groups at unit opacity flatten to their native child paints.
+Knockout groups take this path only for opaque vector paints whose shape equals
+alpha. Other isolated normal groups render into
 bounded transparent surfaces before applying group opacity once. Independent RGB
 tiling fills use Canvas colour surfaces; transparent cells replay once at their
 device coordinates without page-sized shape or component buffers. Compound or
@@ -78,7 +82,12 @@ the normal collector path.
 Canvas replay skips paints outside each tile and shares a
 bounded image/annotation raster cache across tiles, nested groups, masks and
 pattern cells. It releases that
-cache after completion or cancellation, yields to browser events and checks the
+cache after completion or cancellation. The host's document-owned
+`PdfRenderAssets` keeps shared decoded rasters across pages and zoom, with a
+64 MiB/256-entry LRU budget. Active renders lease each raster; eviction or document
+close releases it after its last consumer finishes. Diagnostics report bytes,
+entries, loads and reuse. These are cache budgets, not process RSS limits.
+Replay yields to browser events and checks the
 MoonBit task's lifetime before continuing. Pages, thumbnails and printing use
 the same cancellation boundary. The reader keeps
 scroll navigation active during page loading and shows a loading label on each
@@ -105,6 +114,12 @@ every cursor change. Clipboard events and the copy button refresh the current
 native range before copying. Unloaded pages and XFA retain the Worker path;
 unmounting a page releases its local selection index. Nearby page mounting
 preserves an active native drag range.
+
+Search uses native DOM Ranges and CSS Custom Highlights for exact original UTF-16
+substrings, including matches inside a multi-character glyph. It retains the
+original text nodes and current user selection. Browsers lacking this API use
+the item-level highlight fallback. PDF and XFA search share MoonBit normalization
+and source-offset mapping, including compatibility ligatures and common case folds.
 
 To compare rendering with the pinned PDF.js checkout, build both static outputs
 as described in [the reference setup](../reference/README.md), then run
@@ -158,3 +173,10 @@ order, usage, radio/locked constraints, actual print pixels, thumbnail updates,
 editor snapshots, Range hydration, wrapped toolbars and replacement races.
 Two real PDF.js layer fixtures compare sampled paint in three visibility states.
 Layer manifests and constraints reuse pdflite; see [layer behavior](layers.md).
+
+`node tools/text_interaction_browser_test.mjs <viewer-url>` adds six checks in
+both Chromium and WebKit for precise search, affine/cross-page highlight persistence,
+XFA editing/saving, inherited access and unsupported controls, radio display/print
+state and native namespace/MathML accessibility semantics. The CI
+report gate requires every check in both browsers. Automated DOM and Chromium
+accessibility-tree evidence do not replace VoiceOver/NVDA user acceptance.

@@ -398,8 +398,10 @@ code unit retains its source interval through expansions and canonical mark
 reordering; offsets never refer to the normalized string. The browser maps
 item indices to its transparent text layer and emits `pdf-search-change`.
 Search runs asynchronously through the Worker adapter; the underlying MoonBit
-operation remains synchronous. Exact substring highlighting and complete
-locale/case-fold policy remain future work.
+operation remains synchronous. `PdfSearchOptions::find_matches` supplies the
+same original-offset policy for PDF and XFA. Native DOM Ranges and CSS Custom
+Highlights paint exact substrings without replacing glyph text nodes. Complete
+locale-specific case folding remains outside this normalization policy.
 
 `text_columns.mbt` partitions persistent horizontal-page gutters into reading
 blocks before line grouping. `text_bidi.mbt` maps `bidi` code-point permutations
@@ -487,17 +489,20 @@ links. Widget editing remains outside the readonly layer.
 The MoonBit/Rabbita editor mounts a separate native field and annotation layer.
 It converts pointer gestures through the inverse viewport matrix, applies immutable
 snapshots through `with_editor_changes`, and invalidates page/thumbnail caches.
-The Worker keeps the original snapshot baseline and uses pdflite's complete
-writer for downloads. It completes validated Range sources before editing, so
+The Worker keeps the original snapshot baseline and uses pdflite's incremental
+writer for downloads, with a full rewrite fallback for recovered sources.
+It completes validated Range sources before editing, so
 unvisited objects are retained. Explicit AP streams persist text, choices, button
 states and Ink/Stamp signatures across readers. See [editor details](editor.md)
-for Unicode raster fallback, encryption/XFA restrictions and validation.
+for original-font encoding, Unicode raster fallback, XFA dataset editing,
+encryption and validation. XFA reuses the pinned binder/XML serializer;
+`editor_xfa.mbt` only replaces the supplied data packets in the pdflite object graph.
 
 `accessibility.mbt` associates tagged structure with the existing collector's
 glyph indices and string/Form provenance. A bounded marked-content pass keeps
 the originating MCID stream distinct from the Form invocation that paints its
 text; ParentTree can resolve page-local integer references without `/Pg`.
-`RoleMap`, `/Lang`, `/Alt`, `/ActualText`, table attributes and annotation OBJR
+`RoleMap`, namespace-scoped `RoleMapNS`, `/Lang`, `/Alt`, `/ActualText`, table attributes and annotation OBJR
 references form a page-local semantic view. Unmapped visible text retains the
 A1 geometrical paragraph order. Cycles/depth/node/operation limits retain
 fallback text; the JSON reports mapped/unmapped/excluded counts and truncation.
@@ -506,6 +511,10 @@ The display response includes this view. `web/accessibility-layer.js` creates
 clipped, unselectable DOM/ARIA narration and hides the geometric glyph layer
 from AX. Plain text replaces character-by-character duplicate narration;
 tagged links own the existing native annotation controls with `aria-owns`.
+Formula tags expose math semantics with alternative text. MathML-tagged structure
+uses native MathML elements from a fixed whitelist; attributes and scripts from
+the source are not copied into the DOM. XFA input labels reuse template field names
+when the template supplies no explicit accessible name.
 Paint, native selection and A1 copy/search source indices are retained. The
 semantic DOM shares page mount/unload lifetime; labelled native page controls
 load subsequent pages. Print responses omit this layer. A semantic extraction

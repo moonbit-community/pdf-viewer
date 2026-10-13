@@ -85,7 +85,7 @@ jobs:
         run: |
           npm ci --prefix tools/web-assets --ignore-scripts --omit=optional
           npm ci --prefix tools/test-host --ignore-scripts
-          tools/test-host/node_modules/.bin/playwright install --with-deps chromium
+          tools/test-host/node_modules/.bin/playwright install --with-deps chromium webkit
           echo "PDF_CANVAS_PACKAGE=$GITHUB_WORKSPACE/tools/test-host/package.json" >> "$GITHUB_ENV"
           node --input-type=module -e "import{createRequire}from'node:module';const r=createRequire(process.cwd()+'/tools/test-host/package.json'); console.log('PDF_CHROMIUM='+r('playwright').chromium.executablePath())" >> "$GITHUB_ENV"
       - name: Download MoonBit dependencies
@@ -106,6 +106,7 @@ jobs:
           node tools/ci/check_scope.mjs
           node tools/ci/check_reports_test.mjs
           node tools/pixels/canvas_test.mjs
+          node tools/pixels/render_assets_test.mjs
           node tools/pixels/worker_canvas_test.mjs
           node tools/pixels/review_regression_test.mjs
           node tools/pixels/text_diagnostic_test.mjs
@@ -125,6 +126,8 @@ jobs:
           moon run tools/browser_test.mbtx http://127.0.0.1:4314 "$PDF_CHROMIUM"
           node tools/editor_browser_test.mjs http://127.0.0.1:4314
           node tools/layers_browser_test.mjs http://127.0.0.1:4314
+          node tools/text_interaction_browser_test.mjs http://127.0.0.1:4314
+          PDF_BROWSER=webkit node tools/text_interaction_browser_test.mjs http://127.0.0.1:4314
           node tools/ci/check_reports.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
@@ -136,6 +139,7 @@ jobs:
             _build/browser-test-*/
             _build/editor-test-*/
             _build/layers-test-*/
+            _build/text-interaction-*/
             _build/ci-corpus/manifest.json
             _build/ci-dev.log
             web/_test/manifest.json

@@ -3,8 +3,9 @@
 The six remaining items in the 50-item readonly inventory are implemented.
 This inventory measures delivered paths, not visual compatibility or the full
 reader roadmap. [Annotation editing, form filling/saving and handwritten/image
-signatures](editor.md) now have separate editor acceptance. Cryptographic signing,
-layer controls and manual assistive-technology acceptance remain further work.
+signatures](editor.md) now have separate editor acceptance.
+[Layer controls](layers.md) are implemented separately; cryptographic signing
+and manual assistive-technology acceptance remain further work.
 
 ## Annotations and readonly fields
 
@@ -38,10 +39,13 @@ worker and PDF Canvas renderer; PDF objects and font programs still use pdflite
 and this viewer. Scoped compatibility bindings do not patch global Map/WeakMap.
 
 Dynamic documents use template/data binding, embedded/fallback font metrics,
-generated pages, readonly native controls, selection/search and whole-document
+generated pages, native controls, selection/search and whole-document
 printing. Static XFA retains its PDF page appearances. XML text selections use
 `source_kind: "xfa"` with empty PDF byte ranges. FontFace and image blob resources
-are released on replacement/close. Document scripts and editing are disabled;
+are released on replacement/close. Controls are readonly until **Edit / Fill**;
+bound controls then update datasets through the pinned binder/XML serializer.
+Undo/redo, focused saving and fresh reopen are covered in Chromium and WebKit.
+Document scripts remain disabled;
 external XFA image references are not fetched. Packet input is capped at 32 MiB,
 page count at 5,000 and page dimensions at 20,000 points.
 
@@ -85,7 +89,7 @@ MoonBit/core, Node, Playwright, codec packages and the PDF.js source revision.
 The official versioned MoonBit archives expire on 2026-11-20; update the pins
 and checksums before that date. The installer rejects an existing destination.
 
-CI verifies 26 [real corpus inputs](../tools/ci/corpus.json), four authored PDFs,
+CI verifies 28 [real corpus inputs](../tools/ci/corpus.json), four authored PDFs,
 vendored source/license hashes and the 50-item gap table. It executes the actual
 Worker/Canvas and browser entry, output density/alpha/pattern/ICC regressions,
 XFA/Range checks, 200-page physical printing and cache pressure. The 32×16 gray
@@ -109,7 +113,7 @@ increased differences/missing ink and lost viewer ink. They do not turn known
 differences into pixel parity. CI uploads HTML/JSON, reference/viewer/diff PNGs,
 text/geometry records, print PDFs and manifests even on failures.
 
-Local macOS arm64 validation used Chromium 145.0.7632.6 and the pinned MoonBit
+The initial local macOS arm64 validation used Chromium 145.0.7632.6 and the pinned MoonBit
 compiler: **668 JS, 669 Wasm, 669 Wasm-GC and 677 native** tests after the final
 AP opacity regression, plus **104 browser checks**, 26/26 corpus reads and
 12/12 successful visual measurements. Reports are build artifacts; rerun the
@@ -122,6 +126,24 @@ capture and real host-font warning publication. The four backend suites still pa
 and 677 native**. Nine Worker/Canvas checks remain in the Node runner; the former
 JavaScript function-extraction test now exercises the compiled MoonBit app and
 real DOM through the browser suite.
+
+The text/editing follow-up adds exact UTF-16 search ranges, original affine
+selection highlights with cross-page batch undo, incremental saves, original-font
+Unicode appearances and bound XFA editing. Namespace role mapping, Formula labels
+and native MathML add automated semantic coverage. Six checks run in both
+Chromium and WebKit; report gates require all six in each engine. They include
+template access restrictions, unbound/multiselect controls, radio display/print
+state and same-session highlight move/resize. Human
+VoiceOver/NVDA and PDF/UA acceptance remain unverified by those checks.
+The corpus now also includes `rotated_ink.pdf` and
+`tracemonkey_with_annotations.pdf`. Four additional local Canvas comparisons
+cover the ink page at 0/90 degrees and the annotated paper's first/last pages;
+all rendered with matching geometry and recorded pixel differences. These
+supplemental measurements do not replace or loosen the 12 fixed platform baselines.
+The latest macOS run passes **703 JS, 704 Wasm, 704 Wasm-GC and 712 native**
+tests, plus **110 reader, 25 editor and 11 layer checks** in Chromium and
+**6 text-interaction checks each** in Chromium and WebKit. All 28 corpus inputs pass, and
+the 12 fixed visual measurements remain within their platform's recorded gates.
 
 The warning regression also runs in that browser suite: fresh page, thumbnail
 and print sessions publish a real host-font diagnostic into the Rabbita alert
@@ -140,6 +162,10 @@ moon run tools/reader_corpus.mbtx _build/ci-corpus
 moon run tools/visual_test.mbtx tools/ci/visual_cases.json /path/to/chromium
 # Start tools/dev.mbtx on 4314 in a second terminal.
 moon run tools/browser_test.mbtx http://127.0.0.1:4314 /path/to/chromium
+node tools/editor_browser_test.mjs http://127.0.0.1:4314
+node tools/layers_browser_test.mjs http://127.0.0.1:4314
+node tools/text_interaction_browser_test.mjs http://127.0.0.1:4314
+PDF_BROWSER=webkit node tools/text_interaction_browser_test.mjs http://127.0.0.1:4314
 node tools/ci/check_reports.mjs
 ```
 

@@ -22,3 +22,4 @@ web/_generated/
 /web/vendor/lcms-wasm/lcms.wasm
 /web/vendor/xfa/
 /web/_test/
+.gstack/
