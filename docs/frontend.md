@@ -132,6 +132,23 @@ timing replay. Reports separate reader startup, Worker payloads, paint time and
 pixel-flush time. `PDF_BENCH_COMPARE_RETAINED=1` also compares native display
 against retained replay and reports both renderers' differences from PDF.js.
 Input files stay local and reports are written only under ignored `_build/`.
+The benchmark checks the reference checkout/build, records source and module
+hashes, and times three uncached zoom payloads separately from completed page
+navigation. Worker round-trip time excludes client queue/startup waiting.
+`PDF_BENCH_PROFILE=1` adds a separate diagnostic process/browser with Canvas call counts,
+pixel traffic, nested scene self time, host yields and resource cache activity.
+It also records fresh PDF.js operator-list preparation. Ordinary paint/flush
+samples use the original Canvas modules and prototypes, with no profiler hooks.
+`node tools/pixels/profile_page_stages.mjs /path/to/document.pdf _build/stages.json 1,2,12`
+profiles the readable release bridge on Node, checks cached Canvas/semantic
+hashes, and separates inclusive stage time from self time. These measurements
+are independent of the browser runs; see [the speed investigation](validation/render-speed.md).
+
+Cached pages retain their accessibility manifests within the same 32 MiB page
+budget. Zoom and rotation reuse their original semantic coordinates without
+collecting PDF text or reading fonts again. Font, layer, document and editor
+changes invalidate the page cache. Range hydration invalidates semantic metadata
+while preserving completed page geometry. Failed semantic reads are retried.
 
 `tools/pages_browser_test.mjs` checks page reuse, unchanged viewport resizing,
 bounded eviction and Canvas release. It exercises Chromium and WebKit selection while
