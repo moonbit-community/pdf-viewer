@@ -16,6 +16,8 @@ const requested=(process.argv[3]||'1').split(',').map(Number);
 assert(requested.every(n=>Number.isInteger(n)&&n>0),'Page numbers must be positive integers');
 const engine=process.env.PDF_BROWSER||'webkit';
 assert(['webkit','chromium'].includes(engine),'PDF_BROWSER must be webkit or chromium');
+const replays=Number(process.env.PDF_BENCH_REPLAYS||3);
+assert(Number.isInteger(replays)&&replays>=3&&replays<=30,'PDF_BENCH_REPLAYS must be an integer from 3 to 30');
 const require=createRequire(resolve('tools/test-host/package.json'));
 const launcher=require('playwright')[engine];
 const roots={viewer:resolve(process.env.PDF_BENCH_VIEWER_ROOT||'_build/pages'),reference:resolve('reference/pdf.js/build/generic')};
@@ -99,7 +101,7 @@ try{
  const opened=Date.now();
  await page.locator('#file-input').setInputFiles({name:'benchmark.pdf',mimeType:'application/pdf',buffer:data});
  await page.waitForFunction(()=>document.querySelector('.page[data-page="1"]')?.dataset.rendered==='true'&&document.querySelector('#viewer').getAttribute('aria-busy')==='false');
- const report={engine,dpr:2,sourceSha256:createHash('sha256').update(data).digest('hex'),sourceBytes:data.length,
+ const report={engine,dpr:2,replays,sourceSha256:createHash('sha256').update(data).digest('hex'),sourceBytes:data.length,
   viewerRoot:roots.viewer,referenceRevision,profileEnabled,scope:diagnosticOnly?'diagnostic-only':'ordinary samples without Canvas profiler hooks',
   firstReaderMs:Date.now()-opened,pages:[],navigation:[],errors};
  for(const number of requested){
@@ -158,7 +160,7 @@ try{
  },[...data]);
  assert.equal(report.pdfjs.build,referenceBuild.commit,'Loaded PDF.js must match the checked build');
  for(const number of requested){
-  const result=await page.evaluate(async({number,compareRetained,profileEnabled,summarizeSource})=>{
+  const result=await page.evaluate(async({number,compareRetained,profileEnabled,summarizeSource,replays})=>{
    const state=window.pdfBenchmark,args=state.saved.get(number),canvas=document.createElement('canvas');
    const measure=async draw=>{
     const t=performance.now();await draw();const painted=performance.now();
@@ -167,12 +169,12 @@ try{
     return {paintMs:painted-t,flushMs:flushed-painted,totalMs:flushed-t,pixels};
    };
    const assetsBefore=pdfViewerHost.renderAssetsDiagnostics(),warm=[];let actual;
-   for(let i=0;i<3;i++){const {pixels,...timing}=await measure(()=>state.paint(canvas,args[1],args[2],()=>true,args[4]));warm.push(timing);actual=pixels;}
+   for(let i=0;i<replays;i++){const {pixels,...timing}=await measure(()=>state.paint(canvas,args[1],args[2],()=>true,args[4]));warm.push(timing);actual=pixels;}
    const dimensions=[canvas.width,canvas.height],pdfPage=await state.reference.getPage(number);
    const viewport=pdfPage.getViewport({scale:args[1].layer.viewport.width/pdfPage.getViewport({scale:1}).width});
    const reference=document.createElement('canvas');reference.width=dimensions[0];reference.height=dimensions[1];
    const times=[];let expected;
-   for(let i=0;i<3;i++){
+   for(let i=0;i<replays;i++){
     const t=performance.now();await pdfPage.render({canvasContext:reference.getContext('2d'),viewport,transform:[args[2],0,0,args[2],0,0]}).promise;
     const painted=performance.now();expected=reference.getContext('2d').getImageData(0,0,...dimensions).data;const flushed=performance.now();
     times.push({paintMs:painted-t,flushMs:flushed-painted,totalMs:flushed-t});
@@ -212,7 +214,7 @@ try{
     result.versusRetained=compare(retained,actual);result.retainedVersusPdfjs=compare(expected,retained);
    }
    canvas.width=canvas.height=reference.width=reference.height=1;return result;
-  },{number,compareRetained:process.env.PDF_BENCH_COMPARE_RETAINED==='1',profileEnabled,summarizeSource:summarizeRenderPlan.toString()});
+  },{number,replays,compareRetained:process.env.PDF_BENCH_COMPARE_RETAINED==='1',profileEnabled,summarizeSource:summarizeRenderPlan.toString()});
   assert(result.versusPdfjs.ink>0,'The reader must paint visible content');report.pages.push(result);console.log(JSON.stringify(result));
  }
  if(profileEnabled)report.pdfjs.preparation=await page.evaluate(async({bytes,pages})=>{

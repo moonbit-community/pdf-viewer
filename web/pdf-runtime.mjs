@@ -18,6 +18,10 @@ export async function renderPdfPage(canvas,plan,options={}) {
     configured.matrix=multiplyMatrix([scale,0,0,scale,0,0],logical);
   }
   configured.paintShading=options.paintShading || createShadingPainter(configured);
+  // Only the built-in adapters guarantee opaque sample coverage. External
+  // painters keep their separate shape pass, even when they wrap this engine.
+  configured._builtinShading=!options.paintShading;
+  configured._builtinPattern=!options.paintPattern;
   configured.paintPattern=options.paintPattern || createPatternPainter(configured);
   const nativeItems=prepareNativeCanvasItems(plan,configured);
   try {

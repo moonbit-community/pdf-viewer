@@ -71,6 +71,19 @@ renderer for comparisons. Native display uses the browser's RGBA8 rasterization;
 its antialiasing and rounding can differ from Float32 replay. Pixel-returning
 calls retain the previous renderer and its shape/component arrays.
 
+Opaque built-in RGB shadings reuse colour alpha as coverage, preserving exact
+retained samples while avoiding a second raster/transfer pass. The existing
+direct `shading_pattern` and pattern-carried shading representations use the
+same proof. A structured shading scene requires one independent unit-opacity
+source against transparency; scene annotations and soft-mask backdrop colours
+keep the separate coverage pass. Translucent paints, component/proof domains,
+calibrated/ICC groups and custom adapters retain their existing passes.
+`fullShapeReplay: true` selects separate coverage for reference comparisons.
+Internal scene, mask and backdrop-pattern consumers retain their Float32 colour
+and coverage buffers and omit unused RGBA encoding/Canvas uploads. Surfaces
+actually drawn, including nested tiles and annotation-bearing scenes, still
+produce their normal Canvas output.
+
 Page images use the existing MoonBit Flate whole-buffer encoder and checksum
 library for PNG output. A simple pattern's compatibility SVG borrows images
 already converted for its cell, preserving its original resource indices and
@@ -136,6 +149,9 @@ To compare rendering with the pinned PDF.js checkout, build both static outputs
 as described in [the reference setup](../reference/README.md), then run
 `node tools/render_benchmark.mjs /path/to/document.pdf 1,2,12`.
 `PDF_BROWSER=chromium` selects Chromium; the default is WebKit at DPR 2.
+`PDF_BENCH_REPLAYS=9` increases ordinary drawing samples from the default three;
+the accepted range is 3–30 and applies to both renderers. Worker zoom sampling
+remains separate.
 `PDF_BENCH_VIEWER_ROOT=/path/to/static/viewer` selects another packaged build for
 before/after comparisons.
 The tool uses identical Canvas dimensions and finishes reader prefetch before

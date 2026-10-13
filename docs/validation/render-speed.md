@@ -13,6 +13,7 @@ Build the [pinned reference](../../reference/README.md) and the packaged viewer:
 moon run tools/build_pages.mbtx
 PDF_BENCH_PROFILE=1 node tools/render_benchmark.mjs /path/to/document.pdf 1,2,12
 PDF_BROWSER=chromium PDF_BENCH_PROFILE=1 node tools/render_benchmark.mjs /path/to/document.pdf 1,2,12
+PDF_BENCH_REPLAYS=9 PDF_BENCH_PROFILE=1 node tools/render_benchmark.mjs /path/to/document.pdf 2,12
 node tools/pixels/profile_page_stages.mjs /path/to/document.pdf _build/stages.json 1,2,12
 ```
 
@@ -146,11 +147,57 @@ Packaged Chromium/WebKit checks exercise the actual viewer loader across cloned
 plans and document invalidation, preventing per-paint callback identity from
 silently defeating reuse.
 
+## Fixed: duplicate opaque shading passes and unused scene output
+
+Six shading-pattern scenes still drew colour and coverage separately. Their
+internal renders then encoded and uploaded RGBA targets that the caller
+discarded, consuming only retained colour/shape buffers. The default renderer
+now uses an opaque RGB source's clipped colour alpha as its coverage. Direct
+shading and the existing pattern-carried representations share the proof.
+Structured scenes additionally require one independent unit-opacity source
+against transparency, with no scene annotations or soft-mask backdrop colour.
+Custom adapters and unsupported colour/opacity cases keep separate coverage.
+`fullShapeReplay: true` provides the original separate-pass comparison.
+
+Scene, mask and backdrop-pattern callers now request retained samples without
+encoding or uploading their unused RGBA targets. This request is consumed at
+the call boundary; nested repeating tiles and native retained surfaces still
+publish their Canvas output. Annotation-bearing scenes keep the existing Canvas
+composition and RGBA result.
+
+The final A/B runs compare `dd64f39` with this change, using **nine ordinary
+replays per renderer** in separate sequential browser runs. Each run opens the
+same local PDF through the actual packaged reader and captures its Worker plan
+and host paint arguments. The tests add no PDF opening or parsing path.
+Before/after reader, cloned-plan and reference hashes match exactly within
+each engine; the differences from PDF.js are unchanged.
+
+| Browser / page | Warm before | Warm after | First recorded paint before / after | PDF.js warm after |
+| --- | ---: | ---: | ---: | ---: |
+| WebKit / 12 | 56 ms | 34 ms | 157 / 141 ms | 18 ms |
+| Chromium / 12 | 25.9 ms | 25.1 ms | 114.1 / 110.6 ms | 24.8 ms |
+| WebKit / 2 | 12 ms | 12 ms | 10 / 9 ms | 17 ms |
+| Chromium / 2 | 21.9 ms | 19.1 ms | 22.2 / 20.4 ms | 23.7 ms |
+
+The page-12 WebKit warm median improves by about **39%**. Its samples range from
+46–92 ms before and 27–44 ms after; a separate cloned-plan sample is 45 / 44 ms,
+so that single measurement does not show the same speedup. These measurements
+include forced pixel flush, exclude cloning/hashing, and are not complete
+open/zoom latency. First-paint differences during navigation do not isolate
+uncached image decoding. Chromium remains close to its previous speed.
+
+Both engines reduce page-12 diagnostic traffic from **24 reads / 36 uploads to
+12 reads / 18 uploads**. The 37 focused checks compare complete RGBA, coverage and
+premultiplied/CMYK buffers, exercise both existing shading representations,
+initial backdrops, group opacity/knockout, soft-mask BC, annotations, custom
+adapters and nested Canvas publication. The same default production adapters
+run in the benchmark; custom test callbacks are negative fallback checks.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |
 | --- | --- | --- |
-| Complex-page warm drawing | Page 12 still needs 24 Canvas pixel reads and 36 uploads; PDF.js warm drawing needs neither. | Avoid repeated colour/shape conversion and scene bitmap creation for independent shading patterns. |
+| Complex-page warm drawing | Page 12 still needs 12 Canvas pixel reads and 18 uploads; PDF.js warm drawing needs neither. | Reduce retained shading's source readback, Float32 conversion and required scene bitmap creation. |
 | Cold image preparation | Node page 12 takes about 409 ms overall: colour processing has 115 ms self time, PNG encoding 46 ms, font loading 51 ms and Flate decoding 37 ms. | Reuse decoded image/font resources and avoid encoding pixels that the host can consume directly. |
 | New viewport payloads | Page 12 still sends about 2.13 million JSON characters. Its Canvas plan contains about 709,000 path characters and 138,000 clip-path characters. | Intern repeated immutable geometry/resources and reuse prepared plans between viewports. |
 | Worker startup | A diagnostic WebKit run of the bundled entry spends about 150 ms loading/evaluating code and 10 ms initializing the colour/JBIG2 adapters. The Worker is about 7.4 MiB. | Reduce initial code evaluation; codec initialization is a smaller cost on this input. |

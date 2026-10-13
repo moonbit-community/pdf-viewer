@@ -5,7 +5,7 @@ import { pdfDashedHairlinePath,pdfStrokeGeometry } from './pdf-hairline.mjs';
 import { createColourPlaneSurface, paintColourPlaneSurface, resolveColourPlaneSurface, invalidateColourPlaneSurface } from './pdf-colour-planes.mjs';
 import { PdfCompositor, rgba8ToPremultiplied, premultipliedToRgba8, softMaskSamples } from './pdf-compositor.mjs';
 import { pdfPixelRegion } from './pdf-pixel-region.mjs';
-import {prepareNativeCanvasItems,singleType3Path} from './pdf-canvas-native.mjs';
+import {prepareNativeCanvasItems,singleType3Path,independentPattern} from './pdf-canvas-native.mjs';
 
 export const multiplyMatrix = (a,b) => [
   a[0]*b[0]+a[2]*b[1], a[1]*b[0]+a[3]*b[1],
@@ -99,7 +99,7 @@ export async function renderPdfCanvas(canvas, plan, options = {}) {
   }
 }
 
-async function renderPdfCanvasScoped(canvas, plan, options = {}) {
+async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...options} = {}) {
   const createCanvas=options.createCanvas || defaultCanvas;
   const loadImage=options.loadImage || loadPdfRaster;
   const Path=options.Path2D || globalThis.Path2D;
@@ -125,7 +125,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
 
   const width=options.width || Math.ceil(plan.viewport.width), height=options.height || Math.ceil(plan.viewport.height);
   const matrix=options.matrix || multiplyMatrix(plan.viewport.matrix,pageFlip(plan.page));
-  const nativeItems=prepareNativeCanvasItems(plan,options);
+  const nativeItems=_samplesOnly?null:prepareNativeCanvasItems(plan,options);
   const resourceDepth=options._resourceDepth || 0;
   if(resourceDepth>16) throw new RangeError('PDF raster resource recursion limit exceeded');
   const inheritedWorkingBytes=options._inheritedWorkingBytes || 0;
@@ -395,9 +395,24 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
     environments.inheritedWorkingBytes=retainedWorkingBytes();
     environments.calibration=compositor.colour.calibration;environments.iccProfileId=compositor.colour.profileId;environments.convertToGroup=compositor.colour.convert;environments.profileScope=options._profileScope;
     environments.convertFromGroup=compositor.colour.toRgb;
+    const p=item.paint,directShading=p.shading_pattern||p.pattern?.shading,pattern=directShading||item.pattern||p.pattern;
+    // The built-in shading sampler writes alpha 255 for every covered sample.
+    // At unit paint opacity its clipped colour alpha is exactly its shape.
+    // A single independent shading pattern has the same property only against
+    // transparency; an existing backdrop can contribute alpha outside it.
+    const opaqueCoverage=!options.fullShapeReplay&&options._builtinShading&&!options._maskBackdrop&&component===undefined&&!inkMode&&
+      compositor.colour.space==='DeviceRGB'&&!compositor.colour.profileId&&!compositor.colour.calibration&&
+      p.fill_alpha===1&&!p.alpha_is_shape&&!item.mask&&!p.soft_mask&&(
+        item.kind==='shading'&&!p.shading?.pattern_plan||
+        item.kind==='path'&&p.filled&&!p.stroked&&!p.fill_transform&&(
+          directShading&&!directShading.pattern_plan||
+          (directShading||options._builtinPattern)&&!options.backdrop&&plan.items.length===1&&pattern?.pattern_plan&&
+          !pattern.pattern_plan.annotation_svg&&!pattern.pattern_plan.annotation_fragments?.length&&independentPattern(pattern)
+        )
+      );
     // Shape first gives per-paint pattern/scene caches a bound that includes
     // low-opacity antialias fringes which may round to zero in the colour pass.
-    for(const [context,shapeOnly] of [[shapeCtx,true],[ctx,false]]) {
+    for(const [context,shapeOnly] of opaqueCoverage?[[ctx,false]]:[[shapeCtx,true],[ctx,false]]) {
       context.setTransform(1,0,0,1,0,0); context.clearRect(0,0,width,height); context.save();
       clips(context,item.paint,bounds);
       if(item.kind==='path') await drawPath(context,item.paint,shapeOnly);
@@ -420,7 +435,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
     if(previousSourceRegion){const r=previousSourceRegion;for(let y=r.y;y<r.y+r.height;y++){const a=y*width+r.x,b=a+r.width;sourcePixels.fill(0,a*4,b*4);sourceShape.fill(0,a,b);}}
     previousSourceRegion={x,y,width:w,height:h};
     if(w&&h){
-      const color=ctx.getImageData(x,y,w,h).data,shape=shapeCtx.getImageData(x,y,w,h).data;
+      const color=ctx.getImageData(x,y,w,h).data,shape=opaqueCoverage?color:shapeCtx.getImageData(x,y,w,h).data;
       for(let yy=0;yy<h;yy++)for(let xx=0;xx<w;xx++){
         const src=(yy*w+xx)*4,p=(y+yy)*width+x+xx,dst=p*4,a=color[src+3]/255;
         sourcePixels[dst]=color[src]/255*a;sourcePixels[dst+1]=color[src+1]/255*a;sourcePixels[dst+2]=color[src+2]/255*a;sourcePixels[dst+3]=a;
@@ -457,7 +472,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
       for(let y=0;y<h;y++)backdrop.set(environments.backdrop.subarray(((y+region.y)*width+region.x)*stride,((y+region.y)*width+region.x+w)*stride),y*w*stride);
       const localMatrix=[...matrix];localMatrix[4]-=region.x;localMatrix[5]-=region.y;
       const target=createCanvas(w,h);
-      const rendered=await renderPdfCanvas(target,nested,{...options,_nativeClipBounds:[],_glyphCacheReserved:true,_imageCacheReserved:true,createCanvas,loadImage,Path2D:Path,width:w,height:h,matrix:localMatrix,transparent:true,backdrop,returnInks:ink,outputGroupComponents:true,_profileScope:options._profileScope,_resourceDepth:resourceDepth+1,_inheritedWorkingBytes:retainedWorkingBytes()+w*h*(stride*4+24)});
+      const rendered=await renderPdfCanvas(target,nested,{...options,_samplesOnly:true,_nativeClipBounds:[],_glyphCacheReserved:true,_imageCacheReserved:true,createCanvas,loadImage,Path2D:Path,width:w,height:h,matrix:localMatrix,transparent:true,backdrop,returnInks:ink,outputGroupComponents:true,_profileScope:options._profileScope,_resourceDepth:resourceDepth+1,_inheritedWorkingBytes:retainedWorkingBytes()+w*h*(stride*4+24)});
       diagnostics.push(...rendered.diagnostics);target.width=1;
       const pixels=ink?rendered.inkProof?.premultiplied:rendered.premultiplied;
       if(!pixels||pixels.length!==w*h*stride)throw new Error('Retained scene lost its group component samples');
@@ -484,7 +499,7 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
     const target=createCanvas(width,height);
     const pdfMatrix=multiplyMatrix(matrix,[1,0,0,-1,-plan.page.origin_x,plan.page.origin_y+plan.page.height]);
     const maskMatrix=multiplyMatrix(pdfMatrix,multiplyMatrix(mask.matrix || [1,0,0,1,0,0],pageFlip(mask.plan.page)));
-    const rendered=await renderPdfCanvas(target,mask.plan,{...options,_nativeClipBounds:[],_glyphCacheReserved:true,_imageCacheReserved:true,createCanvas,loadImage,Path2D:Path,width,height,matrix:maskMatrix,transparent:true,returnInks:true,backdrop:null,outputGroupComponents:false,_maskBackdrop:mask.luminosity?(mask.backdrop_components||mask.backdrop):null,_resourceDepth:resourceDepth+1,_inheritedWorkingBytes:retainedWorkingBytes()});
+    const rendered=await renderPdfCanvas(target,mask.plan,{...options,_samplesOnly:true,_nativeClipBounds:[],_glyphCacheReserved:true,_imageCacheReserved:true,createCanvas,loadImage,Path2D:Path,width,height,matrix:maskMatrix,transparent:true,returnInks:true,backdrop:null,outputGroupComponents:false,_maskBackdrop:mask.luminosity?(mask.backdrop_components||mask.backdrop):null,_resourceDepth:resourceDepth+1,_inheritedWorkingBytes:retainedWorkingBytes()});
     diagnostics.push(...rendered.diagnostics);
     const samples=softMaskSamples(rendered.premultiplied,mask);
     target.width=1;
@@ -739,13 +754,19 @@ async function renderPdfCanvasScoped(canvas, plan, options = {}) {
     for(let c=0;c<3;c++)result.pixels[i+c]+=white;
     result.pixels[i+3]=1;
   }
-  let bytes=premultipliedToRgba8(result.pixels);
-  canvas.width=width;canvas.height=height;
-  const output=canvas.getContext('2d'),data=output.createImageData(width,height);data.data.set(bytes);output.putImageData(data,0,0);
-  if(plan.annotation_svg||plan.annotation_fragments?.length){
-    await drawAnnotations(output);
-    bytes=output.getImageData(0,0,width,height).data;
-    rgba8ToPremultiplied(bytes,result.pixels);
+  const annotations=plan.annotation_svg||plan.annotation_fragments?.length;
+  let bytes=_samplesOnly&&!annotations?null:premultipliedToRgba8(result.pixels);
+  // Scene and soft-mask callers consume the retained samples, then discard
+  // this Canvas. Do not encode or upload a bitmap they never draw. Consume this flag at
+  // the call boundary so nested image/pattern surfaces still publish normally.
+  if(!_samplesOnly||annotations){
+    canvas.width=width;canvas.height=height;
+    const output=canvas.getContext('2d'),data=output.createImageData(width,height);data.data.set(bytes);output.putImageData(data,0,0);
+    if(annotations){
+      await drawAnnotations(output);
+      bytes=output.getImageData(0,0,width,height).data;
+      rgba8ToPremultiplied(bytes,result.pixels);
+    }
   }
   layer.width=shapeLayer.width=1;
   if(inkImageCache)inkImageCache.canvas.width=1;
