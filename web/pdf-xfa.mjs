@@ -60,7 +60,7 @@ export async function createXfaDocument(data, bridge) {
     return { page: index + 1, width, height, rotation: 0 };
   });
   const pages = (await factory.getPages()).children;
-  const fields=xfaFields(factory),defaults=xfaFieldDefaults(pages,fields);
+  const {fields,names}=xfaFields(factory),defaults=xfaFieldDefaults(pages,fields,names);
   let storage=new Map(defaults);
   const blobs=new Set();
   const collect=node=>{const src=node.attributes?.src;if(src?.startsWith('blob:'))blobs.add(src);node.children?.forEach(collect);};pages.forEach(collect);

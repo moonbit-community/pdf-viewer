@@ -194,8 +194,10 @@ try{
   assert.equal(rejected.ok,false);assert.match(rejected.error,/Invalid XFA field/);
   const unbound=page.locator('input[value="Initial unbound"]');
   assert.equal(await unbound.isEditable(),false);assert.equal(await unbound.getAttribute('data-xfa-id'),null);
+  assert.equal(await unbound.getAttribute('aria-label'),'unbound');
   assert.equal(await page.locator('select[multiple]').isDisabled(),true);
   const radios=page.locator('#pages input[type=radio]');
+  assert.deepEqual(await radios.evaluateAll(nodes=>nodes.map(node=>node.getAttribute('aria-label'))),['choiceA','choiceB']);
   assert.deepEqual(await radios.evaluateAll(nodes=>nodes.map(node=>node.checked)),[false,true]);
   await page.locator('#pages input[xfaOn="A"]').check();
   await page.waitForFunction(()=>document.querySelector('#pages input[xfaOn="A"]')?.checked&&!document.querySelector('#pages input[xfaOn="B"]')?.checked&&!document.getElementById('edit-toggle').disabled);

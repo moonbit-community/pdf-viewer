@@ -28,20 +28,23 @@ export function xfaPacketUpdates(packets,datasets){
  return [encodedPacket('xdp:xdp',output.join(''))];
 }
 
-export function xfaFieldDefaults(pages,boundFields){
+export function xfaFieldDefaults(pages,boundFields,names){
  const fields=new Map();
  const walk=(node,inheritedReadonly=false)=>{
   const attributes=node.attributes,id=attributes?.dataId;
   const classes=attributes?.class||[];
   const readonly=inheritedReadonly||!!(attributes?.readOnly||attributes?.readonly||attributes?.disabled||attributes?.multiple)||
    ['xfaReadOnly','xfaDisabled','xfaNonInteractive'].some(name=>classes.includes(name));
+  if(['input','textarea','select'].includes(node.name)&&!attributes['aria-label']&&!attributes['aria-labelledby']){
+   const name=names.get(attributes.fieldId)||boundFields.get(id)?.name;
+   if(name)attributes['aria-label']=name;
+  }
   if(id&&boundFields.has(id)&&['input','textarea','select'].includes(node.name)){
    const field=boundFields.get(id),value=String(field.value);
    const previous=fields.get(id);
    fields.set(id,{value,editable:previous?.editable||!readonly});
    attributes['data-xfa-id']=id;
    attributes['data-xfa-readonly']=String(readonly);
-   if(!attributes['aria-label']&&!attributes['aria-labelledby'])attributes['aria-label']=field.name;
   }
   node.children?.forEach(child=>walk(child,readonly));
  };
