@@ -3,8 +3,9 @@
 ## Reuse and ownership
 
 The JPEG baseline/Huffman/IDCT implementation in `image_jpeg_decoder.mbt`
-is adapted from **mizchi/image 0.4.3**, `src/jpeg_decode.mbt` and the zigzag
-constant from `src/jpeg_tables.mbt`, released under Apache-2.0:
+and `image_jpeg_idct.mbt` is adapted from **mizchi/image 0.4.3**,
+`src/jpeg_decode.mbt` and the zigzag constant from `src/jpeg_tables.mbt`,
+released under Apache-2.0:
 <https://github.com/mizchi/image-mbt>.
 The upstream module is fetched from Mooncakes for inspection; it is not a runtime
 dependency. Its public RGBA-only result cannot retain the component samples that
@@ -20,6 +21,7 @@ The paused parser draft was not used.
 Changes to the candidate include component output, CMYK/YCCK, PDF ColorTransform
 and Adobe precedence, restart resets, noninterleaved/progressive scan decoding,
 strict segment/table/index validation, bounded allocation, DC-only IDCT shortcut,
+sparse separable IDCT with decode-owned scratch, hoisted three-component sampling,
 rounding, and byte-sized component planes. Unsupported features retain the
 existing encoded-resource fallback; budget violations are rejected rather than
 handed to a browser decoder that could bypass the same limit.

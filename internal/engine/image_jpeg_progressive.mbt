@@ -420,6 +420,7 @@ fn pdf_jpeg_decode_multiscan(
   let comp_bufs : Array[FixedArray[Byte]] = []
   let block = FixedArray::make(64, 0)
   let output = FixedArray::make(64, 0)
+  let idct_scratch = PdfJpegIdctScratch::new()
   for ci in 0..<ncomp {
     if progression[ci][0] < 0 {
       raise CorruptData("missing JPEG component scan")
@@ -437,10 +438,12 @@ fn pdf_jpeg_decode_multiscan(
         for i in 0..<64 {
           block[i] = coefficients[ci][offset + i] * quant[i]
         }
-        pdf_jpeg_idct_block(block, output)
+        pdf_jpeg_idct_block(block, output, idct_scratch)
         for y in 0..<8 {
+          let target_row = (by * 8 + y) * stride + bx * 8
+          let source_row = y * 8
           for x in 0..<8 {
-            pixels[(by * 8 + y) * stride + bx * 8 + x] = output[y * 8 + x].to_byte()
+            pixels[target_row + x] = output[source_row + x].to_byte()
           }
         }
       }

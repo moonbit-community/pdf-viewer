@@ -144,87 +144,6 @@ fn pdf_jpeg_receive_extend(
 }
 
 ///|
-// Pre-computed IDCT cosine table: cos((2*n+1)*k*PI/16) for n,k in 0..7
-// pdf_jpeg_idct_cos_table[n * 8 + k] = cos((2*n+1)*k*PI/16)
-let pdf_jpeg_idct_cos_table : FixedArray[Double] = {
-  let t = FixedArray::make(64, 0.0)
-  for n in 0..<8 {
-    for k in 0..<8 {
-      t[n * 8 + k] = @math.cos(
-        (2.0 * n.to_double() + 1.0) * k.to_double() * @math.PI / 16.0,
-      )
-    }
-  }
-  t
-}
-
-///|
-// C(k) scaling factor: 1/sqrt(2) for k=0, 1.0 otherwise
-let pdf_jpeg_idct_c : FixedArray[Double] = {
-  let c = FixedArray::make(8, 1.0)
-  c[0] = 1.0 / 2.0.sqrt()
-  c
-}
-
-///|
-// IDCT using pre-computed cosine table
-fn pdf_jpeg_idct_block(
-  coeff : FixedArray[Int],
-  output : FixedArray[Int],
-) -> Unit {
-  let mut dc_only = true
-  for i in 1..<64 {
-    if coeff[i] != 0 {
-      dc_only = false
-      break
-    }
-  }
-  if dc_only {
-    let value = (coeff[0].to_double() / 8.0 + 128.5)
-      .floor()
-      .to_int()
-      .max(0)
-      .min(255)
-    for i in 0..<64 {
-      output[i] = value
-    }
-    return
-  }
-  let tmp = FixedArray::make(64, 0.0)
-  // First pass: columns
-  for x in 0..<8 {
-    for y in 0..<8 {
-      let mut sum = 0.0
-      for u in 0..<8 {
-        sum += pdf_jpeg_idct_c[u] *
-          coeff[u * 8 + x].to_double() *
-          pdf_jpeg_idct_cos_table[y * 8 + u]
-      }
-      tmp[y * 8 + x] = sum
-    }
-  }
-  // Second pass: rows
-  for y in 0..<8 {
-    for x in 0..<8 {
-      let mut sum = 0.0
-      for v in 0..<8 {
-        sum += pdf_jpeg_idct_c[v] *
-          tmp[y * 8 + v] *
-          pdf_jpeg_idct_cos_table[x * 8 + v]
-      }
-      let val = (sum / 4.0 + 128.5).floor().to_int()
-      output[y * 8 + x] = if val < 0 {
-        0
-      } else if val > 255 {
-        255
-      } else {
-        val
-      }
-    }
-  }
-}
-
-///|
 priv struct PdfJpegComponent {
   id : Int
   h_sample : Int
@@ -526,6 +445,7 @@ fn pdf_jpeg_decode(
   let prev_dc = FixedArray::make(ncomp, 0)
   let block = FixedArray::make(64, 0)
   let idct_out = FixedArray::make(64, 0)
+  let idct_scratch = PdfJpegIdctScratch::new()
   let mut mcu_count = 0
   for mcu_y in 0..<mcu_rows {
     for mcu_x in 0..<mcu_cols {
@@ -568,6 +488,8 @@ fn pdf_jpeg_decode(
           None =>
             raise MissingChunk("quantization table " + c.quant_id.to_string())
         }
+        let component_pixels = comp_bufs[ci]
+        let comp_stride = mcu_cols * c.h_sample * 8
         for bv in 0..<c.v_sample {
           for bh in 0..<c.h_sample {
             // Decode one 8x8 block
@@ -579,9 +501,7 @@ fn pdf_jpeg_decode(
             let dc_diff = pdf_jpeg_receive_extend(br, dc_cat)
             prev_dc[ci] += dc_diff
             // Clear block
-            for i in 0..<64 {
-              block[i] = 0
-            }
+            block.fill(0)
             block[0] = prev_dc[ci] * qt[0]
             // AC coefficients
             let mut k = 1
@@ -612,16 +532,15 @@ fn pdf_jpeg_decode(
               k += 1
             }
             // IDCT
-            pdf_jpeg_idct_block(block, idct_out)
+            pdf_jpeg_idct_block(block, idct_out, idct_scratch)
             // Write block to component buffer
-            let comp_stride = mcu_cols * c.h_sample * 8
             let bx = (mcu_x * c.h_sample + bh) * 8
             let by = (mcu_y * c.v_sample + bv) * 8
             for yy in 0..<8 {
+              let target_row = (by + yy) * comp_stride + bx
+              let source_row = yy * 8
               for xx in 0..<8 {
-                comp_bufs[ci][(by + yy) * comp_stride + bx + xx] = idct_out[yy *
-                8 +
-                xx].to_byte()
+                component_pixels[target_row + xx] = idct_out[source_row + xx].to_byte()
               }
             }
           }
@@ -672,35 +591,73 @@ fn pdf_jpeg_interleaved_samples(
       }
   }
   let out = FixedArray::make(fi.width * fi.height * ncomp, b'\x00')
-  let samples = FixedArray::make(ncomp, 0)
-  for y in 0..<fi.height {
-    for x in 0..<fi.width {
-      for ci in 0..<ncomp {
-        let c = fi.components[ci]
-        let stride = mcu_cols * c.h_sample * 8
-        samples[ci] = comp_bufs[ci][y * c.v_sample / fi.max_v * stride +
-        x * c.h_sample / fi.max_h].to_int()
+  if ncomp == 3 {
+    // Hoist plane metadata and each sampled row out of the pixel loop. Keep
+    // integer sampling positions and colour arithmetic identical to the
+    // generic component path, including non-dividing sampling factors.
+    let plane0 = comp_bufs[0]
+    let plane1 = comp_bufs[1]
+    let plane2 = comp_bufs[2]
+    let h0 = fi.components[0].h_sample
+    let h1 = fi.components[1].h_sample
+    let h2 = fi.components[2].h_sample
+    let v0 = fi.components[0].v_sample
+    let v1 = fi.components[1].v_sample
+    let v2 = fi.components[2].v_sample
+    let max_h = fi.max_h
+    let max_v = fi.max_v
+    let stride0 = mcu_cols * h0 * 8
+    let stride1 = mcu_cols * h1 * 8
+    let stride2 = mcu_cols * h2 * 8
+    for y in 0..<fi.height {
+      let row0 = y * v0 / max_v * stride0
+      let row1 = y * v1 / max_v * stride1
+      let row2 = y * v2 / max_v * stride2
+      let output_row = y * fi.width * 3
+      for x in 0..<fi.width {
+        let a = plane0[row0 + x * h0 / max_h]
+        let b = plane1[row1 + x * h1 / max_h]
+        let c = plane2[row2 + x * h2 / max_h]
+        let offset = output_row + x * 3
+        if transform {
+          let luma = a.to_int().to_double()
+          let cb = b.to_int().to_double()
+          let cr = c.to_int().to_double()
+          out[offset] = pdf_image_clamped_byte(luma - 179.456 + 1.402 * cr).to_byte()
+          out[offset + 1] = pdf_image_clamped_byte(
+            luma + 135.459 - 0.344 * cb - 0.714 * cr,
+          ).to_byte()
+          out[offset + 2] = pdf_image_clamped_byte(luma - 226.816 + 1.772 * cb).to_byte()
+        } else {
+          out[offset] = a
+          out[offset + 1] = b
+          out[offset + 2] = c
+        }
       }
-      if transform && ncomp >= 3 {
-        let y = samples[0].to_double()
-        let cb = samples[1].to_double()
-        let cr = samples[2].to_double()
-        if ncomp == 4 {
+    }
+  } else {
+    let samples = FixedArray::make(ncomp, 0)
+    for y in 0..<fi.height {
+      for x in 0..<fi.width {
+        for ci in 0..<ncomp {
+          let c = fi.components[ci]
+          let stride = mcu_cols * c.h_sample * 8
+          samples[ci] = comp_bufs[ci][y * c.v_sample / fi.max_v * stride +
+          x * c.h_sample / fi.max_h].to_int()
+        }
+        if transform && ncomp == 4 {
+          let y = samples[0].to_double()
+          let cb = samples[1].to_double()
+          let cr = samples[2].to_double()
           samples[0] = pdf_image_clamped_byte(434.456 - y - 1.402 * cr)
           samples[1] = pdf_image_clamped_byte(
             119.541 - y + 0.344 * cb + 0.714 * cr,
           )
           samples[2] = pdf_image_clamped_byte(481.816 - y - 1.772 * cb)
-        } else {
-          samples[0] = pdf_image_clamped_byte(y - 179.456 + 1.402 * cr)
-          samples[1] = pdf_image_clamped_byte(
-            y + 135.459 - 0.344 * cb - 0.714 * cr,
-          )
-          samples[2] = pdf_image_clamped_byte(y - 226.816 + 1.772 * cb)
         }
-      }
-      for ci in 0..<ncomp {
-        out[(y * fi.width + x) * ncomp + ci] = samples[ci].to_byte()
+        for ci in 0..<ncomp {
+          out[(y * fi.width + x) * ncomp + ci] = samples[ci].to_byte()
+        }
       }
     }
   }

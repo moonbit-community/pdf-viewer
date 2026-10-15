@@ -851,12 +851,106 @@ Local diagnostics are `_build/colour-speed/cache-probe.json`,
 `full-{chromium,webkit}.json`. Private input bytes, text and rendered images
 remain unpublished.
 
+## Fixed: sparse JPEG IDCT and invariant sample-packing work
+
+JPEG decoding still accounted for about 267 ms in the previous diagnostic
+readable-Worker CPU profile of a roughly 1.88-second preparation sweep. The
+baseline decoder already recognized entirely DC-only blocks. On the private
+input, 69,035 of 91,674 blocks take that shortcut; among the other 22,639 blocks,
+about 84% of coefficients and 59% of columns are zero.
+
+The separable IDCT now visits active frequencies and columns in ascending
+order, hoists invariant scale products, and reuses one fixed scratch workspace
+per decode across both baseline and progressive scans. It retains the original
+multiplication, accumulation and rounding order for nonzero terms. Every
+scratch value consumed by a block is overwritten by that block. Whole-block
+DC handling stays separate. Block clearing uses the array fill primitive, and
+component writes hoist the row addresses.
+
+Three-component sample packing now keeps plane references, strides and each
+sampled row outside the pixel loop. Integer sampling coordinates and the RGB
+coding transform retain their existing arithmetic, including unusual 1–4
+sampling factors that do not divide the maximum factor and partial edge MCUs.
+The packing path adds no image-sized coordinate tables. Gray and CMYK/YCCK
+retain the generic component loop and their existing transform policy.
+
+Nine alternating warmed Node pairs over the ten actual JPEG decodes give
+same-batch medians of 166.1 to 89.4 ms (46%). Complete decoded bytes match, as do all 13 complete
+page payloads. All 12 authored JPEG fixtures also match for each of the three
+ColorTransform settings (36 comparisons). Separate dense, sparse and DC-only
+IDCT microbenchmarks check exact outputs and find no dense-case slowdown in
+that diagnostic batch. These are decoder diagnostics, not browser latency.
+
+Sixteen fresh document/Worker pairs per browser compare the unmodified
+packaged Worker against `a58c715`. Both Workers finish opening before page
+measurement. Pages 1–13 prepare sequentially in each Worker, alternating which
+variant goes first at every page and context. Timing includes ordinary RPC and
+JSON parsing at CSS width 1216 and DPR 2; Canvas, DOM and hashing are excluded.
+
+| 13-page preparation RPC + JSON / median | `a58c715` | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Chromium 145 | 1723.9 ms | **1594.2 ms** | **-7.5%** |
+| WebKit 26 | 1868.5 ms | **1775.0 ms** | **-5.0%** |
+
+Every Chromium pair and 12 of 16 WebKit pairs improve. Page 5 preparation
+medians decrease from 353.1 to 260.7 ms and from 342 to 281.5 ms (26%/18%).
+Page 6 decreases from 179.3 to 149 ms and from 172 to 162 ms (17%/6%).
+Every complete payload SHA-256 matches on all 13 pages in every pair.
+
+Eight additional fresh paired documents use the shipped host to measure first
+preparation plus Canvas painting and a full-pixel flush after both documents
+have opened. The two document-owned image and pattern caches are independent:
+every render asserts that its peer cache is untouched, and each page's resulting
+cache accounting agrees between variants. Page order remains sequential within
+each document and variant order alternates at every page/context. Hashing,
+DOM mounting and document opening are excluded from these page totals.
+
+| 13-page first preparation + Canvas/flush after opening / median | Baseline | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Chromium 145 | 2566.4 ms | **2445.4 ms** | **-4.7%** |
+| WebKit 26 | 2509.5 ms | **2366.0 ms** | **-5.7%** |
+
+All eight Chromium pairs and five WebKit pairs improve in this batch. Every
+complete payload and full-page RGBA hash matches the independent ordinary
+packaged-reader run on all 13 pages. This is an uncached first page pass after
+opening, not a redraw of prepared pages.
+
+Separate eight-pair ordinary complete-document sweeps include File reading,
+Worker/graphics initialization, document opening, every page RPC, Canvas
+painting and full-pixel flush. Chromium medians are 2488.4 to 2393.7 ms versus
+562.1 ms for the pinned PDF.js Canvas API. WebKit is 2573.5 to 2641.5 ms versus
+821 ms. Main-module loading, network PDF downloads, DOM mounting, hashing and
+teardown remain outside this timing scope. The reader RPC still computes its
+selection/editor/accessibility payload. All baseline/candidate RGBA hashes
+match. Whole-document timing continues to vary with background load, so this
+batch does not establish a cold-open improvement across both browsers; use the
+interleaved preparation comparison for the stronger latency conclusion.
+
+The default and JS suites pass (728/734); all 20 JPEG regressions also pass on
+Wasm GC and native. A dense arithmetic reference checks every single-frequency
+position at multiple amplitudes and 512 changing sparse/dense blocks while
+reusing the same workspace. Sampling regressions cover ordinary and unusual
+factors, both transform modes and partial MCUs. All 52 Canvas replay tests,
+actual Worker regressions and all ten packaged-reader checks in each browser
+pass. Public and internal interfaces are unchanged.
+
+A separate lossless PNG filter probe was rejected. The standard
+[Up/Sub filters](https://www.w3.org/TR/png-3/#9Filters) preserved all samples but
+increased both encoding time and compressed bytes on this input: about
+3.30 MB without filtering became 3.52 MB with Up or 3.70 MB with Sub. PNG
+encoding and image transport are unchanged in the shipped JPEG optimization.
+
+Local records are `_build/image-prepare-speed/jpeg-probe.json`,
+`jpeg-bench.json`, `idct-density.json`, `paired-rpc-{chromium,webkit}.json`,
+`paired-full-{chromium,webkit}.json` and `full-{chromium,webkit}.json`. Private input bytes, text and rendered images
+remain unpublished.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |
 | --- | --- | --- |
 | Complex-page warm drawing | Page 12 still needs 12 Canvas pixel reads and 18 uploads; PDF.js warm drawing needs neither. | Reduce retained shading's source readback, Float32 conversion and required scene bitmap creation. |
-| Cold image preparation | An earlier Node page-12 profile took about 409 ms overall: colour processing had 115 ms self time, PNG encoding 46 ms, font loading 51 ms and Flate decoding 37 ms. The latest paired page-5 RPC still needs about 345–348 ms. | Reuse decoded image/font resources and avoid encoding pixels that the host can consume directly. |
+| Cold image preparation | An earlier Node page-12 profile took about 409 ms overall: colour processing had 115 ms self time, PNG encoding 46 ms, font loading 51 ms and Flate decoding 37 ms. The latest paired page-5 RPC still needs about 261–282 ms. | Reuse decoded image/font resources and avoid encoding pixels that the host can consume directly. |
 | New viewport payloads | The compiled page-12 response still sends about 1.30 million JSON characters, down from 2.16 million at scale 1. Image data and repeated clipping remain inline. | Intern decoded image/clip resources and reuse prepared plans between viewports. |
 | Worker startup | An earlier reader batch measured about 105 ms in Chromium and 87 ms in WebKit after static-data compaction; the Worker is about 5.0 MiB. | Reduce remaining initial code evaluation and static initialization; retain first-use checks for CJK/fonts. |
 
