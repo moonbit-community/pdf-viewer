@@ -98,7 +98,7 @@ try{
       (new URL(request.url()).origin!==new URL(base).origin||!['GET','HEAD'].includes(request.method())))
       failures.push(request.method()+' '+request.url());
   });
-  page.on('pageerror',error=>failures.push(String(error)));
+  page.on('pageerror',error=>{failures.push(String(error));console.error('Browser error',error.stack||String(error));});
   page.on('requestfailed',request=>failures.push(request.url()+' '+request.failure()?.errorText));
   page.on('response',response=>{if(response.status()>=400)failures.push(response.url()+' '+response.status());});
   await check('Static artifact starts Rabbita through a repository subpath',async()=>{
@@ -586,6 +586,8 @@ try{
     file:document.querySelector('#file-name')?.textContent,
     busy:document.querySelector('#viewer')?.getAttribute('aria-busy'),
     error:document.querySelector('#error')?.textContent,
+    worker:globalThis.pdfViewerHost?.pdf.diagnostics(),
+    mainIccReady:!!globalThis.__moonbit_pdf_icc,
   })).catch(()=>null));
   if(page)await page.screenshot({path:resolve(output,'failure.png'),fullPage:true}).catch(()=>{});
   process.exitCode=1;

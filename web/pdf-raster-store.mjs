@@ -58,7 +58,7 @@ export class PdfRasterStore{
   const entry=this.entries.get(uri);if(!entry)throw missing();
   const {width,height,channels,rows}=entry,stride=width*channels+1;let canvas,bitmap;
   try{
-   canvas=this.createCanvas(width,height);const context=canvas.getContext('2d',{alpha:channels===4});
+   canvas=this.createCanvas(width,height);const context=canvas.getContext('2d');
    if(!context)throw new Error('PDF raster Canvas context unavailable');
    const data=context.createImageData(width,height),rgba=data.data;
    if(channels===4){for(let y=0;y<height;y++)rgba.set(rows.subarray(y*stride+1,(y+1)*stride),y*width*4);}
