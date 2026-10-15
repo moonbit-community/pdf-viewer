@@ -681,7 +681,7 @@ fn pdf_svg_image(
                 "\" x=\"0\" y=\"0\" width=\"1\" height=\"1\" transform=\"" +
                 pdf_svg_image_transform(page, item.quad, scale) +
                 "\" preserveAspectRatio=\"none\" href=\"" +
-                data_uri +
+                pdf_image_embedded_uri(data_uri) +
                 "\" opacity=\"" +
                 item.fill_alpha.to_string() +
                 "\"" +
@@ -743,6 +743,7 @@ fn pdf_svg_colored_mask_data_uri(
   item : PdfVisualItem,
   mask_data_uri : String,
 ) -> String {
+  let mask_data_uri = pdf_image_embedded_uri(mask_data_uri)
   let (width, height) = match item.resource {
     Some(resource) =>
       (resource.width.unwrap_or(1).max(1), resource.height.unwrap_or(1).max(1))
@@ -791,6 +792,8 @@ fn pdf_svg_alpha_mask_data_uri(
   data_uri : String,
   alpha_mask_data_uri : String,
 ) -> String {
+  let data_uri = pdf_image_embedded_uri(data_uri)
+  let alpha_mask_data_uri = pdf_image_embedded_uri(alpha_mask_data_uri)
   let (width, height) = match item.resource {
     Some(resource) =>
       (

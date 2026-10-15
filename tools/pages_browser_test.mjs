@@ -76,6 +76,16 @@ function codecFixture(profile){
     stream('','/ICC cs .25 .5 .75 scn 0 0 32 32 re f'),
   ]);
 }
+function alphaRasterFixture(){
+  return makePdf([
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Count 1 /Kids [3 0 R] /MediaBox [0 0 32 32] >>',
+    '<< /Type /Page /Parent 2 0 R /Resources << /XObject << /I 5 0 R >> >> /Contents 4 0 R >>',
+    stream('','q 24 0 0 24 4 4 cm /I Do Q'),
+    stream('/Type /XObject /Subtype /Image /Width 2 /Height 2 /BitsPerComponent 8 /ColorSpace /DeviceRGB /SMask 6 0 R /Interpolate true',Buffer.from([255,0,0,0,255,0,0,0,255,255,128,0])),
+    stream('/Type /XObject /Subtype /Image /Width 2 /Height 2 /BitsPerComponent 8 /ColorSpace /DeviceGray',Buffer.from([0,64,128,255])),
+  ]);
+}
 try{
   browser=await launcher.launch({headless:true,...(engine==='chromium'?{
     executablePath:process.env.PDF_CHROMIUM||chromium.executablePath(),args:['--no-sandbox'],
@@ -445,6 +455,113 @@ try{
     assert.equal(result.prevented,true);assert.equal(result.text,result.expected.text);
     assert.deepEqual(result.actual,result.expected,'Local selection retains the exact Worker source indices and original quads');
     assert.equal(await page.locator('#error').isVisible(),false);assert.deepEqual(failures,[]);
+  });
+  await check('Transferable raster samples and warm replay match PNG after eviction, cancellation and reopen',async()=>{
+    const result=await page.evaluate(async()=>{
+      const api=pdfViewerHost,checked=raw=>{const value=JSON.parse(raw);if(!value.ok)throw Error(value.error);return value;};
+      const source=()=>api.pdf.call('cache_info').then(checked).then(value=>value.raster_sources);
+      const hash=async bytes=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(value=>value.toString(16).padStart(2,'0')).join('');
+      const paint=async prepared=>{
+        const canvas=document.createElement('canvas');
+        try{
+          // This high-frequency fixture also has a one-pixel cold/warm Canvas
+          // difference on the legacy PNG path. Compare equally warmed replay;
+          // native decoded image samples are checked independently below.
+          for(let repeat=0;repeat<2;repeat++){
+            const painted=await api.paintCanvas(canvas,prepared,2,()=>true,()=>{throw Error('Unexpected process conversion');});
+            if(painted.diagnostics.length)throw Error(JSON.stringify(painted.diagnostics));
+            canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height);
+          }
+          return await hash(canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data);
+        }
+        finally{canvas.width=canvas.height=0;}
+      };
+      const initial=await source(),raw=await api.pdf.call('render_page',[1,1,0,true,true]),prepared=checked(raw),bitmapHash=await paint(prepared);
+      let legacy;
+      api.pdf.rasterImages=false;
+      try{legacy=checked(await api.pdf.call('render_page',[1,1,0,true,true]));}finally{api.pdf.rasterImages=true;}
+      if(JSON.stringify(legacy).includes('pdf-raster:'))throw Error('Legacy callers received a private raster ID');
+      const legacyHash=await paint(legacy);
+      for(const key of ['layer','editor','annotations','accessibility','intent'])if(JSON.stringify(prepared[key])!==JSON.stringify(legacy[key]))throw Error('Semantic payload changed: '+key);
+      if(!initial.supported)return {supported:false,bitmapHash,legacyHash};
+      const uri=raw.match(/pdf-raster:[a-z0-9-]+:[0-9]+:[0-9]+/)?.[0];if(!uri)throw Error('No transferable image in the reading fixture');
+      const firstImage=(value,prefix)=>typeof value==='string'?(value.startsWith(prefix)?value:null):value&&typeof value==='object'?Object.values(value).map(child=>firstImage(child,prefix)).find(Boolean):null;
+      const png=firstImage(legacy.canvas,'data:image/png'),load=(await import('./pdf-canvas.mjs')).loadPdfRaster;
+      const decoded=[];
+      for(const image of [await api.pdf.loadRaster(uri),await load(png)]){
+        const canvas=document.createElement('canvas');
+        try{canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').drawImage(image,0,0);decoded.push(await hash(canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data));}
+        finally{image.close?.();canvas.width=canvas.height=0;}
+      }
+      if(decoded[0]!==decoded[1])throw Error('Transferred bitmap samples differ from decoded PNG');
+      const before=await source();api.clearRenderAssets();
+      const rebuiltHash=await paint(prepared),rebuilt=await source();
+      if(rebuilt.rebuilds<=before.rebuilds)throw Error('Evicted bitmaps were not rebuilt from retained source rows');
+      await api.pdf.call('render_page',[1,1,0,true,true]);
+      const reused=await source();if(reused.transfers!==rebuilt.transfers)throw Error('Resident bitmaps were transferred twice');
+      api.clearRenderAssets();const controller=new AbortController();
+      const cancelled=api.pdf.call('render_page',[1,1.25,0,true,true],{signal:controller.signal});controller.abort();
+      try{await cancelled;throw Error('Cancelled raster render resolved');}catch(error){if(error.name!=='AbortError')throw error;}
+      const afterCancel=await source();if(afterCancel.transfers<=reused.transfers)throw Error('Cancellation did not exercise an active transfer');
+      if(api.renderAssetsDiagnostics().entries!==0)throw Error('Cancelled reply published bitmaps');
+      const recovered=await paint(checked(await api.pdf.call('render_page',[1,1,0,true,true])));
+      let reopenURI=uri;
+      for(const method of ['set_font_fallbacks','apply_edits']){
+        checked(await api.pdf.call(method,['[]']));
+        if(api.renderAssetsDiagnostics().entries!==0)throw Error('Document invalidation retained decoded bitmaps: '+method);
+        try{await api.pdf.loadRaster(reopenURI);throw Error('An expired raster was recreated');}catch(error){if(error.code!=='raster-expired')throw error;}
+        const fresh=await api.pdf.call('render_page',[1,1,0,true,true]);checked(fresh);
+        const next=fresh.match(/pdf-raster:[a-z0-9-]+:[0-9]+:[0-9]+/)?.[0];
+        if(!next||next===reopenURI)throw Error('Document invalidation reused a stale raster ID');reopenURI=next;
+      }
+      api.pdf.close();if(api.renderAssetsDiagnostics().entries!==0)throw Error('Closing a document retained decoded rasters');
+      return {supported:true,uri:reopenURI,bitmapHash,legacyHash,rebuiltHash,recovered,sources:afterCancel};
+    });
+    assert.equal(result.bitmapHash,result.legacyHash,'Transferred and encoded images must paint identical full-page RGBA');
+    if(result.supported){
+      assert.equal(result.bitmapHash,result.rebuiltHash);assert.equal(result.bitmapHash,result.recovered);
+      assert(result.sources.bytes<=result.sources.budget_bytes&&result.sources.entries<=result.sources.max_entries);
+      await page.locator('#file-input').setInputFiles({name:'bitmap-reopened.pdf',mimeType:'application/pdf',buffer:readingFixture(await readFile('assets/icc/rgb-gamma22.icc'))});
+      await page.waitForFunction(()=>document.querySelector('#viewer').getAttribute('aria-busy')==='false'&&document.querySelector('#file-name').textContent==='bitmap-reopened.pdf'&&document.querySelector('.page[data-rendered="true"]'));
+      const expired=await page.evaluate(async uri=>{try{await pdfViewerHost.pdf.loadRaster(uri);return null;}catch(error){return error.code;}},result.uri);
+      assert.equal(expired,'raster-expired','A reopened Worker must reject IDs from the previous document');
+    }
+    assert.deepEqual(failures,[]);
+  });
+  await check('RGBA bitmaps and PNG fallbacks preserve pixels across unsupported hosts, transfer failure and source saturation',async()=>{
+    for(const mode of ['rgba','unsupported','transfer-failure','full-budget']){
+      const context=await browser.newContext({viewport:{width:1280,height:900},deviceScaleFactor:2}),errors=[];
+      try{
+        await context.route('**/pdf-worker.js',async route=>{
+          const response=await route.fetch(),body=await response.text();
+          const prefix=mode==='rgba'?'':mode==='unsupported'?'globalThis.OffscreenCanvas=undefined;':mode==='transfer-failure'?
+            'const rasterTestPost=self.postMessage.bind(self);self.postMessage=(message,transfer)=>{if(Array.isArray(message.rasterImages)&&message.rasterImages.length)throw new DOMException("Unsupported bitmap transfer","DataCloneError");return rasterTestPost(message,transfer);};':
+            'let rasterTestStore;Object.defineProperty(globalThis,"__moonbit_pdf_rasters",{configurable:true,get(){return rasterTestStore;},set(value){rasterTestStore=value;value.limit=0;}});';
+          await route.fulfill({response,body:prefix+'\n'+body});
+        });
+        const fallback=await context.newPage();fallback.on('pageerror',error=>errors.push(String(error)));await fallback.goto(base);
+        await fallback.locator('#file-input').setInputFiles({name:'fallback.pdf',mimeType:'application/pdf',buffer:mode==='rgba'?alphaRasterFixture():readingFixture(await readFile('assets/icc/rgb-gamma22.icc'))});
+        await fallback.waitForFunction(()=>document.querySelector('#viewer').getAttribute('aria-busy')==='false'&&document.querySelector('#file-name').textContent==='fallback.pdf'&&document.querySelector('.page[data-page="1"][data-rendered="true"]'));
+        const result=await fallback.evaluate(async mode=>{
+          const raw=await pdfViewerHost.pdf.call('render_page',[1,1,0,true,true]),info=JSON.parse(await pdfViewerHost.pdf.call('cache_info'));
+          const pixels=[];
+          if(mode==='rgba'){
+            const paint=async prepared=>{
+              const c=document.createElement('canvas');try{await pdfViewerHost.paintCanvas(c,prepared,2,()=>true,()=>{throw Error('Unexpected process conversion');});return [...c.getContext('2d').getImageData(0,0,c.width,c.height).data];}finally{c.width=c.height=0;}
+            };
+            pixels.push(await paint(JSON.parse(raw)));pdfViewerHost.pdf.rasterImages=false;
+            try{pixels.push(await paint(JSON.parse(await pdfViewerHost.pdf.call('render_page',[1,1,0,true,true]))));}finally{pdfViewerHost.pdf.rasterImages=true;}
+          }
+          return {ok:JSON.parse(raw).ok,privateURI:raw.includes('pdf-raster:'),sources:info.raster_sources,error:document.querySelector('#error').textContent,pixels};
+        },mode);
+        assert.equal(result.ok,true,mode);assert.equal(result.error,'',mode);
+        if(mode==='rgba'){assert.deepEqual(result.pixels[0],result.pixels[1],'Interpolated RGBA and transparent-edge pixels must match PNG exactly');if(result.sources.supported)assert(result.privateURI);}
+        else assert.equal(result.privateURI,false,mode);
+        if(mode==='full-budget'){assert.equal(result.sources.bytes,0);assert.equal(result.sources.entries,0);if(result.sources.supported)assert(result.sources.rejections>0);}
+        else if(mode!=='rgba')assert.equal(result.sources.supported,false,mode);
+        assert.deepEqual(errors,[],mode);
+      }finally{await context.close();}
+    }
   });
   ok=true;
 }catch(error){

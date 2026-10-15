@@ -2,8 +2,11 @@ import * as bridge from "./_generated/pdf.js";
 import { initializePdfGraphics } from "./pdf-graphics.mjs";
 import { PdfRangeSource, PdfRangeDocument } from "./pdf-range.mjs";
 import { installPdfFlate } from "./pdf-flate.mjs";
+import { PdfRasterStore } from "./pdf-raster-store.mjs";
 
 installPdfFlate();
+const rasters = new PdfRasterStore();
+globalThis.__moonbit_pdf_rasters = rasters;
 
 const profileStartup = new URL(import.meta.url).searchParams.get("profile") === "startup";
 const moduleReadyMs = profileStartup ? performance.now() : 0;
@@ -34,13 +37,14 @@ let hits = 0;
 let misses = 0;
 let evictions = 0;
 
-function clearRenders() {
+function clearRenders(clearImages = false) {
   renders.clear();
   bytes = hits = misses = evictions = 0;
+  if (clearImages) rasters.reset();
 }
 
-function render(method, args) {
-  const key = `${method}:${args.join(":")}`;
+function render(method, args, rasterImages) {
+  const key = `${method}:${args.join(":")}:${rasterImages}`;
   if (renders.has(key)) {
     const entry = renders.get(key);
     renders.delete(key);
@@ -49,7 +53,12 @@ function render(method, args) {
     return entry.result;
   }
   misses++;
-  const result = bridge[method](...args);
+  let result;
+  // SVG and print exports stay self-contained. The hook is synchronous and
+  // cannot remain enabled across an asynchronous operation or a failed render.
+  rasters.enabled = rasterImages && method === "render_page" && args[3] === true && args[4] === true;
+  try { result = bridge[method](...args); }
+  finally { rasters.enabled = false; }
   const size = result.length * 2;
   if (size <= budget && JSON.parse(result).ok) {
     while (renders.size >= maxEntries || bytes + size > budget) {
@@ -71,19 +80,25 @@ async function searchRanges(args) {
     const opened = JSON.parse(bridge.prepare_editor(await rangeSource.complete(error.message)));
     if (!opened.ok) throw Error(opened.error);
     rangeDocument = null;
-    clearRenders();
+    clearRenders(true);
     return bridge.search_pdf(...args);
   }
 }
 
 async function handleMessage(event) {
-  const { id, method, args } = event.data;
+  const { id, method, args, rasterImages, rasterKeys } = event.data;
   try {
+    if (method === "raster_image") {
+      const uri = args[0];
+      if (!rasters.entries.has(uri)) throw Object.assign(new Error("PDF raster belongs to an expired document"), {code:"raster-expired"});
+      postResult(id, uri, true, [], uri);
+      return;
+    }
     if (method !== "open_pdf_url" && (!Object.hasOwn(bridge, method) || typeof bridge[method] !== "function")) {
       throw Object.assign(new Error("Unknown PDF operation"), { code: "invalid-operation" });
     }
-    if (["open_pdf", "open_pdf_url", "open_pdf_with_password", "close_pdf", "set_font_fallbacks"].includes(method)) {
-      clearRenders();
+    if (["open_pdf", "open_pdf_url", "open_pdf_with_password", "close_pdf", "prepare_editor"].includes(method)) {
+      clearRenders(true);
     }
     if (["open_pdf", "open_pdf_with_password", "close_pdf"].includes(method)) {
       rangeDocument = rangeSource = null;
@@ -96,7 +111,7 @@ async function handleMessage(event) {
         const opened=JSON.parse(bridge.prepare_editor(await rangeSource.complete("PDF editing")));
         if (!opened.ok) throw Object.assign(new Error(opened.error),{code:opened.code});
         rangeDocument=null;
-        clearRenders();
+        clearRenders(true);
       }
     }
     if (rangeDocument && method !== "open_pdf_url" && (!xfa || ["document_info", "download_metadata", "download_attachment"].includes(method))) {
@@ -105,7 +120,7 @@ async function handleMessage(event) {
         if (error.code === "source-changed") throw error;
         bridge.prepare_editor(await rangeSource.complete(error.message));
         rangeDocument = null;
-        clearRenders();
+        clearRenders(true);
       }
     }
     let result = xfa && method === "apply_edits" ? xfa.apply(JSON.parse(args[0])) : rangeDocument && !xfa && method === "search_pdf" ? await searchRanges(args) : xfa && ["render_page", "render_print_page"].includes(method)
@@ -113,7 +128,7 @@ async function handleMessage(event) {
       ? JSON.stringify({ok:true,layouts:xfa.layouts}) : xfa && method === "select_page_text"
       ? xfa.select(...args) : xfa && method === "search_pdf"
       ? xfa.search(...args) : ["render_page", "render_print_page"].includes(method)
-      ? render(method, args) : method === "open_pdf_url" ? await openURL(...args) : bridge[method](...args);
+      ? render(method, args, rasterImages === true && rasters.supported) : method === "open_pdf_url" ? await openURL(...args) : bridge[method](...args);
     if(xfa&&method==='editor_info'){
       const permissions=JSON.parse(result);
       result=JSON.stringify({...permissions,annotations:false,editable:permissions.forms===true});
@@ -137,7 +152,7 @@ async function handleMessage(event) {
       }
     }
     if (method === "close_pdf") {xfa?.dispose();xfa = null;}
-    if (["apply_edits", "set_optional_content_visibility", "set_optional_content_config"].includes(method) && JSON.parse(result).ok) clearRenders();
+    if (["apply_edits", "apply_xfa_packets", "set_font_fallbacks", "set_optional_content_visibility", "set_optional_content_config"].includes(method) && JSON.parse(result).ok) clearRenders(true);
     if (["render_page", "render_print_page"].includes(method) && rangeSource && rangeSource.stats.first_page_bytes === null && JSON.parse(result).ok) {
       rangeSource.stats.first_page_bytes = rangeSource.stats.received_bytes;
     }
@@ -145,12 +160,29 @@ async function handleMessage(event) {
       result = JSON.stringify({ ...JSON.parse(result), render: {
         entries: renders.size, bytes, budget_bytes: budget,
         max_entries: maxEntries, hits, misses, evictions,
-      }, range: rangeSource ? {...rangeSource.diagnostics(), objects: JSON.parse(bridge.range_cache_info())} : null });
+      }, raster_sources: rasters.diagnostics(), range: rangeSource ? {...rangeSource.diagnostics(), objects: JSON.parse(bridge.range_cache_info())} : null });
     }
-    self.postMessage({ id, result });
+    postResult(id, result, rasterImages === true && rasters.supported, rasterKeys);
   } catch (error) {
-    self.postMessage({ id, error: { message: error.message || String(error), code: error.code } });
+    self.postMessage({ id, rasterEpoch: rasters.epoch, error: { message: error.message || String(error), code: error.code } });
   }
+}
+
+function postResult(id, result, useRasters, known, requestedURI = null) {
+  let images = [];
+  if (useRasters) {
+    try {
+      images = requestedURI ? [rasters.bitmap(requestedURI)] : rasters.prepare(result, known);
+      self.postMessage({id, result:requestedURI ? null : result, rasterImages:images, rasterEpoch:rasters.epoch}, images.map(image=>image.bitmap));
+      return;
+    } catch {
+      for (const image of images) image.bitmap.close?.();
+      // Some hosts expose Canvas but cannot transfer a bitmap. Existing IDs
+      // remain backed by rows, so both cached plans and future calls recover.
+      rasters.supported = false;
+    }
+  }
+  self.postMessage({id, result:requestedURI ? rasters.embed(requestedURI) : rasters.selfContained(result), rasterEpoch:rasters.epoch});
 }
 
 async function start() {
@@ -158,6 +190,7 @@ async function start() {
   // images and colours. Never accept PDF work before both attempts finish.
   const initializeStart = profileStartup ? performance.now() : 0;
   const graphics = await initializePdfGraphics();
+  rasters.initialize();
   self.addEventListener("message", handleMessage);
   self.postMessage({ type: "ready", ...(profileStartup ? { benchmark: {
     moduleReadyMs, graphicsMs: performance.now() - initializeStart,
@@ -165,7 +198,7 @@ async function start() {
       name: new URL(resource.name).pathname, duration: resource.duration,
       bytes: resource.transferSize,
     })),
-  } } : {}), graphics: {
+  } } : {}), rasterImages:rasters.supported, graphics: {
     icc: Boolean(graphics.icc), jbig2: Boolean(graphics.jbig2),
     diagnostics: graphics.diagnostics,
   } });

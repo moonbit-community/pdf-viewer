@@ -5,7 +5,8 @@ function aborted() {
 }
 
 export class PdfWorkerClient {
-  constructor({ workerURL = new URL("./pdf-worker.js", import.meta.url) } = {}) {
+  constructor({ workerURL = new URL("./pdf-worker.js", import.meta.url), rasterImages = false,
+    onRaster, onRasterReset, rasterKeys = () => [] } = {}) {
     this.workerURL = workerURL;
     this.worker = null;
     this.queue = [];
@@ -13,6 +14,12 @@ export class PdfWorkerClient {
     this.ready = false;
     this.graphics = null;
     this.nextId = 0;
+    this.rasterImages = rasterImages;
+    this.rasterSupported = false;
+    this.rasterEpoch = null;
+    this.onRaster = onRaster;
+    this.onRasterReset = onRasterReset;
+    this.rasterKeys = rasterKeys;
     this.stats = { completed: 0, cancelled: 0, workerStarts: 0, workerErrors: 0 };
   }
 
@@ -34,30 +41,55 @@ export class PdfWorkerClient {
     });
     worker.addEventListener("messageerror", () => fail("Unable to read a PDF Worker message"));
     worker.addEventListener("message", event => {
-      if (this.worker !== worker) return;
       const message = event.data;
+      const discard = () => { for (const image of message.rasterImages || []) image.bitmap.close?.(); };
+      if (this.worker !== worker) { discard(); return; }
       if (message.type === "startup-error") {
         fail(message.error?.message || "Unable to initialize the PDF Worker graphics engine");
         return;
       }
       if (message.type === "ready") {
         this.graphics = message.graphics || null;
+        this.rasterSupported = message.rasterImages === true;
         clearTimeout(this.startupTimer);
         this.ready = true;
         this.drain();
         return;
       }
       const task = this.active;
-      if (!task || message.id !== task.id) return;
+      if (!task || message.id !== task.id) { discard(); return; }
       this.active = null;
+      if (message.rasterEpoch !== undefined && this.rasterEpoch !== message.rasterEpoch) {
+        this.rasterEpoch = message.rasterEpoch;
+        this.onRasterReset?.();
+      }
       if (!task.settled) {
         this.stats.completed++;
         if (message.error) {
           this.settle(task, Object.assign(new Error(message.error.message), {
             code: message.error.code || "worker-error",
           }));
-        } else this.settle(task, null, message.result);
-      }
+          discard();
+        } else if (task.method === "raster_image") {
+          const image = message.rasterImages?.find(image => image.uri === task.args[0]);
+          for (const other of message.rasterImages || []) if (other !== image) other.bitmap.close?.();
+          this.settle(task, null, image?.bitmap || message.result);
+        } else {
+          const images = message.rasterImages || [];
+          let received = 0;
+          try {
+            for (const image of images) {
+              received++;
+              if (this.onRaster) this.onRaster(image.uri, image.bitmap);
+              else image.bitmap.close?.();
+            }
+            this.settle(task, null, message.result);
+          } catch (error) {
+            for (const image of images.slice(received)) image.bitmap.close?.();
+            this.settle(task, error);
+          }
+        }
+      } else discard();
       this.drain();
     });
   }
@@ -97,7 +129,9 @@ export class PdfWorkerClient {
     const task = this.queue.shift();
     this.active = task;
     try {
-      this.worker.postMessage({ id: task.id, method: task.method, args: task.args }, task.transfer);
+      const rasterImages = this.rasterImages && this.rasterSupported;
+      this.worker.postMessage({ id: task.id, method: task.method, args: task.args,
+        ...(rasterImages ? {rasterImages:true, rasterKeys:this.rasterKeys().slice(0,256)} : {}) }, task.transfer);
     } catch (error) {
       this.active = null;
       this.settle(task, error);
@@ -111,6 +145,9 @@ export class PdfWorkerClient {
     this.worker = null;
     this.ready = false;
     this.graphics = null;
+    this.rasterSupported = false;
+    this.rasterEpoch = null;
+    this.onRasterReset?.();
     for (const task of [...this.queue, ...(this.active ? [this.active] : [])]) {
       if (!task.settled) this.stats.cancelled++;
       this.settle(task, error);
@@ -118,6 +155,8 @@ export class PdfWorkerClient {
     this.queue = [];
     this.active = null;
   }
+
+  loadRaster(uri) { return this.call("raster_image", [uri], {priority:50}); }
 
   diagnostics() {
     return { ...this.stats, worker: Boolean(this.worker), ready: this.ready,

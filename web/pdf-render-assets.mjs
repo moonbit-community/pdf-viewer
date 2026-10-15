@@ -37,6 +37,16 @@ export class PdfRenderAssets{
   try{return await entry.pending;}
   catch(error){entry.leases--;if(entry.retired&&entry.leases===0&&entry.value){this.disposeValue(entry.value);this.values.delete(entry.value);}throw error;}
  }
+ supply(uri,value){
+  if(this.entries.has(uri)){this.disposeValue(value);return;}
+  let bytes;
+  try{bytes=this.estimateBytes(value,uri);}catch(error){this.disposeValue(value);throw error;}
+  if(!Number.isSafeInteger(bytes)||bytes<0||bytes>this.limit){this.disposeValue(value);return;}
+  const entry={uri,epoch:this.epoch,leases:0,bytes,accounted:true,value,retired:false,pending:Promise.resolve(value)};
+  this.entries.set(uri,entry);this.values.set(value,entry);this.bytes+=bytes;this.loads++;
+  this.trim();
+ }
+ rasterKeys(){return [...this.entries.values()].filter(entry=>entry.value&&typeof entry.uri==='string'&&entry.uri.startsWith('pdf-raster:')).slice(-256).map(entry=>entry.uri);}
  release(value){
   const entry=this.values.get(value);if(!entry)return;
   if(entry.leases>0)entry.leases--;

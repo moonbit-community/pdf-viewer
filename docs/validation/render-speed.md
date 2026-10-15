@@ -1136,13 +1136,87 @@ Local reports are `_build/icc-loop-speed/rows-bench.json`, `density.json`,
 eager/256-pixel experiments are diagnostic records only. Private source bytes,
 text and rendered images remain unpublished.
 
+## Fixed: document-owned transferable raster resources
+
+The browser previously used the image export format as its runtime protocol:
+decoded pixels were PNG-compressed, Base64-encoded into JSON, transferred as
+text, then decoded again before Canvas drawing. The shipped reader now opts
+into a Worker-owned raster source catalog and transferable `ImageBitmap`
+resources for eligible RGB/RGBA scanlines. The Canvas plan carries scoped IDs;
+the bitmap transfers alongside the ordinary RPC result. Source decoding, ICC,
+Decode/clipping, masks, rounding and sampling remain unchanged.
+
+This is a source implementation, rather than a generated-JS transform.
+Private JS hooks are enabled only during a synchronous compiled Canvas display
+request and disabled in `finally`. Standalone bridge/Worker consumers retain
+their PNG protocol by default. SVG embedding lazily calls the original encoder
+to produce self-contained PNG URIs, including nested image masks. Print and
+other non-Canvas exports remain self-contained. MoonBit interfaces are unchanged.
+
+The Worker admits at most 256 source buffers and 64 MiB, charging full backing
+buffers and per-entry overhead. Existing admitted IDs remain reproducible for
+their document epoch. When admission is full, subsequent images take the
+ordinary PNG path. This avoids dangling IDs in retained page/JSON caches.
+Lazy SVG/legacy PNG strings have a separate 8 MiB/256-entry LRU. Both catalogs
+clear with document close/reopen, font policy, layers and editing invalidation.
+
+The main thread uses the existing 64 MiB decoded-image LRU and its render
+leases. Prefetched bitmaps enter that pool directly; there is no additional
+unbounded bitmap inbox. Each request advertises at most 256 resident IDs. After
+eviction, a high-priority resource RPC recreates the bitmap from its retained
+source rows. Cancellation, stale replies and reset close unclaimed transfers;
+active leases survive cache disposal until their final release. Missing Canvas
+support or a failed bitmap creation/transfer recovers to the original PNG
+encoder, including already-cached plans containing raster IDs.
+
+Six alternating fresh-context/document sweeps per variant compare the complete
+reader against `c3f7bb1` in each browser. They include File reading,
+Worker/graphics initialization, opening, all 13 preparation RPCs with JSON
+parsing, Canvas drawing and full-pixel flushes at CSS width 1216 and DPR 2.
+Main-module preloading, network PDF download, text/annotation DOM mounting,
+hashing and teardown remain outside timing. The pinned PDF.js Canvas API's
+render promise includes image/operator preparation; its `getPage` time alone
+is not a comparable preparation stage.
+
+| 13-page cold-document total / median | `c3f7bb1` | Candidate | Change | Pinned PDF.js |
+| --- | ---: | ---: | ---: | ---: |
+| Chromium 145 | 2187.3 ms | **1871.6 ms** | **-14.4%** | 587.9 ms |
+| WebKit 26 | 2275.0 ms | **1964.0 ms** | **-13.7%** | 725.5 ms |
+
+All six pairs improve in both engines. Every full-page RGBA hash matches the
+old reader and the independent packaged-reader baseline, on all pages in every
+run. Every complete non-Canvas payload field (text layer, editor, annotations,
+accessibility, intent, SVG and page metadata) also matches. The ordinary wire
+payload decreases from 11,390,119 to 6,886,378 characters. This input admits
+64 resources covering 20,204,254 pixels: 60,670,914 charged source bytes, 64
+initial bitmap transfers and no on-demand rebuilds during the first sweep.
+Lazy self-contained fallbacks occupy 66,468 bytes. These are same-batch gains
+for this input, not cumulative comparisons with earlier machine-load batches;
+a substantial total-time gap to PDF.js remains.
+
+Default/JS suites pass (733/740), along with 52 Canvas checks, ten actual
+Worker checks, eight raster ownership/budget/transport checks and twelve
+packaged-reader checks in each browser. New browser coverage includes exact
+native RGB samples, interpolated RGBA/transparent edges, equally warm full-page
+replay, resource reconstruction after eviction, resident-ID reuse, active
+cancellation, font/edit invalidation, close/reopen, unsupported hosts, failed
+transfers and zero-budget PNG fallback. The high-frequency reading fixture has
+an existing one-pixel difference between cold and warm Canvas rendering even
+on the PNG path; its comparison warms both paths and separately checks native
+decoded samples. The private 13-page cold sweeps retain strict exact hashes.
+
+Local reports are `_build/bitmap-production/full-{chromium,webkit}.json` and
+the corresponding validation logs. The preceding disposable prototype and
+counterfactual reports remain under `_build/structural-gap/`. Private source
+bytes, text and rendered images remain unpublished.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |
 | --- | --- | --- |
 | Complex-page warm drawing | Page 12 still needs 12 Canvas pixel reads and 18 uploads; PDF.js warm drawing needs neither. | Reduce retained shading's source readback, Float32 conversion and required scene bitmap creation. |
-| Cold image preparation | An earlier Node page-12 profile took about 409 ms overall: colour processing had 115 ms self time, PNG encoding 46 ms, font loading 51 ms and Flate decoding 37 ms. The latest paired page-5 RPC still needs about 261–282 ms. | Reuse decoded image/font resources and avoid encoding pixels that the host can consume directly. |
-| New viewport payloads | The compiled page-12 response still sends about 1.30 million JSON characters, down from 2.16 million at scale 1. Image data and repeated clipping remain inline. | Intern decoded image/clip resources and reuse prepared plans between viewports. |
+| Cold image preparation | The latest six-pair Chromium batch still spends a median 183.9 ms preparing page 5. Source image decoding, colour processing and font preparation still execute. | Reuse decoded image/font resources across page builds with document/revision ownership. |
+| New viewport payloads | The compiled page-12 response falls from 1,295,943 to 1,105,935 JSON characters after image transfer, but repeated clipping, font and retained-ink metadata remain inline. | Intern repeated clip/font metadata and reuse prepared plans between viewports. |
 | Worker startup | An earlier reader batch measured about 105 ms in Chromium and 87 ms in WebKit after static-data compaction; the Worker is about 5.0 MiB. | Reduce remaining initial code evaluation and static initialization; retain first-use checks for CJK/fonts. |
 
 The pixel traffic comes from the retained source colour/shape pass, pattern

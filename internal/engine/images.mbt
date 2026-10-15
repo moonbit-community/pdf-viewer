@@ -659,6 +659,10 @@ fn pdf_image_dimension(
 
 ///|
 fn pdf_image_data_uri(mime_type : String, data : Bytes) -> String {
+  let raster = pdf_image_host_raster_uri(mime_type, data)
+  if raster != "" {
+    return raster
+  }
   "data:" + mime_type + ";base64," + @base64.encode(data)
 }
 
@@ -756,6 +760,26 @@ fn pdf_png_of_scanlines(
 ///|
 /// Byte-oriented entry point avoids a four-byte Int for each image channel.
 fn pdf_png_of_scanline_bytes(
+  width : Int,
+  height : Int,
+  colour_type : Int,
+  scanlines : Bytes,
+) -> Bytes raise @core.PdfError {
+  if pdf_image_host_raster_enabled() {
+    let raster = pdf_image_host_raster(width, height, colour_type, scanlines, () => {
+      pdf_png_encode_scanline_bytes(width, height, colour_type, scanlines) catch {
+        _ => b""
+      }
+    })
+    if !raster.is_empty() {
+      return raster
+    }
+  }
+  pdf_png_encode_scanline_bytes(width, height, colour_type, scanlines)
+}
+
+///|
+fn pdf_png_encode_scanline_bytes(
   width : Int,
   height : Int,
   colour_type : Int,
