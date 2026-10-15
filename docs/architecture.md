@@ -303,8 +303,12 @@ dependency tree fixed by the lockfile. After explicit `npm ci` setup,
 LittleCMS JS/Wasm plus standalone JBIG2 Wasm to ignored local paths. The web
 build also runs `tools/prepare_flate_assets.mjs`, which verifies pako source
 hashes from `tools/ci/pako-assets.json` before bundling the image adapter and
-copying its MIT/Zlib license. The Worker installs synchronous typed-array
-Flate/PNG compression hooks; other hosts retain the portable MoonBit codecs.
+copying its MIT/Zlib license. A local build transform updates compression hash
+positions two 16-bit entries at a time, retaining upstream match decisions and
+exact zlib output; its exhaustive and upstream-byte comparisons run in CI.
+The bounded inflater retains unmodified upstream code. The Worker installs
+synchronous typed-array Flate/PNG compression hooks; other hosts retain the
+portable MoonBit codecs.
 The host decoder validates the first zlib trailer, ignores trailing streams,
 and stops at the image output bound. Failed or oversized attempts fall back to
 the portable decoder, retaining its damaged-stream prefix and error behavior.

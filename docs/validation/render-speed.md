@@ -945,6 +945,95 @@ Local records are `_build/image-prepare-speed/jpeg-probe.json`,
 `paired-full-{chromium,webkit}.json` and `full-{chromium,webkit}.json`. Private input bytes, text and rendered images
 remain unpublished.
 
+## Fixed: packed PNG compressor hash sliding
+
+The post-JPEG readable-Worker CPU sample locates about 272 ms in pako PNG
+compression, including about 90 ms in its hash-table slide. The level-1
+compressor updates 65,536 16-bit hash-chain positions each time its 32 KiB
+window slides. Its original loop branches separately for every position.
+
+After checking the pinned pako 2.1.0 source hashes, the asset build replaces
+only that loop with a local equivalent. Each aligned 32-bit word updates two
+16-bit positions with branchless saturating subtraction. The subtraction is
+independent in each native lane, including on a big-endian host. Empty-chain
+sentinels, hash positions, match selection, zlib bytes and checksums stay exact.
+The build requires exactly one transformed source; the original license and a
+local-modification notice accompany the generated adapter. The inflater and
+its output bounds use the original upstream code.
+
+Seven alternating warmed Node runs per variant over the actual large PNG scanlines give
+encoding medians of 308.4 to 219.4 ms (28.8%). Every compressed byte matches the
+original encoder, and independent Node zlib decoding recovers every scanline.
+This is a compressor diagnostic, not a complete-reader latency estimate.
+Compression options and the tested fflate alternative did not beat the current
+encoder consistently on this input and remain outside the product.
+
+Sixteen fresh document/Worker pairs per browser compare ordinary packaged
+Workers against `9b47a11`. Both documents finish opening before timing. Pages
+1–13 prepare sequentially, alternating variant order at each page and context.
+Timing includes ordinary RPC and JSON parsing at CSS width 1216 and DPR 2;
+Canvas, DOM, opening and SHA-256 computation are excluded.
+
+| 13-page preparation RPC + JSON / median | `9b47a11` | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Chromium 145 | 1758.3 ms | **1657.0 ms** | **-5.8%** |
+| WebKit 26 | 1918.5 ms | 1889.5 ms | -1.5% |
+
+Thirteen of 16 Chromium pairs and ten WebKit pairs improve. Every complete
+page payload SHA-256 matches across all pages and pairs. WebKit's smaller
+change is close to the batch's scheduling variation.
+
+Eight additional fresh document pairs use the shipped Canvas host after both
+documents open, with independent document-owned image and pattern caches.
+Page and variant ordering are the same. These totals include the first
+preparation, RPC/JSON, Canvas painting and full-pixel flush, excluding opening,
+DOM, hashing and teardown. Peer caches remain untouched by each render, and
+all cache accounting agrees between variants.
+
+| 13-page first preparation + Canvas/flush after opening / median | Baseline | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Chromium 145 | 2448.8 ms | **2283.5 ms** | **-6.8%** |
+| WebKit 26 | 2440.5 ms | 2408.5 ms | -1.3% |
+
+Seven of eight Chromium pairs improve; only four WebKit pairs do, so this
+batch does not establish a stable WebKit end-to-end gain. Every full-page RGBA
+hash matches the independent ordinary packaged-reader baseline and every
+complete payload matches its paired Worker.
+
+A separate six-sweep-per-variant cold-document batch includes File reading,
+Worker/graphics initialization, opening, every page RPC, Canvas painting and
+full-pixel flush. Main-module preloading, network PDF downloads, DOM mounting,
+hashing and teardown stay outside timing. The PDF.js reference remains the
+pinned Canvas API; the reader also computes its ordinary text/annotation/editor
+and accessibility payload.
+
+| 13-page cold-document total / median | `9b47a11` | Candidate | Pinned PDF.js |
+| --- | ---: | ---: | ---: |
+| Chromium 145 | 2557.9 ms | 2731.7 ms | 705.3 ms |
+| WebKit 26 | 2822.0 ms | 2883.0 ms | 815.5 ms |
+
+These complete-sweep medians increase in this batch. No cold-start improvement
+is established. The validated latency benefit is Chromium's interleaved page
+preparation after opening; the first-open gap to PDF.js remains substantial.
+Every baseline/candidate RGBA hash matches on all pages in every sweep.
+A later diagnostic readable-Worker CPU sample puts the modified hash slide at
+about 37 ms self time; profiling samples do not replace ordinary latency checks.
+
+Default and JS MoonBit suites pass (728/734), with unchanged interfaces.
+The new CI regression exhausts all 65,536 values in each 16-bit lane for every
+supported window size, including repeated slides, nonzero aligned offsets and
+neighboring-buffer guards. It compares 105 complete zlib encodes byte for byte
+with upstream pako over short, noisy, repeating and window-boundary inputs,
+multiple levels, windows and memory settings. Independent Node zlib decoding
+checks the samples and inputs remain unchanged. Existing 1,396 portable/host
+Flate comparisons, all 13 private page payload/sample comparisons, 52 Canvas
+tests, actual Worker checks and ten packaged-reader checks in each browser pass.
+
+Local reports are `_build/png-prepare-speed/png-hash.json`,
+`paired-rpc-{chromium,webkit}.json`, `paired-full-{chromium,webkit}.json`,
+`full-{chromium,webkit}.json` and `worker-cpu.json`. Private source bytes, text
+and images remain unpublished.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |

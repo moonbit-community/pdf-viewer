@@ -11,6 +11,17 @@ After the normal locked npm install, `tools/prepare_flate_assets.mjs` verifies
 these inputs and bundles `tools/pako_adapter.mjs` with pinned esbuild 0.25.12.
 Both generated files are ignored, and no npm/CDN fetch occurs at viewer runtime.
 
+After verifying upstream hashes, the build applies the local
+`tools/pako_deflate_transform.mjs` optimization to `slide_hash`. The aligned
+16-bit position tables are updated two entries at a time, using branchless
+saturating subtraction. Hash positions, match choices and compressed bytes
+remain identical to upstream; source and license attribution are retained.
+The build fails if the pinned source marker or transform application changes.
+`node tools/pixels/pako_deflate_test.mjs` exhausts all 16-bit positions for each
+supported window size and compares complete zlib bytes against upstream pako
+and decoded samples against Node zlib. This local change affects compression;
+the bounded inflater continues to use unmodified pako sources.
+
 The adapter uses pako's single-stream zlib driver to retain the PDF reader's
 trailing-data behavior. It validates the header and Adler-32 trailer and bounds
 retained output. Invalid, truncated, dictionary-dependent and oversized streams

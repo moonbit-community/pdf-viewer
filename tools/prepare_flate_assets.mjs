@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
+import {optimizePakoDeflate} from './pako_deflate_transform.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const require = createRequire(resolve(root, 'tools/web-assets/package.json'));
@@ -18,9 +19,20 @@ for (const [file, hash] of Object.entries(expected.sha256)) {
 const esbuild = require('esbuild-wasm');
 if (esbuild.version !== '0.25.12') throw Error('Flate adapter requires locked esbuild-wasm 0.25.12');
 try {
+  let optimizedSources = 0;
   const result = await esbuild.build({entryPoints: [resolve(root, 'tools/pako_adapter.mjs')],
     bundle: true, write: false, platform: 'browser', format: 'esm', target: 'es2022',
-    minify: true, legalComments: 'inline'});
+    minify: true, legalComments: 'inline', plugins: [{
+      name: 'verified-pako-hash-slide',
+      setup(build) {
+        build.onLoad({filter: /[\\/]pako[\\/]dist[\\/]pako\.esm\.mjs$/}, async ({path}) => {
+          const contents = optimizePakoDeflate(await readFile(path, 'utf8'));
+          optimizedSources++;
+          return {contents, loader: 'js'};
+        });
+      },
+    }]});
+  if (optimizedSources !== 1) throw Error('Expected one verified pako deflate source');
   const output = resolve(root, 'web/vendor/pako');
   await mkdir(output, {recursive: true});
   await writeFile(resolve(output, 'pako.mjs'), result.outputFiles[0].contents);
