@@ -759,7 +759,7 @@ The unmodified packaged Workers include normal RPC transport and JSON parsing;
 Canvas painting and text/annotation DOM mounting are excluded. Output is still
 the complete ordinary display payload, at CSS width 1216 and DPR 2.
 
-| 13-page preparation RPC + JSON / median | `0b422cf` baseline | Candidate | Change |
+| 13-page preparation RPC + JSON / median | `55fc1f8` baseline | Candidate | Change |
 | --- | ---: | ---: | ---: |
 | Chromium 145 | 2359.6 ms | **2198.9 ms** | **-6.8%** |
 | WebKit 26 | 2369.0 ms | **2025.0 ms** | **-14.5%** |
@@ -792,12 +792,71 @@ encoding alone did not establish a full-document gain because host pixel
 conversion and transfer introduced other work. No raw transport or larger
 colour palette was added to the product.
 
+## Fixed: keep the bounded ICC palette useful for recent colours
+
+The previous ICC row palette retained its first 4096 successful colours for an
+entire image. Consecutive runs still reused the last colour, but photographs
+with more distinct colours repeatedly reconverted later colours when a run
+ended. The palette now keeps four recent exact colours in each hash bucket,
+with at most 4096 entries overall. Hits are promoted and successful misses
+replace the oldest entry in that bucket. Full 24-bit source keys distinguish
+collisions; failed transforms neither evict successes nor become reusable.
+Small images allocate fewer buckets. Decode, range clipping, LittleCMS intent,
+rounding, PNG encoding and ordinary Worker transport remain unchanged.
+
+Actual instrumented LittleCMS calls on the private 13-page input decrease from
+275,923 to 89,645 (67.5%). Page 5 decreases from 114,068 to 16,299 and page 6
+from 119,125 to 30,464. These are work reductions, not proportional latency
+improvements. A diagnostic simulation compares one, two and four entries
+per bucket and a full LRU with the same 4096-entry budget. Four entries recover
+most of the full LRU's reuse and avoid its per-hit map mutations.
+The simulator's call counts are diagnostic; only the implemented palette's
+actual calls and packaged-browser timings are used below.
+
+Sixteen fresh document/Worker pairs per browser use the same interleaved
+per-page comparison described above, against the `e3076f0` rendering sources
+(the `15f4330` CI-only commit has identical rendering sources). Both Workers
+finish opening first, then prepare all 13 pages sequentially at CSS width 1216
+and DPR 2 with ordinary RPC transport and JSON parsing. Canvas painting and
+DOM mounting are excluded; hashing stays outside timing.
+
+| 13-page preparation RPC + JSON / median | Baseline | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Chromium 145 | 1774.9 ms | **1712.4 ms** | **-3.5%** |
+| WebKit 26 | 2089.5 ms | **1943.0 ms** | **-7.0%** |
+
+Preparation totals decrease in all 16 Chromium pairs and 14 of 16 WebKit pairs.
+Page 5 medians decrease from 389.2 to 345.2 ms and from 394 to 348 ms (11–12%).
+Page 6 decreases from 204.9 to 176.6 ms and from 232 to 175.5 ms (14–24%).
+Every complete payload SHA-256 matches across all 13 pages in all pairs.
+The actual gain is modest compared with the conversion-count decrease: the
+rest of image preparation and the page pipeline still execute. Absolute times
+must not be compared with an earlier batch to claim additional gains.
+
+Separate complete-document Canvas/flush sweeps verify exact RGBA hashes on
+all 13 pages against the baseline and the packaged reader. Their timings vary
+substantially with background load and do not establish a stable end-to-end
+first-open speedup. The validated latency improvement here is preparation.
+
+Regression coverage includes more than 4096 distinct samples followed by
+nonconsecutive recent colours, exact output under deliberate bucket collisions,
+and a failed fifth colour that must leave four successes available before
+retry. Default/JS suites pass (725/731); the 17 image-colour regressions also
+pass on Wasm, JS, Wasm GC and native. All 52 Canvas tests, actual Worker
+regressions and all ten packaged-reader checks in each browser pass. Public
+and internal interfaces are unchanged.
+
+Local diagnostics are `_build/colour-speed/cache-probe.json`,
+`count-colours.json`, `paired-rpc-{chromium,webkit}.json` and
+`full-{chromium,webkit}.json`. Private input bytes, text and rendered images
+remain unpublished.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |
 | --- | --- | --- |
 | Complex-page warm drawing | Page 12 still needs 12 Canvas pixel reads and 18 uploads; PDF.js warm drawing needs neither. | Reduce retained shading's source readback, Float32 conversion and required scene bitmap creation. |
-| Cold image preparation | An earlier Node page-12 profile took about 409 ms overall: colour processing had 115 ms self time, PNG encoding 46 ms, font loading 51 ms and Flate decoding 37 ms. The latest paired page-5 RPC still needs about 390–432 ms. | Reuse decoded image/font resources and avoid encoding pixels that the host can consume directly. |
+| Cold image preparation | An earlier Node page-12 profile took about 409 ms overall: colour processing had 115 ms self time, PNG encoding 46 ms, font loading 51 ms and Flate decoding 37 ms. The latest paired page-5 RPC still needs about 345–348 ms. | Reuse decoded image/font resources and avoid encoding pixels that the host can consume directly. |
 | New viewport payloads | The compiled page-12 response still sends about 1.30 million JSON characters, down from 2.16 million at scale 1. Image data and repeated clipping remain inline. | Intern decoded image/clip resources and reuse prepared plans between viewports. |
 | Worker startup | An earlier reader batch measured about 105 ms in Chromium and 87 ms in WebKit after static-data compaction; the Worker is about 5.0 MiB. | Reduce remaining initial code evaluation and static initialization; retain first-use checks for CJK/fonts. |
 

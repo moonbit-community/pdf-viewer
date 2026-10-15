@@ -216,6 +216,87 @@ test "ICC row runs retry failed colours after the palette is full" {
 }
 
 ///|
+test "ICC row palettes reuse recent colours after more than 4096 distinct samples" {
+  let width = 12200
+  let data = FixedArray::make(width * 3, b'\x00')
+  for x in 0..<width {
+    let key = if x < 12000 { x } else if x % 2 == 0 { 20000 } else { 30000 }
+    data[x * 3] = (key >> 16).to_byte()
+    data[x * 3 + 1] = ((key >> 8) & 255).to_byte()
+    data[x * 3 + 2] = (key & 255).to_byte()
+  }
+  let calls = Ref(0)
+  let icc : PdfIccTransform = {
+    convert: values => {
+      calls.val += 1
+      (values[0], values[1], values[2])
+    },
+  }
+  let result = pdf_image_icc_rgb_rows(
+    Bytes::from_array(data),
+    width,
+    1,
+    width * 3,
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+    icc,
+    Samples(@pdflite.PdfDeviceRGB),
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+  )
+  assert_eq(result[1:], Bytes::from_array(data))
+  assert_eq(calls.val, 12002)
+}
+
+///|
+test "ICC palette collisions preserve exact colours and do not retain failed results" {
+  // These five RGB keys share a bucket. A failed fifth colour must leave all
+  // four successes available, then retry before becoming eligible for reuse.
+  let keys = [
+    0, 2243, 2889, 3535, 4181, 0, 2243, 2889, 3535, 4181, 4181, 3535, 2889, 2243,
+    0,
+  ]
+  let data = FixedArray::make(keys.length() * 3, b'\x00')
+  let expected = FixedArray::make(keys.length() * 3 + 1, b'\x00')
+  for x in 0..<keys.length() {
+    for component in 0..<3 {
+      let sample = ((keys[x] >> ((2 - component) * 8)) & 255).to_byte()
+      data[x * 3 + component] = sample
+      expected[1 + x * 3 + component] = if x == 9 || x == 10 {
+        (255 - sample.to_int()).to_byte()
+      } else {
+        sample
+      }
+    }
+  }
+  let calls = Ref(0)
+  let icc : PdfIccTransform = {
+    convert: values => {
+      calls.val += 1
+      if calls.val == 5 {
+        (0.0 / 0.0, 0.0, 0.0)
+      } else if calls.val == 6 {
+        (1.0 - values[0], 1.0 - values[1], 1.0 - values[2])
+      } else {
+        (values[0], values[1], values[2])
+      }
+    },
+  }
+  let result = pdf_image_icc_rgb_rows(
+    Bytes::from_array(data),
+    keys.length(),
+    1,
+    keys.length() * 3,
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+    icc,
+    Samples(@pdflite.PdfDeviceRGB),
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+  )
+  assert_eq(result, Bytes::from_array(expected))
+  assert_eq(calls.val, 7)
+}
+
+///|
 test "raw CalGray images preserve gamma through PDF filters and PNG pixels" {
   let resource = colour_image_fixture(
     "[/CalGray << /WhitePoint [1 1 1] /Gamma 2 >>]",
