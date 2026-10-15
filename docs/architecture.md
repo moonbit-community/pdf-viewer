@@ -239,6 +239,23 @@ their object store can still change during hydration; a page build can retain
 up to 128 CMaps with a separate 2 MiB transient budget. Full caches keep the
 original parsing behavior without admitting more entries.
 
+`syntax_keys.mbt` reuses immutable dictionary-key bytes through a native JS
+Map, admitting at most 256 keys of at most 96 UTF-16 code units. Misses use the
+original MoonBit UTF-8 encoder; native and Wasm targets retain their original
+key construction. CMap grammar keywords are byte literals, so matching them
+needs no runtime encoding. Accessibility traversal resolves children before
+excluding an empty branch on another page, preserving descendant `/Pg`
+overrides and traversal budgets while deferring unused role/text/attribute reads.
+
+Opaque, unscaled 8-bit ICC RGB rows begin with a validated JS typed-array copy
+and patch only pixels whose exact converted bytes differ from the raw source.
+This does not assume that the profile or Decode is an identity: the same CMM,
+clipping, rounding and failure fallback still determine every output pixel.
+Other targets keep the original per-pixel writes. `byte_copy.mbt` validates
+source/destination ranges without overflowing before using `TypedArray.set`;
+its non-JS implementation delegates to the original core copy. Direct RGB rows
+use the same copy helper, and overlapping JS ranges retain memmove semantics.
+
 Text rendering modes 4–7 collect glyph outlines while a text object is read;
 the combined path becomes active at `ET`. Later text-object clips are
 intersected, and the collector saves/restores them with `q/Q`. Form XObjects

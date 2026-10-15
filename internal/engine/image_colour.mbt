@@ -352,7 +352,8 @@ fn pdf_image_colour_png(
       retained_components is None {
       // Identity RGB rows already contain the exact output bytes. Use the
       // core byte copy instead of coordinate math and three stores per pixel.
-      scanlines.blit_from_bytes(
+      pdf_copy_bytes(
+        scanlines,
         scanline_position,
         bytes,
         source_y * row_bytes,

@@ -384,11 +384,12 @@ fn PdfAccessibilityTree::walk(
             .lookup_immediate(pdf_name_key("/K"))
             .map(children => self.walk(children, page, owner, depth + 1))
             .unwrap_or([])
-          let (tag, role_namespace) = pdf_accessibility_role(
-            document,
-            dictionary,
-            self.role_map,
-          )
+          // Descendants can override /Pg, so traverse before dropping a branch.
+          // Empty nodes on another page need no role, text or attribute reads.
+          if children.is_empty() &&
+            !(page == self.page_object || (page is None && self.single_page)) {
+            return []
+          }
           let alt = pdf_annotation_layer_string(document, dictionary, "/Alt")
           let actual = pdf_annotation_layer_string(
             document, dictionary, "/ActualText",
@@ -398,6 +399,11 @@ fn PdfAccessibilityTree::walk(
             (page == self.page_object || (page is None && self.single_page))) {
             return []
           }
+          let (tag, role_namespace) = pdf_accessibility_role(
+            document,
+            dictionary,
+            self.role_map,
+          )
           let attributes = document
             .lookup_direct(pdf_name_key("/A"), dictionary)
             .unwrap_or(@syntax.PdfNull)

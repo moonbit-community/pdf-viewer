@@ -1307,6 +1307,83 @@ Local reports and logs are `_build/preparation-next/`: `resource-counts.json`,
 sweeps, and `interleaved-{chromium,webkit}.json` for per-page alternation. Reports
 contain counts, hashes and timings; private bytes, text and pixels stay ignored.
 
+## Dictionary keys and image row primitives (2026-10-16)
+
+The next pass compares against `6a198e1`. After document-owned font/CMap reuse,
+profiling still found repeated UTF-8 encoding in dictionary lookups and CMap
+keyword comparisons, plus per-byte image copies in the generated JS. The
+viewer now reuses immutable key bytes through a native JS Map (256 keys, at
+most 96 UTF-16 units each); misses use the original encoder. Non-JS key creation
+is unchanged. CMap grammar comparisons use byte literals on every target.
+
+Accessibility traversal still visits descendants and consumes its existing
+budgets before testing an empty branch's page relevance. It defers role and
+text metadata reads until the branch can contribute to that page. A descendant
+with its own `/Pg` remains visible even when its ancestor belongs to another
+page. This reduces work without pruning traversal or dropping page overrides.
+
+| Full private document / diagnostic counts | `6a198e1` | Candidate |
+| --- | ---: | ---: |
+| Dictionary key requests | 139,596 | 69,058 |
+| Dictionary key UTF-8 encodings | 139,596 | 163 |
+| CMap keyword comparisons | 22,845 | 22,845 |
+| CMap keyword UTF-8 encodings | 18,637 | 0 |
+
+The admitted key bytes total 884 bytes in 163 entries (884 UTF-16 units in the
+keys). No document objects enter this cache. These are single-document counts,
+not latency measurements or a claim about all other encoding work.
+
+The ICC row probe finds 18,881,230 eligible pixels but only 89,645 CMM conversions
+with the existing exact palette. Transforming every pixel in a bulk CMM call
+would discard that reuse. Instead, JS copies each raw row with a validated
+`TypedArray.set`, then writes only pixels whose exact converted RGB bytes differ
+from the raw key. Decode, range clipping, CMM results, byte rounding and failed
+CMM fallback remain unchanged. Other targets retain the original per-pixel
+writes. Direct identity RGB rows use the same validated copy helper. Bounds are
+checked with subtraction before copying, including empty and overflowing
+ranges; overlapping JS copies retain memmove behavior. An initial prototype
+using core scalar blits and a generic MoonBit string Map did not improve the
+browser preparation stage. The shipped implementation uses the host primitives.
+
+Nine alternating isolated Node pairs over the same 34 captured ICC row inputs
+produce byte-identical outputs: 75.4 → 67.2 ms median (-10.9%). This is a warmed
+row-function diagnostic, not a browser or whole-document latency claim.
+
+The final browser protocol is unchanged from the preceding per-page alternating
+check: six fresh contexts/documents/Workers per variant, sequential pages 1–13,
+CSS width 1216, DPR 2, with only one engine active at a time. Totals sum header
+and page work and exclude interleaving waits, hashing, DOM mounting and teardown.
+The complete reader RPC still computes text, editor, annotations and accessibility.
+PDF.js' render promise includes image/operator preparation; its getPage time
+is not a comparable preparation stage. The same pinned reference and private
+input are used; these same-batch gains cannot be added to earlier measurements.
+
+| Six-run median / active work | `6a198e1` | Candidate | Change | PDF.js |
+| --- | ---: | ---: | ---: | ---: |
+| Chromium total | 1554.2 ms | 1436.9 ms | -7.5% | 546.4 ms |
+| WebKit total | 1459.5 ms | 1425.0 ms | -2.4% | 581.0 ms |
+| Chromium preparation | 969.9 ms | 857.4 ms | -11.6% | — |
+| WebKit preparation | 1009.5 ms | 979.0 ms | -3.0% | — |
+
+All six total and preparation pairs improve in each browser. Within-pair
+preparation reductions range from 10.5–13.4% in Chromium and 1.6–4.6% in WebKit.
+Every page's RGBA hash matches both the old reader and the independent packaged
+baseline in every run. All complete non-Canvas payload fields also match.
+Candidate/PDF.js total-median ratios remain 2.63× and 2.45×; the gap is substantial.
+
+Full default/Wasm and Wasm GC suites pass 748 tests each; JS passes 759 and
+macOS native 756. Current ICC row tests pass on native/Wasm/Wasm GC with the
+original per-pixel path. Worker checks (10), Canvas replay checks (52) and
+packaged-reader checks (13 per browser) pass. New coverage exercises Unicode
+and literal name spelling, native cache reuse/admission limits, empty and
+invalid copy bounds, JS overlap and descendant page overrides. Public interfaces
+are unchanged. Private bytes, text and rendered pixels remain ignored.
+
+Reports are under `_build/image-batch-next/`: `key-counts-{baseline,ours}.json`,
+`icc-counts.json`, `row-probe.json`, `full-{chromium,webkit}.json` and validation
+logs. The initial generic-container/scalar-copy probes remain separate from the
+final reports and are not used for the performance claim.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |

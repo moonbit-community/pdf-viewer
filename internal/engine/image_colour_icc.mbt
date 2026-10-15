@@ -1,4 +1,12 @@
 ///|
+#cfg(target="js")
+const ICC_RGB_ROW_COPY : Bool = true
+
+///|
+#cfg(not(target="js"))
+const ICC_RGB_ROW_COPY : Bool = false
+
+///|
 /// Opaque, unscaled 8-bit ICC RGB rows need only their final RGB bytes. Keep
 /// the same Decode, range clipping, CMM and rounding rules as the general
 /// converter, with a bounded exact palette instead of per-pixel state tests.
@@ -63,6 +71,11 @@ fn pdf_image_icc_rgb_rows(
   for y in 0..<height {
     let source_row = y * row_bytes
     let output_row = y * stride + 1
+    // Copy the raw row once, then patch only pixels whose exact converted
+    // bytes differ. No assumption about profile identity or Decode is needed.
+    if ICC_RGB_ROW_COPY {
+      pdf_copy_bytes(scanlines, output_row, bytes, source_row, width * 3)
+    }
     for x in 0..<width {
       let source = source_row + x * 3
       let key = (bytes.unsafe_get(source).to_int() << 16) |
@@ -164,10 +177,12 @@ fn pdf_image_icc_rgb_rows(
         }
         rgb
       }
-      let output = output_row + x * 3
-      scanlines.unsafe_set(output, (rgb >> 16).to_byte())
-      scanlines.unsafe_set(output + 1, ((rgb >> 8) & 255).to_byte())
-      scanlines.unsafe_set(output + 2, (rgb & 255).to_byte())
+      if !ICC_RGB_ROW_COPY || rgb != key {
+        let output = output_row + x * 3
+        scanlines.unsafe_set(output, (rgb >> 16).to_byte())
+        scanlines.unsafe_set(output + 1, ((rgb >> 8) & 255).to_byte())
+        scanlines.unsafe_set(output + 2, (rgb & 255).to_byte())
+      }
     }
   }
   // This fresh buffer has no escaping mutable alias and receives no more writes.

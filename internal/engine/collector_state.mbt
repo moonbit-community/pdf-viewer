@@ -1,9 +1,4 @@
 ///|
-fn pdf_name_key(text : String) -> @core.PdfName {
-  @core.pdf_name_of_bytes(@utf8.encode(text))
-}
-
-///|
 fn pdf_form_xobject_of_resources(
   document : @pdflite.PdfDocument,
   resources : @syntax.PdfObject,
