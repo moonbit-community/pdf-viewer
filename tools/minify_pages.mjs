@@ -4,6 +4,7 @@ import {readFile,writeFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
+import {compactPdfData} from './compact_pdf_data.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const require=createRequire(resolve(root,'tools/web-assets/package.json'));
@@ -12,12 +13,15 @@ if(esbuild.version!=='0.25.12')throw Error('Pages build requires locked esbuild-
 try {
   for(const module of ['pdf','viewer']){
     const path=resolve(root,`_build/pages/_generated/${module}.js`);
-    const source=await readFile(path,'utf8');
+    const original=await readFile(path,'utf8');
+    const compacted=module==='pdf'?compactPdfData(original):null;
+    const source=compacted?.source??original;
+    if(compacted)console.log('Published PDF static data: '+JSON.stringify(compacted.statistics));
     const result=await esbuild.transform(source,{
       loader:'js',format:'esm',target:'es2022',minify:true,legalComments:'inline',
     });
     await writeFile(path,result.code);
-    console.log(`Published ${module}.js: ${Buffer.byteLength(source)} → ${Buffer.byteLength(result.code)} bytes.`);
+    console.log(`Published ${module}.js: ${Buffer.byteLength(original)} → ${Buffer.byteLength(result.code)} bytes.`);
   }
   const worker=resolve(root,'_build/pages/pdf-worker.js');
   // A single entry avoids a network waterfall before any PDF can open. XFA

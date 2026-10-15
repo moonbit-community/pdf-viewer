@@ -43,6 +43,7 @@ jobs:
         run: moon run tools/build_pages.mbtx
       - name: Exercise the published site under a repository subpath
         run: |
+          node tools/compact_pdf_data_test.mjs
           node tools/pages_browser_test.mjs
           PDF_BROWSER=webkit node tools/pages_browser_test.mjs
       - name: Upload Pages artifact

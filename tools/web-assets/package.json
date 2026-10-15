@@ -7,6 +7,7 @@
     "node": ">=22.13.0"
   },
   "dependencies": {
+    "acorn": "8.15.0",
     "esbuild-wasm": "0.25.12",
     "lcms-wasm": "1.0.5",
     "pako": "2.1.0",

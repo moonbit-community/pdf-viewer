@@ -352,6 +352,25 @@ MoonBit/pdflite parses PDF bytes in that Worker. The Rabbita application handles
 file input, navigation and native browser selection through DOM bindings and
 narrow native API calls. The main thread initializes the graphics host needed
 for Canvas replay.
+
+The published Pages build compacts compiler-emitted static data before
+minification. `tools/compact_pdf_data.mjs` uses pinned acorn 8.15.0 AST ranges
+to replace large int32 literal arrays with memoized getters, and defer the
+audited pure pdflite CMap unpackers that would otherwise force those arrays at
+module initialization. Arrays use lossless column-delta varints or int32 bytes,
+whichever compresses smaller. Large embedded CMap/font base64 strings are
+compressed inside their existing lookup functions. `web/pdf-static-data.mjs`
+decodes these trusted build constants synchronously with the already bundled
+pako adapter and preserves ordinary Array/String representations and table
+identity. No PDF stream enters this data loader, no runtime `eval` or secondary
+Worker request is introduced, and readiness still waits for both graphics
+engines. First use pays for only the needed tables; the same module retains
+them thereafter. The readable development bridge and MoonBit package sources
+remain available for profiling; public interfaces and native targets are
+unchanged. `tools/compact_pdf_data_test.mjs` compares every transformed table,
+all embedded CMap/font bytes, and import/memoization behavior against the
+untouched release bridge.
+
 The bridge includes `open_pdf`, `open_pdf_with_password`, `render_page`,
 `render_print_page`, `select_text`, `select_page_text`, `search_pdf`,
 `document_info`, `page_layouts`,

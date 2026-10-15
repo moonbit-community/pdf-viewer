@@ -460,6 +460,88 @@ Local raw reports are `_build/root-gap/chromium-fast-flate-final.json` and
 `_build/root-gap/webkit-fast-flate-final.json`; private inputs and ignored
 artifacts are not published.
 
+## 2026-10-15: reduce Worker module startup
+
+Startup profiling places the main cost before the module-ready mark; the
+ICC/JBIG2 attempt takes about 4 ms in the sampled Chromium trace. The bridge
+contains large static character maps, and pdflite expands flat CMap tables into
+lookup records at module initialization even when the document never uses
+them. This follows the image codec change; the baseline here is **66cbcff**,
+not the earlier image experiment's baseline.
+
+The published build now compacts 53 integer arrays (473,004 values), defers 77
+pure derived CMap initializers, and compresses 46 large resource strings inside
+their existing lookup functions. Memoized getters preserve exact values,
+ordinary array representations and shared table identity. Column-delta
+varints or int32 bytes are compressed at build time and expanded synchronously
+only on use. The trusted-data loader reuses the existing pako adapter; PDF
+streams, colour algorithms, font/CMap contents and readiness semantics stay
+unchanged. There is no parser prewarm, early-ready message, extra request,
+runtime eval or feature removal.
+
+The published Worker decreases from **7,831,732 to 5,201,779 bytes (-33.6%)**.
+`tools/worker_startup_benchmark.mjs` measures nine alternating fresh-context
+Worker pairs per engine without opening a PDF. These are loopback, no-store,
+uncompressed HTTP measurements; profiling and other test processes are absent.
+Its Worker-clock module phase is distinct from the main-thread ready timer:
+
+| Engine / median phase | Baseline | Candidate |
+| --- | ---: | ---: |
+| Chromium Worker ready | 119.2 ms | **89.0 ms (-25.3%)** |
+| Chromium module ready | 67.2 ms | 46.5 ms |
+| Chromium graphics initialization | 50.6 ms | 40.9 ms |
+| WebKit Worker ready | 113.0 ms | **72.0 ms (-36.3%)** |
+| WebKit module ready | 106.0 ms | 64.0 ms |
+| WebKit graphics initialization | 6.0 ms | 6.0 ms |
+
+The graphics code is unchanged in this round. Its Chromium timings vary with
+the isolated startup harness; they are not a new codec initialization claim.
+For the actual file-input reader, six alternating fresh-open pairs per engine
+use the same private 13-page fixture and full pixel checks as before:
+
+| Engine / median phase | Baseline | Candidate |
+| --- | ---: | ---: |
+| Chromium Worker startup | 136.5 ms | **104.9 ms (-23.2%)** |
+| Chromium first-page Canvas visible | 539.7 ms | **508.6 ms (-5.8%)** |
+| Chromium page preparation RPC | 266.4 ms | 268.6 ms |
+| WebKit Worker startup | 126.5 ms | **87.0 ms (-31.2%)** |
+| WebKit first-page Canvas visible | 643.5 ms | **607.0 ms (-5.7%)** |
+| WebKit page preparation RPC | 313.5 ms | 320.0 ms |
+
+Every first-open pair improves, with complete RGBA hashes unchanged. In these
+batches PDF.js first-page medians are 119.2 ms (Chromium) and 192.0 ms (WebKit),
+under the earlier Canvas-only reference scope. Results compare within each
+batch; machine load makes absolute values differ from prior sections.
+
+First use of a needed CMap now includes its decode/unpack work. Three extra
+Chromium pairs on `90ms_rksj_h_sample.pdf` check this cost: first-page visibility
+improves from 232.3 to 214.1 ms with matching full RGBA. Thus the tested CJK
+document also benefits after its first lookup. A separate `standard_fonts.pdf`
+reference timing attempt hits the existing reader/reference dimension guard
+and is excluded; no timing claim is made for that input. All 14 font programs
+remain byte-identical, and the packaged-reader font checks pass.
+
+Validation compares all 130 flat/derived tables and all 168 CMaps/14 fonts
+against the untouched release bridge, checks that import expands none of the
+transformed data and that repeat access reuses each array, and rejects unsafe
+rewrite shapes/non-int32 data. All 13 complete private-document payload hashes
+and cache statistics match the previous portable bridge. Default/JS MoonBit
+tests pass (715/720), as do real Worker transport checks and all nine packaged
+reader checks in both browsers. Public `.mbti` interfaces are unchanged.
+
+```sh
+moon run tools/build_pages.mbtx
+node tools/compact_pdf_data_test.mjs
+PDF_BROWSER=chromium PDF_BENCH_SAMPLES=9 PDF_BENCH_BASELINE_ROOT=/path/to/baseline \
+  node tools/worker_startup_benchmark.mjs _build/worker-startup-chromium.json
+PDF_BROWSER=webkit PDF_BENCH_SAMPLES=9 PDF_BENCH_BASELINE_ROOT=/path/to/baseline \
+  node tools/worker_startup_benchmark.mjs _build/worker-startup-webkit.json
+```
+
+Local raw reports are `_build/worker-startup/{chromium,webkit}-startup-final.json`,
+`{chromium,webkit}-first-open.json` and `chromium-cjk-first-open.json`. Private
+documents and ignored diagnostic artifacts are not published.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |
@@ -467,7 +549,7 @@ artifacts are not published.
 | Complex-page warm drawing | Page 12 still needs 12 Canvas pixel reads and 18 uploads; PDF.js warm drawing needs neither. | Reduce retained shading's source readback, Float32 conversion and required scene bitmap creation. |
 | Cold image preparation | Node page 12 takes about 409 ms overall: colour processing has 115 ms self time, PNG encoding 46 ms, font loading 51 ms and Flate decoding 37 ms. | Reuse decoded image/font resources and avoid encoding pixels that the host can consume directly. |
 | New viewport payloads | Page 12 still sends about 2.13 million JSON characters. Its Canvas plan contains about 709,000 path characters and 138,000 clip-path characters. | Intern repeated immutable geometry/resources and reuse prepared plans between viewports. |
-| Worker startup | A diagnostic WebKit run of the bundled entry spends about 150 ms loading/evaluating code and 10 ms initializing the colour/JBIG2 adapters. The Worker is about 7.4 MiB. | Reduce initial code evaluation; codec initialization is a smaller cost on this input. |
+| Worker startup | The latest reader batch measures about 105 ms in Chromium and 87 ms in WebKit after static-data compaction; the Worker is about 5.0 MiB. | Reduce remaining initial code evaluation and static initialization; retain first-use checks for CJK/fonts. |
 
 The pixel traffic comes from the retained source colour/shape pass, pattern
 shape surfaces, CPU shading output and retained scene bitmaps. The document
