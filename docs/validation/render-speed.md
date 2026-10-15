@@ -595,6 +595,63 @@ PDF_BROWSER=webkit PDF_BENCH_SAMPLES=6 PDF_BENCH_BASELINE_ROOT=/path/to/eba738b-
 
 Local reports are `_build/next-bottleneck/effective-group-{chromium,webkit}.json`.
 
+## Next target: Wasm GC page preparation
+
+Further checks on the original private 13-page input locate the largest
+remaining first-open gap in preparation, rather than warm Canvas replay.
+Five ordinary WebKit replays give median paint-plus-flush times of 15 ms on
+page 1, 10 ms on page 2 and 24 ms on page 12. The corresponding warm PDF.js
+medians are 17.5, 16.5 and 17 ms. The reader's initial page-1 preparation RPC
+still takes 329 ms in this run. The independent diagnostic replay retains
+the same reader pixels; its report is
+`_build/render-benchmark-1792057865693/report.json`.
+
+A local Wasm GC prototype builds the same MoonBit document reader, page model
+and Canvas plan. It connects to the same pinned LittleCMS implementation via
+primitive host imports, preserving ICC conversion rather than falling back to
+Alternate. The JS control uses the existing ICC/pako adapters and published
+static-table compaction/minification. Wasm GC uses the portable Flate path.
+Both run in fresh browser contexts on the same pinned browser engine, with
+five sequential alternating pairs per browser.
+
+| Median phase | Chromium JS | Chromium Wasm GC | WebKit JS | WebKit Wasm GC |
+| --- | ---: | ---: | ---: | ---: |
+| Module loading/initialization | 42.6 ms | 23.1 ms | 53 ms | 21 ms |
+| Document open + page model + Canvas JSON | 274.9 ms | 181.6 ms | 334 ms | 247 ms |
+| Complete preparation path | **328.7 ms** | **234.2 ms (-28.7%)** | **404 ms** | **302 ms (-25.2%)** |
+
+The complete path includes graphics initialization, module fetch and
+initialization, Wasm input copying, JSON export and JSON parsing. Wasm input
+copying costs about 7–9 ms and string export about 11–12 ms; JS consumes the
+input Uint8Array and returns its JSON string directly. Every pair improves.
+These are isolated preparation measurements, **not the complete reader's
+first-page visibility**: Worker transport, scheduler and text/annotation DOM
+mounting are excluded. The loopback server also does not represent remote
+network latency or a cold OS cache.
+
+Every normalized Canvas field matches, including each PNG's header and exact
+decompressed scanlines; only PNG compression bytes differ. Both backends then
+paint through the existing Canvas runtime at 2432 x 3436. All complete RGBA
+hashes match each other and the packaged reader within each engine. Drawing
+itself remains similar: Chromium medians 53 vs 55.8 ms, WebKit 69 vs 68 ms.
+
+The prototype does not establish feature parity for the complete Worker API.
+Range loading, editing, JS-only codec hooks, cancellation, cache accounting,
+document lifetime and other inputs still need integration checks. Its binary
+is also larger: 9,112,367 raw bytes versus 4,822,525 bytes for the JS probe;
+offline gzip-9 sizes are 3,709,805 versus 2,530,512 bytes, and Brotli quality-5
+sizes are 2,630,465 versus 2,432,784 bytes. These are compression comparisons,
+not claims about production HTTP compression.
+
+Production continues to use the existing JS Worker. The experimental ICC
+imports and probe package are kept outside tracked product sources under
+`_build/gap-followup/`, alongside the source snapshots and
+`backend-browser-{chromium,webkit}.json` reports. A Type3 instruction cache
+prototype saved only about 10 ms in warmed Node checks; scanline run filling
+saved about 7–10 ms, with unstable fresh-open browser results. Neither was
+included in production. The next substantial experiment is a complete Wasm GC
+Worker adapter, retaining the JS display renderer and existing host engines.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |
