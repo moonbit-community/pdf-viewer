@@ -542,6 +542,59 @@ Local raw reports are `_build/worker-startup/{chromium,webkit}-startup-final.jso
 `{chromium,webkit}-first-open.json` and `chromium-cjk-first-open.json`. Private
 documents and ignored diagnostic artifacts are not published.
 
+## Fixed: unused source planes in nonisolated transparency groups
+
+The image collector retained 16-bit component and opacity planes whenever any
+ancestor group declared CMYK, an ICC profile or a calibrated space. The Canvas
+compositor already implements the effective blending-space rule: nonisolated
+groups inherit their parent's space; only isolated groups with an explicit
+space change it. The collector now follows the same rule, including an inner
+isolated RGB group switching off retention inherited from a CMYK parent.
+Actual CMYK/profile/calibrated consumers keep their original source planes.
+
+The pinned PDF.js fixture `test/pdfs/issue14200.pdf` exposes the cost: its
+nonisolated CMYK Form paints an ICC RGB image and soft mask into an RGB page.
+The unused planes added per-pixel component work, Base64 encoding, page-cache
+accounting, JSON serialization and Worker transport. Removing them reduces
+the first render payload from **4,603,360 to 940,063 characters (-79.6%)**.
+This change does not remove the display PNG or approximate ICC conversion.
+
+Six alternating fresh-context pairs compare the published `eba738b` baseline
+with the collector fix, using the ordinary file-input benchmark above:
+
+| Engine / median phase | Baseline | Candidate |
+| --- | ---: | ---: |
+| Chromium first-page Canvas visible | 650.7 ms | **458.9 ms (-29.5%)** |
+| Chromium page preparation RPC | 388.6 ms | **211.8 ms (-45.5%)** |
+| WebKit first-page Canvas visible | 623.5 ms | **493.0 ms (-20.9%)** |
+| WebKit page preparation RPC | 354.0 ms | **215.5 ms (-39.1%)** |
+
+All 12 pairs improve and all complete before/after RGBA hashes match within
+each browser. The PDF.js Canvas-only medians in these batches remain 67.3 ms
+and 137.0 ms respectively, so a substantial gap remains. This is a gain for
+documents triggering unused ink retention, not a universal first-open gain.
+The original private 13-page input does not trigger this redundant work; its
+three Chromium check pairs retain identical pixels, with no large speedup.
+
+Regression tests cover default/explicit nonisolation, isolated CMYK retention,
+CMYK-to-RGB and RGB-to-CMYK nested isolated groups, inherited nonisolated spaces
+and isolated groups without an explicit colour space. Experimental ICC batch
+loops and skipped display-PNG generation remain outside the product: skipping
+RGB for this nonisolated group changes pixels because the host consumes RGB.
+All 13 complete private-document payload hashes and cache statistics remain
+identical. Default/JS MoonBit tests pass (716/721), along with Canvas and real
+Worker checks and all nine packaged-reader checks in each browser. Public
+`.mbti` interfaces are unchanged.
+
+```sh
+PDF_BROWSER=chromium PDF_BENCH_SAMPLES=6 PDF_BENCH_BASELINE_ROOT=/path/to/eba738b-build \
+  node tools/first_load_benchmark.mjs reference/pdf.js/test/pdfs/issue14200.pdf _build/effective-group-chromium.json
+PDF_BROWSER=webkit PDF_BENCH_SAMPLES=6 PDF_BENCH_BASELINE_ROOT=/path/to/eba738b-build \
+  node tools/first_load_benchmark.mjs reference/pdf.js/test/pdfs/issue14200.pdf _build/effective-group-webkit.json
+```
+
+Local reports are `_build/next-bottleneck/effective-group-{chromium,webkit}.json`.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |

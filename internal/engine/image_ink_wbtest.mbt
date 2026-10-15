@@ -198,11 +198,60 @@ test "page collection retains image inks only inside a process blend context" {
     )
   }
   let process = make("/Group << /S /Transparency /I true /CS /DeviceCMYK >>")
-  let rgb = make("")
   guard process.items[0] is Image(a) else { fail("expected image") }
-  guard rgb.items[0] is Image(b) else { fail("expected image") }
   assert_true(a.resource.unwrap().ink_samples is Some(_))
-  assert_true(b.resource.unwrap().ink_samples is None)
+  for
+    group in [
+      "", "/Group << /S /Transparency /CS /DeviceCMYK >>", "/Group << /S /Transparency /I false /CS /DeviceCMYK >>",
+      "/Group << /S /Transparency /I true /CS /DeviceRGB >>",
+    ] {
+    let rgb = make(group)
+    guard rgb.items[0] is Image(b) else { fail("expected image") }
+    assert_true(b.resource.unwrap().ink_samples is None)
+  }
+}
+
+///|
+test "nested image ink retention follows the innermost explicit isolated space" {
+  let make = fn(outer : String, inner : String) raise {
+    annotation_test_page(
+      [],
+      contents="/F Do",
+      resources="<< /XObject << /F 5 0 R >> >>",
+      extra=[
+        annotation_test_stream(
+          "/Type /XObject /Subtype /Form /BBox [0 0 10 10] " +
+          outer +
+          " /Resources << /XObject << /F 6 0 R >> >>",
+          "/F Do",
+        ),
+        annotation_test_stream(
+          "/Type /XObject /Subtype /Form /BBox [0 0 10 10] " +
+          inner +
+          " /Resources << /XObject << /Im 7 0 R >> >>",
+          "/Im Do",
+        ),
+        annotation_test_stream(
+          "/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceCMYK /BitsPerComponent 8 /Filter /ASCIIHexDecode",
+          "FF000000>",
+        ),
+      ],
+    )
+  }
+  let cmyk = "/Group << /S /Transparency /I true /CS /DeviceCMYK >>"
+  let rgb = "/Group << /S /Transparency /I true /CS /DeviceRGB >>"
+  for
+    (outer, inner, retained) in [
+      (cmyk, rgb, false),
+      (rgb, cmyk, true),
+      (cmyk, "/Group << /S /Transparency /CS /DeviceRGB >>", true),
+      (cmyk, "/Group << /S /Transparency /I true >>", true),
+      (rgb, "/Group << /S /Transparency /CS /DeviceCMYK >>", false),
+    ] {
+    let page = make(outer, inner)
+    guard page.items[0] is Image(image) else { fail("expected image") }
+    assert_eq(image.resource.unwrap().ink_samples is Some(_), retained)
+  }
 }
 
 ///|

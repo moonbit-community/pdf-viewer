@@ -920,16 +920,17 @@ fn pdf_items_of_collected(
   let mut inline_index = 0
   for source_index, collected in collected_entries {
     let index = index_offset + source_index
-    let retain_ink_samples = retain_ink_samples ||
-      collected.group_path.any(group => {
-        group.color_space == "DeviceCMYK" ||
-        group.color_space == "/DeviceCMYK" ||
-        group.icc_profile_id is Some(_) ||
-        group.calibration is Some(_)
-      })
+    // Nonisolated groups inherit the parent's blending colour space. Only an
+    // isolated group with an explicit space can change which source planes
+    // the compositor consumes, including switching back to ordinary RGB.
+    let mut retain_ink_samples = retain_ink_samples
     let mut convert_ink_to_device_cmyk = convert_ink_to_device_cmyk
     for group in collected.group_path {
       if group.isolated && group.color_space != "" {
+        retain_ink_samples = group.color_space == "DeviceCMYK" ||
+          group.color_space == "/DeviceCMYK" ||
+          group.icc_profile_id is Some(_) ||
+          group.calibration is Some(_)
         convert_ink_to_device_cmyk = group.icc_profile_id is None &&
           group.calibration is None
       }
