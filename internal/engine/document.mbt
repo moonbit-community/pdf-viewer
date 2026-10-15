@@ -9,6 +9,7 @@ pub struct PdfViewerDocument {
   optional_content_state : PdfOptionalContentState?
   font_fallbacks : Array[PdfFontFallback]
   priv canvas_resources : PdfCanvasResourceCache
+  priv parsed_fonts : PdfParsedFontCache?
   priv accessibility_sources : Ref[(Int, Array[PdfTextStringSource?])?]
   priv reader_observations : Array[PdfReaderDiagnostic]
   priv editor_security : PdfEditorSecurity?
@@ -151,6 +152,7 @@ fn pdf_viewer_document_of_parsed_document(
     optional_content_state: None,
     font_fallbacks: [],
     canvas_resources: pdf_canvas_resource_cache(),
+    parsed_fonts: Some(pdf_parsed_font_cache()),
     accessibility_sources: Ref(None),
     reader_observations,
     editor_security: None,
@@ -239,6 +241,7 @@ pub fn PdfViewerDocument::page(
       self.optional_content_state,
       self.font_fallbacks,
       optional_content_intent~,
+      parsed_fonts=self.parsed_fonts,
       text_sources=if tagged { Some(sources) } else { None },
     )
     if sources.val is Some(values) {
@@ -263,6 +266,7 @@ pub fn PdfViewerDocument::pages(
         self.optional_content_state,
         self.font_fallbacks,
         optional_content_intent~,
+        parsed_fonts=self.parsed_fonts,
       )
     }
   ]

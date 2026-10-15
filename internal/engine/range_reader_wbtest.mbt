@@ -29,6 +29,7 @@ test "range evicts prior page streams and reloads them with intact source spans"
   range_test_hydrate(reader, bytes, "pages", 0)
   for page in [1, 2, 1] {
     range_test_hydrate(reader, bytes, "page", page)
+    assert_true(reader.document_view().parsed_fonts is None)
     assert_eq(
       reader.document_view().page(page),
       open_document(bytes).page(page),

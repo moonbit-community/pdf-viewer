@@ -67,6 +67,7 @@ pub fn prepare_canvas_page(
     document.font_fallbacks,
     text_sources=if tagged { Some(sources) } else { None },
     canvas_build=Some(build),
+    parsed_fonts=document.parsed_fonts,
   )
   if sources.val is Some(values) {
     document.accessibility_sources.val = Some((number, values))

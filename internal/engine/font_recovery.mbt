@@ -12,12 +12,24 @@ fn pdf_read_font_for_viewer(
       if context.font_cache.get(number) is Some(font) {
         return font
       }
-      let font = pdf_font_unicode_for_viewer(
-        pdf_read_font_recovery_result(document, object).0,
+      let shared = context.parsed_fonts
+      if shared.bind(cache => cache.fonts.get(number)) is Some(font) {
+        if context.font_cache.length() < 128 {
+          context.font_cache[number] = font
+        }
+        return font
+      }
+      let (raw, diagnostics) = pdf_read_font_recovery_result(
+        document,
+        object,
+        resource_context~,
       )
-      // The context belongs to this page build and is discarded afterwards.
-      // Never retain failures or share indirect object numbers across pages,
-      // documents, editor revisions or Range hydration retries.
+      let font = pdf_font_unicode_for_viewer(raw)
+      if !diagnostics.contains(FontDictionaryRecovered) && shared is Some(cache) {
+        cache.retain(number, font)
+      }
+      // The local cache also supports incomplete Range views, and is discarded
+      // after each build. Only the complete document owner shares across pages.
       if context.font_cache.length() < 128 {
         context.font_cache[number] = font
       }

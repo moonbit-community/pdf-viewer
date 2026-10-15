@@ -141,7 +141,13 @@ pub fn PdfViewerDocument::with_editor_changes(
     )
     pdf_edit_replace_number(document, page_number, updated)
   }
-  { ..self, document, pages: document.pages_of_pagetree(), }
+  {
+    ..self,
+    document,
+    pages: document.pages_of_pagetree(),
+    parsed_fonts: self.parsed_fonts.map(_ => pdf_parsed_font_cache()),
+    accessibility_sources: Ref(None),
+  }
 }
 
 ///|

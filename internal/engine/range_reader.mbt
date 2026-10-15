@@ -476,6 +476,7 @@ pub fn PdfRangeReader::document_view(
     optional_content_state: None,
     font_fallbacks: [],
     canvas_resources: pdf_canvas_resource_cache(),
+    parsed_fonts: None,
     accessibility_sources: Ref(None),
     reader_observations,
     editor_security: None,

@@ -224,6 +224,21 @@ them. Large CMap ranges stay in the existing lazy representation, with local
 mapping and original code bytes preserved; parent traversal stops at 64 links.
 Prepared stream dictionaries prevent reference-alias cycles entering decoding.
 
+Complete document views own a bounded parsed-font/CMap cache shared by public
+page models, browser preparation and accessibility collection. It admits at
+most 128 indirect fonts and 256 completely resolved CMaps, with a combined
+8 MiB conservative metadata charge. Embedded font programs and Type 3 resource
+objects remain references to the existing document. Direct dictionaries,
+missing font dictionaries, unavailable CMap sources and cyclic inheritance
+results are not retained across builds. CMap inheritance always resolves with
+a fresh cycle guard before a top-level result can be admitted. Font fallback
+and optional-content views share policy-independent parsed metadata; page
+resources and paint state remain local. Editor/XFA snapshots and newly opened
+documents receive fresh caches. Range views disable document sharing because
+their object store can still change during hydration; a page build can retain
+up to 128 CMaps with a separate 2 MiB transient budget. Full caches keep the
+original parsing behavior without admitting more entries.
+
 Text rendering modes 4–7 collect glyph outlines while a text object is read;
 the combined path becomes active at `ET`. Later text-object clips are
 intersected, and the collector saves/restores them with `q/Q`. Form XObjects

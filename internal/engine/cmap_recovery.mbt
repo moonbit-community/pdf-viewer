@@ -791,15 +791,16 @@ fn pdf_viewer_cmap_recovery_of_object(
 fn pdf_viewer_cmap_recovery_for_font(
   document : @pdflite.PdfDocument,
   font : @pdflite.PdfCIDKeyedFont,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> PdfViewerCMapRecovery? {
   let number = match font.encoding {
     @pdflite.PdfExternalCMap(number, _) | @pdflite.PdfCMap(number) => number
     _ => return None
   }
-  pdf_viewer_cmap_recovery_of_object(
+  pdf_viewer_cmap_recovery_for_resource(
     document,
     @syntax.PdfIndirect(number),
-    Map([]),
+    resource_context,
   )
 }
 

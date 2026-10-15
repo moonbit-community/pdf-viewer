@@ -97,5 +97,10 @@ pub fn PdfViewerDocument::with_xfa_packets(
       root.add_dict_entry(pdf_name_key("/AcroForm"), updated),
     )
   }
-  { ..self, document, }
+  {
+    ..self,
+    document,
+    parsed_fonts: self.parsed_fonts.map(_ => pdf_parsed_font_cache()),
+    accessibility_sources: Ref(None),
+  }
 }

@@ -8,10 +8,14 @@ fn pdf_page_model(
   optional_content_intent? : PdfOptionalContentIntent = Display,
   text_sources? : Ref[Array[PdfTextStringSource?]?]? = None,
   canvas_build? : PdfCanvasBuildContext? = None,
+  parsed_fonts? : PdfParsedFontCache? = None,
 ) -> PdfPageModel raise @core.PdfError {
   let rectangle = pdf_page_view_box(document, page)
   let user_unit = pdf_page_user_unit(document, page)
-  let resource_context = pdf_resource_build_context(font_fallbacks~)
+  let resource_context = pdf_resource_build_context(
+    font_fallbacks~,
+    parsed_fonts~,
+  )
   let (blend_space, blend_profile_id) = pdf_colour_page_profile(
     document, page, resource_context,
   )
@@ -171,6 +175,7 @@ fn pdf_items_of_page(
   resource_context? : PdfResourceBuildContext = pdf_resource_build_context(),
   text_sources? : Ref[Array[PdfTextStringSource?]?]? = None,
   canvas_build? : PdfCanvasBuildContext? = None,
+  parsed_fonts? : PdfParsedFontCache? = None,
 ) -> Array[PdfPageItem] raise @core.PdfError {
   let collected_entries = pdf_collected_entries_of_page(
     document,

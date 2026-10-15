@@ -168,6 +168,7 @@ fn pdf_collected_entries_of_ops(
       state.text_state.current_font,
       op,
       operator_index,
+      resource_context=Some(resource_context),
     )
     match op {
       @content.Op_Do(name) =>

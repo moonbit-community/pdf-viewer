@@ -1233,12 +1233,86 @@ the corresponding validation logs. The preceding disposable prototype and
 counterfactual reports remain under `_build/structural-gap/`. Private source
 bytes, text and rendered images remain unpublished.
 
+## Document-owned font and CMap preparation (2026-10-16)
+
+This change builds on the source reorganization at `204723c`. Parsed indirect
+fonts previously survived only a single page build. Each text operator could
+also decode and resolve its ToUnicode/CMap stream again, even when the existing
+content-keyed parser cache already contained the same mappings. A complete
+document revision now shares bounded parsed fonts and resolved top-level CMaps
+across page builds and accessibility collection. Page-specific resource names,
+font fallback policy, text placement and paints remain outside the cache.
+
+On the same private 13-page input, one sequential preparation pass makes:
+
+| Work | Before | After |
+| --- | ---: | ---: |
+| Font bindings | 1408 | 1408 |
+| Font recovery calls | 487 | 80 |
+| CMap source resolutions | 2503 | 80 |
+| Distinct indirect fonts | 80 | 80 |
+
+The document admits 80 fonts and 80 CMaps, charged at 1,487,680 bytes. The shared
+budget is 8 MiB, 128 fonts and 256 CMaps. Full budgets retain normal parsing;
+direct font dictionaries, failed dictionary recovery, unavailable CMap sources
+and cyclic inheritance results stay outside shared admission. Inheritance is
+resolved with a fresh cycle guard before the top-level result is cached. New
+documents and editor/XFA revisions receive fresh caches. Font fallback and OCG
+views share policy-independent metadata. Range views use only transient page
+caches because hydration can change their underlying object store.
+
+Six fresh-context/document/Worker runs per variant use the same pinned PDF.js,
+CSS width 1216, DPR 2 and all 13 pages. Host load varied substantially during
+this batch. The original contiguous-sweep protocol produced total medians of
+2953.0 → 2857.0 ms in Chromium and 4756.5 → 4060.0 ms in WebKit. Chromium had two
+reverse total-time pairs; opening and painting, which this patch does not
+optimize, varied widely too. These results are retained rather than discarded.
+
+A second six-pair check alternates the old reader, candidate and PDF.js after
+each header/page, with alternating engine order. Only one engine performs work
+at a time. Each independent context retains its own cold document and Worker;
+interleaving waits, hashing and teardown are excluded. Totals sum actual header
+and page work; this is not contiguous elapsed latency. It reduces long host-load
+trends within a pair, while three idle contexts remain resident per sample.
+
+| Per-page alternating work / median | `204723c` | Candidate | Ratio-of-medians change | PDF.js |
+| --- | ---: | ---: | ---: | ---: |
+| Chromium total | 2252.1 ms | 2027.1 ms | -10.0% | 705.3 ms |
+| WebKit total | 2339.0 ms | 2203.5 ms | -5.8% | 853.5 ms |
+| Chromium preparation | 1474.7 ms | 1247.8 ms | -15.4% | — |
+| WebKit preparation | 1584.5 ms | 1511.0 ms | -4.6% | — |
+
+The median within-pair preparation changes are -13.9% in Chromium and -16.5%
+in WebKit: 6/6 and 5/6 preparation pairs improve, respectively. Median within-pair
+total changes are -9.5% and -10.7%, with 5/6 and 6/6 improving. A median of paired
+percentages differs from a percentage computed from two absolute medians;
+both are reported above because host-load variation remains material. No gain
+is extrapolated from the earlier single-run smoke check, and these numbers
+cannot be accumulated with prior batches. PDF.js' render promise includes its
+operator/image preparation; its getPage time is not a comparable stage. A
+substantial overall gap remains (candidate/PDF.js total medians 2.87×/2.58×).
+
+Every full-page RGBA hash and every complete non-Canvas payload field match the
+old and independent packaged-reader baselines on all pages in every run, in
+both protocols. Default/Wasm and Wasm GC suites pass 739 tests each, JS and
+macOS native pass 747 each; generated public interfaces are unchanged. Additional
+checks cover 52 Canvas replays, ten actual Worker cases, Range hydration and
+real xrefs, text diagnostics and thirteen packaged-reader cases in each browser.
+New engine tests exercise revision isolation, direct/missing font admission,
+font entry/byte limits, inherited overrides, cyclic CMap roots, missing-source
+hydration and exhausted CMap budgets.
+
+Local reports and logs are `_build/preparation-next/`: `resource-counts.json`,
+`baseline-resource-counts.json`, `full-{chromium,webkit}.json` for contiguous
+sweeps, and `interleaved-{chromium,webkit}.json` for per-page alternation. Reports
+contain counts, hashes and timings; private bytes, text and pixels stay ignored.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |
 | --- | --- | --- |
 | Complex-page warm drawing | Page 12 still needs 12 Canvas pixel reads and 18 uploads; PDF.js warm drawing needs neither. | Reduce retained shading's source readback, Float32 conversion and required scene bitmap creation. |
-| Cold image preparation | The latest six-pair Chromium batch still spends a median 182.1 ms preparing page 5. Source image decoding, colour processing and font preparation still execute. | Reuse decoded image/font resources across page builds with document/revision ownership. |
+| Cold image preparation | The latest six-pair Chromium batch still spends a median 182.1 ms preparing page 5. Source image decoding and colour processing still execute; parsed font/CMap reuse is now document-owned. | Reduce first-use image decoding and colour conversion; investigate remaining repeated image resources. |
 | New viewport payloads | The compiled page-12 response falls from 1,295,943 to 1,105,935 JSON characters after image transfer, but repeated clipping, font and retained-ink metadata remain inline. | Intern repeated clip/font metadata and reuse prepared plans between viewports. |
 | Worker startup | An earlier reader batch measured about 105 ms in Chromium and 87 ms in WebKit after static-data compaction; the Worker is about 5.0 MiB. | Reduce remaining initial code evaluation and static initialization; retain first-use checks for CJK/fonts. |
 

@@ -6,6 +6,9 @@ priv struct PdfResourceBuildContext {
   /// Parsed indirect fonts share one page build, including nested resources.
   /// Direct dictionaries follow the original font reader on every binding.
   font_cache : Map[Int, @pdflite.PdfFont]
+  parsed_fonts : PdfParsedFontCache?
+  cmap_cache : Map[Int, PdfViewerCMapRecovery]
+  mut cmap_cache_bytes : Int
   /// Type3 Encoding expansion is shared by retained and SVG glyph lowering.
   type3_charprocs : Map[Int, Map[Int, @syntax.PdfObject]]
   icc_profiles : Array[PdfIccProfile]
@@ -25,12 +28,16 @@ priv struct PdfResourceBuildContext {
 ///|
 fn pdf_resource_build_context(
   font_fallbacks? : ArrayView[PdfFontFallback] = [],
+  parsed_fonts? : PdfParsedFontCache? = None,
 ) -> PdfResourceBuildContext {
   {
     font_fallbacks: [
       for fallback in font_fallbacks => fallback
     ],
     font_cache: Map([]),
+    parsed_fonts,
+    cmap_cache: Map([]),
+    cmap_cache_bytes: 0,
     type3_charprocs: Map([]),
     icc_profiles: [],
     icc_profile_keys: [],

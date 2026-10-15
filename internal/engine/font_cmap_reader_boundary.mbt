@@ -32,6 +32,7 @@ fn pdf_cmap_reader_expansion_bounded(cmap : PdfViewerCMapRecovery) -> Bool {
 fn pdf_font_cmap_reader_shadow(
   document : @pdflite.PdfDocument,
   dictionary : @syntax.PdfObject,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> (@syntax.PdfObject, Int?, Bool) raise @core.PdfError {
   let mut shadow = dictionary
   let mut encoding_number : Int? = None
@@ -45,7 +46,9 @@ fn pdf_font_cmap_reader_shadow(
     if direct is Some(@syntax.PdfNameObject(_)) {
       continue
     }
-    let recovery = pdf_viewer_cmap_recovery_of_object(document, object, Map([]))
+    let recovery = pdf_viewer_cmap_recovery_for_resource(
+      document, object, resource_context,
+    )
     if !recovery.map(pdf_cmap_reader_expansion_bounded).unwrap_or(false) {
       bounded = true
       if key == "/Encoding" {

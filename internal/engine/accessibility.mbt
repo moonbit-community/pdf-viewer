@@ -489,6 +489,10 @@ pub fn PdfViewerDocument::accessibility_page_json(
             self.optional_content_state,
           ),
           collect_text_sources=true,
+          resource_context=pdf_resource_build_context(
+            font_fallbacks=self.font_fallbacks[:],
+            parsed_fonts=self.parsed_fonts,
+          ),
           font_fallbacks=self.font_fallbacks[:],
         ).map(entry => entry.text_source.map(source => source.string_source))
     }

@@ -185,6 +185,7 @@ fn pdf_missing_font_for_viewer() -> @pdflite.PdfFont {
 fn pdf_read_font_recovery_result(
   document : @pdflite.PdfDocument,
   object : @syntax.PdfObject,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> (@pdflite.PdfFont, Array[PdfTextDiagnosticKind]) raise @core.PdfError {
   let kinds : Array[PdfTextDiagnosticKind] = []
   let mut shadow = pdf_font_safe_dictionary(document, object, 0) catch {
@@ -196,7 +197,9 @@ fn pdf_read_font_recovery_result(
     kinds.push(FontMetricsRecovered)
   }
   let (prepared, encoding, limited) = pdf_font_cmap_reader_shadow(
-    document, shadow,
+    document,
+    shadow,
+    resource_context~,
   )
   shadow = prepared
   if limited {

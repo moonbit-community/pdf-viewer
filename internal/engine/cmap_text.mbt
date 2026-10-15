@@ -230,6 +230,7 @@ fn pdf_decode_cid_codes(
 fn pdf_viewer_tounicode_recovery_for_font(
   document : @pdflite.PdfDocument,
   font_object : @syntax.PdfObject?,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> PdfViewerCMapRecovery? {
   guard font_object is Some(font_object) else { return None }
   guard pdf_direct_for_viewer(document, font_object).bind(object => {
@@ -238,7 +239,7 @@ fn pdf_viewer_tounicode_recovery_for_font(
     is Some(stream) else {
     return None
   }
-  pdf_viewer_cmap_recovery_of_object(document, stream, Map([]))
+  pdf_viewer_cmap_recovery_for_resource(document, stream, resource_context)
 }
 
 ///|
@@ -248,6 +249,7 @@ fn pdf_apply_cid_text_op(
   font : @pdflite.PdfCIDKeyedFont,
   font_object : @syntax.PdfObject?,
   op : @content.PdfContentOp,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> (
   @pdflite.PdfContentOperatorResourceResult,
   Array[@pdflite.PdfContentTextGlyphPlacement],
@@ -265,9 +267,15 @@ fn pdf_apply_cid_text_op(
   let glyphs : Array[@pdflite.PdfContentTextGlyphPlacement] = []
   let mut text_matrix = layout.text_matrix
   let original_font = @pdflite.PdfFontCIDKeyed(font)
-  let recovery = pdf_viewer_cmap_recovery_for_font(document, font)
+  let recovery = pdf_viewer_cmap_recovery_for_font(
+    document,
+    font,
+    resource_context~,
+  )
   let unicode_recovery = pdf_viewer_tounicode_recovery_for_font(
-    document, font_object,
+    document,
+    font_object,
+    resource_context~,
   )
   let vertical = pdf_viewer_font_is_vertical_with_recovery(
     original_font, recovery,

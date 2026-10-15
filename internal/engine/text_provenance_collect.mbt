@@ -145,6 +145,7 @@ fn pdf_collect_text_string_sources(
   font : @pdflite.PdfFont,
   op : @content.PdfContentOp,
   operator_index : Int,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> Array[PdfCollectedTextSource] {
   guard scope is Some(scope) else { return [] }
   if !scope.collect_sources {
@@ -165,7 +166,7 @@ fn pdf_collect_text_string_sources(
   }
   let recovery = match font {
     @pdflite.PdfFontCIDKeyed(cid) =>
-      pdf_viewer_cmap_recovery_for_font(document, cid)
+      pdf_viewer_cmap_recovery_for_font(document, cid, resource_context~)
     _ => None
   }
   let output : Array[PdfCollectedTextSource] = []

@@ -68,7 +68,14 @@ fn pdf_apply_op_for_viewer(
     | @content.Op_double_quote(_, _, _) => {
       let original_font = state.text_state.current_font
       if original_font is @pdflite.PdfFontCIDKeyed(font) {
-        return pdf_apply_cid_text_op(document, state, font, font_object, op)
+        return pdf_apply_cid_text_op(
+          document,
+          state,
+          font,
+          font_object,
+          op,
+          resource_context~,
+        )
       }
       let layout = state.text_state.content_apply_text_op(
         original_font,
@@ -78,7 +85,11 @@ fn pdf_apply_op_for_viewer(
       let next_state = { ..state, text_state: layout.text_state, }
       let unicode = if original_font
         is (@pdflite.PdfFontStandard(_) | @pdflite.PdfFontSimple(_)) {
-        pdf_viewer_tounicode_recovery_for_font(document, font_object)
+        pdf_viewer_tounicode_recovery_for_font(
+          document,
+          font_object,
+          resource_context~,
+        )
       } else {
         None
       }
