@@ -1034,6 +1034,108 @@ Local reports are `_build/png-prepare-speed/png-hash.json`,
 `full-{chromium,webkit}.json` and `worker-cpu.json`. Private source bytes, text
 and images remain unpublished.
 
+## Fixed: bounded ICC row traversal and component preparation
+
+The opaque ICC RGB row loop still repeated array bounds checks and palette
+writes, besides actual colour conversion. Decode, source clipping and ICC range
+clipping are separable for its 8-bit components. Images with at least 4096
+pixels now prepare three exact 256-entry component tables and reuse one sample
+vector/view for synchronous CMM calls. Smaller images keep direct sample
+preparation. Operation order, NaN handling, LittleCMS intent, fallback, rounding
+and exact source-key palette policy remain the same.
+
+A preflight before allocation proves positive dimensions, a representable RGB
+stride, complete padded source rows and at most 64 MiB of output scanlines.
+Divisions establish the bounds before any potentially overflowing products.
+Every source offset is below `height * row_bytes <= bytes.length`; every output
+offset is below `height * (width * 3 + 1)`. Palette capacity is a power of two
+from 4 to 4096, and its mask ensures `bucket + 3 < capacity`. Component-table
+indices are unsigned bytes. The internal loop uses these established bounds
+instead of checking every channel access again. Public image validation still
+precedes this specialized path.
+
+The four palette probes and shifts are explicit, and a hit already at the
+bucket head needs no palette writes. LRU order and which keys trigger CMM
+conversion stay identical. Failed CMM results still neither enter the palette
+nor displace successes, and repeated failed colours retry. The cache budget,
+alpha/mask/scaled-image and retained-ink paths are unchanged.
+
+Nine alternating warmed Node pairs over all 34 actual ICC RGB row conversions
+give medians of 109.9 to 74.5 ms (32.2%). Every row byte and every complete page
+payload matches the baseline. These are kernel diagnostics, not browser latency.
+An eager-table prototype penalized tiny/flat icons. Seven further warmed pairs
+across 1-pixel, flat/varied 16x16 and 256x256, and flat 64x64 inputs established
+the final cutoff: tiny and flat 64x64 costs remain comparable, both 16x16 cases
+and both large cases improve, and every output byte matches. Both variants warm
+all shapes before measurement, avoiding an unseen-branch JIT comparison.
+
+A separate valid-stream Flate diagnostic was rejected. Fixed 1 MiB output
+chunks increased the warmed Node median from 116.6 to 144.8 ms over 547 actual
+image streams; an adaptive chunk experiment gave 114.0 ms. Neither establishes
+a useful complete-reader improvement, so the inflater remains unchanged.
+
+Sixteen fresh pairs of ordinary packaged documents/Workers compare against
+`84aa7fb`. Both documents open first, then prepare pages 1–13 in sequence,
+alternating variant order at every page and context. Timing includes ordinary
+RPC and JSON parsing at CSS width 1216 and DPR 2, excluding opening, Canvas,
+DOM, hashing and teardown.
+
+| 13-page preparation RPC + JSON / median | `84aa7fb` | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Chromium 145 | 1467.5 ms | **1400.7 ms** | **-4.6%** |
+| WebKit 26 | 1504.5 ms | **1459.0 ms** | **-3.0%** |
+
+Fifteen of 16 Chromium pairs and all 16 WebKit pairs improve. All complete
+payload hashes match on every page in every pair.
+
+Eight additional fresh pairs use the shipped Canvas host after both documents
+open, with independent document-owned image and pattern caches. These totals
+include first preparation, RPC/JSON, Canvas painting and full-pixel flush,
+excluding opening, DOM, hashing and teardown. Variant order alternates at every
+page and context; peer caches remain untouched and cache accounting agrees.
+
+| 13-page first preparation + Canvas/flush after opening / median | Baseline | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Chromium 145 | 1975.3 ms | **1913.3 ms** | **-3.1%** |
+| WebKit 26 | 1985.5 ms | **1933.5 ms** | **-2.6%** |
+
+All eight pairs improve in each browser. Every complete payload and full-page
+RGBA hash matches, including the independent ordinary packaged-reader baseline.
+
+Six additional cold-document sweeps per variant include File reading,
+Worker/graphics initialization, opening, all 13 page RPCs, Canvas painting and
+full-pixel flush. Main-module preloading, network PDF downloads, DOM mounting,
+hashing and teardown stay outside timing. PDF.js uses the pinned Canvas API;
+the reader also computes its ordinary text/annotation/editor/accessibility data.
+
+| 13-page cold-document total / median | `84aa7fb` | Candidate | Change | Pinned PDF.js |
+| --- | ---: | ---: | ---: | ---: |
+| Chromium 145 | 2128.0 ms | **2057.1 ms** | **-3.3%** | 533.9 ms |
+| WebKit 26 | 2124.0 ms | **2086.5 ms** | **-1.8%** | 619.0 ms |
+
+All six Chromium sweeps and five of six WebKit sweeps improve; baseline and
+candidate RGBA hashes match on every page. These are modest same-batch gains
+for this input, and a substantial first-open gap to PDF.js remains. Absolute
+values must not be compared with earlier batches to infer cumulative gains.
+
+Five new regressions pass on JS, Wasm, Wasm GC and native. Their general
+Decode/clip reference covers every source byte, reversed/nonfinite Decode,
+source and ICC ranges, padded rows, and both sides of the lookup cutoff.
+Preflight panic cases cover short rows/inputs, overflowing width and zero
+height. Existing collision, failed-CMM retry and cache-saturation tests retain
+their exact outputs and conversion counts. Interfaces are unchanged.
+
+Full default and JS suites pass (733/739), along with 52 Canvas replay tests,
+ten actual Worker checks and ten packaged-reader checks in each browser.
+Scope/dependency/license validation, `moon check`, `moon info`, `moon fmt`
+and whitespace checks also pass.
+
+Local reports are `_build/icc-loop-speed/rows-bench.json`, `density.json`,
+`inflate-bench.json`, `paired-rpc-{chromium,webkit}.json`,
+`paired-full-{chromium,webkit}.json` and `full-{chromium,webkit}.json`. Earlier
+eager/256-pixel experiments are diagnostic records only. Private source bytes,
+text and rendered images remain unpublished.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |
