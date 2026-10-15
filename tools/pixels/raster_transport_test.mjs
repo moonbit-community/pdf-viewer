@@ -78,5 +78,12 @@ try{
   const p=s.call('render_page',[1]),a=canvas(1,1).transferToImageBitmap(),b=canvas(1,1).transferToImageBitmap();w.emit({id:w.sent[0].id,result:'{}',rasterImages:[{uri:'a',bitmap:a},{uri:'b',bitmap:b}]});await assert.rejects(p,/Receiver failed/);assert.equal(a.closed,1);assert.equal(b.closed,1);
   const next=s.call('cache_info'),c=canvas(1,1).transferToImageBitmap();w.emit({id:w.sent[1].id,error:{message:'Failed'},rasterImages:[{uri:'c',bitmap:c}]});await assert.rejects(next,/Failed/);assert.equal(c.closed,1);s.close();
  });
+ await test('reader and legacy bridge functions retain the same Worker document',async()=>{
+  const bridge=await import('../../web/pdf-client.js'),{viewerHost}=await import('../../web/viewer-host.mjs');
+  assert.equal(viewerHost.pdf,bridge.pdf);bridge.pdf.reset();const w=bridge.pdf.worker;w.ready();
+  const result=bridge.set_font_fallbacks('[]');assert.equal(w.sent[0].method,'set_font_fallbacks');
+  w.emit({id:w.sent[0].id,result:'{"ok":true}',rasterEpoch:1});assert.equal(await result,'{"ok":true}');
+  viewerHost.pdf.close();assert.equal(bridge.pdf.worker,null);
+ });
 }finally{globalThis.Worker=original;}
 console.log(checks+' raster transport tests passed');

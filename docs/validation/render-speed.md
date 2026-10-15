@@ -1195,7 +1195,7 @@ for this input, not cumulative comparisons with earlier machine-load batches;
 a substantial total-time gap to PDF.js remains.
 
 Default/JS suites pass (733/740), along with 52 Canvas checks, ten actual
-Worker checks, eight raster ownership/budget/transport checks and twelve
+Worker checks, nine raster ownership/budget/transport checks and twelve
 packaged-reader checks in each browser. New browser coverage includes exact
 native RGB samples, interpolated RGBA/transparent edges, equally warm full-page
 replay, resource reconstruction after eviction, resident-ID reuse, active

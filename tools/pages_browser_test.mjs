@@ -461,6 +461,7 @@ try{
       const api=pdfViewerHost,checked=raw=>{const value=JSON.parse(raw);if(!value.ok)throw Error(value.error);return value;};
       const source=()=>api.pdf.call('cache_info').then(checked).then(value=>value.raster_sources);
       const hash=async bytes=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(value=>value.toString(16).padStart(2,'0')).join('');
+      const replaySamples=[];
       const paint=async prepared=>{
         const canvas=document.createElement('canvas');
         try{
@@ -472,7 +473,9 @@ try{
             if(painted.diagnostics.length)throw Error(JSON.stringify(painted.diagnostics));
             canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height);
           }
-          return await hash(canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data);
+          const pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
+          if(replaySamples.length<2)replaySamples.push({width:canvas.width,pixels});
+          return await hash(pixels);
         }
         finally{canvas.width=canvas.height=0;}
       };
@@ -482,8 +485,19 @@ try{
       try{legacy=checked(await api.pdf.call('render_page',[1,1,0,true,true]));}finally{api.pdf.rasterImages=true;}
       if(JSON.stringify(legacy).includes('pdf-raster:'))throw Error('Legacy callers received a private raster ID');
       const legacyHash=await paint(legacy);
+      const normalized=plan=>JSON.stringify(plan).replace(/pdf-raster:[a-z0-9-]+:[0-9]+:[0-9]+|data:image\/png;base64,[A-Za-z0-9+/=]+/g,'<image>');
+      const difference={pixels:0,maxDelta:0,bounds:[Infinity,Infinity,-1,-1],examples:[],plansEqual:normalized(prepared.canvas)===normalized(legacy.canvas)};
+      if(bitmapHash!==legacyHash){
+        const [a,b]=replaySamples;
+        for(let i=0;i<a.pixels.length;i+=4)if(a.pixels.slice(i,i+4).some((value,lane)=>value!==b.pixels[i+lane])){
+          const x=i/4%a.width,y=Math.floor(i/4/a.width);difference.pixels++;
+          difference.bounds=[Math.min(difference.bounds[0],x),Math.min(difference.bounds[1],y),Math.max(difference.bounds[2],x),Math.max(difference.bounds[3],y)];
+          for(let lane=0;lane<4;lane++)difference.maxDelta=Math.max(difference.maxDelta,Math.abs(a.pixels[i+lane]-b.pixels[i+lane]));
+          if(difference.examples.length<4)difference.examples.push({x,y,bitmap:[...a.pixels.slice(i,i+4)],png:[...b.pixels.slice(i,i+4)]});
+        }
+      }
       for(const key of ['layer','editor','annotations','accessibility','intent'])if(JSON.stringify(prepared[key])!==JSON.stringify(legacy[key]))throw Error('Semantic payload changed: '+key);
-      if(!initial.supported)return {supported:false,bitmapHash,legacyHash};
+      if(!initial.supported)return {supported:false,bitmapHash,legacyHash,difference};
       const uri=raw.match(/pdf-raster:[a-z0-9-]+:[0-9]+:[0-9]+/)?.[0];if(!uri)throw Error('No transferable image in the reading fixture');
       const firstImage=(value,prefix)=>typeof value==='string'?(value.startsWith(prefix)?value:null):value&&typeof value==='object'?Object.values(value).map(child=>firstImage(child,prefix)).find(Boolean):null;
       const png=firstImage(legacy.canvas,'data:image/png'),load=(await import('./pdf-canvas.mjs')).loadPdfRaster;
@@ -515,9 +529,9 @@ try{
         if(!next||next===reopenURI)throw Error('Document invalidation reused a stale raster ID');reopenURI=next;
       }
       api.pdf.close();if(api.renderAssetsDiagnostics().entries!==0)throw Error('Closing a document retained decoded rasters');
-      return {supported:true,uri:reopenURI,bitmapHash,legacyHash,rebuiltHash,recovered,sources:afterCancel};
+      return {supported:true,uri:reopenURI,bitmapHash,legacyHash,rebuiltHash,recovered,sources:afterCancel,difference,imageBitmapLoader:typeof createImageBitmap};
     });
-    assert.equal(result.bitmapHash,result.legacyHash,'Transferred and encoded images must paint identical full-page RGBA');
+    assert.equal(result.bitmapHash,result.legacyHash,'Transferred and encoded images must paint identical full-page RGBA: '+JSON.stringify({difference:result.difference,imageBitmapLoader:result.imageBitmapLoader}));
     if(result.supported){
       assert.equal(result.bitmapHash,result.rebuiltHash);assert.equal(result.bitmapHash,result.recovered);
       assert(result.sources.bytes<=result.sources.budget_bytes&&result.sources.entries<=result.sources.max_entries);

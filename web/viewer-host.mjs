@@ -1,5 +1,5 @@
 // Browser APIs and existing PDF rendering engines exposed to the MoonBit UI.
-import {PdfWorkerClient} from './pdf-client.js';
+import {pdf,open_pdf,open_pdf_url,open_pdf_with_password} from './pdf-client.js';
 import {PageScheduler} from './page-scheduler.js';
 import {AnnotationLayer} from './annotation-layer.js';
 import {makeAccessibilityLayer} from './accessibility-layer.js';
@@ -21,7 +21,9 @@ let renderAssets=new PdfRenderAssets({loadImage:loadRaster});
 let patternTiles=createPatternTileCache();
 let loadRenderImage=renderAssets.acquire.bind(renderAssets);
 function clearRenderAssets(){renderAssets.dispose();patternTiles.dispose();renderAssets=new PdfRenderAssets({loadImage:loadRaster});patternTiles=createPatternTileCache();loadRenderImage=renderAssets.acquire.bind(renderAssets);}
-const pdf=new PdfWorkerClient({rasterImages:true,onRaster:(uri,bitmap)=>renderAssets.supply(uri,bitmap),
+// Keep the established module singleton: consumer bridge functions and the
+// reader must address the same document and Worker.
+Object.assign(pdf,{rasterImages:true,onRaster:(uri,bitmap)=>renderAssets.supply(uri,bitmap),
   onRasterReset:clearRenderAssets,rasterKeys:()=>renderAssets.rasterKeys()});
 export const viewerHost={
   pdf,makeAccessibilityLayer,makeXfaLayer,clearXfaFonts,
@@ -35,8 +37,7 @@ export const viewerHost={
   },
   openDocument(file,data,password){
     const encoded=password===null?null:new TextEncoder().encode(password);
-    return file.url?pdf.call('open_pdf_url',[file.url,encoded],{priority:100}):
-      pdf.call(encoded===null?'open_pdf':'open_pdf_with_password',encoded===null?[data]:[data,encoded],{transfer:[data.buffer],priority:100});
+    return file.url?open_pdf_url(file.url,encoded):encoded===null?open_pdf(data):open_pdf_with_password(data,encoded);
   },
   paintCanvas(canvas,result,outputScale,isCurrent,convertProcess){
     const assets=renderAssets,tiles=patternTiles,loadImage=loadRenderImage;
