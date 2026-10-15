@@ -461,8 +461,8 @@ try{
       const api=pdfViewerHost,checked=raw=>{const value=JSON.parse(raw);if(!value.ok)throw Error(value.error);return value;};
       const source=()=>api.pdf.call('cache_info').then(checked).then(value=>value.raster_sources);
       const hash=async bytes=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(value=>value.toString(16).padStart(2,'0')).join('');
-      const replaySamples=[];
-      const paint=async prepared=>{
+      const replaySamples=new Map();
+      const paint=async(prepared,label)=>{
         const canvas=document.createElement('canvas');
         try{
           // This high-frequency fixture also has a one-pixel cold/warm Canvas
@@ -474,28 +474,31 @@ try{
             canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height);
           }
           const pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
-          if(replaySamples.length<2)replaySamples.push({width:canvas.width,pixels});
+          replaySamples.set(label,{width:canvas.width,pixels});
           return await hash(pixels);
         }
         finally{canvas.width=canvas.height=0;}
       };
-      const initial=await source(),raw=await api.pdf.call('render_page',[1,1,0,true,true]),prepared=checked(raw),bitmapHash=await paint(prepared);
+      const initial=await source(),raw=await api.pdf.call('render_page',[1,1,0,true,true]),prepared=checked(raw),bitmapHash=await paint(prepared,'bitmap');
       let legacy;
       api.pdf.rasterImages=false;
       try{legacy=checked(await api.pdf.call('render_page',[1,1,0,true,true]));}finally{api.pdf.rasterImages=true;}
       if(JSON.stringify(legacy).includes('pdf-raster:'))throw Error('Legacy callers received a private raster ID');
-      const legacyHash=await paint(legacy);
+      const legacyHash=await paint(legacy,'png');
       const normalized=plan=>JSON.stringify(plan).replace(/pdf-raster:[a-z0-9-]+:[0-9]+:[0-9]+|data:image\/png;base64,[A-Za-z0-9+/=]+/g,'<image>');
-      const difference={pixels:0,maxDelta:0,bounds:[Infinity,Infinity,-1,-1],examples:[],plansEqual:normalized(prepared.canvas)===normalized(legacy.canvas)};
-      if(bitmapHash!==legacyHash){
-        const [a,b]=replaySamples;
+      const compare=(left,right)=>{
+        const difference={pixels:0,maxDelta:0,bounds:[Infinity,Infinity,-1,-1],examples:[]};
+        const a=replaySamples.get(left),b=replaySamples.get(right);
         for(let i=0;i<a.pixels.length;i+=4)if(a.pixels.slice(i,i+4).some((value,lane)=>value!==b.pixels[i+lane])){
           const x=i/4%a.width,y=Math.floor(i/4/a.width);difference.pixels++;
           difference.bounds=[Math.min(difference.bounds[0],x),Math.min(difference.bounds[1],y),Math.max(difference.bounds[2],x),Math.max(difference.bounds[3],y)];
           for(let lane=0;lane<4;lane++)difference.maxDelta=Math.max(difference.maxDelta,Math.abs(a.pixels[i+lane]-b.pixels[i+lane]));
           if(difference.examples.length<4)difference.examples.push({x,y,bitmap:[...a.pixels.slice(i,i+4)],png:[...b.pixels.slice(i,i+4)]});
         }
-      }
+        return difference;
+      };
+      const difference={plansEqual:normalized(prepared.canvas)===normalized(legacy.canvas)};
+      if(bitmapHash!==legacyHash)difference.initial=compare('bitmap','png');
       for(const key of ['layer','editor','annotations','accessibility','intent'])if(JSON.stringify(prepared[key])!==JSON.stringify(legacy[key]))throw Error('Semantic payload changed: '+key);
       if(!initial.supported)return {supported:false,bitmapHash,legacyHash,difference};
       const uri=raw.match(/pdf-raster:[a-z0-9-]+:[0-9]+:[0-9]+/)?.[0];if(!uri)throw Error('No transferable image in the reading fixture');
@@ -509,16 +512,24 @@ try{
       }
       if(decoded[0]!==decoded[1])throw Error('Transferred bitmap samples differ from decoded PNG');
       const before=await source();api.clearRenderAssets();
-      const rebuiltHash=await paint(prepared),rebuilt=await source();
+      const rebuiltHash=await paint(prepared,'rebuilt'),rebuilt=await source();
       if(rebuilt.rebuilds<=before.rebuilds)throw Error('Evicted bitmaps were not rebuilt from retained source rows');
       await api.pdf.call('render_page',[1,1,0,true,true]);
       const reused=await source();if(reused.transfers!==rebuilt.transfers)throw Error('Resident bitmaps were transferred twice');
+      // A full-pool reset also evicts SVG glyph images. Use the same reset for
+      // the PNG reference, while the native-sample assertion above isolates
+      // source-row reconstruction from browser glyph rasterization.
+      api.clearRenderAssets();const resetLegacyHash=await paint(legacy,'reset-png');
       api.clearRenderAssets();const controller=new AbortController();
       const cancelled=api.pdf.call('render_page',[1,1.25,0,true,true],{signal:controller.signal});controller.abort();
       try{await cancelled;throw Error('Cancelled raster render resolved');}catch(error){if(error.name!=='AbortError')throw error;}
       const afterCancel=await source();if(afterCancel.transfers<=reused.transfers)throw Error('Cancellation did not exercise an active transfer');
       if(api.renderAssetsDiagnostics().entries!==0)throw Error('Cancelled reply published bitmaps');
-      const recovered=await paint(checked(await api.pdf.call('render_page',[1,1,0,true,true])));
+      const recovered=await paint(checked(await api.pdf.call('render_page',[1,1,0,true,true])),'recovered');
+      if(bitmapHash!==rebuiltHash)difference.poolReset=compare('bitmap','rebuilt');
+      if(legacyHash!==resetLegacyHash)difference.pngPoolReset=compare('png','reset-png');
+      if(rebuiltHash!==resetLegacyHash)difference.rebuilt=compare('rebuilt','reset-png');
+      if(recovered!==resetLegacyHash)difference.recovered=compare('recovered','reset-png');
       let reopenURI=uri;
       for(const method of ['set_font_fallbacks','apply_edits']){
         checked(await api.pdf.call(method,['[]']));
@@ -529,11 +540,13 @@ try{
         if(!next||next===reopenURI)throw Error('Document invalidation reused a stale raster ID');reopenURI=next;
       }
       api.pdf.close();if(api.renderAssetsDiagnostics().entries!==0)throw Error('Closing a document retained decoded rasters');
-      return {supported:true,uri:reopenURI,bitmapHash,legacyHash,rebuiltHash,recovered,sources:afterCancel,difference,imageBitmapLoader:typeof createImageBitmap};
+      return {supported:true,uri:reopenURI,bitmapHash,legacyHash,rebuiltHash,resetLegacyHash,recovered,sources:afterCancel,difference,imageBitmapLoader:typeof createImageBitmap};
     });
     assert.equal(result.bitmapHash,result.legacyHash,'Transferred and encoded images must paint identical full-page RGBA: '+JSON.stringify({difference:result.difference,imageBitmapLoader:result.imageBitmapLoader}));
     if(result.supported){
-      assert.equal(result.bitmapHash,result.rebuiltHash);assert.equal(result.bitmapHash,result.recovered);
+      if(result.bitmapHash!==result.rebuiltHash)console.log('Full-pool reset replay',JSON.stringify(result));
+      assert.equal(result.rebuiltHash,result.resetLegacyHash,'Reconstructed bitmaps must match PNG after the same pool reset: '+JSON.stringify(result.difference));
+      assert.equal(result.recovered,result.resetLegacyHash,'Cancelled transfers must recover exact PNG pixels: '+JSON.stringify(result.difference));
       assert(result.sources.bytes<=result.sources.budget_bytes&&result.sources.entries<=result.sources.max_entries);
       await page.locator('#file-input').setInputFiles({name:'bitmap-reopened.pdf',mimeType:'application/pdf',buffer:readingFixture(await readFile('assets/icc/rgb-gamma22.icc'))});
       await page.waitForFunction(()=>document.querySelector('#viewer').getAttribute('aria-busy')==='false'&&document.querySelector('#file-name').textContent==='bitmap-reopened.pdf'&&document.querySelector('.page[data-rendered="true"]'));
