@@ -583,7 +583,7 @@ try{
           return {ok:JSON.parse(raw).ok,privateURI:raw.includes('pdf-raster:'),sources:info.raster_sources,error:document.querySelector('#error').textContent,pixels};
         },mode);
         assert.equal(result.ok,true,mode);assert.equal(result.error,'',mode);
-        if(mode==='rgba'){assert.deepEqual(result.pixels[0],result.pixels[1],'Interpolated RGBA and transparent-edge pixels must match PNG exactly');if(result.sources.supported)assert(result.privateURI);}
+        if(mode==='rgba'){assert.deepEqual(result.pixels[0],result.pixels[1],'Interpolated RGBA and transparent-edge pixels must match PNG exactly');assert.equal(result.privateURI,false,'Translucent samples retain the PNG interpolation path');assert.equal(result.sources.entries,0);}
         else assert.equal(result.privateURI,false,mode);
         if(mode==='full-budget'){assert.equal(result.sources.bytes,0);assert.equal(result.sources.entries,0);if(result.sources.supported)assert(result.sources.rejections>0);}
         else if(mode!=='rgba')assert.equal(result.sources.supported,false,mode);

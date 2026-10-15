@@ -32,7 +32,12 @@ export class PdfRasterStore{
   if(!channels||!Number.isInteger(width)||!Number.isInteger(height)||width<=0||height<=0||width>16384||height>16384||!Number.isSafeInteger(pixels)||pixels>PIXEL_LIMIT||!(rows instanceof Uint8Array)||rows.length!==stride*height||typeof encode!=='function')return null;
   const bytes=rows.buffer.byteLength+512;
   if(bytes>this.limit-this.bytes||this.entries.size>=this.maxEntries){this.rejections++;return null;}
-  for(let y=0;y<height;y++)if(rows[y*stride]!==0)return null;
+  for(let y=0;y<height;y++){
+   if(rows[y*stride]!==0)return null;
+   // Canvas-backed bitmaps and decoded PNG use different translucent-edge
+   // interpolation on some hosts. Keep PNG for any nonopaque source sample.
+   if(channels===4)for(let x=0;x<width;x++)if(rows[y*stride+1+x*4+3]!==255)return null;
+  }
   const uri=this.prefix+this.epoch+':'+(++this.next),marker=new Uint8Array(1);
   this.entries.set(uri,{uri,width,height,channels,rows,encode,sent:0});
   this.markers.set(marker,uri);this.bytes+=bytes;this.captures++;return marker;

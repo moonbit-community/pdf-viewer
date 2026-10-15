@@ -12,10 +12,11 @@ const canvas=(width,height)=>{
 const store=options=>{const s=new PdfRasterStore({createCanvas:canvas,...options});assert(s.initialize());s.enabled=true;return s;};
 const png=()=>new Uint8Array([137,80,78,71,13,10,26,10]);
 const capture=(s,rows=new Uint8Array([0,1,2,3]),width=1,colour=2)=>s.uri(s.capture(width,1,colour,rows,png));
-await test('RGB/RGBA rows preserve channels and alpha through independent bitmaps',()=>{
- const s=store(),rgb=capture(s,new Uint8Array([0,1,127,255,254,3,128]),2),rgba=capture(s,new Uint8Array([0,1,2,3,0,128,64,255,127]),2,6);
+await test('opaque RGB/RGBA rows preserve channels through independent bitmaps',()=>{
+ const s=store(),rgb=capture(s,new Uint8Array([0,1,127,255,254,3,128]),2),rgba=capture(s,new Uint8Array([0,1,2,3,255,128,64,255,255]),2,6);
  const a=s.bitmap(rgb),b=s.bitmap(rgb),c=s.bitmap(rgba);
- assert.deepEqual([...a.bitmap.pixels],[1,127,255,255,254,3,128,255]);assert.deepEqual([...c.bitmap.pixels],[1,2,3,0,128,64,255,127]);
+ assert.deepEqual([...a.bitmap.pixels],[1,127,255,255,254,3,128,255]);assert.deepEqual([...c.bitmap.pixels],[1,2,3,255,128,64,255,255]);
+ for(const alpha of [0,64,128,254])assert.equal(capture(s,new Uint8Array([0,1,2,3,alpha]),1,6),'','Translucent samples must retain PNG interpolation');
  a.bitmap.close();assert.equal(b.bitmap.closed,0);assert.equal(s.diagnostics().rebuilds,1);
  assert.equal(s.prepare(JSON.stringify([rgb,rgba,rgb]),[rgb]).length,1);
  b.bitmap.close();c.bitmap.close();
