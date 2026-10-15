@@ -697,6 +697,9 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
     }
   };
   if(nativeItems){
+    // Drop the backing store for same-size replay too. Linux WebKit can keep
+    // earlier vector coverage after an asynchronous image load otherwise.
+    if(canvas.width===width&&canvas.height===height)canvas.width=0;
     canvas.width=width;canvas.height=height;
     const output=canvas.getContext('2d');
     if(!options.transparent){output.fillStyle='#fff';output.fillRect(0,0,width,height);}

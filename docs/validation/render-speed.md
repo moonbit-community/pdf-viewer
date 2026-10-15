@@ -1206,6 +1206,13 @@ an existing one-pixel difference between cold and warm Canvas rendering even
 on the PNG path; its comparison warms both paths and separately checks native
 decoded samples. The private 13-page cold sweeps retain strict exact hashes.
 
+A separate Linux WebKit diagnostic also reproduces repeated vector coverage
+on same-size Canvas replay with the PNG-only reader. Three distinct full-page
+hashes share identical image-region pixels; differences occur in the outlined
+text. Same-size native replays explicitly discard the backing store before
+resetting dimensions. Initial, evicted and cancelled-transfer replays retain
+strict full-page equality with PNG, including an equally reset reference pool.
+
 The reader keeps the existing `pdf-client` singleton, so standalone bridge
 functions still address the UI's open document. Full browser/print, editor,
 layer and Chromium/WebKit text-interaction checks also pass. Linux browser CI

@@ -544,7 +544,8 @@ try{
     });
     assert.equal(result.bitmapHash,result.legacyHash,'Transferred and encoded images must paint identical full-page RGBA: '+JSON.stringify({difference:result.difference,imageBitmapLoader:result.imageBitmapLoader}));
     if(result.supported){
-      if(result.bitmapHash!==result.rebuiltHash)console.log('Full-pool reset replay',JSON.stringify(result));
+      assert.equal(result.bitmapHash,result.rebuiltHash,'Eviction must preserve full-page RGBA: '+JSON.stringify(result.difference));
+      assert.equal(result.bitmapHash,result.recovered,'Cancellation must preserve full-page RGBA: '+JSON.stringify(result.difference));
       assert.equal(result.rebuiltHash,result.resetLegacyHash,'Reconstructed bitmaps must match PNG after the same pool reset: '+JSON.stringify(result.difference));
       assert.equal(result.recovered,result.resetLegacyHash,'Cancelled transfers must recover exact PNG pixels: '+JSON.stringify(result.difference));
       assert(result.sources.bytes<=result.sources.budget_bytes&&result.sources.entries<=result.sources.max_entries);
