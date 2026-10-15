@@ -1142,7 +1142,7 @@ The browser previously used the image export format as its runtime protocol:
 decoded pixels were PNG-compressed, Base64-encoded into JSON, transferred as
 text, then decoded again before Canvas drawing. The shipped reader now opts
 into a Worker-owned raster source catalog and transferable `ImageBitmap`
-resources for eligible RGB/RGBA scanlines. The Canvas plan carries scoped IDs;
+resources for eligible opaque RGB/RGBA scanlines. The Canvas plan carries scoped IDs;
 the bitmap transfers alongside the ordinary RPC result. Source decoding, ICC,
 Decode/clipping, masks, rounding and sampling remain unchanged.
 
@@ -1180,16 +1180,16 @@ is not a comparable preparation stage.
 
 | 13-page cold-document total / median | `c3f7bb1` | Candidate | Change | Pinned PDF.js |
 | --- | ---: | ---: | ---: | ---: |
-| Chromium 145 | 2454.6 ms | **2070.0 ms** | **-15.7%** | 637.0 ms |
-| WebKit 26 | 2702.0 ms | **2353.5 ms** | **-12.9%** | 812.0 ms |
+| Chromium 145 | 2191.1 ms | **1878.0 ms** | **-14.3%** | 568.1 ms |
+| WebKit 26 | 2328.0 ms | **1956.0 ms** | **-16.0%** | 714.5 ms |
 
-All six Chromium pairs and five of six WebKit pairs improve. Every full-page
+All six pairs improve in each browser. Every full-page
 RGBA hash matches the old reader and the independent packaged-reader baseline,
 on all pages in every
 run. Every complete non-Canvas payload field (text layer, editor, annotations,
 accessibility, intent, SVG and page metadata) also matches. The ordinary wire
-payload decreases from 11,390,119 to 6,886,378 characters. This input admits
-64 resources covering 20,204,254 pixels: 60,670,914 charged source bytes, 64
+payload decreases from 11,390,119 to 6,893,132 characters. This input admits
+63 resources: 60,646,006 charged source bytes, 63
 initial bitmap transfers and no on-demand rebuilds during the first sweep.
 Lazy self-contained fallbacks occupy 66,468 bytes. These are same-batch gains
 for this input, not cumulative comparisons with earlier machine-load batches;
@@ -1212,6 +1212,11 @@ hashes share identical image-region pixels; differences occur in the outlined
 text. Same-size native replays explicitly discard the backing store before
 resetting dimensions. Initial, evicted and cancelled-transfer replays retain
 strict full-page equality with PNG, including an equally reset reference pool.
+Linux WebKit also interpolates translucent Canvas-backed bitmaps differently
+from decoded PNG. Admission therefore rejects any nonopaque RGBA sample and
+keeps the original PNG path for transparent edges on every host. Opaque RGBA
+remains eligible; the transparent fixture asserts both exact pixels and PNG
+fallback explicitly.
 
 The reader keeps the existing `pdf-client` singleton, so standalone bridge
 functions still address the UI's open document. Full browser/print, editor,
@@ -1223,7 +1228,7 @@ state. A forced-delayed-frame regression reproduces the old scheduler unwrap
 failure and validates opening, replacement and close during bootstrap on both
 engines; generation tokens prevent superseded opens from resuming later.
 
-Local reports are `_build/bitmap-production/full-{chromium,webkit}.json` and
+Local reports are `_build/bitmap-production/full-final-opaque-{chromium,webkit}.json` and
 the corresponding validation logs. The preceding disposable prototype and
 counterfactual reports remain under `_build/structural-gap/`. Private source
 bytes, text and rendered images remain unpublished.
@@ -1233,7 +1238,7 @@ bytes, text and rendered images remain unpublished.
 | Phase | Observed cost | Next target |
 | --- | --- | --- |
 | Complex-page warm drawing | Page 12 still needs 12 Canvas pixel reads and 18 uploads; PDF.js warm drawing needs neither. | Reduce retained shading's source readback, Float32 conversion and required scene bitmap creation. |
-| Cold image preparation | The latest six-pair Chromium batch still spends a median 201.8 ms preparing page 5. Source image decoding, colour processing and font preparation still execute. | Reuse decoded image/font resources across page builds with document/revision ownership. |
+| Cold image preparation | The latest six-pair Chromium batch still spends a median 182.1 ms preparing page 5. Source image decoding, colour processing and font preparation still execute. | Reuse decoded image/font resources across page builds with document/revision ownership. |
 | New viewport payloads | The compiled page-12 response falls from 1,295,943 to 1,105,935 JSON characters after image transfer, but repeated clipping, font and retained-ink metadata remain inline. | Intern repeated clip/font metadata and reuse prepared plans between viewports. |
 | Worker startup | An earlier reader batch measured about 105 ms in Chromium and 87 ms in WebKit after static-data compaction; the Worker is about 5.0 MiB. | Reduce remaining initial code evaluation and static initialization; retain first-use checks for CJK/fonts. |
 
