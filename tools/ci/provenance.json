@@ -48,7 +48,7 @@
       ]
     ]
   },
-  "runtime_assets": "tools/web-assets/package-lock.json and tools/prepare_web_assets.mjs",
+  "runtime_assets": "tools/web-assets/package-lock.json, tools/prepare_web_assets.mjs, tools/prepare_flate_assets.mjs and tools/ci/pako-assets.json",
   "test_hosts": "tools/test-host/package-lock.json",
   "xfa": "vendor/xfa/UPSTREAM.json and LICENSE",
   "icons": "assets/annotations/UPSTREAM.json and LICENSE",

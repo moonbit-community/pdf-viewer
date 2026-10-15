@@ -21,5 +21,7 @@ web/_generated/
 /web/vendor/lcms-wasm/lcms.mjs
 /web/vendor/lcms-wasm/lcms.wasm
 /web/vendor/xfa/
+/web/vendor/pako/pako.mjs
+/web/vendor/pako/LICENSE
 /web/_test/
 .gstack/

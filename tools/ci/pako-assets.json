@@ -1,0 +1,22 @@
+{
+  "version": "2.1.0",
+  "sha256": {
+    "LICENSE": "a04665b3b2de56c66730c1f720f528175739e4104f79073614aa611da1e85539",
+    "dist/pako.esm.mjs": "94d300905740b5f3d1200df0bc79348319d080bce8e6474ed852bda4c22690ee",
+    "lib/deflate.js": "32cb958d43406da29d268f277ec45d5f61d3ac736bd5b2093d6006278cdaae49",
+    "lib/inflate.js": "f6d86f7e71ecbbdec39f91d109a92147a215db9e31e3dcc540db19cfa71c0616",
+    "lib/utils/common.js": "830c22b5a7bba24d4ed7c0e5a7538d922f30bae7aad05e16b3a20728f187bc47",
+    "lib/utils/strings.js": "5d072a04492071250b8ea5bb8f64106adec4301429c32e3670d30e163b3f94a2",
+    "lib/zlib/adler32.js": "1f181b4365677dcad5bd8fcc4594707171b7317875c50e88054b75d4fa285930",
+    "lib/zlib/constants.js": "37c65f82b9bacde2bbccc9c980a20dee7e2b7f3658304a30abe1023e02ec407b",
+    "lib/zlib/crc32.js": "5452655b14329267c4c3fc58c43df53f4e6f5196fde9d2d431b1ad089e5f3742",
+    "lib/zlib/deflate.js": "07c147a4daec3857ea7a9722c7d5fc5d11ec6cbadf234aace43e6b237a837c30",
+    "lib/zlib/gzheader.js": "8fa0b4995cea477be96b8783a7d6c7cf5fec96765c2108c3bd52e77104bfdbd3",
+    "lib/zlib/inffast.js": "694b23b4d2c00c9d274274ecf092dc7c0c0c64125d54bda5286baf2711822d00",
+    "lib/zlib/inflate.js": "2375dd0e1a5eebf91fd75301b4cc8c120712978f513db8fedd2a5f3321f0145f",
+    "lib/zlib/inftrees.js": "fa1434611e4cd6bb5bca02c99315bdb639a434c02f44fc1cc64d4b258187908f",
+    "lib/zlib/messages.js": "eec5f5d6b8120ada9cd48a3ca0a253c64777906e835477b090e053434d38cf6c",
+    "lib/zlib/trees.js": "8cebc535d46743de70530f0ac263179154e7297f42d6c8c64b5d25fee22493dd",
+    "lib/zlib/zstream.js": "5fa10c7a59ca99113cf92d1260e56cbd6282e15afa85dc8a0eb8e8d6d2321298"
+  }
+}

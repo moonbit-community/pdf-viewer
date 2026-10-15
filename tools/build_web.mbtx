@@ -8,6 +8,7 @@ import {
 ///|
 async fn main {
   @shell.Cmd("node", ["tools/prepare_web_assets.mjs"]).run()
+  @shell.Cmd("node", ["tools/prepare_flate_assets.mjs"]).run()
   @shell.Cmd("node", ["tools/prepare_xfa_assets.mjs"]).run()
   @shell.Cmd("moon", ["build", "--target", "js", "--release", "cmd/browser"]).run()
   @shell.Cmd("moon", ["build", "--target", "js", "--release", "cmd/viewer"]).run()

@@ -763,7 +763,12 @@ fn pdf_png_of_scanline_bytes(
 ) -> Bytes raise @core.PdfError {
   // All scanlines are already available. The ecosystem whole-buffer encoder
   // avoids restaging them through a suspendable compression input window.
-  let compressed = @font_zlib.zlib_compress(scanlines)
+  let host = pdf_image_host_deflate(scanlines)
+  let compressed = if host.is_empty() {
+    @font_zlib.zlib_compress(scanlines)
+  } else {
+    host
+  }
   let output = @buffer.Buffer(size_hint=compressed.length() + 57)
   output.write_bytes(b"\x89PNG\x0D\x0A\x1A\x0A")
   let header = @buffer.Buffer(size_hint=13)

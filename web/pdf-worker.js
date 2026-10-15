@@ -1,6 +1,9 @@
 import * as bridge from "./_generated/pdf.js";
 import { initializePdfGraphics } from "./pdf-graphics.mjs";
 import { PdfRangeSource, PdfRangeDocument } from "./pdf-range.mjs";
+import { installPdfFlate } from "./pdf-flate.mjs";
+
+installPdfFlate();
 
 const profileStartup = new URL(import.meta.url).searchParams.get("profile") === "startup";
 const moduleReadyMs = profileStartup ? performance.now() : 0;

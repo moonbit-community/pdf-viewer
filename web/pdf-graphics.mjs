@@ -6,13 +6,18 @@ let initialization;
 export function initializePdfGraphics(options={}){
   if(!initialization)initialization=(async()=>{
     const diagnostics=[];
-    let icc=null,jbig2=null;
-    try{icc=await installPdfIccEngine(options.icc);}
-    catch(error){diagnostics.push({code:'icc-engine-unavailable',message:`ICC profiles use their PDF Alternate colour space: ${error.message}`});}
     // Resolve from this root adapter so the published Worker can bundle the
     // codec without changing its Wasm asset location under repository paths.
-    try{jbig2=await installJbig2Decoder({wasmUrl:new URL('./vendor/jbig2/jbig2.wasm',import.meta.url),...options.jbig2});}
-    catch(error){diagnostics.push({code:'jbig2-engine-unavailable',message:`JBIG2 images cannot decode: ${error.message}`});}
+    // These independent engines must both settle before PDF work is accepted,
+    // but their fetch/compile steps need not form a startup waterfall.
+    const [colour,codec]=await Promise.allSettled([
+      installPdfIccEngine(options.icc),
+      installJbig2Decoder({wasmUrl:new URL('./vendor/jbig2/jbig2.wasm',import.meta.url),...options.jbig2}),
+    ]);
+    const icc=colour.status==='fulfilled'?colour.value:null;
+    const jbig2=codec.status==='fulfilled'?codec.value:null;
+    if(colour.status==='rejected')diagnostics.push({code:'icc-engine-unavailable',message:`ICC profiles use their PDF Alternate colour space: ${colour.reason.message}`});
+    if(codec.status==='rejected')diagnostics.push({code:'jbig2-engine-unavailable',message:`JBIG2 images cannot decode: ${codec.reason.message}`});
     return {icc,jbig2,diagnostics};
   })();
   return initialization;

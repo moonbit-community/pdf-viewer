@@ -296,11 +296,22 @@ and caches are bounded, but these limits are not a whole-document RSS guarantee
 or a synchronous-JS hard-cancellation promise. Real samples and retained edge
 residuals are in [image sampling](validation/image-sampling.md).
 
-Browser codec/CMM assets come from exact npm dependencies `lcms-wasm@1.0.5`
-and `pdfjs-dist@6.4.299` in `tools/web-assets/`, with archive integrity and the
+Browser codec/CMM assets come from exact npm dependencies `lcms-wasm@1.0.5`,
+`pako@2.1.0` and `pdfjs-dist@6.4.299` in `tools/web-assets/`, with archive integrity and the
 dependency tree fixed by the lockfile. After explicit `npm ci` setup,
 `tools/prepare_web_assets.mjs` verifies versions and asset hashes and copies
 LittleCMS JS/Wasm plus standalone JBIG2 Wasm to ignored local paths. The web
+build also runs `tools/prepare_flate_assets.mjs`, which verifies pako source
+hashes from `tools/ci/pako-assets.json` before bundling the image adapter and
+copying its MIT/Zlib license. The Worker installs synchronous typed-array
+Flate/PNG compression hooks; other hosts retain the portable MoonBit codecs.
+The host decoder validates the first zlib trailer, ignores trailing streams,
+and stops at the image output bound. Failed or oversized attempts fall back to
+the portable decoder, retaining its damaged-stream prefix and error behavior.
+PNG samples, colour conversion, masks and SVG portability stay the same;
+browser PNG compression uses level 1 rather than the portable encoder's level 6.
+ICC and JBIG2 fetch/compile initialization runs concurrently, and both attempts
+must settle before the Worker accepts PDF operations. The web
 build invokes preparation and stages the same-origin assets and license notices
 for the Worker and Canvas host; it does not install npm packages automatically.
 No PDF.js renderer or npm/CDN fetch is needed when opening a PDF. Native JBIG2

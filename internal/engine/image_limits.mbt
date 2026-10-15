@@ -9,6 +9,10 @@ fn pdf_image_inflate_limited(
   if data.is_empty() {
     return Bytes::make(0, b'\x00')
   }
+  let host = pdf_image_host_inflate(data, limit)
+  if !host.is_empty() {
+    return host
+  }
   let decoder = @font_zlib.Decoder()
   let scratch = FixedArray::make(32768, b'\x00')
   let output = @buffer.Buffer()

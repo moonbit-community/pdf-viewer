@@ -140,5 +140,6 @@ Licensed under the [Apache License 2.0](LICENSE).
 Bundled CMap data retains its [upstream attribution and license](assets/cmaps/README.md).
 Image codecs and colour engines retain their respective notices in
 [`codecs/jpx`](codecs/jpx/README.md), [`codecs/jbig2`](codecs/jbig2/README.md),
-and [`web/vendor/lcms-wasm`](web/vendor/lcms-wasm/README.md).
+[`web/vendor/lcms-wasm`](web/vendor/lcms-wasm/README.md),
+and [`web/vendor/pako`](web/vendor/pako/README.md).
 Bundled Standard 14 replacement fonts retain their [font licenses and provenance](assets/standard14/README.md).

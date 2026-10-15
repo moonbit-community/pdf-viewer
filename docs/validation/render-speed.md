@@ -317,6 +317,149 @@ code loading/evaluation and the large per-viewport JSON payload are the other
 remaining targets. This follow-up implements the local changes above and does
 not claim those architectural changes are complete.
 
+## Root-cause follow-up: image preparation before drawing
+
+The earlier small improvements did not isolate the main first-open gap. A new
+counterfactual records the exact results of one preparation stage, then reuses
+those results while reopening the same document. The reusable diagnostic is:
+
+```sh
+node tools/pixels/profile_prepare_work.mjs /path/to/document.pdf _build/prepare-images.json 1 images
+node tools/pixels/profile_prepare_work.mjs /path/to/document.pdf _build/prepare-png.json 1 png
+node tools/pixels/profile_prepare_work.mjs /path/to/document.pdf _build/prepare-flate.json 1 imageflate
+```
+
+Stages also include `icc`, `fonts`, `type3` and `flate`. Each command runs seven
+alternating ordinary/reuse pairs on fresh documents in one Node process, after
+recording has warmed the JIT and adapters. It requires byte-identical complete
+render payloads. These timings are diagnostic, overlap across stages, and must
+not be added together or compared directly with browser latency.
+
+The initial Node experiments measured the following medians on page 1:
+
+| Previously computed results reused | Ordinary | Reused | Calls |
+| --- | ---: | ---: | ---: |
+| Complete image resources | 234.2 ms | 102.7 ms | 10 |
+| Image Flate decoding | 236.0 ms | 155.9 ms | 12, including profiles |
+| PNG encoding | 237.4 ms | 194.5 ms | 10 |
+| Opaque ICC RGB rows | 235.4 ms | 220.0 ms | 2 |
+| Font loading | 237.4 ms | 226.0 ms | 148 |
+| Type3 scenes and compatibility outlines | 237.9 ms | 194.5 ms | 265 each |
+
+The largest measured preparation component is the image pipeline, contributing
+about 56% of ordinary warmed Node page preparation. Images are expanded through
+the transport-oriented zlib streaming decoder, converted, compressed into PNGs,
+and later decoded again for drawing. The streaming zlib wrapper checksums each
+output byte separately and stages compressed input. A separate checksum-only
+experiment reduces Node page preparation from 233.3 to 218.3 ms, so checksum
+arithmetic explains only part of the image decoding cost.
+
+An additional packaged-browser counterfactual substitutes the **same ten exact
+image resources** prepared before measurement. The substituted resources contain
+the original PNGs; output JSON, host image decoding, painting, reader UI and
+Worker creation remain in the measured path. Its reconstructed baseline Worker
+matches the `0e5f4da` build byte for byte. Six alternating fresh-open Chromium
+pairs measure:
+
+| Median phase | Ordinary | Images already prepared |
+| --- | ---: | ---: |
+| Worker startup | 135.7 ms | 135.5 ms |
+| Document open RPC | 38.4 ms | 38.0 ms |
+| Page preparation RPC | 369.5 ms | 181.4 ms |
+| Host Canvas paint | 55.8 ms | 56.4 ms |
+| First-page Canvas visible | 632.8 ms | 446.2 ms |
+
+Every pair improves and complete first-page RGBA hashes match. First-page
+visibility improves by **29.5%**, with almost the whole difference occurring in
+the preparation RPC. This is an upper-bound diagnostic that moves image work
+outside measurement, **not a production optimization or a new PDF cache**.
+The same batch's PDF.js first-page median is 117.5 ms; its 62.0 ms render task
+includes reference resource preparation as well as paint. Our image preparation
+is a major component of the gap, while Worker startup and the remaining page
+preparation also require attention. Removing image preparation alone does not
+establish parity.
+
+A compatible direct-Inflater prototype preserves all 13 payloads and passes
+framing/output-limit differential checks against the original driver. Its actual
+fresh-open improvement is only **2.1% in Chromium** (638.0 to 624.7 ms) and
+**1.0% in WebKit** (695 to 688 ms), across six pairs per engine. This is too small
+to resolve the identified pipeline cost, so that production change was reverted;
+the prototype and its checks remain local under `_build/root-gap/`.
+
+The counterfactual motivated the image codec change below. Native asynchronous
+decompression and bounded pixel/bitmap transport remain possible later changes;
+they need explicit ownership across page/render caches, cancellation,
+colour/mask fidelity and native/SVG fallback. The ten captured image resource results serialize to
+about 134,000 characters, including diagnostic result wrappers; most of the
+roughly 1.87 million-character render payload is elsewhere, so large JSON
+geometry is a separate problem. Worker
+loading/evaluation must also be reduced: its 136 ms startup alone exceeds this
+batch's complete 118 ms PDF.js first page.
+
+## 2026-10-15: accelerate the image codec in the browser Worker
+
+The Worker now installs a pinned pako 2.1.0 adapter for image Flate expansion
+and PNG compression. Typed-array output avoids the portable zlib driver's
+per-byte staging, and level-1 compression reduces the cost of recompressing
+already available display pixels. Colour conversion, masks and PNG/SVG formats
+remain unchanged. The portable engine remains the default on other hosts.
+
+The host decoder stops at the first validated zlib trailer and uses output
+chunks no larger than 32 KiB, with one excess byte to detect the caller's
+output bound. It retains no cross-document decode cache. Invalid, truncated,
+dictionary-dependent or oversized attempts fall back to the existing decoder,
+preserving damaged-stream prefix recovery and error precedence. Empty results
+also use the portable path. Source hashes, npm archive integrity, tool version
+and license copying are pinned by the build.
+
+ICC and JBIG2 fetch/compile attempts now run concurrently. Both still settle
+before the Worker accepts document operations. This removes their serial
+dependency, but does not materially reduce the dominant module evaluation cost
+on this input.
+
+Six alternating fresh-open pairs per engine compare the published candidate
+against the byte-identical `0e5f4da` static baseline. The same private 13-page
+input, browser versions, DPR 2, timing scope and pinned PDF.js reference from
+the preceding measurements are used. No profiling or other test process runs
+concurrently. These are this batch's medians, not comparisons across batches:
+
+| Engine / median phase | Baseline | Candidate |
+| --- | ---: | ---: |
+| Chromium first-page Canvas visible | 679.6 ms | **568.8 ms (-16.3%)** |
+| Chromium page preparation RPC | 392.3 ms | **289.4 ms** |
+| Chromium Worker startup | 139.8 ms | 137.5 ms |
+| Chromium host paint | 60.5 ms | 60.0 ms |
+| WebKit first-page Canvas visible | 811.5 ms | **716.0 ms (-11.8%)** |
+| WebKit page preparation RPC | 436.5 ms | **343.0 ms** |
+| WebKit Worker startup | 134.5 ms | 134.5 ms |
+| WebKit host paint | 87.5 ms | 78.5 ms |
+
+Every pair improves, and all twelve complete first-page RGBA hashes match the
+baseline. PDF.js Canvas first-page medians in the same batches are 127.8 ms
+for Chromium and 212.5 ms for WebKit. This closes part of the preparation gap;
+it does **not** establish PDF.js parity. Its measurement excludes reader UI,
+selection and annotations as documented above.
+
+Validation covers 715 default-target and 720 JS MoonBit tests; 1,396 actual
+release-bridge inflate comparisons with/without the host (118 successful
+nonempty fast decodes); RGB/RGBA PNG sample equality; all 13 complete page
+payloads after canonicalizing PNG samples; the real Worker transport suite;
+and all nine packaged-reader checks in each browser. Public `.mbti` interfaces
+are unchanged. PNG compressed bytes can differ; their decoded samples match.
+
+```sh
+node tools/pixels/image_flate_test.mjs
+node tools/pixels/image_flate_test.mjs /path/to/document.pdf
+PDF_BROWSER=chromium PDF_BENCH_SAMPLES=6 PDF_BENCH_BASELINE_ROOT=/path/to/baseline \
+  node tools/first_load_benchmark.mjs /path/to/document.pdf _build/chromium-first-open.json
+PDF_BROWSER=webkit PDF_BENCH_SAMPLES=6 PDF_BENCH_BASELINE_ROOT=/path/to/baseline \
+  node tools/first_load_benchmark.mjs /path/to/document.pdf _build/webkit-first-open.json
+```
+
+Local raw reports are `_build/root-gap/chromium-fast-flate-final.json` and
+`_build/root-gap/webkit-fast-flate-final.json`; private inputs and ignored
+artifacts are not published.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |

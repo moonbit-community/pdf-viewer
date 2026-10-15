@@ -9,6 +9,7 @@
   "dependencies": {
     "esbuild-wasm": "0.25.12",
     "lcms-wasm": "1.0.5",
+    "pako": "2.1.0",
     "pdfjs-dist": "6.4.299"
   }
 }
