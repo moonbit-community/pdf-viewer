@@ -290,7 +290,8 @@ fn PdfImageAlphaSamples::png(
     } else {
       0
     },
-    Bytes::from_array(scanlines),
+    // Freeze this call's fresh output; the mask's source samples remain separate.
+    scanlines.unsafe_reinterpret_as_bytes(),
   )
 }
 

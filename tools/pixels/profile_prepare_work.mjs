@@ -8,6 +8,7 @@ import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import {installJbig2Decoder} from '../../codecs/jbig2/decoder.mjs';
 import {installPdfIccEngine} from '../../web/pdf-icc.mjs';
+import {installPdfFlate} from '../../web/pdf-flate.mjs';
 
 const [pdfPath,reportPath,pageText='1',stage='images']=process.argv.slice(2);
 assert(pdfPath&&reportPath,'Usage: node tools/pixels/profile_prepare_work.mjs <PDF> <report.json> [page] [stage]');
@@ -47,6 +48,7 @@ await mkdir(dirname(output),{recursive:true});
 const generated=output+'.bridge.mjs';await writeFile(generated,source);
 await installPdfIccEngine({wasmBinary:await readFile(new URL('../../web/vendor/lcms-wasm/lcms.wasm',import.meta.url))});
 await installJbig2Decoder({wasmBytes:await readFile(new URL('../../vendor/jbig2/jbig2.wasm',import.meta.url))});
+installPdfFlate();
 const bridge=await import(pathToFileURL(generated));
 const state=globalThis.pdfPrepareCounterfactual={mode:'record',recorded:{},index:{}};
 const sha256=value=>createHash('sha256').update(value).digest('hex');

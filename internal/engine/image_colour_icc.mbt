@@ -62,10 +62,13 @@ fn pdf_image_icc_rgb_rows(
             let rgb = (pdf_transfer_value_to_byte(r) << 16) |
               (pdf_transfer_value_to_byte(g) << 8) |
               pdf_transfer_value_to_byte(b)
-            // Alternate recovery remains retryable, just as in the general
-            // converter. Only successful CMM results enter the exact palette.
-            if valid && palette.length() < 4096 {
-              palette[key] = rgb
+            // Palette capacity does not limit the one-entry run cache. A new
+            // colour can cover a long run after the bounded palette is full.
+            // Failed CMM results must remain retryable through Alternate.
+            if valid {
+              if palette.length() < 4096 {
+                palette[key] = rgb
+              }
               previous_key = key
               previous_rgb = rgb
             } else {
@@ -81,5 +84,6 @@ fn pdf_image_icc_rgb_rows(
       scanlines[output + 2] = (rgb & 255).to_byte()
     }
   }
-  Bytes::from_array(scanlines)
+  // This fresh buffer has no escaping mutable alias and receives no more writes.
+  scanlines.unsafe_reinterpret_as_bytes()
 }

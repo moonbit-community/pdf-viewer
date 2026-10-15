@@ -7,6 +7,7 @@ import {resolve,dirname} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {installJbig2Decoder} from '../../codecs/jbig2/decoder.mjs';
 import {installPdfIccEngine} from '../../web/pdf-icc.mjs';
+import {installPdfFlate} from '../../web/pdf-flate.mjs';
 
 const [pdfPath,reportPath,pageList='1,2,12']=process.argv.slice(2);
 assert(pdfPath&&reportPath,'Usage: node tools/pixels/profile_page_stages.mjs <PDF> <report.json> [pages]');
@@ -32,7 +33,7 @@ const patterns=[
  ['text layer',/PdfPageModel\d+text__layer_2einner$/],
  ['page model JSON',/PdfPageModelPB6ToJson\d+to__json$/],
  ['text layer JSON',/PdfTextLayerPB6ToJson\d+to__json$/],
- ['render payload',/browser__render__page$/],
+ ['render payload',/browser__render__page(?:_2einner)?$/],
  ['editor manifest',/PdfViewerDocument\d+editor__page__json$/],
  ['annotation layer',/PdfViewerDocument\d+annotation__layer__json$/],
  ['accessibility manifest',/PdfViewerDocument\d+accessibility__page__json_2einner$/],
@@ -62,6 +63,7 @@ const output=resolve(reportPath);await mkdir(dirname(output),{recursive:true});
 const generated=output+'.bridge.mjs';await writeFile(generated,source);
 await installPdfIccEngine({wasmBinary:await readFile(new URL('../../web/vendor/lcms-wasm/lcms.wasm',import.meta.url))});
 await installJbig2Decoder({wasmBytes:await readFile(new URL('../../vendor/jbig2/jbig2.wasm',import.meta.url))});
+installPdfFlate();
 const bridge=await import(pathToFileURL(generated));
 const data=await readFile(resolve(pdfPath)),sha256=value=>createHash('sha256').update(value).digest('hex');
 const profile=globalThis.pdfStageProfile={active:false,stack:[],stages:{}};

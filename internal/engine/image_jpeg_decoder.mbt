@@ -710,7 +710,9 @@ fn pdf_jpeg_interleaved_samples(
     components: ncomp,
     bits: 8,
     row_bytes: fi.width * ncomp,
-    bytes: Bytes::from_array(out),
+    // Transfer the fresh output buffer after its final write. Component planes
+    // and later decodes own different arrays.
+    bytes: out.unsafe_reinterpret_as_bytes(),
     embedded_alpha: None,
     embedded_alpha_bits: 8,
     embedded_alpha_row_bytes: 0,

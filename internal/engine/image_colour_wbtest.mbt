@@ -136,7 +136,7 @@ test "opaque ICC rows retry failed transforms and cache only successful colours"
 }
 
 ///|
-test "opaque ICC row palettes remain bounded and retain earlier successes" {
+test "opaque ICC row palettes retain earlier successes and reuse later runs" {
   let width = 4099
   let data = FixedArray::make(width * 3, b'\x00')
   for x in 0..<width {
@@ -163,9 +163,56 @@ test "opaque ICC row palettes remain bounded and retain earlier successes" {
     Samples(@pdflite.PdfDeviceRGB),
     [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
   )
-  assert_eq(calls.val, 4098)
+  assert_eq(calls.val, 4097)
   assert_eq(result.length(), width * 3 + 1)
   assert_eq(result[1:], Bytes::from_array(data))
+}
+
+///|
+test "ICC row runs retry failed colours after the palette is full" {
+  let width = 4100
+  let data = FixedArray::make(width * 3, b'\x00')
+  for x in 0..<width {
+    let key = if x >= 4096 && x < 4099 {
+      5000
+    } else if x == 4099 {
+      0
+    } else {
+      x
+    }
+    data[x * 3] = (key >> 16).to_byte()
+    data[x * 3 + 1] = ((key >> 8) & 255).to_byte()
+    data[x * 3 + 2] = (key & 255).to_byte()
+  }
+  let calls = Ref(0)
+  let icc : PdfIccTransform = {
+    convert: values => {
+      calls.val += 1
+      if calls.val == 4097 {
+        (0.0 / 0.0, 0.0, 0.0)
+      } else if calls.val == 4098 {
+        (0.1, 0.2, 0.3)
+      } else {
+        (values[0], values[1], values[2])
+      }
+    },
+  }
+  let result = pdf_image_icc_rgb_rows(
+    Bytes::from_array(data),
+    width,
+    1,
+    width * 3,
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+    icc,
+    Samples(@pdflite.PdfDeviceRGB),
+    [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
+  )
+  assert_eq(calls.val, 4098)
+  assert_eq(
+    result[4096 * 3 + 1:],
+    b"\x00\x13\x88\x1A\x33\x4D\x1A\x33\x4D\x00\x00\x00",
+  )
 }
 
 ///|

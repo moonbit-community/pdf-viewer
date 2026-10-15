@@ -30,6 +30,18 @@ fn jpeg_resource_fixture(
 }
 
 ///|
+test "JPEG decoded output stays independent of later decodes and input bytes" {
+  let encoded = jpeg_sample_fixture("rgb444")
+  let original = encoded.copy()
+  let first = pdf_jpeg_decode(encoded, None)
+  let retained = first.bytes.copy()
+  let next = pdf_jpeg_decode(encoded, Some(0))
+  assert_true(first.bytes != next.bytes)
+  assert_eq(first.bytes, retained)
+  assert_eq(encoded, original)
+}
+
+///|
 test "encoded JPEG PNG integration applies Decode and original colour-key ranges" {
   let bytes = jpeg_sample_fixture("rgb444")
   let samples = pdf_jpeg_decode(bytes, Some(0))

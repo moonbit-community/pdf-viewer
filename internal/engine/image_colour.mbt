@@ -690,7 +690,8 @@ fn pdf_image_colour_png(
         } else {
           2
         },
-        Bytes::from_array(scanlines),
+        // The completed row buffer is private to this image and never reused.
+        scanlines.unsafe_reinterpret_as_bytes(),
       ),
       alpha is Some(_) || embedded_alpha,
     ),

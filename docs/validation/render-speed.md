@@ -730,14 +730,76 @@ Local reports are `_build/canvas-compiler/acceptance-{chromium,webkit}.json`;
 `replay-check-{baseline,candidate}-{chromium,webkit}.log` identifies each full
 replay report. Private input bytes, text and rendered images remain unpublished.
 
+## Fixed: saturated ICC runs and repeated image-buffer copies
+
+Two preparation costs remained in the existing image pipeline. The opaque ICC
+RGB row converter stopped updating its previous-colour entry when the separate
+4096-entry palette filled. Later runs of one valid colour repeatedly called
+LittleCMS. The previous-colour entry now remains useful independently of palette
+capacity; failed transforms still retry and only successful conversions are
+reused. On the private 13-page input, instrumented conversion counts decrease
+from 504,453 to 275,923. Page 5 decreases from 263,170 to 114,068 calls and
+page 6 from 198,483 to 119,125. These counts are work reductions, not latency
+estimates; a palette-only Chromium batch did not establish a total-time gain.
+
+A diagnostic readable release Worker CPU profile then found about 160 ms in
+generic byte-by-byte array copies during a roughly 2.1-second preparation sweep.
+Completed ICC/general RGB rows, alpha PNG rows and JPEG interleaved samples were
+copied from a fresh `FixedArray[Byte]` into `Bytes`. Those four producers now
+freeze their own completed array after its final write. No mutable alias escapes
+or is retained for a later decode. Input samples and independent output buffers
+remain separate; the change removes the copy and duplicate allocation on every
+target without changing image arithmetic, codecs, PNG encoding or transport.
+
+The focused browser comparison uses eight fresh pairs of documents and Workers
+per engine. Both Workers finish opening before measurement. Each prepares pages
+1 through 13 in order, alternating which Worker goes first at every page and
+context. This keeps paired pages close in time when background load varies.
+The unmodified packaged Workers include normal RPC transport and JSON parsing;
+Canvas painting and text/annotation DOM mounting are excluded. Output is still
+the complete ordinary display payload, at CSS width 1216 and DPR 2.
+
+| 13-page preparation RPC + JSON / median | `0b422cf` baseline | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Chromium 145 | 2359.6 ms | **2198.9 ms** | **-6.8%** |
+| WebKit 26 | 2369.0 ms | **2025.0 ms** | **-14.5%** |
+
+Page 5 preparation drops from 534.5 to 432.1 ms in Chromium and from 495 to
+389.5 ms in WebKit (19–21%). Page 6 drops from 268.6 to 234.8 ms and from
+257.5 to 227 ms (12–13%). Every paired complete payload SHA-256 matches on
+all 13 pages. These are preparation measurements, not isolated Canvas redraws.
+
+Separate six-pair full-document sweeps include File reading, Worker/graphics
+initialization, document opening, all 13 page RPCs, Canvas painting and full-pixel
+flushes; DOM mounting, remote downloads, hashing and teardown stay outside timing.
+Chromium medians are 3589.7 to 2942.4 ms, versus 667.4 ms for the pinned PDF.js
+Canvas API. WebKit gives 3246.5 to 2907.5 ms, versus 863 ms. Before/after full RGBA
+hashes match on every page in every pair. These sweep medians show an 18%/10%
+reduction in their batches; the interleaved preparation results above are the
+stronger estimate under variable machine load. First-pass parity remains open.
+
+Default and JS MoonBit tests pass (723/729), including retry after palette
+saturation and independence of retained JPEG samples across subsequent decodes.
+The Canvas, actual Worker and packaged-reader regressions pass; the public and
+internal `.mbti` interfaces are unchanged. Node stage/counterfactual profilers
+now install the same bounded pako hooks as the real Worker and recognize the
+optional-argument render wrapper before interpreting stage results.
+
+Local records are `_build/preparation-speed/paired-rpc-{chromium,webkit}.json`
+and `final-{chromium,webkit}.json`, with `count-colours.json` and CPU profiles
+for diagnostics. The raw-row transport experiment remains private: removing PNG
+encoding alone did not establish a full-document gain because host pixel
+conversion and transfer introduced other work. No raw transport or larger
+colour palette was added to the product.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |
 | --- | --- | --- |
 | Complex-page warm drawing | Page 12 still needs 12 Canvas pixel reads and 18 uploads; PDF.js warm drawing needs neither. | Reduce retained shading's source readback, Float32 conversion and required scene bitmap creation. |
-| Cold image preparation | Node page 12 takes about 409 ms overall: colour processing has 115 ms self time, PNG encoding 46 ms, font loading 51 ms and Flate decoding 37 ms. | Reuse decoded image/font resources and avoid encoding pixels that the host can consume directly. |
+| Cold image preparation | An earlier Node page-12 profile took about 409 ms overall: colour processing had 115 ms self time, PNG encoding 46 ms, font loading 51 ms and Flate decoding 37 ms. The latest paired page-5 RPC still needs about 390–432 ms. | Reuse decoded image/font resources and avoid encoding pixels that the host can consume directly. |
 | New viewport payloads | The compiled page-12 response still sends about 1.30 million JSON characters, down from 2.16 million at scale 1. Image data and repeated clipping remain inline. | Intern decoded image/clip resources and reuse prepared plans between viewports. |
-| Worker startup | The latest reader batch measures about 105 ms in Chromium and 87 ms in WebKit after static-data compaction; the Worker is about 5.0 MiB. | Reduce remaining initial code evaluation and static initialization; retain first-use checks for CJK/fonts. |
+| Worker startup | An earlier reader batch measured about 105 ms in Chromium and 87 ms in WebKit after static-data compaction; the Worker is about 5.0 MiB. | Reduce remaining initial code evaluation and static initialization; retain first-use checks for CJK/fonts. |
 
 The pixel traffic comes from the retained source colour/shape pass, pattern
 shape surfaces, CPU shading output and retained scene bitmaps. The document
