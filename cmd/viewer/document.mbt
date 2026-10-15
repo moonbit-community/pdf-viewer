@@ -36,6 +36,16 @@ pub fn close_document() -> Unit {
 
 ///|
 async fn load_document(file : @js.Value, path : String) -> Unit {
+  state.document_generation += 1
+  let requested_generation = state.document_generation
+  // Native input events can precede the first after-render controller setup.
+  // Wait before publishing state or reading the file on every open path.
+  while state.scheduler is None {
+    native_frame().wait()
+  }
+  if requested_generation != state.document_generation {
+    return
+  }
   // Host callers can set the native controls before opening their first file.
   // Capture those preferences before publishing the new reader session.
   let zoom = input_value("zoom")
@@ -43,7 +53,6 @@ async fn load_document(file : @js.Value, path : String) -> Unit {
   close_document()
   state.zoom = zoom
   state.view_mode = view_mode
-  state.document_generation += 1
   let generation = state.document_generation
   set_busy(true)
   state.error = ""
@@ -151,9 +160,6 @@ async fn load_document(file : @js.Value, path : String) -> Unit {
 ///|
 pub fn load_file(file : @js.Value, path : String) -> @js_async.Promise[Unit] {
   @js_async.Promise::from_async(() => {
-    while state.scheduler is None {
-      native_frame().wait()
-    }
     load_document(file, path)
     flush_ui()
   })

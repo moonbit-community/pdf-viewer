@@ -1180,11 +1180,12 @@ is not a comparable preparation stage.
 
 | 13-page cold-document total / median | `c3f7bb1` | Candidate | Change | Pinned PDF.js |
 | --- | ---: | ---: | ---: | ---: |
-| Chromium 145 | 2187.3 ms | **1871.6 ms** | **-14.4%** | 587.9 ms |
-| WebKit 26 | 2275.0 ms | **1964.0 ms** | **-13.7%** | 725.5 ms |
+| Chromium 145 | 2454.6 ms | **2070.0 ms** | **-15.7%** | 637.0 ms |
+| WebKit 26 | 2702.0 ms | **2353.5 ms** | **-12.9%** | 812.0 ms |
 
-All six pairs improve in both engines. Every full-page RGBA hash matches the
-old reader and the independent packaged-reader baseline, on all pages in every
+All six Chromium pairs and five of six WebKit pairs improve. Every full-page
+RGBA hash matches the old reader and the independent packaged-reader baseline,
+on all pages in every
 run. Every complete non-Canvas payload field (text layer, editor, annotations,
 accessibility, intent, SVG and page metadata) also matches. The ordinary wire
 payload decreases from 11,390,119 to 6,886,378 characters. This input admits
@@ -1195,7 +1196,7 @@ for this input, not cumulative comparisons with earlier machine-load batches;
 a substantial total-time gap to PDF.js remains.
 
 Default/JS suites pass (733/740), along with 52 Canvas checks, ten actual
-Worker checks, nine raster ownership/budget/transport checks and twelve
+Worker checks, nine raster ownership/budget/transport checks and thirteen
 packaged-reader checks in each browser. New browser coverage includes exact
 native RGB samples, interpolated RGBA/transparent edges, equally warm full-page
 replay, resource reconstruction after eviction, resident-ID reuse, active
@@ -1204,6 +1205,16 @@ transfers and zero-budget PNG fallback. The high-frequency reading fixture has
 an existing one-pixel difference between cold and warm Canvas rendering even
 on the PNG path; its comparison warms both paths and separately checks native
 decoded samples. The private 13-page cold sweeps retain strict exact hashes.
+
+The reader keeps the existing `pdf-client` singleton, so standalone bridge
+functions still address the UI's open document. Full browser/print, editor,
+layer and Chromium/WebKit text-interaction checks also pass. Linux browser CI
+exposed an older bootstrap race: native file input could finish document/layout
+RPCs before the first after-render callback created the page scheduler. All
+open paths now wait for controller initialization before file I/O or publishing
+state. A forced-delayed-frame regression reproduces the old scheduler unwrap
+failure and validates opening, replacement and close during bootstrap on both
+engines; generation tokens prevent superseded opens from resuming later.
 
 Local reports are `_build/bitmap-production/full-{chromium,webkit}.json` and
 the corresponding validation logs. The preceding disposable prototype and
@@ -1215,7 +1226,7 @@ bytes, text and rendered images remain unpublished.
 | Phase | Observed cost | Next target |
 | --- | --- | --- |
 | Complex-page warm drawing | Page 12 still needs 12 Canvas pixel reads and 18 uploads; PDF.js warm drawing needs neither. | Reduce retained shading's source readback, Float32 conversion and required scene bitmap creation. |
-| Cold image preparation | The latest six-pair Chromium batch still spends a median 183.9 ms preparing page 5. Source image decoding, colour processing and font preparation still execute. | Reuse decoded image/font resources across page builds with document/revision ownership. |
+| Cold image preparation | The latest six-pair Chromium batch still spends a median 201.8 ms preparing page 5. Source image decoding, colour processing and font preparation still execute. | Reuse decoded image/font resources across page builds with document/revision ownership. |
 | New viewport payloads | The compiled page-12 response falls from 1,295,943 to 1,105,935 JSON characters after image transfer, but repeated clipping, font and retained-ink metadata remain inline. | Intern repeated clip/font metadata and reuse prepared plans between viewports. |
 | Worker startup | An earlier reader batch measured about 105 ms in Chromium and 87 ms in WebKit after static-data compaction; the Worker is about 5.0 MiB. | Reduce remaining initial code evaluation and static initialization; retain first-use checks for CJK/fonts. |
 

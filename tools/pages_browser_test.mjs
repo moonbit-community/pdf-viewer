@@ -8,7 +8,7 @@ import {mkdir,readFile,stat,writeFile} from 'node:fs/promises';
 import {extname,resolve,sep} from 'node:path';
 import {layerFixture} from './pixels/layer_fixtures.mjs';
 import {xfaFixture,makePdf,stream} from './pixels/readonly_fixtures.mjs';
-import {waitForUI} from './browser_ui.mjs';
+import {waitForUI,holdBootstrapFramesUntilFile} from './browser_ui.mjs';
 
 const require=createRequire(resolve('tools/test-host/package.json'));
 const {chromium,webkit}=require('playwright');
@@ -574,6 +574,25 @@ try{
         if(mode==='full-budget'){assert.equal(result.sources.bytes,0);assert.equal(result.sources.entries,0);if(result.sources.supported)assert(result.sources.rejections>0);}
         else if(mode!=='rgba')assert.equal(result.sources.supported,false,mode);
         assert.deepEqual(errors,[],mode);
+      }finally{await context.close();}
+    }
+  });
+  await check('A file chosen before the first controller frame waits for initialization',async()=>{
+    for(const mode of ['open','replace','close']){
+      const context=await browser.newContext({viewport:{width:1280,height:900}}),early=await context.newPage(),errors=[];
+      try{
+        early.on('pageerror',error=>{errors.push(String(error));console.error('Bootstrap error',error.stack||String(error));});
+        await holdBootstrapFramesUntilFile(early);await early.goto(base);
+        await early.locator('#file-input').setInputFiles({name:'early.pdf',mimeType:'application/pdf',buffer:layerFixture()});
+        if(mode==='replace')await early.locator('#file-input').setInputFiles({name:'replacement.pdf',mimeType:'application/pdf',buffer:layerFixture()});
+        if(mode==='close'){
+          await early.evaluate(async()=>{(await import('./viewer.js')).closeDocument();});
+          await waitForUI(early,()=>document.querySelector('#file-name').textContent==='No document open'&&document.querySelector('#page-count').textContent==='/ 0'&&document.querySelector('#viewer').getAttribute('aria-busy')==='false');
+          assert.equal(await early.evaluate(()=>pdfViewerHost.pdf.diagnostics().worker),false,'Closing during bootstrap must cancel the pending open');
+        }else{
+          await waitForUI(early,name=>document.querySelector('#file-name').textContent===name&&document.querySelector('#page-count').textContent==='/ 2'&&document.querySelector('#viewer').getAttribute('aria-busy')==='false'&&document.querySelector('.page[data-rendered="true"]'),mode==='replace'?'replacement.pdf':'early.pdf');
+        }
+        assert.equal(await early.locator('#error').isVisible(),false);assert.deepEqual(errors,[],mode);
       }finally{await context.close();}
     }
   });
