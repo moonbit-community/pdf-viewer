@@ -24,8 +24,14 @@ exporting them across artificial package boundaries.
 
 Within the engine, `model.mbt` holds shared page data, `document.mbt` handles the
 document API and opening, `page_api.mbt` defines viewport/page methods, and
-`collector.mbt` lowers content into page items. Other files retain their feature
-names. Public enum constructors should be qualified through the exported type,
+`collector.mbt` assembles page models. Content-operator interpretation lives in
+`collector_entries.mbt`, page-item lowering in `collector_items.mbt`, and graphics
+state and Form-group resolution in `collector_state.mbt`. SVG serialization is
+organized by traversal, paths, images, shading and clipping; Type 1 fonts separate
+program parsing, CharString execution, encoding and outline entry points. These
+remain files in the same package, with unchanged helper visibility and callers.
+The [engine source map](../internal/engine/README.md) lists their responsibilities.
+Public enum constructors should be qualified through the exported type,
 for example `@pdf.PdfPageItem::Path(item)`; package-level shorthand such as
 `@pdf.Path(item)` is not forwarded by a type re-export.
 
