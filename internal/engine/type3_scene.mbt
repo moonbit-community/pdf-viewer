@@ -44,21 +44,13 @@ fn pdf_type3_scene_of_glyph(
   if collected.state.text_state.rendering_mode == 3 {
     return (Some(empty), None)
   }
-  let glyph_name = for (code, name) in simple.encoding.table() {
-    if code == charcode {
-      break Some(name)
-    }
-  } nobreak {
-    None
-  }
-  guard glyph_name is Some(glyph_name) else { return (Some(empty), None) }
-  let charproc = for (name, object) in data.charprocs {
-    if name == glyph_name {
-      break Some(object)
-    }
-  } nobreak {
-    None
-  }
+  let charproc = pdf_type3_charproc(
+    simple.encoding,
+    data.charprocs[:],
+    collected.font_object,
+    charcode,
+    context,
+  )
   guard charproc is Some(charproc) else { return (Some(empty), None) }
   if context.type3_active.length() >= 8 ||
     context.type3_active.contains(charproc) {

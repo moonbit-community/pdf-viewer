@@ -1,6 +1,6 @@
 # Render speed investigation
 
-Measured on 2026-10-13 and 2026-10-14 against PDF.js revision
+Measured on 2026-10-13 through 2026-10-15 against PDF.js revision
 `89b500f5e1d98ed89bb90211e45b28730b2d99ac` (generic build 6.5.1),
 Playwright 1.58.2 and a local 13-page PDF. The input and detailed reports stay in
 ignored `_build/`; no document text, images or input bytes are published here.
@@ -263,6 +263,59 @@ premultiplied/CMYK buffers, exercise both existing shading representations,
 initial backdrops, group opacity/knockout, soft-mask BC, annotations, custom
 adapters and nested Canvas publication. The same default production adapters
 run in the benchmark; custom test callbacks are negative fallback checks.
+
+## 2026-10-15: first-open follow-up
+
+Six fresh-open A/B pairs per engine compare the preceding packaged build with
+the following changes. Baseline and candidate run sequentially in alternating
+order; Chromium and WebKit batches also run sequentially. Measurements retain
+the first-page method and reference limitations described above.
+
+| Browser | Before | After | Change | PDF.js Canvas API |
+| --- | ---: | ---: | ---: | ---: |
+| Chromium 145.0.7632.6 | 812.0 ms | 816.1 ms | +0.5% | 144.0 ms |
+| WebKit 26.0 | 873.0 ms | 817.0 ms | -6.4% | 245.5 ms |
+
+Five of six WebKit pairs improve. Chromium splits three faster and three slower
+pairs and shows no measured first-open gain. Its baseline samples span
+722–1246 ms and candidate samples 740–1139 ms. These local measurements do not
+establish a portable speedup or first-open parity: the candidate is still about
+5.7 times the Chromium reference and 3.3 times the WebKit reference.
+
+- Type3 glyph lookup previously expanded all 256 character codes for every
+  invocation, separately for the retained scene and compatibility outline.
+  A page-owned table now shares bindings for at most 128 indirect fonts. The
+  diagnostic input needs 57 table expansions instead of 530 on page 1.
+  Direct dictionaries retain their original lookup. Graphics state, resources,
+  clipping, placement and the actual CharProc paints remain invocation-local.
+- Compatibility outlines share the page's existing font reader context.
+- Bounded image Flate output uses bulk byte copies between the decoder and its
+  result buffer. Limits, prefix handling and trailer validation are unchanged.
+- Opaque ICC RGB runs reuse the preceding successful palette hit without a
+  hash lookup. Failed transforms still retry, and the 4096-colour cap remains.
+- Browser cache accounting counts the exact default JSON writer length without
+  materializing a discarded serialized page. It keeps numeric spellings, string
+  escaping, UTF-16 sizing, the 32 MiB budget and eviction decisions unchanged.
+
+All 13 complete render payloads and their per-page cache statistics match the
+baseline byte for byte. Both engines' fresh-open batches require identical
+complete baseline/candidate RGBA hashes, stable reference hashes and matching
+Canvas dimensions. Regression checks cover cache string escapes/Unicode/numeric
+spellings, Type3 binding precedence and saturation, and nonuniform Flate output
+across decoder windows. Existing ICC checks cover failed transforms and palette
+saturation. Detailed local reports are under `_build/perf-2026-10-15/`.
+The full default-target suite passes 715 tests and the JS suite passes 720;
+packaged browser acceptance passes on Chromium and WebKit. `moon info` produces
+no interface changes, and `moon fmt` completes successfully.
+
+The next substantial first-open target is the image transport: colour-converted
+pixels currently become compressed PNGs and base64 JSON in the Worker, then
+become decoded images again in the host. A browser-specific typed-buffer path
+could remove this encoding/decoding round trip; it still needs bounded ownership,
+cancellation, masks, ICC, native/SVG compatibility and pixel validation. Worker
+code loading/evaluation and the large per-viewport JSON payload are the other
+remaining targets. This follow-up implements the local changes above and does
+not claim those architectural changes are complete.
 
 ## Remaining costs
 

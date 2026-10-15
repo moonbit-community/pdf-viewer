@@ -20,16 +20,14 @@ fn pdf_image_inflate_limited(
     let produced = decoder.last_produced()
     if produced > limit - output.length() {
       if prefix {
-        for i in 0..<(limit - output.length()).max(0) {
-          output.write_byte(scratch[i])
-        }
+        output.write_bytes(
+          Bytes::from_array(scratch[:(limit - output.length()).max(0)]),
+        )
         return output.to_bytes()
       }
       raise @core.PdfError::FlateOutputLimitExceeded(limit)
     }
-    for i in 0..<produced {
-      output.write_byte(scratch[i])
-    }
+    output.write_bytes(Bytes::from_array(scratch[:produced]))
     position += decoder.last_consumed()
     match status {
       Done => break output.to_bytes()

@@ -1094,6 +1094,7 @@ fn pdf_items_of_collected(
             origin_x,
             origin_y,
             height,
+            resource_context,
           ) catch {
             _ => None
           }

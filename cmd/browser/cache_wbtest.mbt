@@ -1,4 +1,30 @@
 ///|
+test "cache sizing matches serialized UTF-16 for escapes Unicode and numeric spellings" {
+  let controls = StringBuilder()
+  for code in 0..<32 {
+    controls.write_char(code.unsafe_to_char())
+  }
+  let values : Array[Json] = [
+    Json::null(),
+    true,
+    false,
+    [],
+    {},
+    "quotes \" backslash \\ slash / 汉字 😀",
+    Json::string(controls.to_string()),
+    @json.parse(
+      "{\"number\":1.000e+003,\"negative\":-0,\"array\":[null,true,false,1.5]}",
+    ),
+    { "quoted\"key": ["a\\b", { "nested": controls.to_string() }] },
+  ]
+  for value in values {
+    assert_eq(browser_json_size(value), value.stringify().length())
+  }
+  let large = Json::string("data:image/png;base64," + "A".repeat(100000))
+  assert_eq(browser_json_size(large), large.stringify().length())
+}
+
+///|
 fn cache_test_pdf() -> Bytes {
   let contents = "BT /F1 10 Tf 20 80 Td /P << /MCID 0 >> BDC (Base) Tj EMC 0 -20 Td /OC /Layer BDC /P << /MCID 1 >> BDC (Layer) Tj EMC EMC ET"
   let objects = [

@@ -14,6 +14,21 @@ test "image Flate expansion stops at caller limit using existing streaming decod
 }
 
 ///|
+test "bounded image Flate bulk copies preserve nonuniform bytes across output windows" {
+  let pixels = Bytes::from_array(
+    Array::makei(100003, index => ((index * 37 + index / 251) % 256).to_byte()),
+  )
+  let compressed = @font_zlib.zlib_compress(pixels)
+  assert_eq(pdf_image_inflate_limited(compressed, pixels.length()), pixels)
+  for size in [0, 32767, 32768, 32769, 65537] {
+    assert_eq(
+      pdf_image_inflate_limited(compressed, size, prefix=true),
+      pixels[:size].to_owned(),
+    )
+  }
+}
+
+///|
 test "final raw Flate consumes a bounded image prefix instead of trailing expansion" {
   let bytes = @flate.pdf_flate_encode(Bytes::make(100000, b'\xFF'))
   let page = annotation_test_page(

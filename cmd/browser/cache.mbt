@@ -60,7 +60,7 @@ fn browser_cached_page(number : Int) -> @pdf.PdfPageModel? {
 fn browser_cache_page(number : Int, page : @pdf.PdfPageModel) -> Unit {
   // Serialized UTF-16 bytes plus per-item overhead are a conservative cache
   // estimate, not a measurement of the JS heap or the parsed PDF object store.
-  let bytes = ToJson::to_json(page).stringify().length() * 2 +
+  let bytes = browser_json_size(ToJson::to_json(page)) * 2 +
     page.items.length() * 256 +
     page.fonts.length() * 128
   let budget = 32 * 1024 * 1024
@@ -106,7 +106,7 @@ fn browser_page_accessibility(number : Int, page : @pdf.PdfPageModel) -> Json {
   guard value is Some(value) else { return Json::null() }
   // Semantic nodes share the page's eviction and invalidation lifetime. Charge
   // serialized data plus node overhead rather than keeping an unbounded map.
-  let bytes = value.stringify().length() * 2 + page.items.length() * 128
+  let bytes = browser_json_size(value) * 2 + page.items.length() * 128
   if page_cache_bytes.val + bytes <= 32 * 1024 * 1024 &&
     page_cache.get(number) is Some(entry) {
     page_cache[number] = {
