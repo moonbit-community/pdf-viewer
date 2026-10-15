@@ -49,14 +49,28 @@ modules remain adapters rather than application views or navigation controllers.
 
 The PDF parser runs in the Worker. Canvas process-colour conversion uses the
 MoonBit primitive compiled into the UI module, without loading the parser again
-on the main thread. The reader, thumbnails and printing ask the bridge to omit
-the unused whole-page SVG. The public `render_page` and `render_print_page`
-exports still include SVG by default; their optional fourth argument enables
-`omit_svg` and preserves all other page payloads.
+on the main thread. The reader and thumbnails request `render_page` with
+`omit_svg=true, compiled_canvas=true`. Eligible Type3 CharProcs become shared
+document resources in font coordinates; page instructions carry resource IDs
+and placement matrices. The viewer expands each owned version-2 response once,
+releases its wire resource table and reuses the expanded plan for repeat paints.
+The runtime expands before selecting native memory accounting or tiled output,
+preserving the native and retained rendering boundaries. Stateful or
+resource-dependent glyphs retain their complete scenes. Legacy calls without
+`compiled_canvas` and public `PdfPageModel.canvas_plan()` retain version-1 plans.
+The bridge still includes SVG by default; the fourth argument enables
+`omit_svg`, and the fifth explicitly opts into compiled Canvas instructions.
+SVG requests build the complete model on demand; selection reuses the cached
+text projection. Printing retains its existing model and SVG omission path.
 
 Display rendering (`returnPixels: false`) paints ordinary RGB source-over pages
 directly through Canvas2D. Opaque fill-only Type3 glyphs reuse their vector paths,
-including multi-path charprocs; empty charprocs skip painting. Independent
+including multi-path charprocs; empty charprocs skip painting. A single-image
+Type3 scene can use the ordinary native image path, including its decoded
+opacity mask, when its text object has one glyph or explicitly disables text
+knockout. Overlapping knockout glyphs and knockout PDF groups keep the retained
+shape/alpha semantics. `nativeImageGlyphs: false` disables this promotion for
+reference comparisons. Independent
 normal RGB groups at unit opacity flatten to their native child paints.
 Knockout groups take this path only for opaque vector paints whose shape equals
 alpha. Other isolated normal groups render into

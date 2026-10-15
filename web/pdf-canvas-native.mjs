@@ -35,6 +35,19 @@ export function singleType3Path(item,page){
   return paths?.length===1?paths[0]:null;
 }
 
+// A single image in a source-over text scope is an ordinary page image. Its
+// decoded opacity can differ from shape, so overlapping knockout glyphs must
+// keep their retained scene and text-object boundary.
+const nativeType3Image=(item,page)=>{
+  const scene=item.type3_plan;
+  if(!scene||scene.version!==1||scene.diagnostics?.length||scene.annotation_svg||scene.annotation_fragments?.length||scene.items.length!==1)return null;
+  if(['origin_x','origin_y','width','height'].some(key=>scene.page[key]!==page[key]))return null;
+  if([scene.blend_space,scene.page.blend_space].some(space=>space&&space!=='DeviceRGB')||scene.blend_profile_id||scene.page.blend_profile_id||scene.blend_calibration||scene.page.blend_calibration)return null;
+  const child=scene.items[0],p=child.paint;
+  if(child.kind!=='image'||(child.groups||p.group_path||[]).length||child.mask||p.soft_mask||child.pattern||p.pattern||child.stroke_pattern||p.stroke_pattern||p.shading_pattern||!['normal','compatible'].includes(p.blend_mode)||p.fill_alpha!==1||p.fill_overprint||p.stroke_overprint||p.alpha_is_shape)return null;
+  return {...child,paint:{...p,index:item.paint.index},groups:item.groups||item.paint.group_path||[]};
+};
+
 // In a knockout group, source-over is equivalent when each elementary
 // object's shape equals its alpha. Restrict this proof to opaque vector paints.
 const opaqueNativePaint=item=>item.kind==='path'&&!item.paint.pattern&&!item.paint.stroke_pattern&&!item.paint.shading_pattern&&
@@ -46,6 +59,15 @@ export function prepareNativeCanvasItems(plan,options={}){
   const space=plan.page.blend_space||'DeviceRGB';
   if(space!=='DeviceRGB'||plan.blend_profile_id||plan.page.blend_profile_id||plan.blend_calibration||plan.page.blend_calibration)return null;
   const items=[];
+  let textObjects=null;
+  const sourceOverTextScope=paint=>{
+    if(!paint.text_object_id||paint.text_knockout===false)return true;
+    if(!textObjects){
+      textObjects=new Map();
+      for(const item of plan.items)if(item.kind==='text'&&item.paint.text_object_id){const id=item.paint.text_object_id;textObjects.set(id,(textObjects.get(id)||0)+1);}
+    }
+    return textObjects.get(paint.text_object_id)===1;
+  };
   for(let i=0;i<plan.items.length;i++){
     const raw=plan.items[i],groups=raw.groups||raw.paint.group_path||[],group=groups[0];
     if(group){
@@ -94,7 +116,12 @@ export function prepareNativeCanvasItems(plan,options={}){
       if(raw.type3_plan){
         // Opaque source-over glyph parts have shape == alpha. Outside knockout
         // groups they can stay vector paths, including multi-path charprocs.
-        const paths=nativeType3Paths(raw,plan.page);if(!paths)return null;
+        const paths=nativeType3Paths(raw,plan.page);
+        if(!paths){
+          const image=options.nativeImageGlyphs!==false&&sourceOverTextScope(p)?nativeType3Image(raw,plan.page):null;
+          if(!image)return null;
+          items.push(image);continue;
+        }
         for(const path of paths)items.push(path);continue;
       }
       else{

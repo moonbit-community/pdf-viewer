@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { renderPdfCanvas } from '../../web/pdf-canvas.mjs';
 import {createPatternPainter} from '../../web/pdf-patterns.mjs';
 import {renderPdfPage} from '../../web/pdf-runtime.mjs';
+import {prepareNativeCanvasItems} from '../../web/pdf-canvas-native.mjs';
 const require=createRequire(process.env.PDF_CANVAS_PACKAGE || import.meta.url);
 const {createCanvas,Path2D,loadImage}=require('@napi-rs/canvas');
 const options={createCanvas,Path2D,loadImage};
@@ -14,6 +15,42 @@ const pixel=(result,x,y)=>Array.from(result.data.slice((y*20+x)*4,(y*20+x)*4+4))
 const near=(value,expected,tolerance=2)=>value.forEach((v,i)=>assert.ok(Math.abs(v-expected[i])<=tolerance,`${value} != ${expected}`));
 let count=0;
 async function test(name,fn){await fn();count++;console.log(`ok ${name}`);}
+await test('single Type3 images use ordinary native image semantics including opacity masks',async()=>{
+ const bitmap=createCanvas(4,4),ctx=bitmap.getContext('2d'),data=ctx.createImageData(4,4);
+ for(let p=0;p<16;p++){data.data.set([40+p*10,90,200,[0,80,160,255][p%4]],p*4);}ctx.putImageData(data,0,0);
+ const image={kind:'image',paint:{resource:{data_uri:bitmap.toDataURL(),width:4,height:4,has_local_mask:true,alpha_is_explicit_shape:false},
+  quad:{p0:{x:3,y:3},p1:{x:3,y:17},p2:{x:17,y:17},p3:{x:17,y:3}},bounds:{min_x:3,min_y:3,max_x:17,max_y:17},fill_alpha:1,blend_mode:'normal',clips:[]}};
+ const glyph={kind:'text',paint:{index:1,text_object_id:'single',text_knockout:true,fill_alpha:1,blend_mode:'normal'},type3_plan:plan([image])};
+ for(const matrix of [[2,0,0,2,0,0],[0,2,-2,0,40,0],[1.8,.15,-.1,1.8,2,0]]){
+  const background=path(rect,'#c08040'),overlay=path('M0 15H20V20H0Z','#00ff00');
+  const a=createCanvas(1,1),b=createCanvas(1,1),opts={...options,returnPixels:false,width:40,height:40,matrix};
+  assert.equal((await renderPdfCanvas(a,plan([background,glyph,overlay]),opts)).native,true);
+  assert.equal((await renderPdfCanvas(b,plan([background,image,overlay]),opts)).native,true);
+  assert.deepEqual(a.getContext('2d').getImageData(0,0,40,40).data,b.getContext('2d').getImageData(0,0,40,40).data);
+ }
+ const overlapping=plan([path(rect,'#c08040'),glyph,{...glyph,paint:{...glyph.paint,index:2}}]);
+ assert.equal(prepareNativeCanvasItems(overlapping,{returnPixels:false}),null,'Image shape cannot be replaced with alpha in a knockout text object');
+ const a=createCanvas(1,1),b=createCanvas(1,1),opts={...options,width:40,height:40,matrix:[2,0,0,2,0,0]};
+ const actual=await renderPdfCanvas(a,overlapping,{...opts,returnPixels:false}),retained=await renderPdfCanvas(b,overlapping,{...opts,nativeCanvas:false});
+ assert.notEqual(actual.native,true);assert.deepEqual(actual.data,retained.data);
+ const ordinary=await renderPdfCanvas(createCanvas(1,1),plan([path(rect,'#c08040'),image,image]),opts);
+ assert.notDeepEqual(actual.data,ordinary.data,'The knockout guard protects visibly different overlapping images');
+ const sourceOver={...overlapping,items:overlapping.items.map(v=>v.kind==='text'?{...v,paint:{...v.paint,text_knockout:false}}:v)};
+ assert(prepareNativeCanvasItems(sourceOver,{returnPixels:false}),'TK=false admits source-over image glyphs');
+ assert.equal(prepareNativeCanvasItems(plan([glyph]),{returnPixels:false,nativeImageGlyphs:false}),null);
+ for(const patch of [{fill_alpha:.5},{fill_overprint:true},{alpha_is_shape:true},{soft_mask:{}}]){
+  const child={...image,paint:{...image.paint,...patch}};
+  assert.equal(prepareNativeCanvasItems(plan([{...glyph,type3_plan:plan([child])}]),{returnPixels:false}),null);
+ }
+ const cmyk={...glyph,type3_plan:{...glyph.type3_plan,page:{...page,blend_space:'DeviceCMYK'}}};
+ assert.equal(prepareNativeCanvasItems(plan([cmyk]),{returnPixels:false}),null);
+ for(const isolated of [false,true]){
+  const group={id:'image-knockout',isolated,knockout:true,alpha:1,blend_mode:'normal'};
+  const prepared=prepareNativeCanvasItems(plan([{...glyph,groups:[group]}]),{returnPixels:false});
+  if(isolated){assert.equal(prepared[0].kind,'retained');assert.equal(prepared[0].native,false);}
+  else assert.equal(prepared,null);
+ }
+});
 await test('cropped tiles skip invisible sources and groups without changing pixels',async()=>{
  const image=createCanvas(1,1);image.getContext('2d').fillRect(0,0,1,1);
  const group={id:'outside',isolated:true,knockout:false,alpha:1,blend_mode:'normal'};

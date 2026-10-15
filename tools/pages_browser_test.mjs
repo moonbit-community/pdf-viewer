@@ -245,6 +245,51 @@ try{
     assert.equal(result.cleared.entries,0);assert.equal(result.cleared.bytes,0);
     assert.equal(result.rebuilt.loads,1);assert.equal(result.rebuilt.hits,0);
   });
+  await check('Compiled glyphs cross the packaged Worker once and keep single image glyphs native',async()=>{
+    await page.goto(base);await page.locator('#open-empty').waitFor({state:'visible'});
+    await page.evaluate(()=>{
+      const host=pdfViewerHost,paint=host.paintCanvas;
+      window.glyphPaints=[];
+      host.paintCanvas=async(...args)=>{
+        const version=args[1].canvas.version,result=await paint(...args);
+        const {prepareNativeCanvasItems}=await import('./pdf-canvas-native.mjs');
+        const native=prepareNativeCanvasItems(args[1].canvas,{returnPixels:false});
+        window.glyphPaints.push({version,expanded:args[1].canvas.version,native:native!==null});
+        window.glyphPaintArgs=args;return result;
+      };
+    });
+    const fixture=makePdf([
+      '<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Count 1 /Kids [3 0 R] >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 80 80] /Contents 4 0 R /Resources << /Font << /F 5 0 R >> >> >>',
+      stream('','0 .2 .8 rg BT /F 24 Tf 5 10 Td (AAA) Tj ET BT /F 24 Tf 5 40 Td (B) Tj ET'),
+      '<< /Type /Font /Subtype /Type3 /FontBBox [0 0 600 900] /FontMatrix [.001 0 0 .001 0 0] /FirstChar 65 /LastChar 66 /Widths [600 600] /Encoding << /Differences [65 /A /B] >> /CharProcs << /A 6 0 R /B 7 0 R >> /Resources << /XObject << /I 8 0 R >> >> >>',
+      stream('','600 0 0 0 600 900 d1 0 0 600 900 re 100 100 400 700 re f*'),
+      stream('','600 0 d0 600 0 0 900 0 0 cm /I Do'),
+      stream('/Type /XObject /Subtype /Image /Width 4 /Height 1 /BitsPerComponent 8 /ColorSpace /DeviceRGB /SMask 9 0 R',Buffer.from([255,0,0,0,255,0,0,0,255,255,0,255])),
+      stream('/Type /XObject /Subtype /Image /Width 4 /Height 1 /BitsPerComponent 8 /ColorSpace /DeviceGray',Buffer.from([0,80,160,255])),
+    ]);
+    await page.locator('#file-input').setInputFiles({name:'glyphs.pdf',mimeType:'application/pdf',buffer:fixture});
+    await waitForUI(page,()=>document.querySelector('.page[data-page="1"]')?.dataset.rendered==='true'&&document.querySelector('#viewer').getAttribute('aria-busy')==='false');
+    const result=await page.evaluate(async()=>{
+      const args=window.glyphPaintArgs,owned=args[1],expanded=owned.canvas,paint=pdfViewerHost.paintCanvas;
+      const raster=async()=>{
+        const canvas=document.createElement('canvas');await paint(canvas,owned,args[2],()=>true,args[4]);
+        return [...canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data];
+      };
+      const first=await raster(),second=await raster();
+      const selection=JSON.parse(await pdfViewerHost.pdf.call('select_page_text',[1,-1,-1,-1,-1]));
+      const legacy=JSON.parse(await pdfViewerHost.pdf.call('render_page',[1,1,0,true]));
+      const svg=JSON.parse(await pdfViewerHost.pdf.call('render_page',[1,1,0]));
+      return {paints:window.glyphPaints,identity:owned.canvas===expanded,same:first.every((v,i)=>v===second[i]),
+        ink:first.some((v,i)=>i%4!==3&&v<128),legacy:legacy.canvas.version,svg:svg.svg,
+        selection:selection.selection.text,cache:JSON.parse(await pdfViewerHost.pdf.call('cache_info'))};
+    });
+    assert.equal(result.paints[0].version,2);assert.equal(result.paints[0].expanded,1);
+    assert.ok(result.paints.every(p=>p.native===true),'The masked image glyph must keep this whole page on native Canvas');
+    assert.equal(result.identity,true);assert.equal(result.same,true);assert.equal(result.ink,true);
+    assert.equal(result.legacy,1);assert.match(result.svg,/<svg/);assert.match(result.selection,/AAA/);
+    assert.equal(result.cache.compiled_resources.entries,1);assert.deepEqual(failures,[]);
+  });
   await check('Scrolling during Retina rendering cancels old pages and keeps controls responsive',async()=>{
     await page.goto(base);
     await page.evaluate(()=>{

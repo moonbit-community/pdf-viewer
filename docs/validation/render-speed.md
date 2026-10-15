@@ -595,7 +595,7 @@ PDF_BROWSER=webkit PDF_BENCH_SAMPLES=6 PDF_BENCH_BASELINE_ROOT=/path/to/eba738b-
 
 Local reports are `_build/next-bottleneck/effective-group-{chromium,webkit}.json`.
 
-## Next target: Wasm GC page preparation
+## Preparation investigation: isolated Wasm GC prototype
 
 Further checks on the original private 13-page input locate the largest
 remaining first-open gap in preparation, rather than warm Canvas replay.
@@ -649,8 +649,86 @@ imports and probe package are kept outside tracked product sources under
 `backend-browser-{chromium,webkit}.json` reports. A Type3 instruction cache
 prototype saved only about 10 ms in warmed Node checks; scanline run filling
 saved about 7–10 ms, with unstable fresh-open browser results. Neither was
-included in production. The next substantial experiment is a complete Wasm GC
-Worker adapter, retaining the JS display renderer and existing host engines.
+included in production. A complete Wasm GC Worker adapter remains a candidate;
+the following production changes first remove repeated glyph preparation and
+a page-wide fallback from the existing JS path.
+
+## Fixed: compiled glyph resources and single-image Type3 fallback
+
+The browser previously interpreted a Type3 CharProc for every glyph invocation,
+built a positioned retained scene and compatibility outline, then serialized
+that geometry into every viewport response. The new opt-in Canvas projection
+compiles eligible fill-only CharProcs once in font coordinates. Its bounded
+document cache holds at most 512 resources and an estimated 8 MiB. Invocation
+colour, clipping, FontMatrix/placement and groups remain separate. Unsupported
+operators and colour/transparency requirements retain the existing interpreter.
+The viewer expands each response once and reuses its normal Canvas plan;
+the generic runtime expands before selecting native surface budgets or tiles.
+Public page models, legacy bridge calls and printing retain version-1 plans.
+
+The original private input uses 2,017 compiled glyph calls across 13 pages.
+At scale 1, page 1's serialized response falls from 1,909,814 to 1,080,562
+characters (-43.4%); page 2 falls from 2,130,838 to 1,059,751 (-50.3%).
+Six sequential alternating fresh-context pairs compare the packaged baseline
+`2ea5d33` with the candidate. Both use the ordinary file-input measurement above,
+including a pixel flush and two animation frames:
+
+| Median phase | Chromium baseline | Chromium candidate | WebKit baseline | WebKit candidate |
+| --- | ---: | ---: | ---: | ---: |
+| First-page Canvas visible | 529.8 ms | **482.7 ms (-8.9%)** | 626.5 ms | **563.0 ms (-10.1%)** |
+| First-page preparation RPC | 275.5 ms | **231.1 ms (-16.1%)** | 329.0 ms | **262.5 ms (-20.2%)** |
+
+All 12 pairs improve and all first-page RGBA hashes match within each browser.
+PDF.js Canvas-only medians are 120.7 ms and 202.5 ms respectively; first-open
+parity remains unresolved. These local results do not include remote downloads.
+
+A separate capability gap was much larger: page 5 contains one 80 x 76 image
+inside a Type3 CharProc. Rejecting that elementary scene forced the whole page
+through retained transparency and tiled raster transfers. A one-image RGB
+scene can now use the ordinary native image path, including decoded opacity,
+when the enclosing text object has one glyph or explicitly sets TK=false.
+Overlapping knockout glyphs, explicit knockout PDF groups and state requiring
+retained shape/colour treatment keep their previous rendering boundaries.
+`nativeImageGlyphs: false` disables the promotion for reference comparisons.
+
+Nine warm paint-plus-forced-flush samples on each packaged artifact give:
+
+| Page 5 / median | Baseline | Candidate | PDF.js in candidate run |
+| --- | ---: | ---: | ---: |
+| Chromium 145 | 937.7 ms | **22.9 ms (41x faster)** | 24.8 ms |
+| WebKit 26 | 626.0 ms | **26.0 ms (24x faster)** | 17.0 ms |
+
+Native image sampling changes some edge pixels on page 5. Against the same
+full PDF.js output in each engine, mean absolute RGBA-channel error decreases
+from 0.29545 to 0.28555 in Chromium and from 0.31934 to 0.28229 in WebKit.
+This is not an assertion of exact PDF.js parity or universal first-open speedup.
+Page 12 keeps its complete baseline RGBA hash. Its warm medians are 29.4 versus
+31.5 ms in Chromium and 58 versus 56 ms in WebKit in the same batches; no stable
+page-12 improvement or regression is established.
+
+With image promotion disabled, all 13 complete diagnostic-input RGBA hashes
+match before and after glyph compilation. Selection, editor, annotations and
+accessibility payloads also match. Authored tests cover all text rendering modes,
+affine placement, clipping, fill rules, degenerate paths, complex fallbacks,
+cache budgets, real Worker transport and Range document hydration. Image-glyph
+tests exercise alpha masks, overlapping knockout text, TK=false and retained
+colour/state guards. MoonBit tests pass on default and JS targets (721/727),
+144 compiled/legacy native and retained pixel comparisons pass, and all ten
+packaged-reader checks pass in each browser. The public facade's `.mbti` stays
+unchanged; the compiler entry points are confined to the internal engine package.
+
+```sh
+PDF_BROWSER=chromium PDF_BENCH_SAMPLES=6 PDF_BENCH_BASELINE_ROOT=/path/to/2ea5d33-build \
+  node tools/first_load_benchmark.mjs /path/to/document.pdf _build/compiled-chromium.json
+PDF_BROWSER=webkit PDF_BENCH_SAMPLES=6 PDF_BENCH_BASELINE_ROOT=/path/to/2ea5d33-build \
+  node tools/first_load_benchmark.mjs /path/to/document.pdf _build/compiled-webkit.json
+PDF_BROWSER=chromium PDF_BENCH_REPLAYS=9 node tools/render_benchmark.mjs /path/to/document.pdf 5,12
+PDF_BROWSER=webkit PDF_BENCH_REPLAYS=9 node tools/render_benchmark.mjs /path/to/document.pdf 5,12
+```
+
+Local reports are `_build/canvas-compiler/acceptance-{chromium,webkit}.json`;
+`replay-check-{baseline,candidate}-{chromium,webkit}.log` identifies each full
+replay report. Private input bytes, text and rendered images remain unpublished.
 
 ## Remaining costs
 
@@ -658,7 +736,7 @@ Worker adapter, retaining the JS display renderer and existing host engines.
 | --- | --- | --- |
 | Complex-page warm drawing | Page 12 still needs 12 Canvas pixel reads and 18 uploads; PDF.js warm drawing needs neither. | Reduce retained shading's source readback, Float32 conversion and required scene bitmap creation. |
 | Cold image preparation | Node page 12 takes about 409 ms overall: colour processing has 115 ms self time, PNG encoding 46 ms, font loading 51 ms and Flate decoding 37 ms. | Reuse decoded image/font resources and avoid encoding pixels that the host can consume directly. |
-| New viewport payloads | Page 12 still sends about 2.13 million JSON characters. Its Canvas plan contains about 709,000 path characters and 138,000 clip-path characters. | Intern repeated immutable geometry/resources and reuse prepared plans between viewports. |
+| New viewport payloads | The compiled page-12 response still sends about 1.30 million JSON characters, down from 2.16 million at scale 1. Image data and repeated clipping remain inline. | Intern decoded image/clip resources and reuse prepared plans between viewports. |
 | Worker startup | The latest reader batch measures about 105 ms in Chromium and 87 ms in WebKit after static-data compaction; the Worker is about 5.0 MiB. | Reduce remaining initial code evaluation and static initialization; retain first-use checks for CJK/fonts. |
 
 The pixel traffic comes from the retained source colour/shape pass, pattern
