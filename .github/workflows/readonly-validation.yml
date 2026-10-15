@@ -106,6 +106,7 @@ jobs:
           node tools/ci/check_scope.mjs
           node tools/ci/check_reports_test.mjs
           node tools/pixels/canvas_test.mjs
+          node tools/pixels/canvas_program_test.mjs
           node tools/pixels/image_flate_test.mjs
           node tools/compact_pdf_data_test.mjs
           node tools/pixels/render_assets_test.mjs

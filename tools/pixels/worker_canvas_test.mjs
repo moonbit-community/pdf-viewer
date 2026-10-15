@@ -271,12 +271,36 @@ try {
   writeFileSync(`${output}/original-text-pen.png`, workerCanvas.toBuffer('image/png'));
   report.tests.push('unchanged 621-byte text-pen fixture through actual Worker and default Canvas is nonblank, diagnostic-free and exact to direct bridge RGBA');
 
+  const glyphFixture = makePdf([
+    '<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Count 1 /Kids [3 0 R] >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 80 80] /Contents 4 0 R /Resources << /Font << /F 5 0 R >> >> >>',
+    stream('', '0 .2 .8 rg BT /F 24 Tf 10 10 Td (AAA) Tj ET'),
+    '<< /Type /Font /Subtype /Type3 /FontBBox [0 0 600 900] /FontMatrix [.001 0 0 .001 0 0] /FirstChar 65 /LastChar 65 /Widths [600] /Encoding << /Differences [65 /A] >> /CharProcs << /A 6 0 R >> /Resources << >> >>',
+    stream('', '600 0 0 0 600 900 d1 0 0 600 900 re 100 100 400 700 re f*'),
+  ]);
+  checked(await client.call('open_pdf', [glyphFixture], { transfer: [glyphFixture.buffer] }));
+  const compact = checked(await client.call('render_page', [1, 1, 0, true, true]));
+  assert.equal(compact.canvas.version, 2);
+  assert.equal(compact.canvas.glyph_resources.length, 1);
+  assert.equal(compact.canvas.items.filter(item => item.glyph).length, 3);
+  const selection = checked(await client.call('select_page_text', [1, -1, -1, -1, -1]));
+  assert.equal(checked(await client.call('cache_info')).compiled_resources.entries, 1);
+  const legacy = checked(await client.call('render_page', [1, 1, 0, true]));
+  assert.equal(legacy.canvas.version, 1);
+  assert.deepEqual(checked(await client.call('select_page_text', [1, -1, -1, -1, -1])), selection);
+  const compactPaint = await renderPdfPage(createCanvas(1, 1), compact.canvas, options);
+  const legacyPaint = await renderPdfPage(createCanvas(1, 1), legacy.canvas, options);
+  assert.deepEqual(compactPaint.data, legacyPaint.data);
+  assert.deepEqual(compactPaint.diagnostics, []);
+  report.tests.push('actual Worker transports deduplicated glyph programs, keeps legacy call arity and selection, and reproduces legacy Canvas pixels');
+
   const pending = client.call('render_page', [1, 1.3, 0]);
   client.reset();
   await assert.rejects(pending, { name: 'AbortError' });
   const reopened = fixture.slice();
   assert.equal(checked(await client.call('open_pdf', [reopened], { transfer: [reopened.buffer] })).pages, 14);
   assert.equal(checked(await client.call('cache_info')).render.entries, 0);
+  assert.equal(checked(await client.call('cache_info')).compiled_resources.entries, 0);
   client.close();
   await assert.rejects(client.call('cache_info'), { code: 'document-closed' });
   assert.equal(client.diagnostics().queued, 0);

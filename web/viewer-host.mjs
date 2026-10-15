@@ -8,6 +8,7 @@ import {installPdfIccEngine} from './pdf-icc.mjs';
 import {renderPdfPage} from './pdf-runtime.mjs';
 import {PdfRenderAssets} from './pdf-render-assets.mjs';
 import {createPatternTileCache} from './pdf-patterns.mjs';
+import {expandPdfCanvasProgram} from './pdf-canvas-program.mjs';
 
 let initialization,measure;
 let renderAssets=new PdfRenderAssets();
@@ -29,6 +30,9 @@ export const viewerHost={
   },
   paintCanvas(canvas,result,outputScale,isCurrent,convertProcess){
     const assets=renderAssets,tiles=patternTiles,loadImage=loadRenderImage;
+    // RPC snapshots belong to this viewer. Expand each wire program once and
+    // release its resource table before repeated viewport paints.
+    if(result.canvas?.version===2&&isCurrent?.()!==false)result.canvas=expandPdfCanvasProgram(result.canvas);
     return renderPdfPage(canvas,result.canvas,{
       unsupported:'warn',returnPixels:false,outputScale,isCurrent,
       yieldToHost:()=>new Promise(resolve=>setTimeout(resolve,0)),

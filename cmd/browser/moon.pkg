@@ -1,5 +1,6 @@
 import {
   "moonbit-community/pdf-viewer" @pdf,
+  "moonbit-community/pdf-viewer/internal/engine",
   "moonbitlang/core/encoding/base64",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",

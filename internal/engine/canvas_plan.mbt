@@ -20,6 +20,7 @@ fn pdf_canvas_plan(
   scale : Double,
   rotation : Int,
   inherited_profiles : Array[PdfIccProfile],
+  program? : PdfCanvasProgram? = None,
 ) -> Json raise @core.PdfError {
   let profiles = page.icc_profiles.filter(profile => {
     !inherited_profiles.contains(profile)
@@ -27,6 +28,7 @@ fn pdf_canvas_plan(
   let self = { ..page, icc_profiles: [..inherited_profiles, ..profiles], }
   let viewport = self.viewport(scale~, rotation~)
   let items : Array[Json] = []
+  let resources : Map[Int, PdfCanvasGlyphResource] = Map([])
   for item in self.items {
     // Invisible OCR remains in the page model and selection layer, but has
     // no source paint or knockout shape and needs no per-glyph SVG payload.
@@ -41,6 +43,12 @@ fn pdf_canvas_plan(
         }
       ) => continue
       _ => ()
+    }
+    let glyph = program.bind(program => {
+      program.glyphs.get(pdf_page_item_index(item))
+    })
+    if glyph is Some(call) {
+      resources[call.resource.id] = call.resource
     }
     let (kind, paint) = match item {
       Text(value) =>
@@ -177,16 +185,20 @@ fn pdf_canvas_plan(
         )
       _ => ((None : String?).to_json(), (None : String?).to_json())
     }
-    items.push({
+    let command : Json = {
       "kind": kind.to_json(),
       "paint": paint,
       "text_svg": text_svg,
       "text_fill_svg": text_fill_svg,
       "text_stroke_svg": text_stroke_svg,
-      "type3_plan": match item {
-        Text({ type3_scene: Some(scene), .. }) =>
-          pdf_canvas_plan(scene, 1.0, scene.rotation, self.icc_profiles)
-        _ => (None : String?).to_json()
+      "type3_plan": if glyph is Some(_) {
+        Json::null()
+      } else {
+        match item {
+          Text({ type3_scene: Some(scene), .. }) =>
+            pdf_canvas_plan(scene, 1.0, scene.rotation, self.icc_profiles)
+          _ => (None : String?).to_json()
+        }
       },
       "pattern": pattern,
       "stroke_pattern": stroke_pattern,
@@ -195,7 +207,17 @@ fn pdf_canvas_plan(
         pdf_soft_mask_of_page_item(item),
         profiles=self.icc_profiles,
       ),
-    })
+    }
+    items.push(
+      match glyph {
+        Some(call) =>
+          pdf_canvas_object_with(command, "glyph", {
+            "resource": call.resource.id,
+            "matrix": call.matrix,
+          })
+        None => command
+      },
+    )
   }
   let annotation_svg : Json = if self.annotations.is_empty() {
     (None : String?).to_json()
@@ -271,8 +293,12 @@ fn pdf_canvas_plan(
       }).to_json(),
     })
   }
-  {
-    "version": 1,
+  let result : Json = {
+    "version": if resources.is_empty() {
+      1
+    } else {
+      2
+    },
     "diagnostics": self.graphics_diagnostics().to_json(),
     "annotation_svg": annotation_svg,
     "annotation_fragments": annotation_fragments.to_json(),
@@ -299,6 +325,17 @@ fn pdf_canvas_plan(
     },
     "viewport": viewport.to_json(),
     "items": items.to_json(),
+  }
+  if resources.is_empty() {
+    result
+  } else {
+    let ids = resources.keys().to_array()
+    ids.sort()
+    pdf_canvas_object_with(
+      result,
+      "glyph_resources",
+      ids.map(id => resources[id].json).to_json(),
+    )
   }
 }
 

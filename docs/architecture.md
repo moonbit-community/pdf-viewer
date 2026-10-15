@@ -392,6 +392,23 @@ pattern/shading painters and delegates to `renderPdfCanvas()` on the main thread
 main pages and thumbnails use that result and surface graphics diagnostics.
 `render_svg()` remains the compatibility API.
 
+The browser can opt into a compiled Canvas projection for resource-free,
+fill-only Type3 CharProcs. A document cache retains at most 512 compiled glyphs
+and an estimated 8 MiB of numeric geometry. Each page retains only its used
+resources and calls; its geometry is also conservatively charged against the
+page-cache budget. Build contexts release their document-cache references when
+preparation completes, including when Range hydration replaces a document view.
+Resource keys identify CharProc streams within one immutable document. Colour,
+FontMatrix/placement, clips and group state remain invocation data. Complex
+CharProcs retain the ordinary interpreter. Public page models and legacy bridge
+calls keep their complete scenes; explicit SVG requests upgrade a compact cached
+projection to the complete model. Version-2 browser plans carry a local glyph
+resource table, expanded by `web/pdf-canvas-program.mjs` into the existing
+native/retained rendering boundaries. The viewer replaces each owned compact
+response with its expanded plan once; generic runtime calls expand before
+choosing the native surface budget or tiled output. Text selection and semantics consume the
+same top-level provenance and geometry as the complete model.
+
 The native public route writes `.canvas.json` through `cmd/main`, then replays
 it with `tools/render_canvas.mjs` in a Canvas host. `.svg` selects compatibility
 output. It uses the same plan/runtime, not a separate MoonBit software rasterizer;

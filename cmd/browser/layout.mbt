@@ -29,7 +29,7 @@ pub fn select_page_text(
   end_offset : Int,
 ) -> String {
   try {
-    guard browser_page(number) is Some(page) else {
+    guard browser_text_page(number) is Some(page) else {
       return browser_error_with_code("page-missing", "Page does not exist")
     }
     let items = page.text_layer().items

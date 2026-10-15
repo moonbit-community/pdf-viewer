@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as bridge from '../../web/_generated/pdf.js';
 import {PdfRangeSource,PdfRangeDocument} from '../../web/pdf-range.mjs';
-import {rangeFixture,taggedRangeFixture} from './readonly_fixtures.mjs';
+import {rangeFixture,taggedRangeFixture,makePdf,stream} from './readonly_fixtures.mjs';
 const parse=value=>{const result=JSON.parse(value);assert.equal(result.ok,true,result.error);return result;};
 const bytes=rangeFixture();
 function mockFetch(data,{range=true,etag='"fixture-v1"',truncate=false,badRange=false}={}){
@@ -63,10 +63,35 @@ assert.ok(taggedSource.stats.received_bytes<tagged.length/10,'Document metadata 
 assert.deepEqual(parse(bridge.render_page(1,1,0)).accessibility,fullAccessibility,'Metadata hydration preserves the tagged page snapshot');
 const cancelled=new PdfRangeSource('https://example.test/cancelled.pdf',{signal:aborted.signal,fetch:async(url,options)=>{options.signal.throwIfAborted();}});
 await assert.rejects(()=>cancelled.initialize(),error=>error.name==='AbortError');
+// The prepared page owns its compact resource table across document hydration.
+// Unrelated large streams keep metadata outside the initial segment fetches.
+const glyphBytes=makePdf([
+ '<< /Type /Catalog /Pages 2 0 R /Metadata 8 0 R >>','<< /Type /Pages /Count 1 /Kids [3 0 R] >>',
+ '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 80 80] /Contents 4 0 R /Resources << /Font << /F 5 0 R >> >> >>',
+ stream('','BT /F 24 Tf 10 10 Td (AAA) Tj ET'),
+ '<< /Type /Font /Subtype /Type3 /FontBBox [0 0 600 900] /FontMatrix [.001 0 0 .001 0 0] /FirstChar 65 /LastChar 65 /Widths [600] /Encoding << /Differences [65 /A] >> /CharProcs << /A 6 0 R >> /Resources << >> >>',
+ stream('','600 0 0 0 600 900 d1 0 0 600 900 re f'),
+ stream('',Buffer.alloc(1024*1024,32)),
+ stream('/Type /Metadata /Subtype /XML','<x:xmpmeta xmlns:x="adobe:ns:meta/"/>'),
+ stream('',Buffer.alloc(1024*1024,32)),
+]);
+parse(bridge.open_pdf(glyphBytes));const fullGlyphs=parse(bridge.render_page(1,1,0,true,true));
+const glyphSource=new PdfRangeSource('https://example.test/glyphs.pdf',mockFetch(glyphBytes)),glyphReader=new PdfRangeDocument(glyphSource,bridge);
+parse(await glyphReader.open());assert.equal(glyphSource.full,null);
+await glyphReader.prepare('render_page',[1]);
+assert.deepEqual(parse(bridge.render_page(1,1,0,true,true)),fullGlyphs);
+assert.equal(fullGlyphs.canvas.version,2);assert.equal(fullGlyphs.canvas.glyph_resources.length,1);
+const glyphPageCache=parse(bridge.cache_info()).pages;
+const beforeMetadata=glyphSource.stats.received_bytes;
+await glyphReader.prepare('document_info',[]);parse(bridge.document_info());
+assert.ok(glyphSource.stats.received_bytes>beforeMetadata,'Metadata hydration must fetch new document segments');
+assert.equal(parse(bridge.cache_info()).pages,glyphPageCache);
+assert.deepEqual(parse(bridge.render_page(1,1.5,90,true,true)).canvas.glyph_resources,fullGlyphs.canvas.glyph_resources);
+assert.ok(glyphSource.stats.received_bytes<glyphBytes.length/2);
 // Exercise actual classic and compressed xrefs from the pinned PDF.js corpus.
 for(const name of ['tracemonkey.pdf','Pages-tree-refs.pdf','xfa_issue14315.pdf']){
   const bytes=readFileSync(new URL(`../../reference/pdf.js/test/pdfs/${name}`,import.meta.url)),mock=mockFetch(bytes);
   const source=new PdfRangeSource('https://example.test/'+name,mock),reader=new PdfRangeDocument(source,bridge);
   const opened=parse(await reader.open());assert.ok(opened.pages>0);if(!source.full)await reader.prepare('render_page',[1]);parse(bridge.render_page(1,1,0));
 }
-console.log(JSON.stringify({passed:true,first_page_bytes:first.received_bytes,total_bytes:bytes.length,range_requests:mocked.requests.length,checks:['page equality','source provenance','lazy second page','streamed body','full fallback','truncated range','invalid Content-Range','validator change','tagged first render','lazy structure streams','abort','real xrefs']}));
+console.log(JSON.stringify({passed:true,first_page_bytes:first.received_bytes,total_bytes:bytes.length,range_requests:mocked.requests.length,checks:['page equality','source provenance','lazy second page','streamed body','full fallback','truncated range','invalid Content-Range','validator change','tagged first render','lazy structure streams','compiled glyphs across metadata hydration','abort','real xrefs']}));

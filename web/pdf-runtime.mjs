@@ -2,11 +2,13 @@ import {createShadingPainter} from './pdf-shading.mjs';
 import { renderPdfCanvas, multiplyMatrix, checkPdfRender } from './pdf-canvas.mjs';
 import { createPatternPainter } from './pdf-patterns.mjs';
 import {prepareNativeCanvasItems} from './pdf-canvas-native.mjs';
+import {expandPdfCanvasProgram} from './pdf-canvas-program.mjs';
 
 export {initializePdfGraphics} from './pdf-graphics.mjs';
 
 export async function renderPdfPage(canvas,plan,options={}) {
   checkPdfRender(options);
+  plan=expandPdfCanvasProgram(plan);
   const configured={...options};
   const scale=options.outputScale ?? 1;
   if(!Number.isFinite(scale)||scale<=0)throw new RangeError('PDF output scale must be finite and positive');

@@ -8,6 +8,7 @@ pub struct PdfViewerDocument {
   pages : Array[@page.PdfPage]
   optional_content_state : PdfOptionalContentState?
   font_fallbacks : Array[PdfFontFallback]
+  priv canvas_resources : PdfCanvasResourceCache
   priv accessibility_sources : Ref[(Int, Array[PdfTextStringSource?])?]
   priv reader_observations : Array[PdfReaderDiagnostic]
   priv editor_security : PdfEditorSecurity?
@@ -149,6 +150,7 @@ fn pdf_viewer_document_of_parsed_document(
     pages,
     optional_content_state: None,
     font_fallbacks: [],
+    canvas_resources: pdf_canvas_resource_cache(),
     accessibility_sources: Ref(None),
     reader_observations,
     editor_security: None,

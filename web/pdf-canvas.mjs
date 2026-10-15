@@ -6,6 +6,7 @@ import { createColourPlaneSurface, paintColourPlaneSurface, resolveColourPlaneSu
 import { PdfCompositor, rgba8ToPremultiplied, premultipliedToRgba8, softMaskSamples } from './pdf-compositor.mjs';
 import { pdfPixelRegion } from './pdf-pixel-region.mjs';
 import {prepareNativeCanvasItems,singleType3Path,independentPattern} from './pdf-canvas-native.mjs';
+import {expandPdfCanvasProgram} from './pdf-canvas-program.mjs';
 
 export const multiplyMatrix = (a,b) => [
   a[0]*b[0]+a[2]*b[1], a[1]*b[0]+a[3]*b[1],
@@ -79,6 +80,7 @@ export function checkPdfRender(options) {
  * replayed independently. A Canvas2D host is required on every target. */
 export async function renderPdfCanvas(canvas, plan, options = {}) {
   checkPdfRender(options);
+  plan=expandPdfCanvasProgram(plan);
   let scope=options._profileScope,owned=null;
   const ownedGlyphCache=!options._glyphCache;
   const glyphCache=options._glyphCache||{entries:new Map(),bytes:0,limit:Math.max(0,Math.min(options.maxGlyphCacheBytes??16777216,(options.maxWorkingBytes||536870912)/32))};

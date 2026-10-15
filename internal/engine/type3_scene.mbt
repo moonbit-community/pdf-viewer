@@ -22,23 +22,7 @@ fn pdf_type3_scene_of_glyph(
   guard simple.fonttype is @pdflite.PdfSimpleFontType::PdfType3(data) else {
     return (None, None)
   }
-  let empty : PdfPageModel = {
-    number: 0,
-    blend_space: "",
-    blend_profile_id: None,
-    blend_calibration: None,
-    icc_profiles: [],
-    origin_x,
-    origin_y,
-    width,
-    height,
-    user_unit: 1.0,
-    rotation: 0,
-    fonts: [],
-    items: [],
-    annotations: [],
-    text: "",
-  }
+  let empty = pdf_type3_empty_scene(origin_x, origin_y, width, height)
   // ISO 32000-1 9.3.6: only Tr=3 affects Type3; other modes do not
   // restroke the CharProc or add its paths to the text clipping path.
   if collected.state.text_state.rendering_mode == 3 {
@@ -238,4 +222,30 @@ fn pdf_type3_stencil_entry(
     fill_color_explicit: caller.fill_color_explicit,
     stroke_color_explicit: caller.stroke_color_explicit,
   })
+}
+
+///|
+fn pdf_type3_empty_scene(
+  origin_x : Double,
+  origin_y : Double,
+  width : Double,
+  height : Double,
+) -> PdfPageModel {
+  {
+    number: 0,
+    blend_space: "",
+    blend_profile_id: None,
+    blend_calibration: None,
+    icc_profiles: [],
+    origin_x,
+    origin_y,
+    width,
+    height,
+    user_unit: 1.0,
+    rotation: 0,
+    fonts: [],
+    items: [],
+    annotations: [],
+    text: "",
+  }
 }

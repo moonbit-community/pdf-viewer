@@ -54,7 +54,7 @@ function measure(mode){
   state.mode=mode;state.index={};
   assert(JSON.parse(bridge.open_pdf(data)).ok,'PDF must open');
   try{
-    const start=performance.now(),payload=bridge.render_page(page,1,0,true),ms=performance.now()-start;
+    const start=performance.now(),payload=bridge.render_page(page,1,0,true,true),ms=performance.now()-start;
     assert(JSON.parse(payload).ok,'Page must render');
     return {mode,ms,payloadSha256:sha256(payload),calls:state.index};
   }finally{bridge.close_pdf();}

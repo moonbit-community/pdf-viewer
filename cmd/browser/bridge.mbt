@@ -210,6 +210,37 @@ fn browser_page(number : Int) -> @pdf.PdfPageModel? raise {
 }
 
 ///|
+fn browser_canvas_page(
+  number : Int,
+) -> (@pdf.PdfPageModel, @engine.PdfCanvasProgram?)? raise {
+  page_cache_clock.val += 1
+  if page_cache.get(number) is Some(entry) {
+    page_cache_hits.val += 1
+    page_cache[number] = { ..entry, used: page_cache_clock.val, }
+    return Some((entry.page, entry.canvas_program))
+  }
+  page_cache_misses.val += 1
+  guard current_document.val is Some(document) else { return None }
+  guard @engine.prepare_canvas_page(document, number) is Some((page, program)) else {
+    return None
+  }
+  let page = browser_page_fonts(number, page)
+  browser_cache_page(number, page, canvas_program=Some(program))
+  Some((page, Some(program)))
+}
+
+///|
+fn browser_text_page(number : Int) -> @pdf.PdfPageModel? raise {
+  if page_cache.get(number) is Some(entry) {
+    page_cache_clock.val += 1
+    page_cache_hits.val += 1
+    page_cache[number] = { ..entry, used: page_cache_clock.val, }
+    return Some(entry.page)
+  }
+  browser_page(number)
+}
+
+///|
 fn browser_page_fonts(
   number : Int,
   page : @pdf.PdfPageModel,
@@ -235,8 +266,16 @@ pub fn render_page(
   scale : Double,
   rotation : Int,
   omit_svg? : Bool = false,
+  compiled_canvas? : Bool = false,
 ) -> String {
-  browser_render_page(number, scale, rotation, false, omit_svg)
+  browser_render_page(
+    number,
+    scale,
+    rotation,
+    false,
+    omit_svg,
+    compiled_canvas~,
+  )
 }
 
 ///|
@@ -246,6 +285,7 @@ fn browser_render_page(
   rotation : Int,
   printing : Bool,
   omit_svg : Bool,
+  compiled_canvas? : Bool = false,
 ) -> String {
   if scale <= 0.0 || scale.is_nan() || scale.is_inf() {
     return browser_error_with_code(
@@ -258,14 +298,16 @@ fn browser_render_page(
     )
   }
   try {
-    let page = if printing {
+    let prepared = if printing {
       current_document.val
       .bind(document => document.page(number, optional_content_intent=Print))
-      .map(page => browser_page_fonts(number, page))
+      .map(page => (browser_page_fonts(number, page), None))
+    } else if omit_svg && compiled_canvas {
+      browser_canvas_page(number)
     } else {
-      browser_page(number)
+      browser_page(number).map(page => (page, None))
     }
-    guard page is Some(page) else {
+    guard prepared is Some((page, program)) else {
       return browser_error_with_code(
         "page-missing", "No document or page does not exist",
       )
@@ -277,7 +319,10 @@ fn browser_render_page(
       "ok": true,
       "page": number,
       "svg": svg,
-      "canvas": page.canvas_plan(scale~, rotation~),
+      "canvas": match program {
+        Some(program) => program.canvas_plan(page, scale, rotation)
+        None => page.canvas_plan(scale~, rotation~)
+      },
       "layer": page.text_layer(scale~, rotation~),
       "editor": if printing {
         Json::array([])
@@ -321,7 +366,7 @@ pub fn select_text(
   end_offset : Int,
 ) -> String {
   try {
-    guard browser_page(number) is Some(page) else {
+    guard browser_text_page(number) is Some(page) else {
       return browser_error_with_code(
         "page-missing", "No document or page does not exist",
       )

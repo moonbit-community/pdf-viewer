@@ -9,6 +9,8 @@ import {
 }
 
 // Values
+pub fn canvas_resource_cache_info(PdfViewerDocument) -> Json
+
 pub fn clear_icc_transforms() -> Unit
 
 pub fn icc_capability() -> String
@@ -22,6 +24,8 @@ pub fn open_range_reader(Bytes, Bytes, Int, stream_budget? : Int) -> PdfRangeRea
 pub fn pdf_optional_content_state(config_index? : Int?, on? : Array[Int], off? : Array[Int]) -> PdfOptionalContentState
 
 pub fn pdf_search_options(case_sensitive? : Bool, whole_word? : Bool, diacritic_sensitive? : Bool) -> PdfSearchOptions
+
+pub fn prepare_canvas_page(PdfViewerDocument, Int) -> (PdfPageModel, PdfCanvasProgram)? raise @core.PdfError
 
 pub fn process_cmyk_to_rgb(Double, Double, Double, Double) -> Array[Double]
 
@@ -118,6 +122,12 @@ pub fn PdfByteSpan::not_equal(Self, Self) -> Bool
 pub fn PdfByteSpan::to_json(Self) -> Json
 #deprecated
 pub fn PdfByteSpan::to_repr(Self) -> @debug.Repr
+
+pub struct PdfCanvasProgram {
+  // private fields
+}
+pub fn PdfCanvasProgram::canvas_plan(Self, PdfPageModel, Double, Int) -> Json raise @core.PdfError
+pub fn PdfCanvasProgram::estimated_bytes(Self) -> Int
 
 pub(all) struct PdfChoiceOption {
   index : Int

@@ -1,6 +1,7 @@
 ///|
 priv struct BrowserCachedPage {
   page : @pdf.PdfPageModel
+  canvas_program : @engine.PdfCanvasProgram?
   bytes : Int
   used : Int
   accessibility : Json?
@@ -43,6 +44,10 @@ fn browser_clear_pages() -> Unit {
 ///|
 fn browser_cached_page(number : Int) -> @pdf.PdfPageModel? {
   page_cache_clock.val += 1
+  if page_cache.get(number) is Some({ canvas_program: Some(_), .. }) {
+    page_cache_misses.val += 1
+    return None
+  }
   match page_cache.get(number) {
     Some(entry) => {
       page_cache_hits.val += 1
@@ -57,15 +62,24 @@ fn browser_cached_page(number : Int) -> @pdf.PdfPageModel? {
 }
 
 ///|
-fn browser_cache_page(number : Int, page : @pdf.PdfPageModel) -> Unit {
+fn browser_cache_page(
+  number : Int,
+  page : @pdf.PdfPageModel,
+  canvas_program? : @engine.PdfCanvasProgram? = None,
+) -> Unit {
   // Serialized UTF-16 bytes plus per-item overhead are a conservative cache
   // estimate, not a measurement of the JS heap or the parsed PDF object store.
   let bytes = browser_json_size(ToJson::to_json(page)) * 2 +
     page.items.length() * 256 +
-    page.fonts.length() * 128
+    page.fonts.length() * 128 +
+    canvas_program.map(program => program.estimated_bytes()).unwrap_or(0)
   let budget = 32 * 1024 * 1024
   if bytes > budget {
     return
+  }
+  if page_cache.get(number) is Some(old) {
+    page_cache_bytes.val -= old.bytes
+    page_cache.remove(number)
   }
   while page_cache.length() >= 8 || page_cache_bytes.val + bytes > budget {
     let mut oldest : Int? = None
@@ -84,6 +98,7 @@ fn browser_cache_page(number : Int, page : @pdf.PdfPageModel) -> Unit {
   }
   page_cache[number] = {
     page,
+    canvas_program,
     bytes,
     used: page_cache_clock.val,
     accessibility: None,
@@ -147,6 +162,9 @@ pub fn cache_info() -> String {
     "hits": page_cache_hits.val,
     "misses": page_cache_misses.val,
     "evictions": page_cache_evictions.val,
+    "compiled_resources": current_document.val
+    .map(document => @engine.canvas_resource_cache_info(document))
+    .unwrap_or(Json::null()),
     "accessibility_hits": accessibility_cache_hits.val,
     "accessibility_misses": accessibility_cache_misses.val,
   }

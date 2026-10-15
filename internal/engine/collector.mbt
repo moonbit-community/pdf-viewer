@@ -7,6 +7,7 @@ fn pdf_page_model(
   font_fallbacks : ArrayView[PdfFontFallback],
   optional_content_intent? : PdfOptionalContentIntent = Display,
   text_sources? : Ref[Array[PdfTextStringSource?]?]? = None,
+  canvas_build? : PdfCanvasBuildContext? = None,
 ) -> PdfPageModel raise @core.PdfError {
   let rectangle = pdf_page_view_box(document, page)
   let user_unit = pdf_page_user_unit(document, page)
@@ -37,6 +38,7 @@ fn pdf_page_model(
     page_fonts~,
     optional_content_view~,
     text_sources~,
+    canvas_build~,
   )
   let text = pdf_text_of_items(items)
   let fonts = page_fonts.fonts
@@ -854,6 +856,7 @@ fn pdf_items_of_page(
   optional_content_view? : PdfOptionalContentView? = None,
   resource_context? : PdfResourceBuildContext = pdf_resource_build_context(),
   text_sources? : Ref[Array[PdfTextStringSource?]?]? = None,
+  canvas_build? : PdfCanvasBuildContext? = None,
 ) -> Array[PdfPageItem] raise @core.PdfError {
   let collected_entries = pdf_collected_entries_of_page(
     document,
@@ -893,6 +896,7 @@ fn pdf_items_of_page(
     convert_ink_to_device_cmyk=blend_profile is None &&
       pdf_colour_page_calibration(document, page) is None,
     resource_context~,
+    canvas_build~,
   )
 }
 
@@ -910,6 +914,7 @@ fn pdf_items_of_collected(
   appearance_fonts? : PdfAppearanceFontScope,
   page_fonts? : PdfPageFontScope,
   resource_context? : PdfResourceBuildContext = pdf_resource_build_context(),
+  canvas_build? : PdfCanvasBuildContext? = None,
 ) -> Array[PdfPageItem] raise @core.PdfError {
   let font_fallbacks = page_fonts
     .map(scope => scope.fallbacks[:])
@@ -1063,22 +1068,37 @@ fn pdf_items_of_collected(
           is @pdflite.PdfFontSimple(
             { fonttype: @pdflite.PdfSimpleFontType::PdfType3(_), .. }
           ))
-        let (type3_scene, type3_scene_unresolved) = pdf_type3_scene_of_glyph(
-          document,
-          collected,
-          charcode,
-          origin_x,
-          origin_y,
-          width,
-          height,
-          resource_context,
-          retain_ink_samples,
-          convert_ink_to_device_cmyk,
-          font_fallbacks~,
-        ) catch {
-          _ => (None, Some("Type3 CharProc could not be lowered"))
+        let compiled = if !retain_ink_samples {
+          canvas_build.bind(build => {
+            pdf_canvas_glyph_call(
+              document, collected, charcode, resource_context, build,
+            )
+          })
+        } else {
+          None
         }
-        let type3_outline = if invisible {
+        let (type3_scene, type3_scene_unresolved) = if compiled is Some(call) &&
+          canvas_build is Some(build) {
+          build.program.glyphs[index] = call
+          (Some(pdf_type3_empty_scene(origin_x, origin_y, width, height)), None)
+        } else {
+          pdf_type3_scene_of_glyph(
+            document,
+            collected,
+            charcode,
+            origin_x,
+            origin_y,
+            width,
+            height,
+            resource_context,
+            retain_ink_samples,
+            convert_ink_to_device_cmyk,
+            font_fallbacks~,
+          ) catch {
+            _ => (None, Some("Type3 CharProc could not be lowered"))
+          }
+        }
+        let type3_outline = if invisible || compiled is Some(_) {
           None
         } else {
           pdf_type3_outline_of_glyph(
@@ -1104,7 +1124,8 @@ fn pdf_items_of_collected(
           Some(glyph) => Some(pdf_glyph_transform(collected.state, glyph))
           None => None
         }
-        let (outline_path, glyph_outline) = match (invisible, type3_outline) {
+        let (outline_path, glyph_outline) = match
+          (invisible || compiled is Some(_), type3_outline) {
           (true, _) => (None, None)
           (_, Some(value)) => (None, Some(value))
           (_, None) =>
