@@ -1384,12 +1384,98 @@ Reports are under `_build/image-batch-next/`: `key-counts-{baseline,ours}.json`,
 logs. The initial generic-container/scalar-copy probes remain separate from the
 final reports and are not used for the performance claim.
 
+## JPEG sample rows and Flate match expansion (2026-10-16)
+
+This pass compares against pushed commit `3687bc9`; the baseline package's
+hashes match the preceding report's candidate. A readable release Worker CPU
+profile still puts image resources at 378 ms of 651 ms in page-model building,
+including JPEG decoding and bounded Flate expansion. These sampled times are
+inclusive diagnostics, not ordinary browser latency or additive stage costs.
+
+The JS JPEG sample kernel now writes through a clamped byte view of its fresh
+output buffer. The original sampling positions, transform selection, floating
+expressions and evaluation order are preserved. A shared MoonBit boundary
+validates output capacity and the last sampled position in each padded plane
+before the native loop. Other backends retain scalar sample conversion. IDCT
+blocks and scratch validate their fixed lengths once before bounded unchecked
+access; coefficient accumulation, sparse-column order and rounding are unchanged.
+
+The verified pako build replaces only distance-one matches copied directly from
+current output with native byte fills. Pako has already validated the distance
+and available output space at that point. Window-backed copies, other distances,
+headers, Adler-32, output bounds and damaged-stream fallback retain their prior
+paths. The transform requires one exact pinned source block and one build
+application. Larger output chunks and generic bulk match copies were probed but
+did not reliably improve on the smaller distance-one change.
+
+| Isolated warmed Node diagnostic / nine trials per variant | Baseline | Candidate |
+| --- | ---: | ---: |
+| Actual JPEG sampling inputs, 10 images / 3,868,440 pixels | 33.2 ms | 23.8 ms |
+| Actual bounded image Flate inputs | 128.7 ms | 93.4 ms |
+
+Both diagnostics verify exact output bytes. They exclude the rest of preparation
+and are not browser or full-document latency claims.
+
+The final browser check uses **eight** fresh contexts/documents/Workers per
+variant with the same 13-page private file, pinned PDF.js reference, CSS width
+1216 and DPR 2. Engines alternate after each header/page; only one engine does
+active work at a time. Totals sum actual header and page work, excluding waits
+between turns, hashes, DOM mounting and teardown. The reader still computes its
+complete text, editor, annotation and accessibility payload. PDF.js preparation
+is included in its render promise, so its getPage timing is not a comparable
+reader preparation metric. Values are same-batch medians, not cumulative gains
+over earlier batches.
+
+| Eight-run median / active work | `3687bc9` | Candidate | Change | PDF.js |
+| --- | ---: | ---: | ---: | ---: |
+| Chromium total | 1648.4 ms | 1562.4 ms | -5.2% | 664.0 ms |
+| WebKit total | 1805.0 ms | 1703.5 ms | -5.6% | 685.5 ms |
+| Chromium preparation | 995.5 ms | 919.9 ms | -7.6% | — |
+| WebKit preparation | 1162.5 ms | 1145.0 ms | -1.5% | — |
+
+Chromium total and preparation each improve in seven of eight pairs. WebKit
+total improves in six pairs; preparation improves in five, is unchanged in one
+and increases in two. Medians of paired total reductions are 4.7% and 2.8%;
+paired preparation reductions are 6.2% and 4.6%. Host-load variation is visible,
+especially in WebKit, so the small WebKit preparation-median change does not
+establish a stable 1.5% improvement. An initial six-run exploratory batch had
+larger changes and outliers; it is retained as `noisy-full-{chromium,webkit}.json`
+and is not used for these final percentages.
+
+Every page's full RGBA hash matches the independently recorded packaged reader
+in every run, and all complete non-Canvas payload fields match the baseline.
+PDF.js hashes also match the pinned independent reference. Candidate/PDF.js
+total-median ratios are 2.35× and 2.49× in this batch; parity remains distant.
+The final Worker is 5,234,516 bytes, 122 bytes smaller than the baseline, and its
+post-format rebuild is byte-identical to the measured artifact.
+
+The JS regression exhausts all 16,777,216 YCbCr tuples against the scalar
+converter, plus padded planes, destination sentinels, invalid bounds and
+sampling factors. The original sampling and dense IDCT oracle tests remain in
+place. A new pako test compares 12,221 low-level stream transitions with the
+pinned original driver, including input/output positions, bit state, checksum,
+status and exact output. It exercises 1,088 native fills and checks nonzero
+output view offsets, short chunks and sliding-window boundaries. Existing
+portable/host Flate tests pass 1,396 comparisons including corrupt/truncated
+streams, prefix recovery and bounded expansion; compression still matches
+upstream bytes in 105 cases.
+
+Full JS tests pass 764 cases; Wasm and Wasm GC pass 752 each; macOS native
+passes 760. Actual Worker checks (10), Canvas replay (52), compiled/legacy
+pixel comparisons (144), packaged Chromium/WebKit checks (13 each), range
+reader checks (129 requests), browser/print acceptance, editor acceptance (25),
+layers and text interaction pass. Public interfaces are unchanged.
+
+Ignored reports, probes, profiles and validation logs are in
+`_build/jpeg-sampling-next/`. Private PDF bytes, rendered pixels and text remain
+outside tracked files.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |
 | --- | --- | --- |
 | Complex-page warm drawing | Page 12 still needs 12 Canvas pixel reads and 18 uploads; PDF.js warm drawing needs neither. | Reduce retained shading's source readback, Float32 conversion and required scene bitmap creation. |
-| Cold image preparation | The latest six-pair Chromium batch still spends a median 182.1 ms preparing page 5. Source image decoding and colour processing still execute; parsed font/CMap reuse is now document-owned. | Reduce first-use image decoding and colour conversion; investigate remaining repeated image resources. |
+| Cold image preparation | A preceding six-pair Chromium batch spent a median 182.1 ms preparing page 5. Source image decoding and colour processing still execute after the JPEG/Flate loop changes; parsed font/CMap reuse is document-owned. | Reduce first-use image decoding and colour conversion; investigate remaining repeated image resources. |
 | New viewport payloads | The compiled page-12 response falls from 1,295,943 to 1,105,935 JSON characters after image transfer, but repeated clipping, font and retained-ink metadata remain inline. | Intern repeated clip/font metadata and reuse prepared plans between viewports. |
 | Worker startup | An earlier reader batch measured about 105 ms in Chromium and 87 ms in WebKit after static-data compaction; the Worker is about 5.0 MiB. | Reduce remaining initial code evaluation and static initialization; retain first-use checks for CJK/fonts. |
 

@@ -609,32 +609,26 @@ fn pdf_jpeg_interleaved_samples(
     let stride0 = mcu_cols * h0 * 8
     let stride1 = mcu_cols * h1 * 8
     let stride2 = mcu_cols * h2 * 8
-    for y in 0..<fi.height {
-      let row0 = y * v0 / max_v * stride0
-      let row1 = y * v1 / max_v * stride1
-      let row2 = y * v2 / max_v * stride2
-      let output_row = y * fi.width * 3
-      for x in 0..<fi.width {
-        let a = plane0[row0 + x * h0 / max_h]
-        let b = plane1[row1 + x * h1 / max_h]
-        let c = plane2[row2 + x * h2 / max_h]
-        let offset = output_row + x * 3
-        if transform {
-          let luma = a.to_int().to_double()
-          let cb = b.to_int().to_double()
-          let cr = c.to_int().to_double()
-          out[offset] = pdf_image_clamped_byte(luma - 179.456 + 1.402 * cr).to_byte()
-          out[offset + 1] = pdf_image_clamped_byte(
-            luma + 135.459 - 0.344 * cb - 0.714 * cr,
-          ).to_byte()
-          out[offset + 2] = pdf_image_clamped_byte(luma - 226.816 + 1.772 * cb).to_byte()
-        } else {
-          out[offset] = a
-          out[offset + 1] = b
-          out[offset + 2] = c
-        }
-      }
-    }
+    pdf_jpeg_rgb_rows(
+      out,
+      fi.width,
+      fi.height,
+      plane0,
+      plane1,
+      plane2,
+      h0,
+      h1,
+      h2,
+      v0,
+      v1,
+      v2,
+      max_h,
+      max_v,
+      stride0,
+      stride1,
+      stride2,
+      transform,
+    )
   } else {
     let samples = FixedArray::make(ncomp, 0)
     for y in 0..<fi.height {

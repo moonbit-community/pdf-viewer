@@ -19,8 +19,16 @@ remain identical to upstream; source and license attribution are retained.
 The build fails if the pinned source marker or transform application changes.
 `node tools/pixels/pako_deflate_test.mjs` exhausts all 16-bit positions for each
 supported window size and compares complete zlib bytes against upstream pako
-and decoded samples against Node zlib. This local change affects compression;
-the bounded inflater continues to use unmodified pako sources.
+and decoded samples against Node zlib.
+
+The same verified build applies `tools/pako_inflate_transform.mjs` to the
+low-level inflater's direct output match loop. Distance-one matches repeat
+the preceding output byte, so a native typed-array fill replaces their scalar
+copies. Window-backed matches and all header, distance, trailer and budget
+checks retain the original code. The transform requires one exact source block
+and the build requires one application. `node tools/pixels/pako_inflate_test.mjs`
+compares low-level output, input positions, bit state, checksum and status with
+the pinned original driver across input/output splits and window boundaries.
 
 The adapter uses pako's single-stream zlib driver to retain the PDF reader's
 trailing-data behavior. It validates the header and Adler-32 trailer and bounds

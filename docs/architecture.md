@@ -344,7 +344,10 @@ hashes from `tools/ci/pako-assets.json` before bundling the image adapter and
 copying its MIT/Zlib license. A local build transform updates compression hash
 positions two 16-bit entries at a time, retaining upstream match decisions and
 exact zlib output; its exhaustive and upstream-byte comparisons run in CI.
-The bounded inflater retains unmodified upstream code. The Worker installs
+The bounded inflater also replaces validated distance-one output matches with
+native byte fills; window-backed matches retain the upstream loop. CI compares
+stream transitions, checksums and output bytes against the pinned driver.
+The Worker installs
 synchronous typed-array Flate/PNG compression hooks; other hosts retain the
 portable MoonBit codecs.
 The host decoder validates the first zlib trailer, ignores trailing streams,

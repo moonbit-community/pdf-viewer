@@ -51,15 +51,23 @@ fn pdf_jpeg_idct_block(
   output : FixedArray[Int],
   scratch : PdfJpegIdctScratch,
 ) -> Unit {
+  // Every decoder block and decode-owned scratch has these fixed sizes.
+  // Prove them once before the two bounded 8x8 transform passes.
+  guard! coeff.length() == 64 &&
+    output.length() == 64 &&
+    scratch.rows.length() == 64 &&
+    scratch.scaled.length() == 8 &&
+    scratch.frequencies.length() == 8 &&
+    scratch.columns.length() == 8
   let mut dc_only = true
   for i in 1..<64 {
-    if coeff[i] != 0 {
+    if coeff.unsafe_get(i) != 0 {
       dc_only = false
       break
     }
   }
   if dc_only {
-    let value = (coeff[0].to_double() / 8.0 + 128.5)
+    let value = (coeff.unsafe_get(0).to_double() / 8.0 + 128.5)
       .floor()
       .to_int()
       .max(0)
@@ -71,41 +79,51 @@ fn pdf_jpeg_idct_block(
   for x in 0..<8 {
     let mut frequency_count = 0
     for u in 0..<8 {
-      let value = coeff[u * 8 + x]
+      let value = coeff.unsafe_get(u * 8 + x)
       if value != 0 {
-        scratch.frequencies[frequency_count] = u
-        scratch.scaled[frequency_count] = pdf_jpeg_idct_c[u] * value.to_double()
+        scratch.frequencies.unsafe_set(frequency_count, u)
+        scratch.scaled.unsafe_set(
+          frequency_count,
+          pdf_jpeg_idct_c.unsafe_get(u) * value.to_double(),
+        )
         frequency_count += 1
       }
     }
     if frequency_count == 0 {
       continue
     }
-    scratch.columns[column_count] = x
+    scratch.columns.unsafe_set(column_count, x)
     column_count += 1
     for y in 0..<8 {
       let mut sum = 0.0
       for i in 0..<frequency_count {
-        sum += scratch.scaled[i] *
-          pdf_jpeg_idct_cos_table[y * 8 + scratch.frequencies[i]]
+        sum += scratch.scaled.unsafe_get(i) *
+          pdf_jpeg_idct_cos_table.unsafe_get(
+            y * 8 + scratch.frequencies.unsafe_get(i),
+          )
       }
-      scratch.rows[y * 8 + x] = sum
+      scratch.rows.unsafe_set(y * 8 + x, sum)
     }
   }
   for y in 0..<8 {
     // Each scaled term is invariant across the eight output columns.
     for i in 0..<column_count {
-      let v = scratch.columns[i]
-      scratch.scaled[i] = pdf_jpeg_idct_c[v] * scratch.rows[y * 8 + v]
+      let v = scratch.columns.unsafe_get(i)
+      scratch.scaled.unsafe_set(
+        i,
+        pdf_jpeg_idct_c.unsafe_get(v) * scratch.rows.unsafe_get(y * 8 + v),
+      )
     }
     for x in 0..<8 {
       let mut sum = 0.0
       for i in 0..<column_count {
-        sum += scratch.scaled[i] *
-          pdf_jpeg_idct_cos_table[x * 8 + scratch.columns[i]]
+        sum += scratch.scaled.unsafe_get(i) *
+          pdf_jpeg_idct_cos_table.unsafe_get(
+            x * 8 + scratch.columns.unsafe_get(i),
+          )
       }
       let value = (sum / 4.0 + 128.5).floor().to_int()
-      output[y * 8 + x] = value.max(0).min(255)
+      output.unsafe_set(y * 8 + x, value.max(0).min(255))
     }
   }
 }

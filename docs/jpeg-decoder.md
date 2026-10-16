@@ -26,6 +26,16 @@ rounding, and byte-sized component planes. Unsupported features retain the
 existing encoded-resource fallback; budget violations are rejected rather than
 handed to a browser decoder that could bypass the same limit.
 
+For JS, three-component sample rows use a clamped byte view over the fresh
+output buffer. This preserves the original YCbCr expressions and their
+evaluation order while delegating saturation and ties-to-even rounding to the
+host. Geometry and the last sampled offset in each padded plane are checked
+before entering the native loop. Other targets use the original scalar rows.
+An exhaustive JS test compares all 16,777,216 8-bit YCbCr tuples with the scalar
+converter; existing sampling tests include non-dividing factors and partial
+MCUs. The IDCT validates its fixed block/scratch sizes once before bounded
+unchecked indexing, preserving accumulation order and dense-reference rounding.
+
 ## Sample contract
 
 `PdfImageDecodedSamples` contains width, height, components, bits, explicit
