@@ -44,7 +44,11 @@ fn pdf_page_model(
     text_sources~,
     canvas_build~,
   )
-  let text = pdf_text_of_items(items)
+  let content = pdf_text_content_of_items(items[:])
+  if canvas_build is Some(build) {
+    build.program.text_content = Some(content)
+  }
+  let text = content.text
   let fonts = page_fonts.fonts
   let next_index = Ref(0)
   for item in items {
@@ -221,6 +225,11 @@ fn pdf_items_of_page(
 
 ///|
 fn pdf_text_of_items(items : ArrayView[PdfPageItem]) -> String {
-  let text_items = pdf_text_reading_order_of_page_items(items)
-  pdf_join_text_items(text_items[:])
+  pdf_text_content_of_items(items).text
+}
+
+///|
+fn pdf_text_content_of_items(items : ArrayView[PdfPageItem]) -> PdfTextContent {
+  let items = pdf_text_reading_order_of_page_items(items)
+  { items, text: pdf_join_text_items(items[:]), }
 }

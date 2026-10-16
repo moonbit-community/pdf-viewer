@@ -127,7 +127,11 @@ fn pdf_text_paragraph_break(
 /// Build run/paragraph views using the same ordered glyphs as copy, selection,
 /// search and text_sources(). No run/paragraph sorting or renumbering occurs.
 pub fn PdfPageModel::text_structure(self : PdfPageModel) -> PdfTextStructure {
-  let content = self.text_content()
+  pdf_text_structure_of_content(self.text_content())
+}
+
+///|
+fn pdf_text_structure_of_content(content : PdfTextContent) -> PdfTextStructure {
   let sources = pdf_text_source_ranges(content.items[:])
   let paragraphs : Array[PdfTextParagraph] = []
   let mut runs : Array[PdfTextRun] = []

@@ -1823,3 +1823,132 @@ removed many pixel transfers, but changed affine pattern coverage and some
 pixels. That experiment remains outside the product. Further optimization must
 retain transparent-edge coverage, group bounds, knockout shape and colour-space
 semantics, including dense pattern lattices and cache eviction.
+
+
+## Shared ordinary glyphs and clipped shading source regions (2026-10-17)
+
+The private 13-page image document and the public 14-page `tracemonkey.pdf`
+are separate inputs. Earlier sub-five-second document results concern the
+private input. The public paper exposes much denser ordinary text and a page
+with 81 axial gradients; its old baseline already takes over ten seconds to
+paint that page. These are preparation/paint/readback sums, not navigation or
+file-opening latency.
+
+### Structural changes
+
+The browser's shared glyph program previously covered Type3 CharProcs only.
+Ordinary embedded Type1/CFF fills rebuilt positioned path strings and painted
+compatibility SVG for every character, even when the same outline repeated
+thousands of times. Mode-0 browser fills now share numeric font-coordinate
+geometry, keyed by indirect PDF font dictionary plus character code. Placement,
+colour, masks, patterns and groups remain per invocation. CFF FD matrices and
+Type1 FontMatrix retain their existing composition. Direct dictionaries,
+TrueType, stroke/clip modes and retained inks keep the original path. The
+512-entry / 8 MiB document budget and 16,384-resource page limit remain bounded;
+page-local reuse still works when document admission is full. Public models and
+later SVG requests retain complete positioned output.
+
+A separate bridge diagnostic on public page 1 at scale 1 / rotation 0 finds:
+
+| Payload/cache measurement | `7f71850` behavior | Candidate |
+| --- | ---: | ---: |
+| Text invocations | 4,282 | 4,282 |
+| Shared ordinary outline resources | 0 | 195 |
+| Complete response, UTF-16 code units | 14,238,044 | 7,886,624 |
+| Canvas JSON, UTF-16 code units | 12,359,883 | 6,008,463 |
+| Page-model cache admission | Rejected above 32 MiB | Admitted, 13,444,426-byte charge |
+
+The prepared program also shares the body's computed reading order between
+page text, selection and accessibility. Tagged ActualText, artifact exclusion,
+source provenance, annotation ordering and rotated/bidi geometry retain their
+existing behavior. Geometry and text references are conservatively charged to
+the page cache. The host still creates positioned paths and Path2D objects per
+invocation; this does not remove all repeated drawing work or transfer all page
+preparation to a streamed operator list.
+
+Public page 11 reveals another independent cost. Its 81 clipped axial gradients
+make the page use retained compositing. Gradient sampling already respects a
+conservative clip rectangle, but source readback, clearing and compositor dirty
+regions still cover the whole tile/page. The same proven region now bounds
+those source operations, retaining the gradient sampler and compositing rules.
+Unknown clip syntax and explicit backdrop/luminosity-mask extraction keep full
+replay. The latter preserves the existing floating-point working values and
+quantization boundary. `fullShadingReplay` is the differential control. No new
+native-gradient approximation is included.
+
+### Complete public-document comparison
+
+The pushed baseline is `7f718506e6118e883b04861180cc7a7d59c79ec4`.
+`tools/document_benchmark.mjs` uses independently built packaged sites and the
+pinned PDF.js generic build. Each variant gets a fresh context, document and
+actual Worker. Three alternating runs traverse all 14 pages once at CSS width
+1216 / DPR 2. Timers sum preparation, painting and complete RGBA readback;
+startup, opening, hashing, optional diagnostic PNG export, DOM and teardown are
+excluded. There is no separate parser/scene warm-up, and no build, test or dev
+server runs during measurement. Ours includes selection/accessibility
+preparation; PDF.js is a render-only lower bound, not matching semantic work.
+
+| WebKit / three-run median | `7f71850` | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Full 14-page total work | 26,238 ms | 12,075 ms | -54.0% |
+| Full 14-page preparation | 15,489 ms | 8,027 ms | -48.2% |
+| Page 11 painting, excluding preparation/readback | 10,510 ms | 2,697 ms | -74.3% |
+
+Every pair improves in all three rows. Every page's baseline/candidate RGBA
+and complete semantic hashes match in all three WebKit pairs. PDF.js totals
+895 ms at the median, so the total gap falls from about 29.3x to 13.5x. This is
+a substantial reduction on this input, with a large remaining gap.
+
+Chromium's first two candidate sweeps take 11,106 and 11,081 ms; corresponding
+baseline sweeps take 25,927 and 23,589 ms. Both candidate sweeps match the first
+baseline's pixels and semantics on all 14 pages. The strict three-pair run
+stops when the old baseline itself changes nine pixels on page 13: maximum
+channel delta 4, total absolute channel delta 57 in a 2432 x 3148 surface. This
+was also observed before the shading change. Diagnostic PNGs confirm the
+baseline variation; no tolerance was added to the benchmark. Its incomplete
+Chromium report is not presented as a completed three-pair result. A separate
+page-11 trial matches exact pixels while painting falls from 10,876 to 2,432 ms;
+that isolated trial is diagnostic, not the full-document median above.
+
+Reproduce with separate baseline/candidate site directories and the pinned
+local PDF.js build:
+
+```sh
+PDF_BENCH_BASELINE_ROOT=/path/to/baseline-site node tools/document_benchmark.mjs reference/pdf.js/test/pdfs/tracemonkey.pdf _build/document-benchmark/chromium.json
+PDF_BROWSER=webkit PDF_BENCH_BASELINE_ROOT=/path/to/baseline-site node tools/document_benchmark.mjs reference/pdf.js/test/pdfs/tracemonkey.pdf _build/document-benchmark/webkit.json
+```
+
+`PDF_BENCH_CAPTURE_PAGE=13` saves ignored local diagnostic PNGs after timed
+readback. Reports retain failed rows, mark completion only after all checks
+pass, and record the fixture, Worker and host-module hashes.
+
+### Existing private document and regression checks
+
+Five alternating first-sweep pairs per browser repeat the existing 13-page
+image-heavy document at the same CSS width / DPR. All pages match their
+independently recorded RGBA and complete semantic hashes.
+
+| Five-run median | `7f71850` | Candidate |
+| --- | ---: | ---: |
+| Chromium full 13-page total | 1,405.1 ms | 1,360.8 ms |
+| Chromium preparation | 887.9 ms | 862.0 ms |
+| WebKit full 13-page total | 1,638 ms | 1,421 ms |
+| WebKit preparation | 1,213 ms | 1,036 ms |
+
+Total work improves in only three/five pairs per browser; preparation improves
+in four/five Chromium pairs and three/five WebKit pairs. These sessions show
+considerable scheduling variation. They preserve the old document's latency
+range, not a demonstrated large general speedup for image-heavy PDFs.
+
+Regression checks include 778 JS, 763 Wasm, 763 WasmGC and 771 native tests;
+144 Type3 and 128 ordinary Type1/CFF compiled/legacy native/retained pixel
+comparisons; exact positioned geometry, distinct encodings, masks, patterns,
+alpha, blend, clipping and SVG upgrade; and 41 shading pass checks against full
+sampling/readback with exact RGBA, shape and floating-point components. The
+shading checks also require reduced actual readback for small clips and full
+fallback for unknown syntax/backdrop extraction. Packaged browser, editing,
+layers, text interaction, corpus and visual gates are retained. The 12 visual
+cases continue to record their existing differences from PDF.js; no cross-engine
+pixel parity is claimed.
+
+Public fixture SHA-256: `3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113`. Candidate Worker SHA-256: `0bceaea28dd76400670cf7646b412c0267f344d3317f5f71d933f15faea4fddb`, 5,248,011 bytes. Canvas host SHA-256: `bff76c272a0e755f1b251bc59ccd069fab1526dd76c4d24f52b0b571e72ff018`.

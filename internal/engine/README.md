@@ -18,6 +18,8 @@ The central files have separate responsibilities:
 - `collector_entries.mbt`: collected entry types and content-operator interpretation.
 - `path_builder.mbt`: owned buffers for consecutive path construction, frozen at interpreter boundaries.
 - `collector_items.mbt`: lowering collected entries into paths, text, images and shading.
+- `canvas_program.mbt`: prepared browser paints, reading order and bounded glyph resource ownership.
+- `canvas_outlines.mbt`: shared Type1/CFF fill geometry keyed by PDF font encoding and character code.
 - `collector_state.mbt`: Form groups, graphics-state resolution and paint attributes.
 - `svg.mbt`: SVG page wrapper and source-order item traversal.
 - `svg_groups.mbt`: transparency-group and masked-run traversal.

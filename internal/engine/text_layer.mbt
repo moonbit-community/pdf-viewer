@@ -55,9 +55,19 @@ pub fn PdfPageModel::text_layer(
   scale? : Double = 1.0,
   rotation? : Int = self.rotation,
 ) -> PdfTextLayer {
-  let viewport = self.viewport(scale~, rotation~)
+  let items = pdf_text_reading_order_of_page_items(self.items[:])
+  pdf_text_layer_of_items(self, items[:], scale, rotation)
+}
+
+///|
+fn pdf_text_layer_of_items(
+  page : PdfPageModel,
+  text_items : ArrayView[PdfTextItem],
+  scale : Double,
+  rotation : Int,
+) -> PdfTextLayer {
+  let viewport = page.viewport(scale~, rotation~)
   let output : Array[PdfTextLayerItem] = []
-  let text_items = pdf_text_reading_order_of_page_items(self.items[:])
   for index, text in text_items {
     guard !text.text.is_empty() else { continue }
     let quad = text.quad
@@ -67,7 +77,7 @@ pub fn PdfPageModel::text_layer(
     output.push({
       item_index: text.index,
       text: text.text,
-      separator: pdf_text_separator_at(text_items[:], index),
+      separator: pdf_text_separator_at(text_items, index),
       quad: text.quad,
       matrix: [
         top_right.x - top_left.x,
@@ -77,13 +87,13 @@ pub fn PdfPageModel::text_layer(
         top_left.x,
         top_left.y,
       ],
-      font_family: pdf_svg_font_family_for_page(self, text.font),
-      font_weight: pdf_svg_font_weight_for_page(self, text.font),
-      font_style: pdf_svg_font_style_for_page(self, text.font),
+      font_family: pdf_svg_font_family_for_page(page, text.font),
+      font_weight: pdf_svg_font_weight_for_page(page, text.font),
+      font_style: pdf_svg_font_style_for_page(page, text.font),
       vertical: text.vertical,
     })
   }
-  { page: self.number, viewport, items: output, }
+  { page: page.number, viewport, items: output, }
 }
 
 ///|

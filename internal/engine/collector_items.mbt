@@ -168,9 +168,16 @@ fn pdf_items_of_collected(
           ))
         let compiled = if !retain_ink_samples {
           canvas_build.bind(build => {
-            pdf_canvas_glyph_call(
-              document, collected, charcode, resource_context, build,
-            )
+            match
+              pdf_canvas_glyph_call(
+                document, collected, charcode, resource_context, build,
+              ) {
+              Some(call) => Some(call)
+              None =>
+                pdf_canvas_outline_call(
+                  document, collected, charcode, cff_fonts, type1_fonts, build,
+                )
+            }
           })
         } else {
           None
@@ -178,7 +185,14 @@ fn pdf_items_of_collected(
         let (type3_scene, type3_scene_unresolved) = if compiled is Some(call) &&
           canvas_build is Some(build) {
           build.program.glyphs[index] = call
-          (Some(pdf_type3_empty_scene(origin_x, origin_y, width, height)), None)
+          if call.outline {
+            (None, None)
+          } else {
+            (
+              Some(pdf_type3_empty_scene(origin_x, origin_y, width, height)),
+              None,
+            )
+          }
         } else {
           pdf_type3_scene_of_glyph(
             document,
@@ -224,7 +238,17 @@ fn pdf_items_of_collected(
         }
         let (outline_path, glyph_outline) = match
           (invisible || compiled is Some(_), type3_outline) {
-          (true, _) => (None, None)
+          (true, _) =>
+            (
+              // The sidecar supplies this ordinary fill at the host boundary.
+              // An empty native path suppresses compatibility SVG generation.
+              if compiled is Some({ outline: true, .. }) {
+                Some("")
+              } else {
+                None
+              },
+              None,
+            )
           (_, Some(value)) => (None, Some(value))
           (_, None) =>
             pdf_text_outline_and_path(

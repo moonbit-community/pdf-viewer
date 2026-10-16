@@ -33,6 +33,13 @@ test "Canvas programs compile glyph geometry once across placements and pages" {
   assert_true(program.canvas_plan(page, 1.0, 0) is { "version": Number(2), .. })
   let original = document.page(1).unwrap()
   assert_eq(page.text_layer(), original.text_layer())
+  assert_eq(program.text_content, Some(page.text_content()))
+  for rotation in [0, 90, 180, 270] {
+    assert_eq(
+      program.text_layer(page, 1.25, rotation),
+      page.text_layer(scale=1.25, rotation~),
+    )
+  }
   assert_eq(page.annotations, original.annotations)
   assert_true(original.canvas_plan() is { "version": Number(1), .. })
   assert_true(
@@ -125,7 +132,11 @@ test "Compiled glyph cache belongs to its document and respects its byte budget"
   assert_eq(uncached.glyphs.length(), 2)
   assert_eq(uncached.resources.length(), 1)
   assert_eq(full.canvas_resources.misses, 1)
-  let capped : PdfCanvasProgram = { glyphs: Map([]), resources: Map([]), }
+  let capped : PdfCanvasProgram = {
+    glyphs: Map([]),
+    resources: Map([]),
+    text_content: None,
+  }
   for id in 1000..<17384 {
     capped.resources[id] = { id, bytes: 256, json: Json::null(), }
   }
@@ -135,7 +146,11 @@ test "Compiled glyph cache belongs to its document and respects its byte budget"
       first.pages[0],
       resource_context=context,
     )[0]
-  let build = { program: capped, cache: first.canvas_resources, }
+  let build = {
+    program: capped,
+    cache: first.canvas_resources,
+    outlines: Map([]),
+  }
   assert_true(
     pdf_canvas_glyph_call(first.document, entry, 65, context, build) is None,
   )

@@ -129,8 +129,7 @@ fn pdf_svg_relative_viewport_transform(
 ///|
 /// Return the page's positioned text items and their reading-order text.
 pub fn PdfPageModel::text_content(self : PdfPageModel) -> PdfTextContent {
-  let items = pdf_text_reading_order_of_page_items(self.items[:])
-  { items, text: pdf_join_text_items(items[:]), }
+  pdf_text_content_of_items(self.items[:])
 }
 
 ///|

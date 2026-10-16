@@ -323,7 +323,10 @@ fn browser_render_page(
         Some(program) => program.canvas_plan(page, scale, rotation)
         None => page.canvas_plan(scale~, rotation~)
       },
-      "layer": page.text_layer(scale~, rotation~),
+      "layer": match program {
+        Some(program) => program.text_layer(page, scale, rotation)
+        None => page.text_layer(scale~, rotation~)
+      },
       "editor": if printing {
         Json::array([])
       } else {
@@ -343,7 +346,7 @@ fn browser_render_page(
       "accessibility": if printing {
         Json::null()
       } else {
-        browser_page_accessibility(number, page)
+        browser_page_accessibility(number, page, program~)
       },
       "intent": if printing {
         "print"

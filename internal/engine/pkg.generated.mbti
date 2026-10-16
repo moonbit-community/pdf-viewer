@@ -126,8 +126,10 @@ pub fn PdfByteSpan::to_repr(Self) -> @debug.Repr
 pub struct PdfCanvasProgram {
   // private fields
 }
+pub fn PdfCanvasProgram::accessibility_page_json(Self, PdfViewerDocument, Int, PdfPageModel) -> Json? raise @core.PdfError
 pub fn PdfCanvasProgram::canvas_plan(Self, PdfPageModel, Double, Int) -> Json raise @core.PdfError
 pub fn PdfCanvasProgram::estimated_bytes(Self) -> Int
+pub fn PdfCanvasProgram::text_layer(Self, PdfPageModel, Double, Int) -> PdfTextLayer
 
 pub(all) struct PdfChoiceOption {
   index : Int

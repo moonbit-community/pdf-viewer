@@ -57,14 +57,10 @@ fn pdf_cff_svg_path(
 }
 
 ///|
-fn pdf_cff_outline_path(
+fn pdf_cff_glyph_geometry(
   font : PdfCffFont,
   glyph_id : Int,
-  glyph_matrix : @geometry.TransformMatrix,
-  origin_x : Double,
-  origin_y : Double,
-  page_height : Double,
-) -> String? {
+) -> (Array[PdfCffPathCommand], @geometry.TransformMatrix)? {
   let commands = match font.outlines.get(glyph_id) {
     Some(Some(value)) => value
     Some(None) => return None
@@ -83,7 +79,7 @@ fn pdf_cff_outline_path(
     }
   }
   if commands.is_empty() {
-    return Some("")
+    return Some((commands, { a: 1.0, b: 0.0, c: 0.0, d: 1.0, e: 0.0, f: 0.0, }))
   }
   let font_matrix = if font.cid {
     match font.fd_select.get(glyph_id) {
@@ -96,6 +92,25 @@ fn pdf_cff_outline_path(
     }
   } else {
     font.font_matrix
+  }
+  Some((commands, font_matrix))
+}
+
+///|
+fn pdf_cff_outline_path(
+  font : PdfCffFont,
+  glyph_id : Int,
+  glyph_matrix : @geometry.TransformMatrix,
+  origin_x : Double,
+  origin_y : Double,
+  page_height : Double,
+) -> String? {
+  let (commands, font_matrix) = match pdf_cff_glyph_geometry(font, glyph_id) {
+    Some(value) => value
+    None => return None
+  }
+  if commands.is_empty() {
+    return Some("")
   }
   let matrix = @geometry.transform_matrix_compose(glyph_matrix, font_matrix)
   for value in [matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f] {
@@ -154,20 +169,12 @@ fn pdf_cff_paint_path(
 
 ///|
 /// Resolve the page-space geometry independently of painting and clipping.
-fn pdf_cff_path_of_pdf_glyph(
+fn pdf_cff_geometry_of_pdf_glyph(
   document : @pdflite.PdfDocument,
   pdf_font : @pdflite.PdfFont,
   fonts : Map[Int, PdfCffFont?],
   charcode : Int,
-  glyph_matrix : @geometry.TransformMatrix?,
-  origin_x : Double,
-  origin_y : Double,
-  page_height : Double,
-) -> String? {
-  let glyph_matrix = match glyph_matrix {
-    Some(value) => value
-    None => return None
-  }
+) -> (Array[PdfCffPathCommand], @geometry.TransformMatrix)? {
   let number = match pdf_font.embedded_fontfile_number() {
     Some(value) => value
     None => return None
@@ -197,9 +204,50 @@ fn pdf_cff_path_of_pdf_glyph(
     Some(value) => value
     None => return None
   }
-  pdf_cff_outline_path(
-    font, glyph_id, glyph_matrix, origin_x, origin_y, page_height,
+  pdf_cff_glyph_geometry(font, glyph_id)
+}
+
+///|
+fn pdf_cff_path_of_pdf_glyph(
+  document : @pdflite.PdfDocument,
+  pdf_font : @pdflite.PdfFont,
+  fonts : Map[Int, PdfCffFont?],
+  charcode : Int,
+  glyph_matrix : @geometry.TransformMatrix?,
+  origin_x : Double,
+  origin_y : Double,
+  page_height : Double,
+) -> String? {
+  let glyph_matrix = match glyph_matrix {
+    Some(value) => value
+    None => return None
+  }
+  let (commands, font_matrix) = match
+    pdf_cff_geometry_of_pdf_glyph(document, pdf_font, fonts, charcode) {
+    Some(value) => value
+    None => return None
+  }
+  if commands.is_empty() {
+    return Some("")
+  }
+  let matrix = @geometry.transform_matrix_compose(glyph_matrix, font_matrix)
+  guard [matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f].all(value => {
+    !value.is_nan() && !value.is_inf()
+  }) else {
+    return None
+  }
+  let path = pdf_cff_svg_path(
+    commands[:],
+    matrix,
+    origin_x,
+    origin_y,
+    page_height,
   )
+  if path == "" {
+    None
+  } else {
+    Some(path)
+  }
 }
 
 ///|

@@ -467,13 +467,24 @@ pub fn PdfViewerDocument::accessibility_page_json(
   number : Int,
   page_model? : PdfPageModel? = None,
 ) -> Json? raise @core.PdfError {
-  guard number >= 1 && number <= self.pages.length() else { return None }
+  pdf_accessibility_page_json(self, number, page_model~)
+}
+
+///|
+fn pdf_accessibility_page_json(
+  view : PdfViewerDocument,
+  number : Int,
+  page_model? : PdfPageModel? = None,
+  text_content? : PdfTextContent? = None,
+) -> Json? raise @core.PdfError {
+  guard number >= 1 && number <= view.pages.length() else { return None }
   let page = match page_model {
     Some(page) if page.number == number => Some(page)
-    _ => self.page(number)
+    _ => view.page(number)
   }
   guard page is Some(page) else { return None }
-  let document = self.document
+  let content = text_content.unwrap_or_else(() => page.text_content())
+  let document = view.document
   let catalog = document.catalog()
   let root = document.lookup_direct(pdf_name_key("/StructTreeRoot"), catalog)
   let used_items : Map[Int, Bool] = Map([])
@@ -481,9 +492,9 @@ pub fn PdfViewerDocument::accessibility_page_json(
   let nodes : Array[Json] = []
   let mut truncated = false
   if root is Some(root) {
-    let raw_page = self.pages[number - 1]
-    let cached = self.accessibility_sources.val
-    self.accessibility_sources.val = None
+    let raw_page = view.pages[number - 1]
+    let cached = view.accessibility_sources.val
+    view.accessibility_sources.val = None
     let sources = match cached {
       Some((cached_number, sources)) if cached_number == number => sources
       _ =>
@@ -492,14 +503,14 @@ pub fn PdfViewerDocument::accessibility_page_json(
           raw_page,
           optional_content_view=pdf_optional_content_view(
             document,
-            self.optional_content_state,
+            view.optional_content_state,
           ),
           collect_text_sources=true,
           resource_context=pdf_resource_build_context(
-            font_fallbacks=self.font_fallbacks[:],
-            parsed_fonts=self.parsed_fonts,
+            font_fallbacks=view.font_fallbacks[:],
+            parsed_fonts=view.parsed_fonts,
           ),
-          font_fallbacks=self.font_fallbacks[:],
+          font_fallbacks=view.font_fallbacks[:],
         ).map(entry => entry.text_source.map(source => source.string_source))
     }
     let wanted : Map[String, Bool] = Map([])
@@ -536,7 +547,7 @@ pub fn PdfViewerDocument::accessibility_page_json(
     )
     let groups : Array[PdfAccessibilityGroup] = []
     let mut previous_key : String? = None
-    for item in page.text_content().items {
+    for item in content.items {
       guard sources.get(item.index) is Some(Some(source)) else { continue }
       let path = pdf_accessibility_path(source.form_path[:])
       guard marks.get(pdf_accessibility_operator(path, source.operator_index))
@@ -584,7 +595,7 @@ pub fn PdfViewerDocument::accessibility_page_json(
       page_object: (document.page_reference_numbers() catch { _ => [] }).get(
         number - 1,
       ),
-      single_page: self.pages.length() == 1,
+      single_page: view.pages.length() == 1,
       role_map: document
       .lookup_direct(pdf_name_key("/RoleMap"), root)
       .unwrap_or(@syntax.PdfNull),
@@ -610,10 +621,10 @@ pub fn PdfViewerDocument::accessibility_page_json(
   }
   let items : Map[Int, PdfTextItem] = Map(
     [
-      for item in page.text_content().items => (item.index, item)
+      for item in content.items => (item.index, item)
     ],
   )
-  for paragraph in page.text_structure().paragraphs {
+  for paragraph in pdf_text_structure_of_content(content).paragraphs {
     let remaining : Array[PdfTextItem] = []
     for run in paragraph.runs {
       for source in run.sources {

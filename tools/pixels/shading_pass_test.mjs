@@ -17,13 +17,13 @@ const path=(colour,extra={})=>({kind:'path',paint:{svg_path:'M4.25 3.5H43.75V36.
 const pattern={kind:'axial',pattern_plan:plan([shading({group_path:[{id:'shading-pattern',isolated:false,knockout:true,alpha:1,blend_mode:'normal'}]})])};
 
 function host(){
- const metrics={reads:0,uploads:0},seen=new WeakSet();
+ const metrics={reads:0,uploads:0,readPixels:0},seen=new WeakSet();
  const tracked=(w,h)=>{
   const canvas=createCanvas(w,h),context=canvas.getContext('2d');
   if(!seen.has(context)){
    seen.add(context);
    for(const [name,key] of [['getImageData','reads'],['putImageData','uploads']]){
-    const original=context[name];context[name]=function(...args){metrics[key]++;return original.apply(this,args);};
+    const original=context[name];context[name]=function(...args){metrics[key]++;if(name==='getImageData')metrics.readPixels+=args[2]*args[3];return original.apply(this,args);};
    }
   }
   return canvas;
@@ -36,7 +36,7 @@ async function render(input,extra={}){
  return {result,metrics};
 }
 async function exact(input,extra={}){
- const fast=await render(input,extra),control=await render(input,{...extra,fullShapeReplay:true});
+ const fast=await render(input,extra),control=await render(input,{...extra,fullShapeReplay:true,fullShadingReplay:true});
  for(const key of ['data','premultiplied','shape'])assert.deepEqual(fast.result[key],control.result[key],key);
  assert.deepEqual(fast.result.inkProof?.premultiplied,control.result.inkProof?.premultiplied);
  return {fast,control};
@@ -79,6 +79,24 @@ await exact(plan([path('#000',{pattern})]),{backdrop,transparent:true});count++;
 await exact(plan([path('#000',{pattern})]),{_maskBackdrop:[.2,.3,.4],transparent:true});count++;
 const patternMask={plan:plan([path('#000',{pattern})]),luminosity:true,matrix:identity,backdrop:[.2,.3,.4]};
 await exact(plan([path('#ff0000',{soft_mask:patternMask})]),{transparent:true});count++;
+
+// Small clipped gradients must retain their exact shape without transferring
+// page-sized rows for every paint. Alternate disjoint clips to expose stale
+// source buffers, and keep unsupported host-authored syntax on full replay.
+for(const clips of [
+ [{svg_path:'M5.25 7.5L17.75 7.5L17.75 20.25L5.25 20.25Z'}],
+ [{svg_path:'M5.25 7.5C22 2 29 26 17.75 20.25L5.25 20.25Z'}],
+ [{svg_path:'M5 7L18 7L18 21L5 21Z'},{svg_path:'M8 9L15 9L15 19L8 19Z'}],
+]){
+ const large=plan([shading({clips}),shading({clips:[{svg_path:'M25 10L35 10L35 20L25 20Z'}]})]);
+ large.page={...page,width:400,height:320};large.viewport={width:400,height:320,matrix:[1,0,0,-1,0,320]};
+ const {fast,control}=await exact(large,{transparent:true});
+ assert(fast.metrics.readPixels<control.metrics.readPixels/3,'Clip bounds must also constrain actual source readback');count++;
+}
+const unknownClip=plan([shading({clips:[{svg_path:'M5 7H18V21H5Z'}]})]);
+const unknownFast=await render(unknownClip),unknownControl=await render(unknownClip,{fullShadingReplay:true});
+assert.deepEqual(unknownFast.result.data,unknownControl.result.data);
+assert.equal(unknownFast.metrics.readPixels,unknownControl.metrics.readPixels,'Unknown clip syntax keeps full readback');count++;
 
 const custom=(context,_resource,_paint,env)=>{context.setTransform(...identity);context.fillStyle=env.shapeOnly?'#000':'rgba(255,0,0,.5)';context.fillRect(0,0,width,height);};
 const external=await render(plan([shading({clips:[]})]),{paintShading:custom,transparent:true});

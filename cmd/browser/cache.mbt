@@ -108,14 +108,23 @@ fn browser_cache_page(
 }
 
 ///|
-fn browser_page_accessibility(number : Int, page : @pdf.PdfPageModel) -> Json {
+fn browser_page_accessibility(
+  number : Int,
+  page : @pdf.PdfPageModel,
+  program? : @engine.PdfCanvasProgram? = None,
+) -> Json {
   if page_cache.get(number) is Some({ accessibility: Some(value), .. }) {
     accessibility_cache_hits.val += 1
     return value
   }
   accessibility_cache_misses.val += 1
   guard current_document.val is Some(document) else { return Json::null() }
-  let value = document.accessibility_page_json(number, page_model=Some(page)) catch {
+  let value = try {
+    match program {
+      Some(program) => program.accessibility_page_json(document, number, page)
+      None => document.accessibility_page_json(number, page_model=Some(page))
+    }
+  } catch {
     _ => return Json::null()
   }
   guard value is Some(value) else { return Json::null() }

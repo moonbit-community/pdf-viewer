@@ -369,6 +369,13 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
   };
   const paintRegion=item=>{
     if(item.type3_plan&&!options.fullSceneReplay)return sceneRegion(item.type3_plan);
+    // The same proven clip already bounds gradient sampling. It also bounds
+    // colour/shape readback and compositing; a small clipped gradient must not
+    // clear and blend the entire page surface.
+    if(item.kind==='shading'&&!options.fullShadingReplay&&!options.backdrop&&!options._maskBackdrop&&!item.paint.shading?.pattern_plan){
+      const region=shadingClipRegion(item.paint.clips,matrix,width,height);
+      if(region)return region;
+    }
     let x=0,y=0,w=width,h=height;
     const b=item.paint.bounds;
     if(b && item.kind!=='shading' && !item.type3_plan) {

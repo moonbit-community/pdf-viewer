@@ -475,21 +475,48 @@ changes and document replacement cannot return expired image IDs. The source
 row limit remains 64 MiB; page and serialized-response budgets are unchanged.
 
 The browser can opt into a compiled Canvas projection for resource-free,
-fill-only Type3 CharProcs. A document cache retains at most 512 compiled glyphs
+fill-only Type3 CharProcs and ordinary embedded Type1/CFF fills in text mode 0.
+A document cache retains at most 512 compiled glyphs
 and an estimated 8 MiB of numeric geometry. Each page retains only its used
 resources and calls; its geometry is also conservatively charged against the
 page-cache budget. Build contexts release their document-cache references when
 preparation completes, including when Range hydration replaces a document view.
-Resource keys identify CharProc streams within one immutable document. Colour,
-FontMatrix/placement, clips and group state remain invocation data. Complex
-CharProcs retain the ordinary interpreter. Public page models and legacy bridge
+Type3 resource keys identify CharProc streams within one immutable document.
+Ordinary outline keys include the indirect PDF font dictionary and character
+code, preserving distinct encodings of the same embedded program. Their negative
+wire IDs cannot collide with Type3 stream IDs. CFF FD matrices and Type1 font
+matrices compose with each invocation's glyph placement. Colour, clips and group
+state remain invocation data. Direct font dictionaries, stroke/clip text modes,
+TrueType outlines, retained inks and complex CharProcs keep the existing lowering.
+Public page models and legacy bridge
 calls keep their complete scenes; explicit SVG requests upgrade a compact cached
 projection to the complete model. Version-2 browser plans carry a local glyph
 resource table, expanded by `web/pdf-canvas-program.mjs` into the existing
 native/retained rendering boundaries. The viewer replaces each owned compact
 response with its expanded plan once; generic runtime calls expand before
-choosing the native surface budget or tiled output. Text selection and semantics consume the
-same top-level provenance and geometry as the complete model.
+choosing the native surface budget or tiled output. Ordinary fills expand directly
+to the existing fill path, preserving its transform arithmetic; they do not pass
+through Type3's scene/bounds map. The Worker avoids both positioned path strings
+and compatibility SVG copies for these calls. Host expansion still creates a
+positioned path per invocation, so this does not yet remove repeated Path2D
+construction on the host.
+
+The prepared program also retains the body's computed reading order. Page text,
+the selection layer, tagged accessibility grouping and paragraph fallback share
+that order instead of sorting the same immutable items repeatedly. Annotation
+selection retains its separate ordering and provenance. Geometry and text owners
+are conservatively included in page-cache accounting. Text selection and
+semantics consume the same top-level provenance and geometry as the complete
+model.
+
+Clipped shadings use the same conservative device region for sampling, source
+readback, source-buffer clearing and compositor dirty bounds. Previously only
+sampling respected this region, leaving page-sized transfers and blends for
+every small gradient. Absolute M/L/C/Z clips are bounded by their control-point
+hulls with an antialias margin; unknown syntax and missing clips keep full
+replay. Explicit backdrop and luminosity-mask extraction also keep full bounds
+to preserve their floating-point working values and quantization boundary.
+`fullShadingReplay` remains a differential control for the complete path.
 
 The native public route writes `.canvas.json` through `cmd/main`, then replays
 it with `tools/render_canvas.mjs` in a Canvas host. `.svg` selects compatibility

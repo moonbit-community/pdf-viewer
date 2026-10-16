@@ -4,6 +4,7 @@
 pub struct PdfCanvasProgram {
   priv glyphs : Map[Int, PdfCanvasGlyphCall]
   priv resources : Map[Int, PdfCanvasGlyphResource]
+  priv mut text_content : PdfTextContent?
 }
 
 ///|
@@ -12,12 +13,14 @@ pub struct PdfCanvasProgram {
 priv struct PdfCanvasBuildContext {
   program : PdfCanvasProgram
   cache : PdfCanvasResourceCache
+  outlines : Map[(Int, Int), PdfCanvasOutlineResource]
 }
 
 ///|
 priv struct PdfCanvasGlyphCall {
   resource : PdfCanvasGlyphResource
   matrix : Array[Double]
+  outline : Bool
 }
 
 ///|
@@ -32,6 +35,8 @@ priv struct PdfCanvasGlyphResource {
 /// Invocation colour, placement, clips and transparency are never cached here.
 priv struct PdfCanvasResourceCache {
   glyphs : Map[Int, PdfCanvasGlyphResource]
+  outlines : Map[(Int, Int), PdfCanvasOutlineResource]
+  mut next_outline_id : Int
   mut bytes : Int
   mut hits : Int
   mut misses : Int
@@ -39,7 +44,14 @@ priv struct PdfCanvasResourceCache {
 
 ///|
 fn pdf_canvas_resource_cache() -> PdfCanvasResourceCache {
-  { glyphs: Map([]), bytes: 0, hits: 0, misses: 0, }
+  {
+    glyphs: Map([]),
+    outlines: Map([]),
+    next_outline_id: -1,
+    bytes: 0,
+    hits: 0,
+    misses: 0,
+  }
 }
 
 ///|
@@ -51,8 +63,8 @@ pub fn prepare_canvas_page(
 ) -> (PdfPageModel, PdfCanvasProgram)? raise @core.PdfError {
   document.accessibility_sources.val = None
   guard number >= 1 && number <= document.pages.length() else { return None }
-  let program = { glyphs: Map([]), resources: Map([]), }
-  let build = { program, cache: document.canvas_resources, }
+  let program = { glyphs: Map([]), resources: Map([]), text_content: None, }
+  let build = { program, cache: document.canvas_resources, outlines: Map([]), }
   let sources : Ref[Array[PdfTextStringSource?]?] = Ref(None)
   let tagged = document.document.lookup_direct(
       pdf_name_key("/StructTreeRoot"),
@@ -86,11 +98,46 @@ pub fn PdfCanvasProgram::canvas_plan(
 }
 
 ///|
+/// Reuse the prepared page's reading order for its browser-owned selection
+/// projection. The page/program pair must retain its prepared body items.
+pub fn PdfCanvasProgram::text_layer(
+  self : PdfCanvasProgram,
+  page : PdfPageModel,
+  scale : Double,
+  rotation : Int,
+) -> PdfTextLayer {
+  let content = self.text_content.unwrap_or_else(() => page.text_content())
+  pdf_text_layer_of_items(page, content.items[:], scale, rotation)
+}
+
+///|
+/// Semantic projection of the same prepared body, against the current document
+/// view's tags, annotations and source provenance.
+pub fn PdfCanvasProgram::accessibility_page_json(
+  self : PdfCanvasProgram,
+  document : PdfViewerDocument,
+  number : Int,
+  page : PdfPageModel,
+) -> Json? raise @core.PdfError {
+  pdf_accessibility_page_json(
+    document,
+    number,
+    page_model=Some(page),
+    text_content=self.text_content,
+  )
+}
+
+///|
 /// Conservative page-cache charge, including shared geometry at every owner.
 pub fn PdfCanvasProgram::estimated_bytes(self : PdfCanvasProgram) -> Int {
   let mut bytes = self.glyphs.length() * 256
   for _, resource in self.resources {
     bytes += resource.bytes
+  }
+  if self.text_content is Some(content) {
+    // Items and the joined string share their immutable page owners; charge
+    // references and the string conservatively at every retaining sidecar.
+    bytes += 128 + content.items.length() * 8 + content.text.length() * 2
   }
   bytes
 }
@@ -99,7 +146,7 @@ pub fn PdfCanvasProgram::estimated_bytes(self : PdfCanvasProgram) -> Int {
 pub fn canvas_resource_cache_info(document : PdfViewerDocument) -> Json {
   let cache = document.canvas_resources
   {
-    "entries": cache.glyphs.length(),
+    "entries": cache.glyphs.length() + cache.outlines.length(),
     "estimated_bytes": cache.bytes,
     "budget_bytes": 8 * 1024 * 1024,
     "max_entries": 512,
@@ -159,7 +206,7 @@ fn pdf_canvas_glyph_call(
   let program = build.program
   if program.resources.get(id) is Some(resource) {
     cache.hits += 1
-    return Some({ resource, matrix: values, })
+    return Some({ resource, matrix: values, outline: false, })
   }
   // Match the host wire-table limit; excess glyphs keep complete scenes.
   guard program.resources.length() < 16384 else { return None }
@@ -179,7 +226,7 @@ fn pdf_canvas_glyph_call(
         _ => None
       }
       guard resource is Some(resource) else { return None }
-      if cache.glyphs.length() < 512 &&
+      if cache.glyphs.length() + cache.outlines.length() < 512 &&
         cache.bytes + resource.bytes <= 8 * 1024 * 1024 {
         cache.glyphs[id] = resource
         cache.bytes += resource.bytes
@@ -188,7 +235,7 @@ fn pdf_canvas_glyph_call(
     }
   }
   program.resources[id] = resource
-  Some({ resource, matrix: values, })
+  Some({ resource, matrix: values, outline: false, })
 }
 
 ///|

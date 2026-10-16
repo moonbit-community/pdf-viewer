@@ -6,13 +6,30 @@ export function expandPdfCanvasProgram(plan) {
   if(!Array.isArray(plan.glyph_resources)||plan.glyph_resources.length>16384)throw new Error('Invalid PDF glyph resource table');
   const resources=new Map();
   for(const resource of plan.glyph_resources){
-    if(!Number.isInteger(resource.id)||resources.has(resource.id)||!Array.isArray(resource.commands)||resource.commands.length>32768)throw new Error('Invalid PDF glyph resource');
+    if(!Number.isInteger(resource.id)||resources.has(resource.id)||!Array.isArray(resource.commands)||resource.commands.length>32768||(resource.kind!==undefined&&resource.kind!=='outline'))throw new Error('Invalid PDF glyph resource');
     resources.set(resource.id,resource);
   }
   const items=plan.items.map(item=>{
     if(!item.glyph)return item;
     const resource=resources.get(item.glyph.resource),m=item.glyph.matrix;
     if(item.kind!=='text'||!resource||!Array.isArray(m)||m.length!==6||!m.every(v=>Number.isFinite(v)&&Math.abs(v)<=1e12))throw new Error('Invalid PDF glyph invocation');
+    if(resource.kind==='outline'){
+      // Ordinary CFF/Type1 paths use the font transform directly. Type3's
+      // elementary scene applies an additional bounds map below.
+      const parts=[],commands=resource.commands;
+      for(let i=0;i<commands.length;){
+        const op=commands[i++],count=op===0||op===1?2:op===2?6:op===3?0:-1;
+        if(count<0||i+count>commands.length)throw new Error('Invalid PDF glyph path');
+        parts.push(['M','L','C','Z'][op]);
+        for(let end=i+count;i<end;i+=2){
+          const x=commands[i],y=commands[i+1];
+          if(!Number.isFinite(x)||!Number.isFinite(y)||Math.abs(x)>1e12||Math.abs(y)>1e12)throw new Error('Invalid PDF glyph coordinate');
+          parts.push(String(x*m[0]+y*m[2]+m[4]-plan.page.origin_x),String(plan.page.origin_y+plan.page.height-(x*m[1]+y*m[3]+m[5])));
+        }
+      }
+      const {glyph,...expanded}=item;
+      return {...expanded,paint:{...item.paint,fill_path:parts.join(' ')}};
+    }
     const commands=resource.commands,points=[],ops=[];let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
     for(let i=0;i<commands.length;){
       const op=commands[i++],count=op===0||op===1?2:op===2?6:op===3?0:-1;
