@@ -132,11 +132,7 @@ test "Compiled glyph cache belongs to its document and respects its byte budget"
   assert_eq(uncached.glyphs.length(), 2)
   assert_eq(uncached.resources.length(), 1)
   assert_eq(full.canvas_resources.misses, 1)
-  let capped : PdfCanvasProgram = {
-    glyphs: Map([]),
-    resources: Map([]),
-    text_content: None,
-  }
+  let capped = pdf_canvas_program()
   for id in 1000..<17384 {
     capped.resources[id] = { id, bytes: 256, json: Json::null(), }
   }

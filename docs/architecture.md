@@ -501,6 +501,23 @@ and compatibility SVG copies for these calls. Host expansion still creates a
 positioned path per invocation, so this does not yet remove repeated Path2D
 construction on the host.
 
+Version-2 prepared plans also share complete source lookup rasters for direct
+axial, radial and function shadings. Each page owns at most 64 rasters and an
+estimated 8 MiB, charged against the existing page-model cache. Structural
+identity includes domain, adaptive tree, source/process samples, BBox,
+Background and colour/profile metadata; placement matrices, coordinates,
+Extend, clips and graphics state remain invocation data. Error rasters, meshes,
+shading patterns and entries beyond either limit keep the existing lowering.
+The program owns each retained raster and its JSON projection; its compact
+selection model omits that raster. Public models and later SVG requests still
+build independent mutable arrays. Host expansion restores the exact legacy
+plan while preserving shared raster object identity. A built-in render owns a
+bounded decoded-sampler cache across placements and tiles, with up to 8 MiB
+reserved from the existing working-memory budget. RGB, process components and
+raw source lookups use distinct entries. Target-profile conversion remains
+per invocation. The cache expires after each render, so reusing a mutable host
+plan or an independently created painter retains existing behavior.
+
 The prepared program also retains the body's computed reading order. Page text,
 the selection layer, tagged accessibility grouping and paragraph fallback share
 that order instead of sorting the same immutable items repeatedly. Annotation

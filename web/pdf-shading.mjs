@@ -112,17 +112,35 @@ function tableSampler(raster, component, source = false) {
   return { sample, dimensions, domain };
 }
 
+// Cache only decoded source lookups, never a target-profile conversion closure.
+// The built-in runtime supplies this cache for one immutable render operation.
+function cachedTableSampler(raster,component,source,cache){
+  if(!cache)return tableSampler(raster,component,source);
+  if(component!==undefined&&(!Number.isSafeInteger(component)||component<0||component>3))fail('invalid CMYK shading component');
+  const key=source?'source':component===undefined?'rgb':component;
+  let entries=cache.entries.get(raster);
+  if(entries?.has(key))return entries.get(key);
+  const sampler=tableSampler(raster,component,source);
+  const values=source?raster.source_samples:component===undefined?raster.samples:raster.process_samples;
+  const bytes=4096+(values?.length||0)*(typeof values==='string'?2:8)+(raster.tree?.length||0)*8;
+  if(bytes>cache.limit-cache.bytes)return sampler;
+  if(!entries){entries=new Map();cache.entries.set(raster,entries);}
+  entries.set(key,sampler);
+  cache.bytes+=bytes;
+  return sampler;
+}
+
 // The target CMM receives original source components after the shading Function
 // and whole tint alternate, never the display RGB table. A raw ICC mesh needs
 // no source table: its barycentrically interpolated components are exact here.
 // CalRGB uses the same route with an analytical calibration descriptor.
-function targetSampler(raster, env) {
+function targetSampler(raster, env, cache) {
   if (typeof env.convertToGroup !== 'function') fail('actual target profile requires host convertToGroup');
   const metadata = raster.source_colour;
   if (!metadata || raster.source_error) fail(raster.source_error || 'original shading source metadata unavailable for target profile');
   const n = metadata.components?.length, ranges = metadata.component_ranges;
   if (!(n >= 1 && n <= 4) || ranges?.length !== n * 2 || !finite(ranges)) fail('invalid original shading source ranges');
-  const raw = raster.source_direct ? null : tableSampler(raster, undefined, true);
+  const raw = raster.source_direct ? null : cachedTableSampler(raster, undefined, true, cache);
   const components = new Array(n).fill(0), normalized = new Array(n).fill(0);
   const source = { ...metadata, components, process_cmyk: null };
   const output = (values, rgb) => {
@@ -479,7 +497,7 @@ export function createShadingPainter(configuration = {}) {
         return gray && rgb ? [rgb[0] * .3 + rgb[1] * .59 + rgb[2] * .11] : rgb;
       } };
     }
-    const sampler = raster ? env.shapeOnly ? { domain: raster.domain, dimensions: raster.size?.length, sample() {} } : target ? targetSampler(raster, targetEnv) : tableSampler(raster, component) : null;
+    const sampler = raster ? env.shapeOnly ? { domain: raster.domain, dimensions: raster.size?.length, sample() {} } : target ? targetSampler(raster, targetEnv, options._samplerCache) : cachedTableSampler(raster, component, false, options._samplerCache) : null;
     if (component !== undefined && !sampler) fail('CMYK shading requires retained source samples');
     const bbox = raster?.bbox || [];
     if (bbox.length && (bbox.length !== 4 || !finite(bbox) || bbox[2] < bbox[0] || bbox[3] < bbox[1])) fail('invalid shading BBox');

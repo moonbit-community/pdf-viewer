@@ -4,7 +4,22 @@
 pub struct PdfCanvasProgram {
   priv glyphs : Map[Int, PdfCanvasGlyphCall]
   priv resources : Map[Int, PdfCanvasGlyphResource]
+  priv shadings : Map[Int, Int]
+  priv shading_resources : Array[PdfCanvasShadingResource]
+  priv mut shading_bytes : Int
   priv mut text_content : PdfTextContent?
+}
+
+///|
+fn pdf_canvas_program() -> PdfCanvasProgram {
+  {
+    glyphs: Map([]),
+    resources: Map([]),
+    shadings: Map([]),
+    shading_resources: [],
+    shading_bytes: 0,
+    text_content: None,
+  }
 }
 
 ///|
@@ -63,7 +78,7 @@ pub fn prepare_canvas_page(
 ) -> (PdfPageModel, PdfCanvasProgram)? raise @core.PdfError {
   document.accessibility_sources.val = None
   guard number >= 1 && number <= document.pages.length() else { return None }
-  let program = { glyphs: Map([]), resources: Map([]), text_content: None, }
+  let program = pdf_canvas_program()
   let build = { program, cache: document.canvas_resources, outlines: Map([]), }
   let sources : Ref[Array[PdfTextStringSource?]?] = Ref(None)
   let tagged = document.document.lookup_direct(
@@ -130,7 +145,9 @@ pub fn PdfCanvasProgram::accessibility_page_json(
 ///|
 /// Conservative page-cache charge, including shared geometry at every owner.
 pub fn PdfCanvasProgram::estimated_bytes(self : PdfCanvasProgram) -> Int {
-  let mut bytes = self.glyphs.length() * 256
+  let mut bytes = self.glyphs.length() * 256 +
+    self.shadings.length() * 128 +
+    self.shading_bytes
   for _, resource in self.resources {
     bytes += resource.bytes
   }

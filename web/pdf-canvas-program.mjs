@@ -9,7 +9,21 @@ export function expandPdfCanvasProgram(plan) {
     if(!Number.isInteger(resource.id)||resources.has(resource.id)||!Array.isArray(resource.commands)||resource.commands.length>32768||(resource.kind!==undefined&&resource.kind!=='outline'))throw new Error('Invalid PDF glyph resource');
     resources.set(resource.id,resource);
   }
+  const shadings=new Map();
+  if(plan.shading_resources!==undefined){
+    if(!Array.isArray(plan.shading_resources)||plan.shading_resources.length>64)throw new Error('Invalid PDF shading resource table');
+    for(const resource of plan.shading_resources){
+      if(!Number.isInteger(resource.id)||shadings.has(resource.id)||!resource.raster||typeof resource.raster!=='object'||Array.isArray(resource.raster))throw new Error('Invalid PDF shading resource');
+      shadings.set(resource.id,resource.raster);
+    }
+  }
   const items=plan.items.map(item=>{
+    const shading=item.paint?.shading;
+    if(shading?.raster_resource!==undefined){
+      if(item.kind!=='shading'||!Number.isInteger(shading.raster_resource)||!shadings.has(shading.raster_resource))throw new Error('Invalid PDF shading invocation');
+      const {raster_resource,...resource}=shading;
+      item={...item,paint:{...item.paint,shading:{...resource,raster:shadings.get(raster_resource)}}};
+    }
     if(!item.glyph)return item;
     const resource=resources.get(item.glyph.resource),m=item.glyph.matrix;
     if(item.kind!=='text'||!resource||!Array.isArray(m)||m.length!==6||!m.every(v=>Number.isFinite(v)&&Math.abs(v)<=1e12))throw new Error('Invalid PDF glyph invocation');
@@ -63,6 +77,6 @@ export function expandPdfCanvasProgram(plan) {
     const {glyph,...expanded}=item;
     return {...expanded,type3_plan};
   });
-  const {glyph_resources,...expanded}=plan;
+  const {glyph_resources,shading_resources,...expanded}=plan;
   return {...expanded,version:1,items};
 }

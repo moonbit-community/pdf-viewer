@@ -118,6 +118,8 @@ jobs:
           node tools/pixels/worker_prepare_test.mjs
           node tools/pixels/pattern_cache_test.mjs
           node tools/pixels/shading_pass_test.mjs
+          node tools/pixels/shading_program_test.mjs
+          node tools/pixels/test_shading.mjs
           node tools/pixels/worker_canvas_test.mjs
           node tools/pixels/review_regression_test.mjs
           node tools/pixels/text_diagnostic_test.mjs

@@ -1952,3 +1952,121 @@ cases continue to record their existing differences from PDF.js; no cross-engine
 pixel parity is claimed.
 
 Public fixture SHA-256: `3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113`. Candidate Worker SHA-256: `0bceaea28dd76400670cf7646b412c0267f344d3317f5f71d933f15faea4fddb`, 5,248,011 bytes. Canvas host SHA-256: `bff76c272a0e755f1b251bc59ccd069fab1526dd76c4d24f52b0b571e72ff018`.
+
+## Shared shading tables and decoded sampler ownership (2026-10-17)
+
+The baseline is the published `e2a13d7cc6e5dba5ff2f1dadf26834c8b1d444f2`.
+Public page 11 has 81 shading invocations but only three distinct complete
+lookup rasters. Their repeated descriptions occupy 19,631,876 UTF-16 code units.
+The existing sampler cache already avoids most repeated function evaluation;
+the remaining duplication is in retained arrays, JSON projection, serialization,
+transfer, parsing and host table decoding.
+
+Prepared version-2 plans now own at most 64 shared rasters and an estimated
+8 MiB per page, conservatively charged to the unchanged 32 MiB model cache.
+Identity includes every raster field; geometry, Extend and paint state remain
+per invocation. Meshes, shading patterns, error rasters and exhausted budgets
+retain the previous lowering. Public models still own independent mutable
+arrays, and a later SVG request rebuilds the complete model. Host expansion
+recovers the exact legacy plan while sharing raster object identity. One render
+can reuse bounded decoded RGB, process-component and raw-source lookups across
+placements and tiles. Its cache expires after rendering; target-profile
+conversion remains specific to the current environment. No native-gradient
+approximation or sampling/compositing rule changes are included.
+
+| Public page 11 bridge diagnostic, scale 1 / rotation 0 | Baseline | Candidate |
+| --- | ---: | ---: |
+| Complete response, UTF-16 code units | 27,784,565 | 8,897,328 |
+| Canvas JSON, UTF-16 code units | 26,345,016 | 7,457,779 |
+| Shared shading rasters | 0 | 3 |
+| Model-cache admission | Rejected above 32 MiB | Admitted, 19,266,988-byte charge |
+
+This is a 68.0% reduction in response characters, not a measured network-byte
+reduction. The page's response also fits the existing 24 MiB serialized-result
+cache, instead of being rejected. Neither cache limit increases.
+
+### First full-document sweep
+
+`tools/document_benchmark.mjs` repeats the preceding section's full 14-page
+protocol: independently packaged sites, fresh contexts/documents/actual Workers,
+CSS width 1216 / DPR 2, and three alternating pairs. Startup/opening, hashes,
+DOM and teardown are excluded; preparation, painting and full RGBA readback are
+included. No parser/scene warm-up precedes the sweep. Builds, tests and dev
+servers are stopped during measurement, with a 45-second quiet interval after
+heavy work. The tool now records `pdf-runtime.mjs` and `pdf-shading.mjs` hashes
+as well as the existing Worker/host hashes.
+
+| WebKit / three-run median | Baseline | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Full 14-page total work | 9,830 ms | 9,734 ms | -1.0% |
+| Full preparation | 6,708 ms | 6,595 ms | -1.7% |
+| Page 11 preparation | 1,112 ms | 751 ms | -32.5% |
+| Page 11 total work | 3,345 ms | 2,840 ms | -15.1% |
+
+All three pairs improve total work, by 4.0%, 3.9% and 1.0%; every page's RGBA
+and complete semantic hashes match. PDF.js's render-only median is 620 ms,
+versus our preparation-plus-rendering work including selection/accessibility.
+The remaining gap is about 15.7x on this run. Full-document preparation still
+accounts for approximately 6.6 seconds. Table duplication is a concrete cost,
+but this result does not establish it as the principal remaining PDF.js gap.
+Absolute timings from different sessions must not be treated as paired gains.
+
+Chromium's first two complete pairs take 11,353.8 / 11,518.7 ms at baseline
+and 10,489.5 / 10,833.8 ms with the candidate. All 14 pages match exact RGBA
+and semantics in those pairs. The third candidate run triggers the strict
+page-13 pixel check: its hash exactly matches the alternate output previously
+recorded from the old baseline in the preceding section (nine pixels, maximum
+channel delta 4, total absolute delta 57). The report retains this failed row
+and remains incomplete; no tolerance was added and no completed three-pair
+Chromium result is claimed.
+
+A separate WebKit diagnostic prepares page 11 in three fresh documents per
+variant, then explicitly requests and paints that same page again. All first
+and repeated outputs match exact RGBA and semantics. On the second request,
+preparation medians are 1,435 ms at baseline and 16 ms for the candidate:
+baseline records two result-cache misses and no admission, while the candidate
+records one miss, one hit and a 17,820,754-byte charge. This verifies the new
+cache admission, with both budgets unchanged. Total repeated-page work is
+4,315 / 4,623 ms respectively; painting varies substantially in this separate
+session. It is a preparation-cache result, not a demonstrated total replay
+speedup, and is not substituted for the first full-document sweep above.
+
+### Existing image-heavy document and validation
+
+The separate 13-page document is unchanged and contains no shading invocations.
+Every run matches its independently recorded full RGBA and semantic hashes.
+Five alternating pairs run in Chromium. WebKit's initial five pairs show an
+apparent 90 ms median regression, so five additional fresh pairs repeat after
+a quiet interval, preserving both blocks:
+
+| First full 13-page sweep, median | Baseline | Candidate |
+| --- | ---: | ---: |
+| Chromium, five pairs | 1,263.3 ms | 1,206.2 ms |
+| WebKit, first five pairs | 1,418 ms | 1,508 ms |
+| WebKit, additional five pairs | 1,769 ms | 1,822 ms |
+| WebKit, all ten pairs | 1,653 ms | 1,638.5 ms |
+
+Chromium improves in four/five pairs. WebKit improves in five/ten pairs, with a
+median paired total difference of +0.5 ms and preparation difference of +8.5 ms
+(candidate minus baseline). The old baseline itself shifts substantially
+between blocks. These samples do not demonstrate a stable general speedup or
+regression for image-heavy documents. Private fixture SHA-256 remains
+`fea1ef069944d3479425ebf076a9b34118f7ba9e3df8cefb54e557ca16f90817`.
+
+Validation passes 780 JS, 765 Wasm, 765 WasmGC and 773 native tests, with no
+public-interface changes. New checks cover complete legacy/expanded plan
+equality; 18 native/retained/tiled shading pixel comparisons; source ownership,
+geometry, opacity, SVG upgrade and resource limits; malformed tables/calls;
+one decode across placements/tiles; mutable-plan repaint; bounded-cache
+fallback; and distinct RGB/process/raw-source entries with per-target CMM
+conversion. All 47 sampler checks, 41 shading-pass checks, 52 Canvas checks,
+144 Type3 and 128 ordinary-outline comparisons pass. Packaged Chromium/WebKit,
+editing, layers, text interaction, corpus and all 12 visual-baseline gates pass;
+existing visual differences from PDF.js remain recorded.
+
+Candidate Worker SHA-256:
+`b158d00e2b75f4c1978b4e3541d559c98127db00bf433e86f4c287f07a5c706a`,
+5,251,070 bytes (3,059 bytes above baseline). Changed host-module SHA-256:
+`pdf-canvas-program.mjs` = `c05f1061f2487a20b9ae344e5ba65d43600795a0b9834d30695d40072888f727`;
+`pdf-runtime.mjs` = `65afb567d8aa2e6fde56316d5e63f0342efc391d2356947ee8b30004b92831b1`;
+`pdf-shading.mjs` = `ebafe8dff7a67db828dff21f9fd22d2041a3a6b4f4d14fd8abe1751eeb4dc215`.

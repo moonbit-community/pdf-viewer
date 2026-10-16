@@ -684,6 +684,13 @@ fn pdf_items_of_collected(
             Some(pdf_shading_resource_with_ctm(value, collected.state.ctm))
           None => None
         }
+        let shading = match canvas_build {
+          Some(build) =>
+            shading.map(value => {
+              pdf_canvas_shading_resource(value, index, build.program)
+            })
+          None => shading
+        }
         items.push(
           PdfPageItem::Shading({
             index,

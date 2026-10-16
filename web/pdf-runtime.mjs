@@ -19,7 +19,13 @@ export async function renderPdfPage(canvas,plan,options={}) {
     configured.height=options.height ?? Math.ceil(plan.viewport.height*scale);
     configured.matrix=multiplyMatrix([scale,0,0,scale,0,0],logical);
   }
-  configured.paintShading=options.paintShading || createShadingPainter(configured);
+  // One render owns decoded lookup tables across placements and tiles. An
+  // independently reused painter retains its mutable host-plan semantics.
+  const samplerBytes=!options.paintShading&&plan.items.some(item=>item.kind==='shading')
+    ?Math.min(8388608,Math.floor((options.maxWorkingBytes||536870912)/16)):0;
+  if(samplerBytes)configured._inheritedWorkingBytes=(options._inheritedWorkingBytes||0)+samplerBytes;
+  configured.paintShading=options.paintShading || createShadingPainter({...configured,
+    _samplerCache:samplerBytes?{entries:new WeakMap(),bytes:0,limit:samplerBytes}:null});
   // Only the built-in adapters guarantee opaque sample coverage. External
   // painters keep their separate shape pass, even when they wrap this engine.
   configured._builtinShading=!options.paintShading;

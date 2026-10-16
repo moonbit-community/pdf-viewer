@@ -106,7 +106,7 @@ fn pdf_canvas_plan(
               group_path: [],
             }.to_json(),
             "shading",
-            pdf_canvas_shading_plan(value.shading, self),
+            pdf_canvas_shading_call(value.shading, value.index, self, program),
           ),
         )
     }
@@ -293,8 +293,10 @@ fn pdf_canvas_plan(
       }).to_json(),
     })
   }
+  let shading_resources = program.map(p => p.shading_resources).unwrap_or([])
+  let compiled = !resources.is_empty() || !shading_resources.is_empty()
   let result : Json = {
-    "version": if resources.is_empty() {
+    "version": if !compiled {
       1
     } else {
       2
@@ -326,11 +328,24 @@ fn pdf_canvas_plan(
     "viewport": viewport.to_json(),
     "items": items.to_json(),
   }
-  if resources.is_empty() {
+  if !compiled {
     result
   } else {
     let ids = resources.keys().to_array()
     ids.sort()
+    let result = if shading_resources.is_empty() {
+      result
+    } else {
+      pdf_canvas_object_with(
+        result,
+        "shading_resources",
+        [
+          for id, r in shading_resources => {
+            { "id": id.to_json(), "raster": r.json }
+          }
+        ].to_json(),
+      )
+    }
     pdf_canvas_object_with(
       result,
       "glyph_resources",

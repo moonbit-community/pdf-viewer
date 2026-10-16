@@ -16,11 +16,7 @@ fn prepared_text_test_projections(document : PdfViewerDocument) -> Unit raise {
     assert_eq(layer, page.text_layer(scale=1.25, rotation~))
     assert_eq(program.text_content, Some(content))
   }
-  let fallback : PdfCanvasProgram = {
-    glyphs: Map([]),
-    resources: Map([]),
-    text_content: None,
-  }
+  let fallback = pdf_canvas_program()
   assert_eq(fallback.text_layer(page, 1.0, 0), page.text_layer(rotation=0))
   assert_eq(fallback.accessibility_page_json(document, 1, page), prepared)
   assert_eq(program.accessibility_page_json(document, 0, page), None)

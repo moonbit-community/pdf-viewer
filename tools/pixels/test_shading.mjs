@@ -43,6 +43,32 @@ function near(actual, expected, tolerance = 1) {
 const mesh = raster => ({ kind: 'mesh', raster });
 const axial = (raster = grey(), coords = [16, 0, 48, 0]) => ({ kind: 'axial', coords, raster });
 
+test('bounded decoded samplers preserve RGB, process and per-target source semantics', () => {
+  const pack=values=>{const bytes=Buffer.alloc(values.length*2);values.forEach((v,i)=>bytes.writeUInt16LE(v*257,i*2));return bytes.toString('base64');};
+  const raster=table([0,1],[2],()=>[0,0,0],{
+    samples:pack([10,20,30,240,220,200]),process_samples:pack([0,20,40,60,255,180,80,30]),
+    source_samples:pack([0,255]),source_colour:{space:'DeviceGray',components:[0],component_ranges:[0,1]},
+  });
+  const cache={entries:new WeakMap(),bytes:0,limit:8388608},painter=createShadingPainter({_samplerCache:cache});
+  const environments=[{},...[0,1,2,3].map(component=>({colourSpace:'DeviceCMYK',component})),
+    {colourSpace:'DeviceRGB',iccProfileId:'A',convertToGroup:s=>[s.components[0],0,0]},
+    {colourSpace:'DeviceRGB',iccProfileId:'B',convertToGroup:s=>[0,s.components[0],0]},
+    {colourSpace:'DeviceCMYK',component:2,iccProfileId:'C',convertToGroup:s=>[0,0,s.components[0],0]},
+  ];
+  const atob=globalThis.atob;let decodes=0;globalThis.atob=s=>{decodes++;return atob(s);};
+  try{
+    const expected=environments.map(env=>render(axial(raster),{env}).data);decodes=0;
+    for(let repeat=0;repeat<2;repeat++)for(const [i,env] of environments.entries())assert.deepEqual(render(axial(raster),{env,painter}).data,expected[i]);
+    assert.equal(decodes,6,'RGB, four process components and one raw source cache entry');
+    assert.equal(cache.entries.get(raster).size,6);assert(cache.bytes<=cache.limit);
+    for(const component of ['rgb','source',-.5,4])assert.throws(()=>render(axial(raster),{painter,env:{colourSpace:'DeviceCMYK',component}}),/component/);
+    const limited={entries:new WeakMap(),bytes:0,limit:1},fallback=createShadingPainter({_samplerCache:limited});decodes=0;
+    for(let i=0;i<2;i++)assert.deepEqual(render(axial(raster),{painter:fallback}).data,expected[0]);
+    assert.equal(decodes,2);assert.equal(limited.bytes,0);
+    assert.throws(()=>render(axial({...raster,samples:'invalid'}),{painter}),/base64/);
+  }finally{globalThis.atob=atob;}
+});
+
 test('axial projection, non-unit input domain, and independently false Extend', () => {
   const resource = axial(table([2, 4], [3], t => [127.5 * (t - 2), 0, 0]));
   let result = render(resource);
