@@ -156,7 +156,21 @@ fn pdf_collected_entries_of_ops(
   let mut fill_color_stack : Array[Bool] = []
   let mut stroke_color_stack : Array[Bool] = []
   let output : Array[PdfCollectedEntry] = []
+  let mut path_run_end = 0
   for operator_index, op in ops {
+    if operator_index < path_run_end {
+      continue
+    }
+    if pdf_path_construction_op(op) {
+      let (partial_path, end) = pdf_build_path_run(
+        state.partial_path,
+        ops,
+        operator_index,
+      )
+      state = { ..state, partial_path, }
+      path_run_end = end
+      continue
+    }
     if op is @content.Op_BT {
       text_object_id = Some(
         invocation_scope + "/text/" + operator_index.to_string(),

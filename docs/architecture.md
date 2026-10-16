@@ -64,6 +64,14 @@ interface and an OpenSeek adapter from depending on `pdflite` internals.
 The collector retains a display list instead of drawing directly while parsing.
 That gives us independently testable page geometry, positioned text/source
 selection, a structured `PdfPageModel.canvas_plan()` and SVG compatibility output.
+Consecutive path construction operators use `path_builder.mbt`: it copies the
+incoming partial path once and appends segments to owned arrays, avoiding the
+reference machine's copy of every previous segment on each append. It publishes
+the arrays before any other operator runs. Painting, clipping, graphics-state
+saves/restores, transforms and resource operations retain the existing
+interpreter; saved and emitted paths keep immutable snapshots. The Type3 glyph
+compiler uses the same builder. Construction is linear within each consecutive
+run; boundaries that resume a large existing path can still require a copy.
 The shipped page/thumbnail pixel path is the Canvas plan replayed by
 `web/pdf-runtime.mjs` / `web/pdf-canvas.mjs`; it does not rasterize a completed
 page SVG. Public entry points, capability limits and focused evidence are in

@@ -18,6 +18,7 @@ import {
   "mizchi/font",
   "moonbitlang/pdflite",
   "moonbitlang/pdflite/content",
+  "moonbitlang/pdflite/content/path" @content_path,
   "moonbitlang/pdflite/annotation",
   "moonbitlang/pdflite/bookmark",
   "moonbitlang/pdflite/core",

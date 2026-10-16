@@ -1695,6 +1695,105 @@ Ignored final reports, profiles and logs are under `_build/cold-load-next/`;
 earlier, differently scoped candidate measurements are isolated in its
 `prototype/` directory. Private PDF bytes, pixels and text remain untracked.
 
+## Consecutive path construction (2026-10-17)
+
+Baseline is pushed commit `4a5d751`. The reference path machine copies the
+entire accumulated segment array on every `l`/`c`/`v`/`y` append, and copies
+subpath arrays when adding contours. A consecutive path of N segments can
+therefore require quadratic copying before any Canvas work begins. Both the
+page collector and compiled Type3 glyph preparation used this machine.
+
+`path_builder.mbt` now constructs consecutive `m/l/c/v/y/h/re` runs in owned
+append-only buffers. It copies an incoming partial path once and freezes the
+result before any non-construction operator executes. Painting, clipping,
+transforms, q/Q, resources and recovery still use the reference interpreter.
+No saved/emitted array is mutated. The operation indices used for text source
+provenance remain the original stream indices. This makes construction linear
+within each consecutive run; repeatedly resuming a large path across state
+boundaries can still copy that path. No public interface changes.
+
+### Reproducible scaling probe against PDF.js
+
+`tools/path_benchmark.mjs` generates one authored 256-by-256-point page with
+512, 2,048, 8,192 or 16,384 consecutive line segments and a fill. Each size uses
+three alternating samples of the independent baseline, final packaged candidate
+and pinned PDF.js reference, each in a fresh browser context/document/Worker.
+CSS width is 256 and DPR is 2. No stage output, cached document or prepared page
+is supplied. Opening and Worker/module startup finish before timing. The table
+includes actual preparation, Canvas painting and a complete RGBA readback;
+PDF.js rendering includes its asynchronous Worker/operator preparation. Hashing,
+DOM and teardown are excluded. All three variants have identical complete RGBA
+for every size in each browser; baseline/candidate semantic hashes also match.
+
+| Median total work | Old / Chromium | New / Chromium | PDF.js / Chromium | Old / WebKit | New / WebKit | PDF.js / WebKit |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 512 segments | 12.1 ms | 10.0 ms | 4.9 ms | 19 ms | 15 ms | 16 ms |
+| 2,048 segments | 26.2 ms | 13.8 ms | 7.0 ms | 30 ms | 19 ms | 9 ms |
+| 8,192 segments | 205.9 ms | 20.8 ms | 6.4 ms | 129 ms | 33 ms | 14 ms |
+| 16,384 segments | 748.5 ms | 30.1 ms | 7.8 ms | 359 ms | 41 ms | 17 ms |
+
+At 16,384 segments preparation alone falls from 745.3 to 27.0 ms in Chromium
+and 354 to 36 ms in WebKit. All three baseline/candidate pairs improve at every
+size in both browsers. The total gap to PDF.js in this constructed case falls
+from about 96x to 3.9x in Chromium and 21x to 2.4x in WebKit. Three samples and
+an authored long-path input establish the removed scaling problem, not general
+PDF.js parity or a representative corpus speedup. Small reference timings,
+especially WebKit's 512-segment case, remain sensitive to scheduling.
+
+Run against two independently built site directories, without other builds or
+tests running during timing:
+
+```sh
+PDF_BENCH_BASELINE_ROOT=/path/to/baseline-site node tools/path_benchmark.mjs _build/path-benchmark/chromium.json
+PDF_BROWSER=webkit PDF_BENCH_BASELINE_ROOT=/path/to/baseline-site node tools/path_benchmark.mjs _build/path-benchmark/webkit.json
+```
+
+The tool records the exact three Worker hashes and refuses blank output or
+baseline/candidate pixel/semantic differences. It requires the pinned local
+PDF.js generic build. Candidate Worker SHA-256 is
+`5960cd1d01d486237b81227a31798bf8950bb3a9371f1f6298ae60a50811dfc3`,
+5,242,369 bytes; final rebuilding leaves the measured artifact unchanged.
+
+### Existing document and validation limits
+
+The existing private 13-page input is mostly images and short Type3 paths.
+Five alternating fresh-context/document/Worker pairs per browser repeat the
+first complete sweep at CSS width 1216 / DPR 2. Scope and independent RGBA/full
+semantic checks match the previous first-sweep experiment. Startup, opening,
+hashes, DOM and teardown are excluded; the timer sums actual page preparation,
+painting and complete pixel flushes rather than uninterrupted elapsed time.
+
+| Five-run median / first sweep | `4a5d751` | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Chromium total work | 1193.6 ms | 1188.2 ms | -0.5% |
+| Chromium preparation | 771.8 ms | 764.6 ms | -0.9% |
+| WebKit total work | 1367 ms | 1332 ms | -2.6% |
+| WebKit preparation | 1032 ms | 1010 ms | -2.1% |
+
+Chromium totals and preparation improve in three/five pairs. WebKit totals
+improve in only two/five, preparation in three/five; median paired total change
+is a 0.5% regression despite the lower ratio of medians. These data do not show
+a stable large improvement for this document. Every page's RGBA and full
+semantic hashes remain identical. The structural long-path fix should not be
+credited with a general first-load gain.
+
+Before selecting this change, an exact bounded ICC batch prototype was tested
+and rejected: its complete pixels/semantics matched, but collecting and
+backfilling batches increased whole-document preparation. The existing palette
+already removes most repeated scalar colour conversions. No prototype host
+code, extra transform buffers or batch protocol is included in the product.
+
+Validation passes 773 JS, 758 Wasm, 758 Wasm-GC and 766 native tests, including
+128 deterministic 64-operation differential sequences against the full reference
+interpreter state, saved input immutability and a 16,384-segment run. Canvas
+replay (52 tests), compiled/legacy pixels (144 comparisons), actual Worker,
+range, raster/resource lifecycle, Chromium/WebKit packaged readers, complete
+browser/editor/layer/text interaction, corpus and visual report gates pass.
+The visual suite retains its previously documented cross-renderer differences;
+it is not an exact PDF.js corpus pixel match. `moon info`/`moon fmt` leave public
+interfaces unchanged. Final reports are ignored under `_build/path-builder-next/`;
+the rejected colour prototype is isolated under `_build/icc-batch-next/`.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |

@@ -278,7 +278,21 @@ fn pdf_canvas_compile_glyph(
     0.0, 0.0, 1.0, 1.0,
   )
   let mut path : @shape.PdfPath? = None
-  for op in ops {
+  let mut path_run_end = 0
+  for index, op in ops {
+    if index < path_run_end {
+      continue
+    }
+    if pdf_path_construction_op(op) {
+      let (partial_path, end) = pdf_build_path_run(
+        state.partial_path,
+        ops[:],
+        index,
+      )
+      state = { ..state, partial_path, }
+      path_run_end = end
+      continue
+    }
     // d1 colour setters are ignored rather than resolved against font resources.
     match op {
       @content.Op_g(_)

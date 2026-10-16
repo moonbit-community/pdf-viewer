@@ -16,6 +16,7 @@ The central files have separate responsibilities:
 - `page_api.mbt`: viewport conversion and page-level APIs.
 - `collector.mbt`: page-model assembly and page geometry.
 - `collector_entries.mbt`: collected entry types and content-operator interpretation.
+- `path_builder.mbt`: owned buffers for consecutive path construction, frozen at interpreter boundaries.
 - `collector_items.mbt`: lowering collected entries into paths, text, images and shading.
 - `collector_state.mbt`: Form groups, graphics-state resolution and paint attributes.
 - `svg.mbt`: SVG page wrapper and source-order item traversal.
