@@ -33,10 +33,11 @@ fn pdf_font_cmap_reader_shadow(
   document : @pdflite.PdfDocument,
   dictionary : @syntax.PdfObject,
   resource_context? : PdfResourceBuildContext? = None,
-) -> (@syntax.PdfObject, Int?, Bool) raise @core.PdfError {
+) -> (@syntax.PdfObject, Int?, Bool, Array[(Int, Bytes)]?) raise @core.PdfError {
   let mut shadow = dictionary
   let mut encoding_number : Int? = None
   let mut bounded = false
+  let mut unicode = None
   for key in ["/Encoding", "/ToUnicode"] {
     guard dictionary.lookup_immediate(pdf_name_key(key)) is Some(object) else {
       continue
@@ -49,6 +50,19 @@ fn pdf_font_cmap_reader_shadow(
     let recovery = pdf_viewer_cmap_recovery_for_resource(
       document, object, resource_context,
     )
+    if key == "/ToUnicode" &&
+      dictionary.lookup_immediate(pdf_name_key("/Subtype")) ==
+      Some(@syntax.PdfNameObject(pdf_name_key("/Type3"))) &&
+      pdf_direct_for_viewer(document, object)
+      is Some(@syntax.PdfStreamObject(stream)) &&
+      stream.dictionary.lookup_immediate(pdf_name_key("/UseCMap")) is None &&
+      recovery is Some(cmap) {
+      unicode = pdf_type3_reader_unicode(cmap)
+      if unicode is Some(_) {
+        shadow = shadow.remove_dict_entry(pdf_name_key(key))
+        continue
+      }
+    }
     if !recovery.map(pdf_cmap_reader_expansion_bounded).unwrap_or(false) {
       bounded = true
       if key == "/Encoding" {
@@ -70,7 +84,7 @@ fn pdf_font_cmap_reader_shadow(
       }
     }
   }
-  (shadow, encoding_number, bounded)
+  (shadow, encoding_number, bounded, unicode)
 }
 
 ///|

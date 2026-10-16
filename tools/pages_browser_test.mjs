@@ -113,10 +113,22 @@ try{
     assert.equal(requests.includes(prefix+'_generated/pdf.js'),false,'The main thread loads only the UI; the full parser belongs to the Worker');
     assert.equal(requests.includes(prefix+'vendor/xfa/xfa.mjs'),false,'The XFA engine loads only when an XFA document needs it');
   });
+  await check('An empty reader prepares one Worker without opening a document',async()=>{
+    await page.waitForFunction(()=>pdfViewerHost.pdf.diagnostics().ready);
+    const state=await page.evaluate(()=>pdfViewerHost.pdf.diagnostics());
+    assert.equal(state.workerStarts,1);
+    assert.equal(state.completed,0);
+    assert.equal(state.prepared,true);
+    assert.equal(state.active,null);
+    assert.equal(state.queued,0);
+  });
   await check('Packaged Worker paints a local PDF without network uploads',async()=>{
     const startupRequestStart=requests.length;
     await page.locator('#file-input').setInputFiles({name:'local.pdf',mimeType:'application/pdf',buffer:layerFixture()});
     await idle('local.pdf');
+    const adopted=await page.evaluate(()=>pdfViewerHost.pdf.diagnostics());
+    assert.equal(adopted.workerStarts,1,'Opening the first file must adopt the untouched prepared Worker');
+    assert.equal(adopted.prepared,false);
     const startupRequests=requests.slice(startupRequestStart);
     for(const asset of ['_generated/pdf.js','pdf-graphics.mjs','pdf-range.mjs','pdf-runtime.mjs','pdf-canvas.mjs','pdf-patterns.mjs','pdf-shading.mjs','pdf-xfa.mjs','vendor/xfa/xfa.mjs'])
       assert.ok(!startupRequests.some(path=>path.endsWith('/'+asset)),'Ordinary PDF startup must not load '+asset);

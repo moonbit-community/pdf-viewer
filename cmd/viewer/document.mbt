@@ -1,11 +1,16 @@
 ///|
 pub fn close_document() -> Unit {
+  clear_document_state(false)
+}
+
+///|
+fn clear_document_state(keep_prepared_worker : Bool) -> Unit {
   reset_editor()
   clear_xfa_fonts()
   clear_render_assets()
   state.document_generation += 1
   state.generation += 1
-  close_worker()
+  close_worker(keep_prepared_worker)
   close_sidebar()
   if state.annotations is Some(ui) {
     annotations_close(ui)
@@ -50,7 +55,7 @@ async fn load_document(file : @js.Value, path : String) -> Unit {
   // Capture those preferences before publishing the new reader session.
   let zoom = input_value("zoom")
   let view_mode = input_value("view-mode")
-  close_document()
+  clear_document_state(true)
   state.zoom = zoom
   state.view_mode = view_mode
   let generation = state.document_generation
@@ -198,3 +203,7 @@ pub fn runtime_diagnostics() -> @js_async.Promise[@js.Value] {
 ///|
 extern "js" fn initial_file() -> @js.Nullable[@js.Value] =
   #| () => { const path=new URL(location.href).searchParams.get("file");if(!path)return null;const url=new URL(path,location.href);return {name:decodeURIComponent(url.pathname.split('/').pop())||"document.pdf",url:url.href,path}; }
+
+///|
+extern "js" fn has_initial_file() -> Bool =
+  #| () => Boolean(new URL(location.href).searchParams.get('file'))

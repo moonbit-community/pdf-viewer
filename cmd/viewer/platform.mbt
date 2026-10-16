@@ -85,11 +85,15 @@ async fn call(
 
 ///|
 extern "js" fn reset_worker() -> Unit =
-  #| () => globalThis.pdfViewerHost.pdf.reset()
+  #| () => globalThis.pdfViewerHost.pdf.resetForDocument()
 
 ///|
-extern "js" fn close_worker() -> Unit =
-  #| () => globalThis.pdfViewerHost.pdf.close()
+extern "js" fn close_worker(keep_prepared : Bool) -> Unit =
+  #| keep => { const pdf=globalThis.pdfViewerHost.pdf; if(keep)pdf.closeForReplacement(); else pdf.close(); }
+
+///|
+extern "js" fn prepare_worker() -> Unit =
+  #| () => globalThis.pdfViewerHost.pdf.prepare()
 
 ///|
 extern "js" fn worker_diagnostics() -> @js.Value =

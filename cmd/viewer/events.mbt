@@ -198,7 +198,7 @@ fn initialize_events() -> Unit {
     abort(state.selection_controller)
     cancel_thumbnails()
     abort(state.print_controller)
-    close_worker()
+    close_worker(false)
   })
   window.add_event_listener("pageshow", event => {
     if event_persisted(event) && state.file is Some(file) {

@@ -11,6 +11,9 @@ fn main {
               ui_scheduler.val = Some(scheduler)
               initialize_pages()
               initialize_events()
+              if state.document_generation == 0 && !has_initial_file() {
+                prepare_worker()
+              }
               launch(() => {
                 if initial_file().to_option() is Some(file) {
                   load_document(file, value_string(file, "path"))

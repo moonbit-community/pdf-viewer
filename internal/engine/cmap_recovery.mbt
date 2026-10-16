@@ -42,6 +42,8 @@ priv struct PdfViewerCMapRecovery {
   unicode_entries : Array[PdfViewerUnicodeEntry]
   diagnostics : PdfViewerCMapDiagnostics
   source_available : Bool
+  /// Lexical eligibility only; reuse also checks diagnostics and source ranges.
+  reader_hex_compatible : Bool
   mut usecmap : @core.PdfName?
   mut wmode : Int?
 }
@@ -355,6 +357,7 @@ fn pdf_viewer_parse_cmap(data : BytesView) -> PdfViewerCMapRecovery {
       source_unavailable: false,
     },
     source_available: true,
+    reader_hex_compatible: false,
     usecmap: None,
     wmode: None,
   }
@@ -541,7 +544,11 @@ fn pdf_viewer_parse_cmap(data : BytesView) -> PdfViewerCMapRecovery {
     }
     index += 1
   }
-  output
+  {
+    ..output,
+    reader_hex_compatible: !output.unicode_entries.is_empty() &&
+    pdf_cmap_reader_hex_compatible(data),
+  }
 }
 
 ///|
@@ -587,6 +594,7 @@ fn pdf_viewer_cmap_recovery_cached(bytes : Bytes) -> PdfViewerCMapRecovery {
           source_unavailable: true,
         },
         source_available: false,
+        reader_hex_compatible: false,
         usecmap: None,
         wmode: None,
       }
@@ -657,6 +665,7 @@ fn pdf_viewer_cmap_compose_recovery(
       inherited.diagnostics.source_unavailable,
     },
     source_available: current.source_available,
+    reader_hex_compatible: false,
     usecmap: match current.usecmap {
       Some(_) => current.usecmap
       None => inherited.usecmap
@@ -733,6 +742,7 @@ fn pdf_viewer_cmap_recovery_of_object(
           source_unavailable: false,
         },
         source_available: true,
+        reader_hex_compatible: false,
         usecmap: None,
         wmode: None,
       })
@@ -763,6 +773,7 @@ fn pdf_viewer_cmap_recovery_of_object(
           source_unavailable: true,
         },
         source_available: false,
+        reader_hex_compatible: false,
         usecmap: None,
         wmode: None,
       })

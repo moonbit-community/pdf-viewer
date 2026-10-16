@@ -12,6 +12,7 @@ export class PdfWorkerClient {
     this.queue = [];
     this.active = null;
     this.ready = false;
+    this.prepared = false;
     this.graphics = null;
     this.nextId = 0;
     this.rasterImages = rasterImages;
@@ -94,6 +95,26 @@ export class PdfWorkerClient {
     });
   }
 
+  // An empty reader may initialize codecs while the user chooses a file.
+  // Only this untouched Worker can cross the first document-open boundary.
+  prepare() {
+    if (this.worker) return;
+    this.reset();
+    this.prepared = true;
+  }
+
+  resetForDocument() {
+    if (this.worker && this.prepared && !this.active && !this.queue.length) {
+      this.prepared = false;
+      return;
+    }
+    this.reset();
+  }
+
+  closeForReplacement() {
+    if (!this.prepared || this.active || this.queue.length) this.close();
+  }
+
   settle(task, error, result) {
     if (task.settled) return;
     task.settled = true;
@@ -107,6 +128,7 @@ export class PdfWorkerClient {
     if (!this.worker) return Promise.reject(Object.assign(new Error("No document open"), {
       code: "document-closed",
     }));
+    this.prepared = false;
     return new Promise((resolve, reject) => {
       const task = { id: ++this.nextId, method, args, signal, priority, transfer, resolve, reject };
       task.abort = () => {
@@ -144,6 +166,7 @@ export class PdfWorkerClient {
     this.worker?.terminate();
     this.worker = null;
     this.ready = false;
+    this.prepared = false;
     this.graphics = null;
     this.rasterSupported = false;
     this.rasterEpoch = null;
@@ -159,7 +182,7 @@ export class PdfWorkerClient {
   loadRaster(uri) { return this.call("raster_image", [uri], {priority:50}); }
 
   diagnostics() {
-    return { ...this.stats, worker: Boolean(this.worker), ready: this.ready,
+    return { ...this.stats, worker: Boolean(this.worker), ready: this.ready, prepared: this.prepared,
       graphics: this.graphics,
       queued: this.queue.length, active: this.active?.method || null };
   }

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // Measure a first PDF page through the packaged reader's ordinary file input.
-// Each sample owns a fresh browser context and Worker. Private PDFs stay local.
+// Each sample owns a fresh browser context and Worker. The empty shell may
+// prepare its untouched Worker before file selection; report that timing too.
+// Private PDFs stay local.
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
@@ -46,7 +48,7 @@ let browser;
 try{
   browser=await launcher.launch({headless:true});
   const report={engine,browserVersion:browser.version(),playwrightVersion:require('playwright/package.json').version,timestamp:new Date().toISOString(),samples,dpr:2,sourceSha256:sha256(bytes),sourceBytes:bytes.length,viewerRoot,referenceRevision:revision,
-    scope:'Reader shell and PDF.js module loaded before timing; each sample starts at reading a File with a fresh document/Worker. Canvas-visible includes a pixel flush and two animation frames. Reader-ready additionally includes mounted text/annotations/fonts, before document metadata necessarily completes; PDF.js uses its Canvas API without viewer UI.',
+    scope:'Reader shell and PDF.js module loaded before timing; each sample starts at reading a File with a fresh document and a Worker unique to this browser context. The empty reader can initialize its untouched Worker before file selection: negative Worker timestamps explicitly report that shifted work. No PDF or parser warm-up occurs before selection. Canvas-visible includes a pixel flush and two animation frames. Reader-ready additionally includes mounted text/annotations/fonts, before document metadata necessarily completes; PDF.js uses its Canvas API without viewer UI. Navigation-to-Canvas includes the harness network-idle wait and file setup; it is not an immediate-open benchmark.',
     baselineRoot,ours:[],baseline:[],pdfjs:[]};
   for(const [name,root] of [['build',viewerRoot],['baselineBuild',baselineRoot]]){
     if(!root)continue;report[name]={};
@@ -108,6 +110,7 @@ try{
         const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',rgba))].map(x=>x.toString(16).padStart(2,'0')).join('');
         const requests=s.requests.filter(r=>r.end<=s.ready).map(r=>({...r,start:r.start-s.start,end:r.end-s.start}));
         const result={canvasVisibleMs:s.visible-s.start,readerReadyMs:s.ready-s.start,paintMs:s.paintMs,flushMs:s.flushMs,
+          navigationToCanvasMs:s.visible,fileSelectedAtMs:s.start,workerReadyBeforeFile:s.workers.some(w=>w.ready<=s.start),
           width:c.width,height:c.height,rgbaSha256:hash,workers:s.workers.map(w=>({...w,created:w.created-s.start,ready:w.ready-s.start})),requests};
         pdfViewerHost.pdf.close();return result;
       });

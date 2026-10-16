@@ -1572,6 +1572,129 @@ Ignored audit, exact-result supply experiments, production revisit reports and
 validation logs are under `_build/structural-gap-next/`. Private PDF bytes,
 pixels and text remain outside tracked files.
 
+## First-file loading and Type3 Unicode reuse (2026-10-16)
+
+Baseline is pushed commit `0bdd72d`. This pass separates real first-use work
+from preparation an empty reader can finish while the user chooses a file.
+Both variants use the same release/minification pipeline and pinned PDF.js
+reference. No PDF parsing, prepared page or previously decoded document is
+supplied before timing. Private input remains the same 13-page file.
+
+The initial Chromium baseline measured about 434 ms from file selection to a
+flushed Canvas and two animation frames: about 101 ms of Worker startup, 44 ms
+opening and 189 ms first-page RPC/preparation. A release-engine Worker diagnostic
+found 57 Type3 fonts whose ToUnicode streams were checked by the viewer and
+then parsed again by the strict font reader. The latter pass alone accounted
+for about 20 ms in an instrumented run. These are diagnostic inclusive times,
+not interchangeable with the uninstrumented measurements below.
+
+The font reader now reuses the already checked small Type3 Unicode map while
+preserving the complete font descriptor. Eligibility is conservative: at most
+256 nonoverlapping byte codes, safe destination increments, ordinary even hex
+tokens, clean diagnostics and no inheritance. Direct streams, other font
+types, odd/spaced hex, broad or ambiguous ranges and unavailable sources retain
+the original reader/recovery path. Lexical eligibility is recorded with the
+existing CMap parse; no extra stream decode is introduced. The final
+instrumented Worker has zero strict CMap parses for those 57 first-page fonts.
+
+An empty reader also starts one untouched Worker before file selection. The
+first open adopts it even if its graphics initialization is still pending.
+No PDF requests run before selection. Any RPC consumes this privilege;
+replacement, explicit close and page hide terminate used Workers normally.
+Idle startup failure creates a fresh Worker on open. Initial `?file=` loading
+skips this empty-reader preparation. This shifts startup work into user idle
+time; its benefit must not be credited as reduced engine computation.
+
+### First file selected in an empty reader
+
+Seven alternating fresh-context/document/Worker pairs per browser use the
+ordinary packaged reader file input, CSS width 1216 and DPR 2. The shell and
+reference module load before selection; the empty shell can initialize its
+Worker during that interval. All seven candidates in each browser report a
+Worker ready before file selection, with negative relative timestamps in the
+report. Every candidate and baseline has the same complete first-page RGBA.
+
+| Seven-run median | `0bdd72d` | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Chromium Canvas visible | 439.1 ms | 354.6 ms | -19.2% |
+| Chromium reader ready | 432.6 ms | 347.4 ms | -19.7% |
+| WebKit Canvas visible | 687.0 ms | 502.0 ms | -26.9% |
+| WebKit reader ready | 618.0 ms | 451.0 ms | -27.0% |
+
+Six of seven Chromium pairs and all seven WebKit pairs improve. Medians of
+within-pair Canvas-visible reductions are 22.2% and 14.6%; reader-ready paired
+reductions are 22.5% and 16.0%. Host variation makes these different from the
+ratios of medians. Chromium's first-page RPC in this file-input batch does not
+show a stable gain (180 to 185 ms; three of seven pairs improve), so its total
+improvement must not be attributed entirely to CMap reuse. WebKit's RPC medians
+are 345 to 267 ms, with six of seven pairs improving. PDF.js Canvas API timings
+remain in the raw reports; the differing UI and Worker-start lifetimes do not
+establish reference parity.
+
+### Immediate navigation and actual first-use computation
+
+A separate seven-pair run starts at navigation to `?file=/fixture.pdf`, with
+no prior shell, Worker or PDF work. It includes HTML/modules/CSS, opening,
+Worker startup, preparation, painting, flush and two frames. Both variants use
+the same URL transport, and every RGBA and full semantic payload hash matches.
+The candidate skips empty-reader Worker preparation in this mode.
+
+| Seven-run median | `0bdd72d` | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Chromium first-page RPC | 226.8 ms | 187.9 ms | -17.2% |
+| WebKit first-page RPC | 318.0 ms | 269.0 ms | -15.4% |
+| Chromium navigation to Canvas | 613.8 ms | 519.8 ms | -15.3% |
+| WebKit navigation to Canvas | 760.0 ms | 711.0 ms | -6.4% |
+
+Five of seven pairs improve for each RPC row; median paired reductions are
+18.9% and 19.8%. Total navigation is less consistent: only four/seven Chromium
+and five/seven WebKit pairs improve, with paired reductions of 4.7% and 10.9%.
+These results do not support a universal first-load percentage.
+
+An independent seven-pair fresh-Node-process diagnostic uses the minified
+release bridge with the same ICC/JBIG2/Flate and raster-admission hooks. It
+times process CPU during the first page, including concurrent runtime threads,
+after separately opening the document. Median CPU time falls from 509.2 to
+453.1 ms (-11.0%), all seven pairs improve, and the median paired reduction is
+13.2%. Full semantic hashes match. This excludes Canvas painting, bitmap
+construction/transport, UI and Worker startup; it is evidence of reduced work,
+not browser latency and cannot be added to the browser rows.
+
+### Complete-document first pass and validation
+
+Five alternating fresh-context/document/Worker pairs per browser prepare,
+paint and fully flush pages 1–13 at CSS width 1216 / DPR 2. The timer excludes
+opening/startup, hashes, DOM and teardown; it sums actual page work and does not
+measure uninterrupted elapsed time. This host entry does not start the UI or
+prepare an idle Worker. No stage output is supplied. Every page matches the
+independently recorded RGBA and complete semantic payload hashes.
+
+| Five-run median / first sweep | `0bdd72d` | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Chromium total work | 1453.4 ms | 1341.4 ms | -7.7% |
+| Chromium preparation | 903.4 ms | 839.2 ms | -7.1% |
+| WebKit total work | 1655.0 ms | 1615.0 ms | -2.4% |
+| WebKit preparation | 1229.0 ms | 1161.0 ms | -5.5% |
+
+Only three of five pairs improve for each total row; preparation improves in
+four of five. This pass does not establish a large whole-document cold-load
+gain. The main structural gap remains the serial whole-page model, complete
+projection/semantic payload and subsequent painting.
+
+Local checks pass 771 JS, 756 Wasm, 756 Wasm-GC and 764 native tests; all 15
+packaged-reader checks in both browsers; the complete browser, editor, layer
+and text acceptance suites; actual Worker/range tests; 52 Canvas replay tests;
+144 compiled/legacy pixel comparisons; and focused preparation/raster cache
+tests. New regressions compare reused font metadata with the strict reader and
+cover inheritance, malformed hex, overlap, range limits, source immutability,
+one-shot Worker adoption, early file input, replacement, close and startup
+retry. `moon info`/`moon fmt` leave public interfaces unchanged. The release
+Worker is 5,239,776 bytes; the final rebuild matches the measured artifact.
+
+Ignored final reports, profiles and logs are under `_build/cold-load-next/`;
+earlier, differently scoped candidate measurements are isolated in its
+`prototype/` directory. Private PDF bytes, pixels and text remain untracked.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |

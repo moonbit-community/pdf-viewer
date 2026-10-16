@@ -239,6 +239,14 @@ their object store can still change during hydration; a page build can retain
 up to 128 CMaps with a separate 2 MiB transient budget. Full caches keep the
 original parsing behavior without admitting more entries.
 
+Small Type3 ToUnicode maps can reuse the CMap preflight result when constructing
+the complete font metadata, avoiding a second stream parse by the strict reader.
+The parser records lexical hex compatibility alongside its source parse;
+font reuse additionally requires at most 256 nonoverlapping byte codes, safe
+Unicode increments and clean diagnostics. Odd or spaced hex tokens, inherited
+maps, ambiguous ranges and non-Type3 fonts keep the original reader/recovery
+path. Source dictionaries and the resulting font descriptor remain unchanged.
+
 `syntax_keys.mbt` reuses immutable dictionary-key bytes through a native JS
 Map, admitting at most 256 keys of at most 96 UTF-16 code units. Misses use the
 original MoonBit UTF-8 encoder; native and Wasm targets retain their original
@@ -397,6 +405,15 @@ MoonBit/pdflite parses PDF bytes in that Worker. The Rabbita application handles
 file input, navigation and native browser selection through DOM bindings and
 narrow native API calls. The main thread initializes the graphics host needed
 for Canvas replay.
+
+An empty reader starts one untouched Worker while the user chooses a file.
+The first open can adopt it, including when initialization is still pending;
+readiness continues to gate every PDF request. Any RPC consumes that privilege.
+Replacing a used document, explicit close, cancellation during bootstrap and
+page hide retain Worker termination. Idle startup failures are retried with a
+fresh Worker on open. Initial `?file=` navigation starts normally instead of
+adding an empty-reader preparation step. This overlaps startup with user idle
+time; it does not remove startup computation or preparse a PDF.
 
 The published Pages build compacts compiler-emitted static data before
 minification. `tools/compact_pdf_data.mjs` uses pinned acorn 8.15.0 AST ranges
