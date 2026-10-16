@@ -51,7 +51,7 @@ fn pdf_image_resource_of_resources(
 }
 
 ///|
-fn pdf_image_resource_of_object(
+fn pdf_image_resource_of_object_uncached(
   document : @pdflite.PdfDocument,
   resources : @syntax.PdfObject,
   name : String,

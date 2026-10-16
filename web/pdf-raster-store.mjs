@@ -1,3 +1,5 @@
+import {PdfImageResourceCache} from './pdf-image-resource-cache.mjs';
+
 // Document-owned source rows back transferable display bitmaps. Admission is
 // bounded: existing IDs remain reproducible until invalidation; excess images
 // use the ordinary PNG path instead of retaining an unbounded source registry.
@@ -11,6 +13,7 @@ export class PdfRasterStore{
   this.pattern=new RegExp(this.prefix+'[0-9]+:[0-9]+','g');
   this.epoch=0;this.next=0;this.enabled=false;this.supported=false;
   this.entries=new Map();this.markers=new WeakMap();this.bytes=0;
+  this.resources=new PdfImageResourceCache(maxEntries);
   this.embedded=new Map();this.embeddedBytes=0;
   this.captures=0;this.rejections=0;this.transfers=0;this.rebuilds=0;
  }
@@ -23,6 +26,7 @@ export class PdfRasterStore{
  }
  reset(){
   this.enabled=false;this.entries.clear();this.markers=new WeakMap();this.bytes=0;this.next=0;this.epoch++;
+  this.resources.reset();
   this.embedded.clear();this.embeddedBytes=0;
   this.captures=this.rejections=this.transfers=this.rebuilds=0;
  }
@@ -43,6 +47,10 @@ export class PdfRasterStore{
   this.markers.set(marker,uri);this.bytes+=bytes;this.captures++;return marker;
  }
  uri(marker){return this.markers.get(marker)||'';}
+ resourceGet(...keys){return this.enabled&&this.supported?this.resources.get(...keys):undefined;}
+ resourceSet(document,resources,name,object,convertInk,intent,bg,ucr,value,uri){
+  if(this.enabled&&this.supported&&this.entries.has(uri))this.resources.set([document,resources,name,object,convertInk,intent,bg,ucr],value);
+ }
  embed(uri){
   const entry=this.entries.get(uri);if(!entry){if(typeof uri==='string'&&uri.startsWith(this.prefix))throw missing();return uri;}
   if(this.embedded.has(uri)){const cached=this.embedded.get(uri);this.embedded.delete(uri);this.embedded.set(uri,cached);return cached;}
@@ -84,5 +92,5 @@ export class PdfRasterStore{
    return images;
   }catch(error){for(const image of images)image.bitmap.close?.();throw error;}
  }
- diagnostics(){return {supported:this.supported,entries:this.entries.size,bytes:this.bytes,budget_bytes:this.limit,max_entries:this.maxEntries,embedded_entries:this.embedded.size,embedded_bytes:this.embeddedBytes,embedded_budget_bytes:EMBED_LIMIT,captures:this.captures,rejections:this.rejections,transfers:this.transfers,rebuilds:this.rebuilds};}
+ diagnostics(){return {supported:this.supported,entries:this.entries.size,bytes:this.bytes,budget_bytes:this.limit,max_entries:this.maxEntries,embedded_entries:this.embedded.size,embedded_bytes:this.embeddedBytes,embedded_budget_bytes:EMBED_LIMIT,captures:this.captures,rejections:this.rejections,transfers:this.transfers,rebuilds:this.rebuilds,resources:this.resources.diagnostics()};}
 }

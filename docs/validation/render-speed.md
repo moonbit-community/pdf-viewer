@@ -1470,6 +1470,108 @@ Ignored reports, probes, profiles and validation logs are in
 `_build/jpeg-sampling-next/`. Private PDF bytes, rendered pixels and text remain
 outside tracked files.
 
+## Structural audit and image reuse after page eviction (2026-10-16)
+
+This pass investigates the remaining gap against PDF.js rather than another
+scalar codec loop. The published engine already uses `moon build --release`,
+static-data compaction, esbuild minification and one bundled Worker. A missing
+release-build flag does not explain the measured gap.
+
+A diagnostic pass through the actual Chromium Worker attributes about 680 ms
+to whole-page model construction, including 338 ms of image resources; full
+JSON stringification takes about 43 ms. Accessibility/text/editor/annotation
+preparation and bitmap construction add other work before the response can be
+painted. These are inclusive instrumented times, not ordinary latency, and
+must not be added. PDF.js sends operator-list chunks and image objects
+independently; this reader waits for the complete page projection, semantic
+payload and JSON. The reference's observed native paths include 722 deflate
+streams and 30 qcms array calls. Its ImageDecoder JPEG path is **not** used on
+this input, so native JPEG cannot be credited for this gap.
+
+Exact-result supply experiments isolate images, auxiliary manifests and the
+whole model on fresh documents in warm Workers. All rendered pixels and
+complete semantic payload hashes remain unchanged. Those experiments show
+where work can be removed, but their precomputed results are not a product
+cache or an achievable cold-load speedup. They remain separate from the
+production measurements below.
+
+A concrete lifetime mismatch also appears on revisits. The model LRU holds
+eight pages and the serialized-result LRU twelve entries. A sequential sweep
+of this 13-page file therefore rebuilds every page on return. Previously the
+raster source registry retained the earlier pixels, while each rebuilt page
+decoded and admitted a new copy. Source retention grew from 60,646,006 bytes
+to 67,108,822 bytes; the second revisit had 104 cumulative admission rejections,
+causing PNG encoding/transport/decoding to return. Both page and response caches
+reported zero hits across the three sweeps.
+
+The Worker now retains successful opaque raster-backed image-resource results
+alongside their existing source rows. Identity keys include the parsed
+document, active resource dictionary, image object, binding name, rendering
+intent, BG/UCR and conversion policy. JS never reads generated MoonBit object
+fields. Local masks, retained ink and reported colour failures bypass reuse;
+failed colour construction retains its retry behavior. Only URIs still owned
+by the current raster store can be admitted. Reset clears both rows and the
+resource index, including editor, layer/font and document invalidation. The
+index is bounded to 256 small entries, names to 256 UTF-16 units and intents
+to 96 units. Existing 32 MiB page, 24 MiB response and 64 MiB source-row limits
+are unchanged.
+
+### Actual production candidate: complete-document revisits
+
+Baseline is pushed commit `ec13332`. Each browser uses five alternating
+fresh-context/document/Worker pairs. Each variant performs one first visit to
+pages 1–13, then two sequential revisits at the same CSS width 1216 and DPR 2.
+Each sweep sums preparation/RPC/JSON, painting and full-pixel flush. Opening,
+network input, DOM mounting, hashes and teardown are excluded. This measures
+real page reconstruction after eviction, not replay of an already prepared
+Canvas plan. No stage results are supplied in this production comparison.
+
+| Five-run median / sweep | `ec13332` | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Chromium first revisit, total | 1577.9 ms | 885.1 ms | -43.9% |
+| Chromium second revisit, total | 1681.3 ms | 926.8 ms | -44.9% |
+| WebKit first revisit, total | 1884.0 ms | 808.0 ms | -57.1% |
+| WebKit second revisit, total | 1849.0 ms | 778.0 ms | -57.9% |
+| Chromium first revisit, preparation | 989.7 ms | 423.5 ms | -57.2% |
+| Chromium second revisit, preparation | 1051.7 ms | 450.7 ms | -57.1% |
+| WebKit first revisit, preparation | 1114.0 ms | 537.0 ms | -51.8% |
+| WebKit second revisit, preparation | 1165.0 ms | 539.0 ms | -53.7% |
+
+All five pairs improve for every revisit row. Medians of within-pair total
+reductions are 41.5%/42.1% in Chromium and 55.7%/61.8% in WebKit; paired
+preparation reductions are 56.8%/53.9% and 50.8%/54.0%. Host-load variation is
+visible, so same-batch paired comparisons matter. First visits show no
+consistent gain: only two of five Chromium pairs and one of five WebKit pairs
+improve. This change fixes a revisit degradation; it does not close the cold
+first-load gap or establish PDF.js parity.
+
+On each revisit the resource cache supplies 58 of the 63 transferable image
+resources. Five conservative misses remain where resource views are freshly
+constructed. After the second revisit, the candidate retains 60,807,366 source
+bytes, has 116 resource hits, and has no source admission rejections. No larger
+memory budget was needed. Every page and sweep in every run matches the
+independently recorded packaged-reader RGBA and full semantic hashes.
+
+The regression suite now includes a real packaged-Worker 14-page revisit that
+forces both model/result eviction, checks stable image IDs and semantic data,
+and verifies that capture counts/source bytes do not grow. Focused tests cover
+all identity/policy keys, invalid and oversized keys, capacity, source
+saturation, invalidation, masks, retained ink and colour-failure retries.
+Local validation passes 767 JS, 752 Wasm, 752 Wasm-GC and 760 native tests,
+the complete browser/editor/layer/text acceptance suites, all 14 packaged-reader
+checks in both Chromium and WebKit, the actual Worker/range suites, 52 Canvas
+replay tests and nine raster transport tests. The release Pages build succeeds;
+the bundled Worker is 5,236,496 bytes. Generated package interfaces are unchanged.
+
+The remaining cold-load direction is a browser preparation pipeline that can
+publish lightweight paint instructions and resource dependencies before the
+entire rich page/semantic projection completes. The audit does not support
+spending the next pass on minifier flags or treating JSON alone as the cause.
+
+Ignored audit, exact-result supply experiments, production revisit reports and
+validation logs are under `_build/structural-gap-next/`. Private PDF bytes,
+pixels and text remain outside tracked files.
+
 ## Remaining costs
 
 | Phase | Observed cost | Next target |

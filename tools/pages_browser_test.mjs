@@ -46,8 +46,8 @@ async function idle(filename){
       document.querySelector('.page[data-page="1"][data-rendered="true"]')
   ),filename);
 }
-function readingFixture(profile){
-  const count=6,samples=Buffer.alloc(256*128*3);
+function readingFixture(profile,count=6){
+  const samples=Buffer.alloc(256*128*3);
   for(let i=0;i<256*128;i++)samples.set(i%2?[32,96,160]:[255,255,255],i*3);
   const objects=['<< /Type /Catalog /Pages 2 0 R >>',
     `<< /Type /Pages /Count ${count} /MediaBox [0 0 612 792] /Kids [${Array.from({length:count},(_,i)=>`${6+i*2} 0 R`).join(' ')}] >>`,
@@ -555,6 +555,41 @@ try{
       assert.equal(expired,'raster-expired','A reopened Worker must reject IDs from the previous document');
     }
     assert.deepEqual(failures,[]);
+  });
+  await check('Page-model eviction reuses image resources without duplicating retained source rows',async()=>{
+    const context=await browser.newContext(),isolated=await context.newPage(),errors=[];
+    isolated.on('pageerror',error=>errors.push(String(error)));
+    try{
+      await isolated.goto(base);
+      await isolated.locator('#open-empty').waitFor({state:'visible'});
+      const result=await isolated.evaluate(async bytes=>{
+        const api=pdfViewerHost,data=new Uint8Array(bytes),checked=raw=>{const value=JSON.parse(raw);if(!value.ok)throw Error(value.error);return value;};
+        api.pdf.reset();checked(await api.openDocument(new File([data],'resource-revisit.pdf'),data,null));
+        const saved=[],semantics=payload=>JSON.stringify(Object.fromEntries(['layer','editor','annotations','accessibility','intent'].map(key=>[key,payload[key]])));
+        for(let number=1;number<=14;number++){
+          const raw=await api.pdf.call('render_page',[number,.25,0,true,true]);
+          saved.push({uri:raw.match(/pdf-raster:[a-z0-9-]+:[0-9]+:[0-9]+/)?.[0],semantic:semantics(checked(raw))});
+        }
+        const cold=checked(await api.pdf.call('cache_info'));
+        if(!cold.raster_sources.supported){api.pdf.close();return{supported:false};}
+        if(!cold.evictions)throw Error('The regression must actually evict page models');
+        for(let number=1;number<=14;number++){
+          const raw=await api.pdf.call('render_page',[number,.25,0,true,true]);
+          if(!saved[number-1].uri||!raw.includes(saved[number-1].uri))throw Error('Page rebuild replaced its retained image resource');
+          if(semantics(checked(raw))!==saved[number-1].semantic)throw Error('Page rebuild changed semantic data');
+        }
+        const revisited=checked(await api.pdf.call('cache_info'));api.pdf.close();
+        return{supported:true,cold,revisited};
+      },Array.from(readingFixture(await readFile('assets/icc/rgb-gamma22.icc'),14)));
+      assert.deepEqual(errors,[]);
+      if(result.supported){
+        assert.equal(result.revisited.raster_sources.captures,result.cold.raster_sources.captures);
+        assert.equal(result.revisited.raster_sources.bytes,result.cold.raster_sources.bytes);
+        assert.equal(result.revisited.raster_sources.rejections,0);
+        assert(result.revisited.raster_sources.resources.hits>=14);
+        assert(result.revisited.evictions>result.cold.evictions);
+      }
+    }finally{await context.close();}
   });
   await check('RGBA bitmaps and PNG fallbacks preserve pixels across unsupported hosts, transfer failure and source saturation',async()=>{
     for(const mode of ['rgba','unsupported','transfer-failure','full-budget']){

@@ -437,6 +437,18 @@ pattern/shading painters and delegates to `renderPdfCanvas()` on the main thread
 main pages and thumbnails use that result and surface graphics diagnostics.
 `render_svg()` remains the compatibility API.
 
+The Worker's raster store also retains up to 256 small opaque image-resource
+results, referencing its existing source rows. Page-model eviction can reuse
+these resources without decoding and admitting the same pixels again. Keys
+include document, resource dictionary and image identity, binding name,
+rendering intent, BG/UCR and conversion policy; generated MoonBit fields remain
+opaque to JS. Only successful opaque raster-backed resources are admitted.
+Masks, retained ink and reported colour failures keep their original paths.
+Names over 256 UTF-16 units or intents over 96 units bypass this metadata cache.
+Raster-store reset also clears the resource index, so editing, layer/font
+changes and document replacement cannot return expired image IDs. The source
+row limit remains 64 MiB; page and serialized-response budgets are unchanged.
+
 The browser can opt into a compiled Canvas projection for resource-free,
 fill-only Type3 CharProcs. A document cache retains at most 512 compiled glyphs
 and an estimated 8 MiB of numeric geometry. Each page retains only its used
