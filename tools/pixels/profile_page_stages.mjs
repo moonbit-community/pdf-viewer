@@ -26,6 +26,9 @@ const patterns=[
  ['PNG encoding',/pdf__png__of__scanline__bytes$/],
  ['Flate decoding',/pdf__flate__decode__prefix__limited$/],
  ['font loading',/pdf__read__font__for__viewer(?:_2einner)?$/],
+ ['decoded font resources',/pdf__font__program(?:_2einner)?$/],
+ ['TrueType layout',/pdf__font__program__layout$/],
+ ['TrueType contours',/pdf__font__program__contours$/],
  ['Type3 lowering',/pdf__type3__outline__of__glyph$/],
  ['glyph resource compilation',/pdf__canvas__compile__glyph(?:_2einner)?$/],
  ['glyph instances',/pdf__canvas__glyph__call$/],
@@ -79,7 +82,7 @@ const report={host:'Node',scope:'Readable release bridge, inclusive and exclusiv
 for(const page of pages){
  const timings=[];
  for(let repeat=0;repeat<2;repeat++){
-  const result=measure(()=>bridge.render_page(page,1,0,true,true));
+  const result=measure(()=>bridge.render_page(page,1,0,true,true,true));
   const ms=result.milliseconds,stages=profile.stages,parseStart=performance.now(),parsed=JSON.parse(result.value);
   assert(parsed.ok,'Page must render');
   const parseMs=performance.now()-parseStart;

@@ -57,6 +57,7 @@ fn pdf_text_clip_path_of_group(
   origin_x : Double,
   origin_y : Double,
   height : Double,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> String? {
   match group.path {
     Some(path) => return path
@@ -74,6 +75,7 @@ fn pdf_text_clip_path_of_group(
         origin_x,
         origin_y,
         height,
+        resource_context~,
       ) {
       Some(path) => Some(path)
       None => None
@@ -90,6 +92,7 @@ fn pdf_text_clip_path_of_group(
           origin_x,
           origin_y,
           height,
+          resource_context~,
         )
     }
     let truetype_path = match type1_path {
@@ -104,6 +107,7 @@ fn pdf_text_clip_path_of_group(
           origin_x,
           origin_y,
           height,
+          resource_context~,
         ) catch {
           _ => None
         }
@@ -147,6 +151,7 @@ fn pdf_clip_path_of_collected(
   origin_x : Double,
   origin_y : Double,
   height : Double,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> String? {
   let parts : Array[String] = []
   match
@@ -157,7 +162,14 @@ fn pdf_clip_path_of_collected(
   for group in collected.text_clip_groups {
     match
       pdf_text_clip_path_of_group(
-        document, group, fonts, type1_fonts, origin_x, origin_y, height,
+        document,
+        group,
+        fonts,
+        type1_fonts,
+        origin_x,
+        origin_y,
+        height,
+        resource_context~,
       ) {
       Some(path) => parts.push(path)
       None => ()

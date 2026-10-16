@@ -14,6 +14,7 @@ fn pdf_page_font_name(
   object : @syntax.PdfObject?,
   name : String,
   scope : PdfPageFontScope,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> String {
   for index, source in scope.sources {
     if source == (name, object) {
@@ -36,7 +37,9 @@ fn pdf_page_font_name(
       }
     None => name
   }
-  let bytes = pdf_viewer_ttf_embedded_bytes(document, font) catch { _ => None }
+  let bytes = pdf_viewer_ttf_embedded_bytes(document, font, resource_context~) catch {
+    _ => None
+  }
   let fallback = pdf_font_fallback_for(scope.fallbacks[:], name, base_name)
   scope.sources.push((name, object))
   scope.fonts.push(

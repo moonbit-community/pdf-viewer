@@ -15,6 +15,7 @@ fn pdf_canvas_outline_call(
   cff_fonts : Map[Int, PdfCffFont?],
   type1_fonts : Map[Int, PdfType1Font?],
   build : PdfCanvasBuildContext,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> PdfCanvasGlyphCall? {
   // Stroke paths use a separate pen transform; clipping modes retain their
   // existing lowering. Ordinary fills can reuse geometry with all paint state
@@ -42,11 +43,21 @@ fn pdf_canvas_outline_call(
         None => {
           let font = collected.state.text_state.current_font
           let geometry = match
-            pdf_cff_geometry_of_pdf_glyph(document, font, cff_fonts, charcode) {
+            pdf_cff_geometry_of_pdf_glyph(
+              document,
+              font,
+              cff_fonts,
+              charcode,
+              resource_context~,
+            ) {
             Some(value) => Some(value)
             None =>
               pdf_type1_geometry_of_pdf_glyph(
-                document, font, type1_fonts, charcode,
+                document,
+                font,
+                type1_fonts,
+                charcode,
+                resource_context~,
               )
           }
           guard geometry is Some((commands, font_matrix)) else { return None }

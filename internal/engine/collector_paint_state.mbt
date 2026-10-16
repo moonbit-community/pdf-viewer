@@ -71,10 +71,24 @@ fn pdf_collected_paint_state(
     },
   }
   let clip_path = pdf_clip_path_of_collected(
-    document, collected, cff_fonts, type1_fonts, origin_x, origin_y, height,
+    document,
+    collected,
+    cff_fonts,
+    type1_fonts,
+    origin_x,
+    origin_y,
+    height,
+    resource_context=Some(resource_context),
   )
   let clips = pdf_clips_of_collected(
-    document, collected, cff_fonts, type1_fonts, origin_x, origin_y, height,
+    document,
+    collected,
+    cff_fonts,
+    type1_fonts,
+    origin_x,
+    origin_y,
+    height,
+    resource_context=Some(resource_context),
   )
   let clip_path = if clips.is_empty() {
     clip_path

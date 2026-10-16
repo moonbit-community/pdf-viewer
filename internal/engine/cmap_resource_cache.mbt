@@ -28,7 +28,7 @@ fn pdf_viewer_cmap_recovery_for_resource(
   let bytes = pdf_recovered_cmap_bytes(cmap)
   if shared is Some(cache) &&
     cache.cmaps.length() < 256 &&
-    bytes <= 0x800000 - cache.bytes {
+    bytes <= 0x800000 - cache.bytes - cache.programs.bytes {
     cache.cmaps[number] = cmap
     cache.bytes += bytes
   } else if context.cmap_cache.length() < 128 &&

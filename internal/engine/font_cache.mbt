@@ -5,12 +5,18 @@
 priv struct PdfParsedFontCache {
   fonts : Map[Int, @pdflite.PdfFont]
   cmaps : Map[Int, PdfViewerCMapRecovery]
+  programs : PdfFontProgramCache
   mut bytes : Int
 }
 
 ///|
 fn pdf_parsed_font_cache() -> PdfParsedFontCache {
-  { fonts: Map([]), cmaps: Map([]), bytes: 0, }
+  {
+    fonts: Map([]),
+    cmaps: Map([]),
+    programs: pdf_font_program_cache(),
+    bytes: 0,
+  }
 }
 
 ///|
@@ -102,7 +108,7 @@ fn PdfParsedFontCache::retain(
     return
   }
   let bytes = pdf_parsed_font_bytes(font)
-  guard bytes <= 0x800000 - self.bytes else { return }
+  guard bytes <= 0x800000 - self.bytes - self.programs.bytes else { return }
   self.fonts[number] = font
   self.bytes += bytes
 }

@@ -22,6 +22,7 @@ The central files have separate responsibilities:
 - `canvas_program.mbt`: prepared browser paints, reading order and bounded glyph resource ownership.
 - `canvas_text_runs.mbt`: bounded text-operation packets that separate shared paint state from numeric glyph operands.
 - `canvas_outlines.mbt`: shared Type1/CFF fill geometry keyed by PDF font encoding and character code.
+- `font_program_cache.mbt`: document-owned decoded font/CID-map resources and lazy TrueType tables/contours within the parsed-font budget; incomplete Range builds use local owners.
 - `canvas_shadings.mbt`: page-owned lookup tables shared by direct shading invocations, with bounded resource and cache charges.
 - `collector_state.mbt`: Form groups, graphics-state resolution and paint attributes.
 - `svg.mbt`: SVG page wrapper and source-order item traversal.

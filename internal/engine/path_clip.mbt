@@ -44,6 +44,7 @@ fn pdf_clips_of_collected(
   origin_x : Double,
   origin_y : Double,
   height : Double,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> Array[PdfClipPath] {
   let clips : Array[PdfClipPath] = []
   // The final entry is the implicit page boundary, enforced by the viewport.
@@ -60,7 +61,14 @@ fn pdf_clips_of_collected(
   for group in collected.text_clip_groups {
     match
       pdf_text_clip_path_of_group(
-        document, group, fonts, type1_fonts, origin_x, origin_y, height,
+        document,
+        group,
+        fonts,
+        type1_fonts,
+        origin_x,
+        origin_y,
+        height,
+        resource_context~,
       ) {
       Some(svg_path) => clips.push({ svg_path, even_odd: false, })
       None => ()

@@ -8,6 +8,7 @@ priv struct PdfResourceBuildContext {
   /// Direct dictionaries follow the original font reader on every binding.
   font_cache : Map[Int, @pdflite.PdfFont]
   parsed_fonts : PdfParsedFontCache?
+  font_programs : PdfFontProgramCache
   cmap_cache : Map[Int, PdfViewerCMapRecovery]
   mut cmap_cache_bytes : Int
   /// Type3 Encoding expansion is shared by retained and SVG glyph lowering.
@@ -38,6 +39,9 @@ fn pdf_resource_build_context(
     ],
     font_cache: Map([]),
     parsed_fonts,
+    font_programs: parsed_fonts
+    .map(cache => cache.programs)
+    .unwrap_or_else(pdf_font_program_cache),
     cmap_cache: Map([]),
     cmap_cache_bytes: 0,
     type3_charprocs: Map([]),

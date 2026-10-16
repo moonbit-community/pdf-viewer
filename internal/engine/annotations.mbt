@@ -42,6 +42,7 @@ fn pdf_annotation_font_name(
   scope : PdfAppearanceFontScope,
   active_font? : (@pdflite.PdfFont, @syntax.PdfObject?),
   font_fallbacks? : ArrayView[PdfFontFallback] = [],
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> String {
   let object = match active_font {
     Some((_, object)) => object.unwrap_or(@syntax.PdfNull)
@@ -66,6 +67,7 @@ fn pdf_annotation_font_name(
       Some((font, _)) => font
       None => pdf_read_font_for_viewer(document, object)
     },
+    resource_context~,
   ) catch {
     _ => None
   }

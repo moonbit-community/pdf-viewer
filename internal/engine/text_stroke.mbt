@@ -30,6 +30,7 @@ fn pdf_text_stroke(
   origin_y : Double,
   height : Double,
   font_fallbacks? : ArrayView[PdfFontFallback] = [],
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> PdfTextStroke? {
   let state = collected.state
   if !pdf_text_mode_strokes(state.text_state.rendering_mode) {
@@ -53,7 +54,14 @@ fn pdf_text_stroke(
     None => None
   }
   let path = pdf_text_stroke_path(
-    document, collected, cff_fonts, type1_fonts, charcode, pen_matrix, font_fallbacks,
+    document,
+    collected,
+    cff_fonts,
+    type1_fonts,
+    charcode,
+    pen_matrix,
+    font_fallbacks,
+    resource_context~,
   )
   let fallback_scale = pdf_text_stroke_similarity_scale(pen_matrix)
   let m = state.ctm
@@ -101,18 +109,35 @@ fn pdf_text_stroke_path(
   charcode : Int,
   pen_matrix : @geometry.TransformMatrix?,
   font_fallbacks : ArrayView[PdfFontFallback],
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> String? {
   let font = collected.state.text_state.current_font
   match
     pdf_cff_path_of_pdf_glyph(
-      document, font, cff_fonts, charcode, pen_matrix, 0.0, 0.0, 0.0,
+      document,
+      font,
+      cff_fonts,
+      charcode,
+      pen_matrix,
+      0.0,
+      0.0,
+      0.0,
+      resource_context~,
     ) {
     Some(path) => return Some(path)
     None => ()
   }
   match
     pdf_type1_path_of_pdf_glyph(
-      document, font, type1_fonts, charcode, pen_matrix, 0.0, 0.0, 0.0,
+      document,
+      font,
+      type1_fonts,
+      charcode,
+      pen_matrix,
+      0.0,
+      0.0,
+      0.0,
+      resource_context~,
     ) {
     Some(path) => return Some(path)
     None => ()
@@ -126,6 +151,7 @@ fn pdf_text_stroke_path(
     0.0,
     0.0,
     0.0,
+    resource_context~,
   ) catch {
     _ => None
   }

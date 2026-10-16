@@ -2231,3 +2231,152 @@ composition and its buffers then cover more than that individual paint.
 Restricting fallback to independent paint scopes is another architectural
 candidate; preserving backdrop, knockout, shape and quantization semantics is
 required before changing it. No such rendering change is included here.
+
+## Document-owned font programs and TrueType contours (2026-10-17)
+
+Baseline is pushed `58b8c4461d1c825069ad565a3c9eae89aae13fdd`, packaged
+independently before editing. A render/semantic pipeline audit followed by
+Node stage and CPU profiles identifies a larger repeated-resource cost than
+semantic deferral alone. TrueType outline fallback decoded the same embedded
+font stream for every glyph, then rebuilt loca offsets and contours. Its
+font-stream decode path accounts for approximately 2.0 seconds of 4.7 seconds
+sampled inside full-document bridge rendering in that diagnostic. Inclusive
+profile stages overlap; these numbers are not browser latency or an additive
+breakdown. The pinned PDF.js evaluator instead owns font resources in its
+[font cache](https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/src/core/evaluator.js),
+with a [glyph-ID cache](https://github.com/mozilla/pdf.js/blob/89b500f5e1d98ed89bb90211e45b28730b2d99ac/src/core/font_renderer.js)
+inside its path renderer.
+
+`font_program_cache.mbt` gives decoded font and indirect CID-map streams a
+single document-revision owner. Type1/CFF geometry, font registration and
+TrueType filling/stroking/clipping share this owner. TrueType table layout is
+initialized only when requested, and unplaced contours are keyed by font-stream
+identity plus GID. Encoding/Differences, CID selection and all paint-time
+transforms still run against the active font dictionary/invocation. The
+positioned-path arithmetic and existing browser protocol are unchanged.
+
+The existing parsed-font/CMap 8 MiB estimate now also charges decoded programs,
+loca offsets and contours. Admission caps at 128 programs and 512 contour
+entries, including negative contour results. Metadata and CMap admission both
+respect the shared byte limit. Full budgets keep uncached behavior; failed
+stream decodes are not retained. Complete immutable document/policy views share
+resources; editor/XFA snapshots and newly opened documents get new owners.
+Range views use build-local owners capped at 8 MiB, which do not cross hydration
+boundaries. Existing document, page and serialized-cache limits are unchanged.
+
+The readable Node stage diagnostic uses the same page order and same explicit
+version-3 request on both artifacts. Each listed first request is followed by
+one repeated request before advancing. Counts refer to the first request and
+exclude opening; they are not full-browser timing measurements:
+
+| Public `tracemonkey.pdf` page | Baseline Flate calls | Candidate Flate calls |
+| --- | ---: | ---: |
+| 1 | 37 | 13 |
+| 2 | 360 | 4 |
+| 11 | 292 | 249 |
+| 14 | 8 | 1 |
+
+A separate first sequential 14-page Node comparison requires byte-for-byte
+identity of every complete render response, not just equal Canvas plans or
+selected text. All pages pass, including selection, editor, annotations and
+accessibility fields. The benchmark still requests all those fields; no work
+is deferred out of its timing scope. `profile_page_stages.mjs` now uses the
+version-3 capability and reports decoded-font/layout/contour stages explicitly.
+
+After the complete validation suite stopped, a 45-second quiet interval
+preceded all browser timings. Variants run serially with alternating order,
+fresh browser contexts, documents and actual Workers. The public measurement
+uses `tools/document_benchmark.mjs`, the two independent packaged sites, CSS
+width 1216 and DPR 2. It times one first sequential 14-page sweep, including
+preparation, host painting and full RGBA readback. Startup, opening, hashing,
+DOM layers and teardown remain outside the timer. Selection, editor,
+annotations and accessibility preparation are still included in our request;
+PDF.js remains a render-only lower bound.
+
+WebKit completes all three pairs with exact baseline/candidate RGBA and complete
+semantic hashes on every page:
+
+| Full 14-page sweep, ms | Baseline | Candidate |
+| --- | ---: | ---: |
+| Total samples | 6,838 / 6,890 / 7,177 | 5,179 / 5,263 / 5,236 |
+| Preparation samples | 4,193 / 4,202 / 4,289 | 2,565 / 2,668 / 2,608 |
+| Median total | 6,890 | 5,236 |
+| Median preparation | 4,202 | 2,608 |
+| Median host paint + readback | 2,688 | 2,614 |
+
+Median total decreases **24.0%**, and preparation decreases **37.9%**. Paired
+total reductions are 24.3%, 23.6% and 27.0%; paired preparation reductions are
+38.8%, 36.5% and 39.2%. These measurements compare this block's old and new
+artifacts; they must not be combined with absolute timings from earlier blocks.
+The pinned PDF.js totals are 533 / 710 / 544 ms, median 544 ms. Our 5,236 ms
+total is still approximately 9.6 times that render-only lower bound.
+
+| Public page, median ms | Baseline total | Candidate total | Baseline preparation | Candidate preparation |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 311 | 325 | 243 | 257 |
+| 2 | 467 | 326 | 396 | 253 |
+| 10 | 756 | 222 | 696 | 163 |
+| 11 | 2,380 | 2,271 | 604 | 584 |
+| 13 | 1,198 | 505 | 980 | 285 |
+| 14 | 94 | 90 | 60 | 56 |
+
+Chromium's strict run stops after the first candidate sweep with
+`complete:false`; it is not an accepted three-pair performance result. All
+14 semantic payload hashes match. Page 13's RGBA differs by four pixels,
+maximum channel delta 2, sum absolute channel delta 15. The baseline hash is
+`9657065c732a4ac28f2ae3cfba44144314ab25bc07babf5f3a39047a1ebb1dc4`;
+the candidate is
+`367bb5030a71c8b76bf45e5ff70f03da0b3cb37d55530c67977d1eb4129ed88e`.
+Both are the exact previously recorded Chromium anti-alias variants described
+above, reproduced from the older baseline images. The unchanged strict gate,
+incomplete report and both captured page images are retained; no tolerance is
+introduced and this run supplies no headline speedup.
+
+The independent private 13-page image-heavy fixture, SHA-256
+`fea1ef069944d3479425ebf076a9b34118f7ba9e3df8cefb54e557ca16f90817`,
+completes five alternating pairs per engine, with the same first-sweep scope.
+Every page matches independently recorded historical RGBA and full semantic
+payload hashes:
+
+| Private full sweep, ms | Baseline | Candidate |
+| --- | ---: | ---: |
+| Chromium total samples | 1,136.8 / 1,146.1 / 1,132.7 / 1,126.5 / 1,126.9 | 1,121.8 / 1,150.5 / 1,114.0 / 1,125.3 / 1,115.3 |
+| Chromium median total / preparation | 1,132.7 / 703.3 | 1,121.8 / 693.7 |
+| WebKit total samples | 1,201 / 1,167 / 1,173 / 1,194 / 1,194 | 1,174 / 1,177 / 1,186 / 1,160 / 1,183 |
+| WebKit median total / preparation | 1,194 / 868 | 1,177 / 869 |
+
+This fixture is effectively unchanged: approximately 1.0% and 1.4% lower
+median total, with overlapping samples and no WebKit preparation reduction.
+Raster admission/transfer counts and budgets remain identical. The font
+lifetime fix does not establish a general image-heavy speedup.
+
+Seven new whitebox tests cover document/policy sharing and edit isolation,
+different encodings over one font stream, transformed/composite/empty/invalid
+glyphs, the combined byte budget, program/contour count caps, failed decode
+recovery, Range hydration isolation and a deep CID-map reference alias chain.
+The alias regression first fails when font-file recovery re-resolves the CID
+reference; passing its already-resolved stream preserves the original reader's
+behavior while retaining indirect resource identity for sharing.
+
+Final validation passes JS 790/790, Wasm 774/774, Wasm GC 774/774 and native
+782/782; `moon info`/`moon fmt` produce no public interface changes. Focused
+Canvas, glyph/outline/text, shading, raster/worker/Range and XFA checks pass,
+as do packaged Chromium/WebKit smoke tests, browser/editor/layer interaction,
+Chromium/WebKit text interaction, reader corpus and all 12 visual measurements.
+The visual report retains its existing differences against PDF.js. The updated
+stage profiler matches every compiler stage and preserves repeated-response
+Canvas/accessibility hashes.
+
+The measured candidate Worker is 5,264,078 bytes, SHA-256
+`f86264350344e77b17e6db004d2f710a9c308b5db36d8039a369e1039252fb47`.
+Baseline Worker and all host/frontend modules retain the hashes recorded in
+the preceding section. This change does not claim a startup improvement.
+Reports, diagnostic profiles, byte comparisons and captures stay under ignored
+`_build/architecture-coupling/`.
+
+The largest remaining public page is page 11: approximately 2.27 seconds,
+including about 1.7 seconds of host paint/readback, versus PDF.js's 142 ms
+render-only median. Its shading/retained composition path remains a concrete
+architectural target. Full semantic-model construction, complete-response JSON
+and host positioned-glyph expansion also remain in place. Document-owned font
+resources remove repeated work; they do not resolve those other pipeline gaps.

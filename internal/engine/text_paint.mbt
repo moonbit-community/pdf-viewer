@@ -17,11 +17,20 @@ fn pdf_text_outline_and_path(
   origin_y : Double,
   height : Double,
   font_fallbacks? : ArrayView[PdfFontFallback] = [],
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> (String?, String?) {
   let font = collected.state.text_state.current_font
   match
     pdf_cff_path_of_pdf_glyph(
-      document, font, cff_fonts, charcode, glyph_matrix, origin_x, origin_y, height,
+      document,
+      font,
+      cff_fonts,
+      charcode,
+      glyph_matrix,
+      origin_x,
+      origin_y,
+      height,
+      resource_context~,
     ) {
     Some(path) =>
       (
@@ -39,8 +48,15 @@ fn pdf_text_outline_and_path(
     None =>
       match
         pdf_type1_path_of_pdf_glyph(
-          document, font, type1_fonts, charcode, glyph_matrix, origin_x, origin_y,
+          document,
+          font,
+          type1_fonts,
+          charcode,
+          glyph_matrix,
+          origin_x,
+          origin_y,
           height,
+          resource_context~,
         ) {
         Some(path) =>
           (
@@ -65,6 +81,7 @@ fn pdf_text_outline_and_path(
             origin_x,
             origin_y,
             height,
+            resource_context~,
           ) catch {
             _ => None
           }

@@ -490,6 +490,21 @@ fn pdf_viewer_ttf_glyph_contours_of_index(
     Some(value) => value
     None => return None
   }
+  pdf_viewer_ttf_glyph_contours_with_offsets(
+    data,
+    glyph_index,
+    offsets[:],
+    glyf,
+  )
+}
+
+///|
+fn pdf_viewer_ttf_glyph_contours_with_offsets(
+  data : BytesView,
+  glyph_index : Int,
+  offsets : ArrayView[Int],
+  glyf : @truetype.PdfTrueTypeTableRecord,
+) -> Array[Array[PdfViewerTrueTypePoint]]? {
   if glyph_index < 0 || glyph_index + 1 >= offsets.length() {
     return None
   }
@@ -655,6 +670,25 @@ fn pdf_viewer_ttf_outline_path(
   if contours.length() == 0 {
     return Some("")
   }
+  pdf_viewer_ttf_positioned_path(
+    contours[:],
+    units_per_em,
+    glyph_matrix,
+    origin_x,
+    origin_y,
+    page_height,
+  )
+}
+
+///|
+fn pdf_viewer_ttf_positioned_path(
+  contours : ArrayView[Array[PdfViewerTrueTypePoint]],
+  units_per_em : Int,
+  glyph_matrix : @geometry.TransformMatrix,
+  origin_x : Double,
+  origin_y : Double,
+  page_height : Double,
+) -> String? {
   // Contours are normalized to 1000 units; the text matrix maps one em.
   // Never fit the font-wide BBox into a glyph's advance rectangle: that
   // squeezes narrow letters and makes the scale depend on glyph width.
@@ -667,12 +701,7 @@ fn pdf_viewer_ttf_outline_path(
     f: glyph_matrix.f,
   }
   let path = pdf_viewer_ttf_path_of_contours(
-    contours[:],
-    units_per_em,
-    mapping,
-    origin_x,
-    origin_y,
-    page_height,
+    contours, units_per_em, mapping, origin_x, origin_y, page_height,
   )
   if path == "" {
     None
@@ -703,15 +732,11 @@ fn pdf_viewer_ttf_font_object(
 fn pdf_viewer_ttf_embedded_bytes(
   document : @pdflite.PdfDocument,
   font : @pdflite.PdfFont,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> Bytes? raise @core.PdfError {
   match font.embedded_fontfile_number() {
     Some(number) =>
-      Some(
-        pdf_decode_font_stream_with_recovery(
-          document,
-          @syntax.PdfIndirect(number),
-        ).stream_bytes(),
-      )
+      Some(pdf_font_program_bytes(document, number, resource_context~))
     None => None
   }
 }
@@ -733,6 +758,7 @@ fn pdf_viewer_ttf_cid_to_gid(
   font_object : @syntax.PdfObject,
   font : @pdflite.PdfCIDKeyedFont,
   charcode : Int,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> Int raise @core.PdfError {
   let cid = pdf_viewer_ttf_cid_of_charcode_with_document(
     document, font, charcode,
@@ -749,9 +775,22 @@ fn pdf_viewer_ttf_cid_to_gid(
             Some(@syntax.PdfNameObject(name)) if name ==
               pdf_name_key("/Identity") => cid
             Some(@syntax.PdfStreamObject(_) as map_object) => {
-              let bytes = pdf_decode_font_stream_with_recovery(
-                document, map_object,
-              ).stream_bytes()
+              let raw = document
+                .direct(descendant)
+                .lookup_immediate(pdf_name_key("/CIDToGIDMap"))
+              let bytes = match raw {
+                Some(@syntax.PdfIndirect(number)) =>
+                  // Keep the reader's already-resolved map. Re-resolving the
+                  // reference with font-file recovery limits narrows aliases.
+                  pdf_font_program_bytes(
+                    document,
+                    number,
+                    resource_context~,
+                    resolved_stream=Some(map_object),
+                  )
+                _ =>
+                  pdf_decode_font_stream_with_recovery(document, map_object).stream_bytes()
+              }
               let offset = cid * 2
               match pdf_viewer_ttf_u16(bytes[:], offset) {
                 Some(value) => value
@@ -919,21 +958,31 @@ fn pdf_truetype_path_of_pdf_glyph(
   origin_x : Double,
   origin_y : Double,
   page_height : Double,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> String? raise @core.PdfError {
   let glyph_matrix = match glyph_matrix {
     Some(value) => value
     None => return None
   }
-  let bytes = match font {
+  match font {
     @pdflite.PdfFontSimple(
       { fonttype: @pdflite.PdfSimpleFontType::PdfTrueType, .. }
     )
-    | @pdflite.PdfFontCIDKeyed(_) =>
+    | @pdflite.PdfFontCIDKeyed(_) => ()
+    _ => return None
+  }
+  let program = match (resource_context, font.embedded_fontfile_number()) {
+    (Some(context), Some(number)) =>
+      Some((number, pdf_font_program(document, number, context)))
+    _ => None
+  }
+  let bytes = match program {
+    Some((_, program)) => program.data
+    None =>
       match pdf_viewer_ttf_embedded_bytes(document, font) {
         Some(value) => value
         None => return None
       }
-    _ => return None
   }
   let glyph_index = match font {
     @pdflite.PdfFontSimple(
@@ -941,9 +990,38 @@ fn pdf_truetype_path_of_pdf_glyph(
     ) => pdf_viewer_ttf_simple_gid(simple, bytes, charcode)
     @pdflite.PdfFontCIDKeyed(cid_font) => {
       guard font_object is Some(font_object) else { return None }
-      pdf_viewer_ttf_cid_to_gid(document, font_object, cid_font, charcode)
+      pdf_viewer_ttf_cid_to_gid(
+        document,
+        font_object,
+        cid_font,
+        charcode,
+        resource_context~,
+      )
     }
     _ => return None
+  }
+  if resource_context is Some(context) && program is Some((number, program)) {
+    let layout = pdf_font_program_layout(program, number, context)
+    guard layout.units_per_em is Some(units_per_em) && units_per_em > 0 else {
+      return None
+    }
+    guard pdf_font_program_contours(
+        program, layout, number, glyph_index, context,
+      )
+      is Some(contours) else {
+      return None
+    }
+    if contours.is_empty() {
+      return Some("")
+    }
+    return pdf_viewer_ttf_positioned_path(
+      contours[:],
+      units_per_em,
+      glyph_matrix,
+      origin_x,
+      origin_y,
+      page_height,
+    )
   }
   pdf_viewer_ttf_outline_path(
     bytes, glyph_index, glyph_matrix, origin_x, origin_y, page_height,

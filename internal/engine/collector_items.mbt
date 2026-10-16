@@ -100,7 +100,13 @@ fn pdf_items_of_collected(
               Some(call) => Some(call)
               None =>
                 pdf_canvas_outline_call(
-                  document, collected, charcode, cff_fonts, type1_fonts, build,
+                  document,
+                  collected,
+                  charcode,
+                  cff_fonts,
+                  type1_fonts,
+                  build,
+                  resource_context=Some(resource_context),
                 )
             }
           })
@@ -192,6 +198,7 @@ fn pdf_items_of_collected(
               origin_y,
               height,
               font_fallbacks~,
+              resource_context=Some(resource_context),
             )
         }
         let ordinary = type3_scene is None && type3_scene_unresolved is None
@@ -242,6 +249,7 @@ fn pdf_items_of_collected(
           origin_y,
           height,
           font_fallbacks~,
+          resource_context=Some(resource_context),
         )
         let glyph_outline = match
           pdf_text_stroke_outline(
@@ -286,6 +294,7 @@ fn pdf_items_of_collected(
                     collected.font_object,
                   ),
                   font_fallbacks~,
+                  resource_context=Some(resource_context),
                 )
               None =>
                 match page_fonts {
@@ -296,6 +305,7 @@ fn pdf_items_of_collected(
                       collected.font_object,
                       state.font,
                       scope,
+                      resource_context=Some(resource_context),
                     )
                   None => state.font
                 }

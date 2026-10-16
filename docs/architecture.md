@@ -235,17 +235,27 @@ Prepared stream dictionaries prevent reference-alias cycles entering decoding.
 Complete document views own a bounded parsed-font/CMap cache shared by public
 page models, browser preparation and accessibility collection. It admits at
 most 128 indirect fonts and 256 completely resolved CMaps, with a combined
-8 MiB conservative metadata charge. Embedded font programs and Type 3 resource
-objects remain references to the existing document. Direct dictionaries,
-missing font dictionaries, unavailable CMap sources and cyclic inheritance
-results are not retained across builds. CMap inheritance always resolves with
+8 MiB conservative charge shared by metadata and decoded font resources.
+`font_program_cache.mbt` retains up to 128 decoded indirect font/CID-map streams,
+with TrueType head/loca/glyf metadata initialized on demand and up to 512 unplaced
+glyph contour entries. Contours are keyed by font-stream identity and glyph ID;
+each font dictionary still resolves its own Encoding/Differences or CIDToGIDMap,
+and each paint applies its own placement, fill, stroke and clip arithmetic.
+Type1/CFF geometry, font registration, TrueType fills/strokes/clips and indirect
+CID maps consume the same decoded-resource owner. Oversized resources or full
+budgets use the existing uncached paths; decode failures are not admitted.
+Type 3 resource objects remain references to the existing document. Direct font
+dictionary metadata, missing font dictionaries, unavailable CMap sources and
+cyclic inheritance results are not retained across builds. CMap inheritance always resolves with
 a fresh cycle guard before a top-level result can be admitted. Font fallback
 and optional-content views share policy-independent parsed metadata; page
 resources and paint state remain local. Editor/XFA snapshots and newly opened
 documents receive fresh caches. Range views disable document sharing because
 their object store can still change during hydration; a page build can retain
-up to 128 CMaps with a separate 2 MiB transient budget. Full caches keep the
-original parsing behavior without admitting more entries.
+up to 128 CMaps with a separate 2 MiB transient budget. Decoded font resources
+and contours use a build-local owner capped at 8 MiB in these views; that owner
+does not survive hydration. Full caches keep the original parsing behavior
+without admitting more entries.
 
 Small Type3 ToUnicode maps can reuse the CMap preflight result when constructing
 the complete font metadata, avoiding a second stream parse by the strict reader.

@@ -108,6 +108,7 @@ fn pdf_type1_geometry_of_pdf_glyph(
   pdf_font : @pdflite.PdfFont,
   fonts : Map[Int, PdfType1Font?],
   charcode : Int,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> (Array[PdfCffPathCommand], @geometry.TransformMatrix)? {
   let number = match pdf_font.embedded_fontfile_number() {
     Some(value) => value
@@ -118,10 +119,7 @@ fn pdf_type1_geometry_of_pdf_glyph(
     Some(None) => return None
     None => {
       let parsed = try {
-        let bytes = pdf_decode_font_stream_with_recovery(
-          document,
-          @syntax.PdfIndirect(number),
-        ).stream_bytes()
+        let bytes = pdf_font_program_bytes(document, number, resource_context~)
         pdf_type1_parse_font(bytes)
       } catch {
         _ => None
@@ -151,13 +149,20 @@ fn pdf_type1_path_of_pdf_glyph(
   origin_x : Double,
   origin_y : Double,
   page_height : Double,
+  resource_context? : PdfResourceBuildContext? = None,
 ) -> String? {
   let glyph_matrix = match glyph_matrix {
     Some(value) => value
     None => return None
   }
   let (commands, font_matrix) = match
-    pdf_type1_geometry_of_pdf_glyph(document, pdf_font, fonts, charcode) {
+    pdf_type1_geometry_of_pdf_glyph(
+      document,
+      pdf_font,
+      fonts,
+      charcode,
+      resource_context~,
+    ) {
     Some(value) => value
     None => return None
   }
