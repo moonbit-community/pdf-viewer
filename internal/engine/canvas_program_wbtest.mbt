@@ -30,7 +30,7 @@ test "Canvas programs compile glyph geometry once across placements and pages" {
   let second = program.glyphs[1]
   assert_eq(first.resource.id, second.resource.id)
   assert_true(first.matrix != second.matrix)
-  assert_true(program.canvas_plan(page, 1.0, 0) is { "version": Number(2), .. })
+  assert_true(program.canvas_plan(page, 1.0, 0) is { "version": Number(3), .. })
   let original = document.page(1).unwrap()
   assert_eq(page.text_layer(), original.text_layer())
   assert_eq(program.text_content, Some(page.text_content()))

@@ -1,6 +1,7 @@
 ///|
 /// Per-page bounded recursive resources; no process-global document cache.
 priv struct PdfResourceBuildContext {
+  mut next_paint_run : Int
   /// The document view's host policy follows nested pattern/mask resources.
   font_fallbacks : Array[PdfFontFallback]
   /// Parsed indirect fonts share one page build, including nested resources.
@@ -31,6 +32,7 @@ fn pdf_resource_build_context(
   parsed_fonts? : PdfParsedFontCache? = None,
 ) -> PdfResourceBuildContext {
   {
+    next_paint_run: 0,
     font_fallbacks: [
       for fallback in font_fallbacks => fallback
     ],

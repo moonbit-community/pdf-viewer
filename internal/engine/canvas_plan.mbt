@@ -21,14 +21,18 @@ fn pdf_canvas_plan(
   rotation : Int,
   inherited_profiles : Array[PdfIccProfile],
   program? : PdfCanvasProgram? = None,
+  text_runs? : Bool = true,
 ) -> Json raise @core.PdfError {
   let profiles = page.icc_profiles.filter(profile => {
     !inherited_profiles.contains(profile)
   })
   let self = { ..page, icc_profiles: [..inherited_profiles, ..profiles], }
   let viewport = self.viewport(scale~, rotation~)
-  let items : Array[Json] = []
+  let items : Array[PdfCanvasCommand] = []
   let resources : Map[Int, PdfCanvasGlyphResource] = Map([])
+  let text_state_ids : Map[Int, Int] = Map([])
+  let text_states : Array[Json] = []
+  let mut active_text_run : PdfCanvasTextRun? = None
   for item in self.items {
     // Invisible OCR remains in the page model and selection layer, but has
     // no source paint or knockout shape and needs no per-glyph SVG payload.
@@ -50,6 +54,33 @@ fn pdf_canvas_plan(
     if glyph is Some(call) {
       resources[call.resource.id] = call.resource
     }
+    let row = match (item, glyph) {
+      (Text(value), Some(call)) if text_runs &&
+        (
+          text_states.length() < 16384 ||
+          text_state_ids.contains(call.paint_run)
+        ) => pdf_canvas_text_row(value, call)
+      _ => None
+    }
+    if item is Text(value) &&
+      glyph is Some(call) &&
+      row is Some(row) &&
+      text_state_ids.get(call.paint_run) is Some(state) {
+      let run = match active_text_run {
+        Some(run) if run.scope == call.paint_run && run.text.length() < 4096 =>
+          run
+        _ => {
+          let run = { scope: call.paint_run, state, draws: [], text: [], }
+          items.push(TextRun(run))
+          active_text_run = Some(run)
+          run
+        }
+      }
+      run.draws.append(row)
+      run.text.push(value.text)
+      continue
+    }
+    active_text_run = None
     let (kind, paint) = match item {
       Text(value) =>
         (
@@ -208,16 +239,32 @@ fn pdf_canvas_plan(
         profiles=self.icc_profiles,
       ),
     }
-    items.push(
-      match glyph {
-        Some(call) =>
-          pdf_canvas_object_with(command, "glyph", {
-            "resource": call.resource.id,
-            "matrix": call.matrix,
-          })
-        None => command
-      },
-    )
+    if item is Text(value) && glyph is Some(call) && row is Some(row) {
+      let state = text_states.length()
+      text_states.push(pdf_canvas_text_state(command))
+      text_state_ids[call.paint_run] = state
+      let run = {
+        scope: call.paint_run,
+        state,
+        draws: row,
+        text: [value.text],
+      }
+      items.push(TextRun(run))
+      active_text_run = Some(run)
+    } else {
+      items.push(
+        Paint(
+          match glyph {
+            Some(call) =>
+              pdf_canvas_object_with(command, "glyph", {
+                "resource": call.resource.id,
+                "matrix": call.matrix,
+              })
+            None => command
+          },
+        ),
+      )
+    }
   }
   let annotation_svg : Json = if self.annotations.is_empty() {
     (None : String?).to_json()
@@ -296,7 +343,9 @@ fn pdf_canvas_plan(
   let shading_resources = program.map(p => p.shading_resources).unwrap_or([])
   let compiled = !resources.is_empty() || !shading_resources.is_empty()
   let result : Json = {
-    "version": if !compiled {
+    "version": if !text_states.is_empty() {
+      3
+    } else if !compiled {
       1
     } else {
       2
@@ -326,7 +375,12 @@ fn pdf_canvas_plan(
       "rotation": self.rotation.to_json(),
     },
     "viewport": viewport.to_json(),
-    "items": items.to_json(),
+    "items": pdf_canvas_commands_json(items),
+  }
+  let result = if text_states.is_empty() {
+    result
+  } else {
+    pdf_canvas_object_with(result, "text_states", text_states.to_json())
   }
   if !compiled {
     result

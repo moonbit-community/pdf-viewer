@@ -107,6 +107,7 @@ jobs:
           node tools/ci/check_reports_test.mjs
           node tools/pixels/canvas_test.mjs
           node tools/pixels/canvas_program_test.mjs
+          node tools/pixels/text_program_test.mjs
           node tools/pixels/outline_program_test.mjs
           node tools/pixels/image_flate_test.mjs
           node tools/pixels/pako_deflate_test.mjs

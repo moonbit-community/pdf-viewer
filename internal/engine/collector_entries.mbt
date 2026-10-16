@@ -4,6 +4,7 @@
 /// is enough for text bounds but loses rotations and Form-XObject placement for
 /// paths and images.
 priv struct PdfCollectedEntry {
+  paint_run : Int
   entry : @pdflite.PdfContentJsonEntry
   state : @pdflite.PdfContentOperatorState
   pattern_initial : PdfPatternInitialState
@@ -161,6 +162,8 @@ fn pdf_collected_entries_of_ops(
     if operator_index < path_run_end {
       continue
     }
+    let paint_run = resource_context.next_paint_run
+    resource_context.next_paint_run += 1
     if pdf_path_construction_op(op) {
       let (partial_path, end) = pdf_build_path_run(
         state.partial_path,
@@ -291,52 +294,53 @@ fn pdf_collected_entries_of_ops(
               resource_context=Some(resource_context),
             )
             let mut glyph_index = 0
-            for entry in result.entries {
-              if pdf_optional_content_visible_marked_content(
-                  document,
-                  resources,
-                  result.state.marked_content[:],
-                  optional_content_view,
-                  initial_optional_content_visible,
-                ) {
-                let emitted_entry = match glyphs.get(glyph_index) {
-                  Some(glyph) => { ..entry, bounding_box: glyph.bounding_box, }
-                  None => entry
+            if !result.entries.is_empty() {
+              let clip_paths = [ for path in clip_paths => path ]
+              let text_clip_groups = [ for group in text_clip_groups => group ]
+              let group_path = [ for value in group_path => value ]
+              let group_masks = [ for entry in initial_group_masks => entry ]
+
+              for entry in result.entries {
+                if pdf_optional_content_visible_marked_content(
+                    document,
+                    resources,
+                    result.state.marked_content[:],
+                    optional_content_view,
+                    initial_optional_content_visible,
+                  ) {
+                  let emitted_entry = match glyphs.get(glyph_index) {
+                    Some(glyph) =>
+                      { ..entry, bounding_box: glyph.bounding_box, }
+                    None => entry
+                  }
+                  output.push({
+                    paint_run,
+                    entry: emitted_entry,
+                    state: result.state,
+                    pattern_initial: {
+                      state: initial,
+                      fill_explicit: initial_fill_color_explicit,
+                      stroke_explicit: initial_stroke_color_explicit,
+                    },
+                    text_glyph: glyphs.get(glyph_index),
+                    text_object_id,
+                    text_source: None,
+                    font_object: None,
+                    font_resource_missing: false,
+                    resources,
+                    inline_image: None,
+                    clip_paths,
+                    text_clip_groups,
+                    soft_mask,
+                    group,
+                    group_path,
+                    group_masks,
+                    fill_color_explicit,
+                    stroke_color_explicit,
+                  })
                 }
-                output.push({
-                  entry: emitted_entry,
-                  state: result.state,
-                  pattern_initial: {
-                    state: initial,
-                    fill_explicit: initial_fill_color_explicit,
-                    stroke_explicit: initial_stroke_color_explicit,
-                  },
-                  text_glyph: glyphs.get(glyph_index),
-                  text_object_id,
-                  text_source: None,
-                  font_object: None,
-                  font_resource_missing: false,
-                  resources,
-                  inline_image: None,
-                  clip_paths: [
-                    for path in clip_paths => path
-                  ],
-                  text_clip_groups: [
-                    for group in text_clip_groups => group
-                  ],
-                  soft_mask,
-                  group,
-                  group_path: [
-                    for value in group_path => value
-                  ],
-                  group_masks: [
-                    for entry in initial_group_masks => entry
-                  ],
-                  fill_color_explicit,
-                  stroke_color_explicit,
-                })
+                glyph_index += 1
               }
-              glyph_index += 1
             }
             state = result.state
           }
@@ -350,39 +354,39 @@ fn pdf_collected_entries_of_ops(
             optional_content_view,
             initial_optional_content_visible,
           ) {
-          for entry in result.entries {
-            output.push({
-              entry,
-              state: result.state,
-              pattern_initial: {
-                state: initial,
-                fill_explicit: initial_fill_color_explicit,
-                stroke_explicit: initial_stroke_color_explicit,
-              },
-              text_glyph: None,
-              text_object_id: None,
-              text_source: None,
-              font_object: None,
-              font_resource_missing: false,
-              resources,
-              inline_image: Some((dictionary, decode_parms, data)),
-              clip_paths: [
-                for path in clip_paths => path
-              ],
-              text_clip_groups: [
-                for group in text_clip_groups => group
-              ],
-              soft_mask,
-              group,
-              group_path: [
-                for value in group_path => value
-              ],
-              group_masks: [
-                for entry in initial_group_masks => entry
-              ],
-              fill_color_explicit,
-              stroke_color_explicit,
-            })
+          if !result.entries.is_empty() {
+            let clip_paths = [ for path in clip_paths => path ]
+            let text_clip_groups = [ for group in text_clip_groups => group ]
+            let group_path = [ for value in group_path => value ]
+            let group_masks = [ for entry in initial_group_masks => entry ]
+
+            for entry in result.entries {
+              output.push({
+                paint_run,
+                entry,
+                state: result.state,
+                pattern_initial: {
+                  state: initial,
+                  fill_explicit: initial_fill_color_explicit,
+                  stroke_explicit: initial_stroke_color_explicit,
+                },
+                text_glyph: None,
+                text_object_id: None,
+                text_source: None,
+                font_object: None,
+                font_resource_missing: false,
+                resources,
+                inline_image: Some((dictionary, decode_parms, data)),
+                clip_paths,
+                text_clip_groups,
+                soft_mask,
+                group,
+                group_path,
+                group_masks,
+                fill_color_explicit,
+                stroke_color_explicit,
+              })
+            }
           }
         }
         state = result.state
@@ -510,58 +514,58 @@ fn pdf_collected_entries_of_ops(
           )
         }
         let mut glyph_index = 0
-        for entry in result.entries {
-          if pdf_optional_content_visible_marked_content(
-              document,
-              resources,
-              result.state.marked_content[:],
-              optional_content_view,
-              initial_optional_content_visible,
-            ) {
-            let emitted_entry = match glyphs.get(glyph_index) {
-              Some(glyph) => { ..entry, bounding_box: glyph.bounding_box, }
-              None => entry
+        if !result.entries.is_empty() {
+          let clip_paths = [ for path in clip_paths => path ]
+          let text_clip_groups = [ for group in text_clip_groups => group ]
+          let group_path = [ for value in group_path => value ]
+          let group_masks = [ for entry in initial_group_masks => entry ]
+
+          for entry in result.entries {
+            if pdf_optional_content_visible_marked_content(
+                document,
+                resources,
+                result.state.marked_content[:],
+                optional_content_view,
+                initial_optional_content_visible,
+              ) {
+              let emitted_entry = match glyphs.get(glyph_index) {
+                Some(glyph) => { ..entry, bounding_box: glyph.bounding_box, }
+                None => entry
+              }
+              output.push({
+                paint_run,
+                entry: emitted_entry,
+                state: result.state,
+                pattern_initial: {
+                  state: initial,
+                  fill_explicit: initial_fill_color_explicit,
+                  stroke_explicit: initial_stroke_color_explicit,
+                },
+                text_glyph: glyphs.get(glyph_index),
+                text_object_id,
+                text_source: pdf_collected_text_source_for_glyph(
+                  text_sources[:],
+                  glyphs[:],
+                  glyph_index,
+                ),
+                font_object: text_source_scope.bind(scope => scope.font_object),
+                font_resource_missing: text_source_scope
+                .map(scope => scope.font_resource_missing)
+                .unwrap_or(false),
+                resources,
+                inline_image: None,
+                clip_paths,
+                text_clip_groups,
+                soft_mask,
+                group,
+                group_path,
+                group_masks,
+                fill_color_explicit,
+                stroke_color_explicit,
+              })
             }
-            output.push({
-              entry: emitted_entry,
-              state: result.state,
-              pattern_initial: {
-                state: initial,
-                fill_explicit: initial_fill_color_explicit,
-                stroke_explicit: initial_stroke_color_explicit,
-              },
-              text_glyph: glyphs.get(glyph_index),
-              text_object_id,
-              text_source: pdf_collected_text_source_for_glyph(
-                text_sources[:],
-                glyphs[:],
-                glyph_index,
-              ),
-              font_object: text_source_scope.bind(scope => scope.font_object),
-              font_resource_missing: text_source_scope
-              .map(scope => scope.font_resource_missing)
-              .unwrap_or(false),
-              resources,
-              inline_image: None,
-              clip_paths: [
-                for path in clip_paths => path
-              ],
-              text_clip_groups: [
-                for group in text_clip_groups => group
-              ],
-              soft_mask,
-              group,
-              group_path: [
-                for value in group_path => value
-              ],
-              group_masks: [
-                for entry in initial_group_masks => entry
-              ],
-              fill_color_explicit,
-              stroke_color_explicit,
-            })
+            glyph_index += 1
           }
-          glyph_index += 1
         }
         state = result.state
         match clipped_state {

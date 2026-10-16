@@ -96,5 +96,10 @@ fn pdf_canvas_outline_call(
     return None
   }
   program.resources[outline.resource.id] = outline.resource
-  Some({ resource: outline.resource, matrix: values, outline: true, })
+  Some({
+    resource: outline.resource,
+    matrix: values,
+    outline: true,
+    paint_run: collected.paint_run,
+  })
 }

@@ -1,8 +1,9 @@
 // Compiled glyph resources stay in font coordinates. Reproduce the existing
 // positioned path arithmetic at the host boundary, including its bounds map.
-// Only the browser compiler emits version 2; public model plans remain version 1.
+// Only the browser compiler emits versions 2/3; public model plans remain 1.
+import {expandPdfTextRuns} from './pdf-canvas-text-runs.mjs';
 export function expandPdfCanvasProgram(plan) {
-  if(plan?.version!==2)return plan;
+  if(plan?.version!==2&&plan?.version!==3)return plan;
   if(!Array.isArray(plan.glyph_resources)||plan.glyph_resources.length>16384)throw new Error('Invalid PDF glyph resource table');
   const resources=new Map();
   for(const resource of plan.glyph_resources){
@@ -17,7 +18,7 @@ export function expandPdfCanvasProgram(plan) {
       shadings.set(resource.id,resource.raster);
     }
   }
-  const items=plan.items.map(item=>{
+  const items=expandPdfTextRuns(plan).map(item=>{
     const shading=item.paint?.shading;
     if(shading?.raster_resource!==undefined){
       if(item.kind!=='shading'||!Number.isInteger(shading.raster_resource)||!shadings.has(shading.raster_resource))throw new Error('Invalid PDF shading invocation');
@@ -77,6 +78,6 @@ export function expandPdfCanvasProgram(plan) {
     const {glyph,...expanded}=item;
     return {...expanded,type3_plan};
   });
-  const {glyph_resources,shading_resources,...expanded}=plan;
+  const {glyph_resources,shading_resources,text_states,...expanded}=plan;
   return {...expanded,version:1,items};
 }

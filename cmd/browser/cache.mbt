@@ -67,13 +67,9 @@ fn browser_cache_page(
   page : @pdf.PdfPageModel,
   canvas_program? : @engine.PdfCanvasProgram? = None,
 ) -> Unit {
-  // Serialized UTF-16 bytes plus per-item overhead are a conservative cache
-  // estimate, not a measurement of the JS heap or the parsed PDF object store.
-  let bytes = browser_json_size(ToJson::to_json(page)) * 2 +
-    page.items.length() * 256 +
-    page.fonts.length() * 128 +
-    canvas_program.map(program => program.estimated_bytes()).unwrap_or(0)
   let budget = 32 * 1024 * 1024
+  let bytes = browser_model_cache_size(page, budget) +
+    canvas_program.map(program => program.estimated_bytes()).unwrap_or(0)
   if bytes > budget {
     return
   }

@@ -20,7 +20,7 @@ function fixture(charproc,contents,extra=''){
  const xref=text.length;text+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;for(const n of offsets)text+=String(n).padStart(10,'0')+' 00000 n \n';
  text+=`trailer\n<< /Size ${objects.length+1} /Root 1 0 R ${extra} >>\nstartxref\n${xref}\n%%EOF\n`;return new TextEncoder().encode(text);
 }
-function prepare(bytes,omit){assert(JSON.parse(bridge.open_pdf(bytes)).ok);const result=JSON.parse(bridge.render_page(1,1,0,omit,omit));assert(result.ok);bridge.close_pdf();return result;}
+function prepare(bytes,omit){assert(JSON.parse(bridge.open_pdf(bytes)).ok);const result=JSON.parse(bridge.render_page(1,1,0,omit,omit,omit));assert(result.ok);bridge.close_pdf();return result;}
 let checks=0;
 for(const [name,charproc,compiled] of [
  ['curve','600 0 0 0 600 900 d1 0 0 m 80 900 400 100 600 900 c 600 0 l h f',true],
@@ -35,7 +35,7 @@ for(const [name,charproc,compiled] of [
 ]){
  for(const mode of [0,1,2,3,4,5,6,7]){
   const bytes=fixture(charproc,`1 0 0 1 23 37 cm 0 .2 .8 rg 0 0 180 140 re W n BT /F1 40 Tf ${mode} Tr 5 10 Td (AA) Tj ET`),old=prepare(bytes,false),next=prepare(bytes,true);
-  assert.equal(next.canvas.version,compiled&&mode!==3?2:1,name+' version');
+  assert.equal(next.canvas.version,compiled&&mode!==3?3:1,name+' version');
   for(const key of ['layer','editor','annotations','accessibility'])assert.deepEqual(next[key],old[key],name+' '+key);
   for(const retained of [false,true]){
    const a=createCanvas(1,1),b=createCanvas(1,1),opts={...options,width:400,height:320,matrix:[2,.15,-.1,2,0,0],returnPixels:retained,nativeCanvas:!retained};
@@ -47,8 +47,8 @@ for(const [name,charproc,compiled] of [
 const bytes=fixture('600 0 d0 0 0 600 900 re f','/GS gs BT /F1 40 Tf 20 30 Td (AA) Tj ET');
 assert.equal(prepare(bytes,true).canvas.version,1,'Inherited transparency retains the interpreter');
 assert(JSON.parse(bridge.open_pdf(fixture('600 0 d0 0 0 600 900 re f','BT /F1 40 Tf 20 30 Td (A) Tj ET'))).ok);
-const compact=JSON.parse(bridge.render_page(1,1,0,true,true));
-assert.equal(compact.canvas.version,2);
+const compact=JSON.parse(bridge.render_page(1,1,0,true,true,true));
+assert.equal(compact.canvas.version,3);
 let intermediateSurfaces=0;
 await renderPdfPage(createCanvas(1,1),compact.canvas,{...options,returnPixels:false,width:1000,height:1000,maxWorkingBytes:64*1024*1024,
  createCanvas:(w,h)=>{if(w>1||h>1)intermediateSurfaces++;return createCanvas(w,h);}});

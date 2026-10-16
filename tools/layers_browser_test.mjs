@@ -169,8 +169,36 @@ try{
     await page.locator('#edit-undo').click();await page.waitForFunction(()=>document.querySelector('[data-field-name="layer-field"]')?.value==='Before'&&!document.querySelector('#edit-toggle').disabled);
     await page.locator('#edit-redo').click();await page.waitForFunction(()=>document.querySelector('[data-field-name="layer-field"]')?.value==='Edited layer field'&&!document.querySelector('#edit-toggle').disabled);
     assert.match(await text(),/Beta/);
+    await page.evaluate(()=>{
+      const original=pdfViewerHost.pdf.call.bind(pdfViewerHost.pdf);
+      pdfViewerHost.pdf.call=async(method,args,options)=>{
+        const result=await original(method,args,options);
+        if(method==='apply_edits'){
+          window.layerFieldCommitWaiting=true;
+          await new Promise(resolve=>window.releaseLayerFieldCommit=resolve);
+        }else if(method==='render_page'&&window.layerFieldCommitWaiting&&!window.layerFieldPaintWaiting){
+          pdfViewerHost.pdf.call=original;window.layerFieldPaintWaiting=true;
+          await new Promise(resolve=>window.releaseLayerFieldPaint=resolve);
+        }
+        return result;
+      };
+    });
     await field.fill('Active before layer toggle');
-    await page.locator('#layer-6').click();await waitLayers({6:true,7:false});
+    await page.locator('#layer-6').hover();await page.mouse.down();
+    try{
+      await page.waitForFunction(()=>window.layerFieldCommitWaiting===true);
+      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      assert.equal(await page.locator('#layer-6').isDisabled(),false,'Field blur must preserve the pending layer click');
+      await page.evaluate(()=>window.releaseLayerFieldCommit());
+      await page.waitForFunction(()=>window.layerFieldPaintWaiting===true);
+      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      assert.equal(await page.locator('#layer-6').isDisabled(),false,'Field repaint must preserve the pending layer click');
+      await page.mouse.up();
+      await page.waitForFunction(()=>document.querySelector('.layers-panel')?.getAttribute('aria-busy')==='true');
+    }finally{
+      await page.mouse.up();await page.evaluate(()=>{window.releaseLayerFieldCommit?.();window.releaseLayerFieldPaint?.();});
+    }
+    await waitLayers({6:true,7:false});
     assert.equal(await page.locator('#pages [data-field-name="layer-field"]').count(),0);
     await page.locator('#layer-7').click();await waitLayers({6:false,7:true});
     assert.equal(await field.inputValue(),'Active before layer toggle');

@@ -22,7 +22,7 @@ test "ordinary outlines share geometry while retaining transforms and semantics"
   assert_eq(item.type3_outline, None)
   assert_eq(item.type3_scene, None)
   assert_eq(item.fill_color, text_stroke_test_item(original).fill_color)
-  assert_true(program.canvas_plan(page, 1.0, 0) is { "version": Number(2), .. })
+  assert_true(program.canvas_plan(page, 1.0, 0) is { "version": Number(3), .. })
   let (_, again) = prepare_canvas_page(document, 1).unwrap()
   assert_eq(again.glyphs[0].resource.id, program.glyphs[0].resource.id)
   assert_eq(document.canvas_resources.hits, 5)

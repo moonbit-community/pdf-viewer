@@ -18,7 +18,9 @@ The central files have separate responsibilities:
 - `collector_entries.mbt`: collected entry types and content-operator interpretation.
 - `path_builder.mbt`: owned buffers for consecutive path construction, frozen at interpreter boundaries.
 - `collector_items.mbt`: lowering collected entries into paths, text, images and shading.
+- `collector_paint_state.mbt`: content-operation paint lowering shared by immutable prepared glyphs, with independent state for public models.
 - `canvas_program.mbt`: prepared browser paints, reading order and bounded glyph resource ownership.
+- `canvas_text_runs.mbt`: bounded text-operation packets that separate shared paint state from numeric glyph operands.
 - `canvas_outlines.mbt`: shared Type1/CFF fill geometry keyed by PDF font encoding and character code.
 - `canvas_shadings.mbt`: page-owned lookup tables shared by direct shading invocations, with bounded resource and cache charges.
 - `collector_state.mbt`: Form groups, graphics-state resolution and paint attributes.

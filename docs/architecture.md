@@ -450,7 +450,12 @@ and `close_pdf`.
 Page models use an LRU budget of eight pages/estimated 32 MiB; serialized render
 responses use twelve entries/24 MiB, including the Canvas plan, compatibility
 SVG and text layer. These bounds exclude parsed input, temporary decoding and
-main-thread Canvas working surfaces. Closing/replacing a document terminates
+main-thread Canvas working surfaces. Page admission walks the retained model's
+object graph with conservative slot, string and buffer charges, deduplicating
+shared owners within each page. It no longer constructs a complete model JSON
+graph solely to estimate memory. This remains an estimate, not a heap
+measurement; unknown closures and excess traversal work bypass admission.
+Closing/replacing a document terminates
 its Worker and rejects outstanding work. AbortSignal removes queued tasks and
 discards active results; a synchronous active operation can finish before the
 next RPC. The host contract does not reproduce PDF.js loading/render task
@@ -500,6 +505,25 @@ through Type3's scene/bounds map. The Worker avoids both positioned path strings
 and compatibility SVG copies for these calls. Host expansion still creates a
 positioned path per invocation, so this does not yet remove repeated Path2D
 construction on the host.
+
+The viewer additionally opts into version-3 text runs with the sixth
+`render_page` argument. Five-argument compiled clients retain version 2, and
+older Workers ignore the extra capability argument. Collection assigns a
+document-build-local identity to each content operation, including recursive
+Form invocations. It snapshots clip/group scopes once per operation. Prepared
+glyphs from that operation share colour, clip, mask and group lowering; public
+page models still lower independent mutable resource arrays.
+
+Version 3 stores each eligible operation's paint state once in `text_states`.
+Ordered `text_run` commands contain Unicode strings and 29-number rows covering
+source index/character code, advances, bounds, quad, glyph transform and compiled
+resource placement. Each packet contains at most 4,096 glyphs; at most 16,384
+states are admitted per plan. Ineligible glyphs and excess states retain legacy
+commands in source order. `web/pdf-canvas-text-runs.mjs` validates and expands
+these operands at the existing renderer boundary, preserving every legacy paint
+field. A complete semantic page model and monolithic JSON response are still
+built; this change removes per-glyph state work and wire duplication rather
+than introducing streaming or independent semantic requests.
 
 Version-2 prepared plans also share complete source lookup rasters for direct
 axial, radial and function shadings. Each page owns at most 64 rasters and an

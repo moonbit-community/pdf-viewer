@@ -2070,3 +2070,164 @@ Candidate Worker SHA-256:
 `pdf-canvas-program.mjs` = `c05f1061f2487a20b9ae344e5ba65d43600795a0b9834d30695d40072888f727`;
 `pdf-runtime.mjs` = `65afb567d8aa2e6fde56316d5e63f0342efc391d2356947ee8b30004b92831b1`;
 `pdf-shading.mjs` = `ebafe8dff7a67db828dff21f9fd22d2041a3a6b4f4d14fd8abe1751eeb4dc215`.
+
+## Text-operation state and batched glyph commands (2026-10-17)
+
+### Architectural cause and implementation
+
+Baseline is pushed `7b4ae0f5470b4a21be6655f33642523f6f961d4f`, independently
+packaged before editing. Inspecting both pipelines identifies an important
+representation mismatch, rather than an isolated arithmetic hotspot. On the
+first page of public `tracemonkey.pdf`, the pinned PDF.js browser build produces
+401 operators, including 151 text draws containing 4,282 glyphs. Its independent
+text-content request returns 182 runs. Our prepared Canvas response instead
+carried 4,282 full glyph paint objects. Shared font geometry alone did not
+remove repeated colour, clip, mask, group and JSON paint-state work.
+
+The collector now assigns an identity to each content operation and snapshots
+its clip/group scope once. The immutable prepared projection lowers common
+paint state once per operation; public page models retain independent mutable
+arrays. Version-3 browser commands separate that state from bounded numeric
+glyph operands and Unicode strings. Five-argument bridge requests still receive
+version 2; the viewer and benchmark explicitly opt in with the sixth argument.
+Packets cap at 4,096 glyphs, with at most 16,384 states per plan. Mixed fallback
+commands preserve source order. Host decoding restores all legacy paint fields
+before the existing native/retained/tiled renderer.
+
+A second architectural duplication was cache admission: it built a complete
+`page.to_json()` graph just to estimate retained memory. Admission now walks
+retained objects directly, deduplicating owners within a page and charging
+conservative slot/string/buffer estimates. This is not a heap measurement.
+Unknown closures or excess traversal work bypass admission. The eight-page /
+32 MiB model budget and twelve-entry / 24 MiB response budget are unchanged.
+
+| Public document, same page and scale | Baseline | Candidate |
+| --- | ---: | ---: |
+| Page 1 Canvas commands | 4,282 | 151 |
+| Page 1 shared text states | 0 | 151 |
+| Page 1 glyph operands | 4,282 | 4,282 |
+| Page 1 Canvas JSON characters | 6,008,463 | 1,823,566 |
+| Page 1 complete response characters | 7,886,624 | 3,701,727 |
+| Page 11 Canvas commands, including nontext | 3,561 | 334 |
+| Page 11 Canvas JSON characters | 7,457,779 | 4,187,265 |
+| Page 14 Canvas commands | 2,709 | 77 |
+
+These are UTF-16 character counts, not network-byte or heap measurements. A
+separate 14-page comparison expands each candidate plan and compares the
+complete resulting plan against the packaged baseline, as well as every
+semantic response field. Every page is exactly equal.
+
+### First full-document measurements
+
+The final packaged artifact uses the preceding section's full-document protocol:
+three alternating fresh-context/document/Worker pairs, CSS width 1216 / DPR 2,
+with preparation, painting and full RGBA readback included. Startup/opening,
+hashes, DOM and teardown are excluded. Our semantic preparation remains included;
+PDF.js is a render-only lower bound. All builds, tests and dev servers started
+for this work are stopped, followed by a 45-second quiet interval. Other host
+activity can still vary, so paired results and all samples are retained.
+
+| Final WebKit build, three-run median | Baseline | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Full 14-page total work | 10,817 ms | 9,495 ms | -12.2% |
+| Full preparation | 7,158 ms | 5,541 ms | -22.6% |
+| Page 1 preparation | 598 ms | 331 ms | -44.6% |
+| Page 1 total work | 664 ms | 403 ms | -39.3% |
+
+Every page passes exact RGBA and complete semantic comparison in all three
+pairs. Paired preparation gains are 23.4%, 38.2% and 21.4%; paired total gains
+are 15.8%, 32.0% and 1.6%. Painting varies enough that it absorbs much of the
+last pair's preparation gain. Page 11 total medians are 3,283 / 3,804 ms;
+this trial does not establish an improvement for its retained shading replay.
+PDF.js's median is 948 ms, leaving approximately 10.0x total work on this scope.
+The architectural change has not closed that gap.
+
+An earlier three-pair WebKit trial, before adding the explicit capability flag,
+also passes every page's pixels and semantics. Its total medians are 13,440 /
+10,199 ms (-24.1%), with preparation 8,340 / 5,795 ms (-30.5%). The early trial
+and final build are separate sessions and artifacts; they are not pooled, and
+its larger percentage is not substituted for the final-build result.
+
+Chromium's final-build run stops at the first candidate's page-13 pixel check.
+Its baseline hash is the previously observed alternate
+`9657065c732a4ac28f2ae3cfba44144314ab25bc07babf5f3a39047a1ebb1dc4`;
+the candidate hash is
+`367bb5030a71c8b76bf45e5ff70f03da0b3cb37d55530c67977d1eb4129ed88e`.
+A separate captured run passes one complete 14-page pair, then stops when the
+candidate produces the previously observed nine-pixel alternate. Comparing the
+old baseline's two captured RGBA buffers shows that the new hash exactly equals
+a mixture containing five of those same nine changed pixels. Thus the initial
+baseline/candidate pair differs at the other four known pixels, maximum channel
+delta 2 and total absolute delta 15. This bounds the observed mismatch to the
+existing antialias variants; it does not turn either failed run into a pass.
+Six additional baseline-only captured sweeps all produce the normal hash. Their
+diagnostic report remains explicitly separate from performance validation.
+Both failed comparison reports retain `complete: false`, with no tolerance
+added and no completed Chromium three-pair speedup claimed.
+
+### Image-heavy document and regression validation
+
+The separate 13-page fixture retains SHA-256
+`fea1ef069944d3479425ebf076a9b34118f7ba9e3df8cefb54e557ca16f90817`.
+All its pages match independently recorded exact RGBA and full semantic hashes.
+WebKit's initial block shows an apparent regression, so five additional fresh
+alternating pairs repeat after a quiet interval, preserving both blocks:
+
+| First full 13-page sweep, median | Baseline | Candidate |
+| --- | ---: | ---: |
+| Chromium, five pairs | 1,231.5 ms | 1,204.3 ms |
+| WebKit, initial five pairs | 1,353 ms | 1,552 ms |
+| WebKit, additional five pairs | 1,298 ms | 1,320 ms |
+| WebKit, all ten pairs | 1,304 ms | 1,336 ms |
+
+The additional WebKit block's median paired difference is +10 ms; pooled across
+ten pairs it is +37.5 ms total and +16 ms preparation (candidate minus baseline).
+Only two/ten WebKit pairs improve total work, versus three/five in Chromium.
+A general image-heavy speedup is not established, and the small negative
+WebKit result is retained. In separate instrumented diagnostic Workers, the new
+retained-model walk takes 11–16 ms across all 13 pages. An `Object.values`
+alternative preserves estimates and pixels but shows no stable traversal gain;
+it is not included in production or substituted for the measurements above.
+
+Validation passes 783 JS, 767 Wasm, 767 WasmGC and 775 native tests. The root
+facade is unchanged; the internal program API gains only the optional text-run
+capability. New checks cover shared operation identity, independent public
+mutable owners, 4,096-glyph packet splitting, complete expanded-plan parity,
+Unicode and mixed fallback ordering, recursive Form scopes, immutable replay,
+legacy five-argument requests and malformed operands/tables. All 15 new text
+native/retained/tiled comparisons, 144 Type3, 128 ordinary-outline, 18 shared
+shading, 52 Canvas, 47 sampler and 41 shading-pass checks pass. Packaged
+Chromium/WebKit, Chromium editing/layers, both text-interaction engines, corpus
+and all 12 visual-baseline gates pass; existing PDF.js differences remain recorded.
+
+Browser regression testing also reproduced a pre-existing layer-click race on
+the immutable baseline. Blurring a focused form field started an async commit
+and disabled the layer checkbox before pointer-up. Layer controls now remain
+available while field commits/repaints finish; the existing layer-operation
+queue waits for those commits. A deterministic test holds both RPC responses
+between pointer-down/up and verifies that the click survives and saved field
+values remain intact. Document, print and layer-operation locks remain active.
+
+Final Worker SHA-256:
+`98c8eeb4a9aaf3fc081b5856d5388f100a87cee397efe8b083065c00afe1d1bd`,
+5,256,441 bytes (5,371 bytes above baseline). Changed host-module SHA-256:
+`viewer-host.mjs` = `093e8bb06a8057154357d6e89a7ec14af6a2b9fe035b7a9ce68a0d0627933234`;
+`pdf-canvas-program.mjs` = `75d5978a5b3f86f6e1894c28c53f218043eb9e95a1e036113cb54930bfb83e91`;
+`pdf-canvas-text-runs.mjs` = `428b542b1b2b32ffee65485feba6a318bd11de2d98642fc906f4df352f9e259b`.
+
+### Remaining architectural limits
+
+This implementation still constructs a semantic `PdfPageModel` before Canvas
+serialization, sends one complete JSON response, and expands glyphs into
+positioned paths at the host. PDF.js's pinned Worker exposes `GetOperatorList`
+and `GetTextContent` independently; its operator list can flush in approximately
+1,000-operator chunks. Separating our render and semantic projections and
+streaming commands therefore remains a concrete next direction, not a feature
+provided by version 3.
+
+The native renderer also rejects an entire otherwise eligible scope when it
+encounters unsupported paint, including an ungrouped direct shading. Retained
+composition and its buffers then cover more than that individual paint.
+Restricting fallback to independent paint scopes is another architectural
+candidate; preserving backdrop, knockout, shape and quantization semantics is
+required before changing it. No such rendering change is included here.

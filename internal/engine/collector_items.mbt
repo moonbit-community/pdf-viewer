@@ -21,6 +21,7 @@ fn pdf_items_of_collected(
   let cff_fonts : Map[Int, PdfCffFont?] = Map([])
   let type1_fonts : Map[Int, PdfType1Font?] = Map([])
   let mut inline_index = 0
+  let mut shared_paint : (Int, PdfCollectedPaintState)? = None
   for source_index, collected in collected_entries {
     let index = index_offset + source_index
     // Nonisolated groups inherit the parent's blending colour space. Only an
@@ -40,89 +41,26 @@ fn pdf_items_of_collected(
     }
     let entry = collected.entry
     let bounds = pdf_bounds_of_quad(entry.bounding_box)
-    let paint = pdf_paint_attributes_of_state(collected.state)
-    let fill_source = if collected.fill_color_explicit {
-      pdf_colour_source(
-        collected.state.path_state.colourspace_non_stroke,
-        collected.state.path_state.colour_non_stroke,
-        black_generation=collected.state.black_generation,
-        undercolour_removal=collected.state.undercolour_removal,
-        document=Some(document),
-        rendering_intent=collected.state.path_state.rendering_intent,
-        resource_context=Some(resource_context),
-      )
-    } else {
-      pdf_colour_source(
-        @pdflite.PdfDeviceGray,
-        @pdflite.PdfContentColourFloats([0]),
-      )
-    }
-    let stroke_source = if collected.stroke_color_explicit {
-      pdf_colour_source(
-        collected.state.path_state.colourspace_stroke,
-        collected.state.path_state.colour_stroke,
-        black_generation=collected.state.black_generation,
-        undercolour_removal=collected.state.undercolour_removal,
-        document=Some(document),
-        rendering_intent=collected.state.path_state.rendering_intent,
-        resource_context=Some(resource_context),
-      )
-    } else {
-      pdf_colour_source(
-        @pdflite.PdfDeviceGray,
-        @pdflite.PdfContentColourFloats([0]),
-      )
-    }
-    let paint = {
-      ..paint,
-      fill_alpha: if fill_source.paints {
-        paint.fill_alpha
-      } else {
-        0.0
-      },
-      stroke_alpha: if stroke_source.paints {
-        paint.stroke_alpha
-      } else {
-        0.0
-      },
-    }
-    let clip_path = pdf_clip_path_of_collected(
-      document, collected, cff_fonts, type1_fonts, origin_x, origin_y, height,
-    )
-    let clips = pdf_clips_of_collected(
-      document, collected, cff_fonts, type1_fonts, origin_x, origin_y, height,
-    )
-    let clip_path = if clips.is_empty() {
-      clip_path
-    } else {
-      Some(clips.map(clip => clip.svg_path).join("||"))
-    }
-    let soft_mask = pdf_soft_mask_resource_of_collected(
-      document,
-      origin_x,
-      origin_y,
-      width,
-      height,
-      collected.soft_mask,
-      context=resource_context,
-    )
-    let group_path = collected.group_path.map(group => {
-      let mut resource = group.soft_mask
-      for (id, mask) in collected.group_masks {
-        if id == group.id {
-          resource = pdf_soft_mask_resource_of_collected(
-            document,
-            origin_x,
-            origin_y,
-            width,
-            height,
-            Some(mask),
-            context=resource_context,
-          )
+    let common = match (canvas_build, shared_paint) {
+      (Some(_), Some((scope, common))) if scope == collected.paint_run => common
+      _ => {
+        let common = pdf_collected_paint_state(
+          document, collected, cff_fonts, type1_fonts, origin_x, origin_y, width,
+          height, resource_context,
+        )
+        if canvas_build is Some(_) {
+          shared_paint = Some((collected.paint_run, common))
         }
+        common
       }
-      { ..group, soft_mask: resource, }
-    })
+    }
+    let paint = common.paint
+    let fill_source = common.fill_source
+    let stroke_source = common.stroke_source
+    let clip_path = common.clip_path
+    let clips = common.clips
+    let soft_mask = common.soft_mask
+    let group_path = common.group_path
     let group = group_path.last()
     match entry.object {
       @pdflite.PdfContentGlyphObject(charcode, _, text) => {
@@ -137,20 +75,7 @@ fn pdf_items_of_collected(
               clipping_path: [],
             }
         }
-        let fill_color = pdf_colour_hex_for_paint_in_space(
-          collected.state.path_state.colourspace_non_stroke,
-          collected.state.path_state.colour_non_stroke,
-          collected.fill_color_explicit,
-          document=Some(document),
-          rendering_intent=collected.state.path_state.rendering_intent,
-        )
-        let stroke_color = pdf_colour_hex_for_paint_in_space(
-          collected.state.path_state.colourspace_stroke,
-          collected.state.path_state.colour_stroke,
-          collected.stroke_color_explicit,
-          document=Some(document),
-          rendering_intent=collected.state.path_state.rendering_intent,
-        )
+        let (fill_color, stroke_color) = common.colors(document, collected)
         let (advance_x, advance_y, vertical) = match collected.text_glyph {
           Some(glyph) => {
             let font = collected.state.text_state.current_font

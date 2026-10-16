@@ -75,6 +75,13 @@ fn layers_restore_controls() -> Unit {
 }
 
 ///|
+fn layers_controls_busy(model : Model) -> Bool {
+  // Layer updates wait for field commits. Disabling on field blur would eat
+  // the pending pointer click, including while that commit repaints the page.
+  model.layers_busy || (model.busy && !model.editor.busy) || model.printing
+}
+
+///|
 fn layer_rows_view(
   rows : Array[Json],
   groups : Map[Int, Json],
@@ -108,13 +115,7 @@ fn layer_rows_view(
               checked=visible,
               attrs=@html.Attrs::build()
                 .data_set("layer-id", number.to_string())
-                .disabled(
-                  locked ||
-                  model.layers_busy ||
-                  model.editor.busy ||
-                  model.busy ||
-                  model.printing,
-                ),
+                .disabled(locked || layers_controls_busy(model)),
               on_change=@cmd.Emit(_ => {
                 // Keep the native checkbox controlled until the Worker accepts
                 // the toggle, including a rejected locked radio peer.
@@ -198,10 +199,7 @@ fn layers_view(model : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
   for entry in entries {
     groups[json_int(json_field(entry, "id"))] = entry
   }
-  let busy = model.layers_busy ||
-    model.editor.busy ||
-    model.busy ||
-    model.printing
+  let busy = layers_controls_busy(model)
   @html.div(
     class="layers-panel",
     attrs=@html.Attrs::build()

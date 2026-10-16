@@ -33,6 +33,7 @@ priv struct PdfCanvasBuildContext {
 
 ///|
 priv struct PdfCanvasGlyphCall {
+  paint_run : Int
   resource : PdfCanvasGlyphResource
   matrix : Array[Double]
   outline : Bool
@@ -108,8 +109,9 @@ pub fn PdfCanvasProgram::canvas_plan(
   page : PdfPageModel,
   scale : Double,
   rotation : Int,
+  text_runs? : Bool = true,
 ) -> Json raise @core.PdfError {
-  pdf_canvas_plan(page, scale, rotation, [], program=Some(self))
+  pdf_canvas_plan(page, scale, rotation, [], program=Some(self), text_runs~)
 }
 
 ///|
@@ -223,7 +225,12 @@ fn pdf_canvas_glyph_call(
   let program = build.program
   if program.resources.get(id) is Some(resource) {
     cache.hits += 1
-    return Some({ resource, matrix: values, outline: false, })
+    return Some({
+      resource,
+      matrix: values,
+      outline: false,
+      paint_run: collected.paint_run,
+    })
   }
   // Match the host wire-table limit; excess glyphs keep complete scenes.
   guard program.resources.length() < 16384 else { return None }
@@ -252,7 +259,12 @@ fn pdf_canvas_glyph_call(
     }
   }
   program.resources[id] = resource
-  Some({ resource, matrix: values, outline: false, })
+  Some({
+    resource,
+    matrix: values,
+    outline: false,
+    paint_run: collected.paint_run,
+  })
 }
 
 ///|

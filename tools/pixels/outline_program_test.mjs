@@ -38,11 +38,11 @@ function fixture(kind,contents){
  const xref=text.length;text+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n${offsets.map(n=>String(n).padStart(10,'0')+' 00000 n \n').join('')}trailer\n<< /Root 1 0 R /Size ${objects.length+1} >>\nstartxref\n${xref}\n%%EOF\n`;
  return new TextEncoder().encode(text);
 }
-function prepare(bytes,compiled){assert(JSON.parse(bridge.open_pdf(bytes)).ok);const result=JSON.parse(bridge.render_page(1,1,0,compiled,compiled));assert(result.ok,result.error);bridge.close_pdf();return result;}
+function prepare(bytes,compiled){assert(JSON.parse(bridge.open_pdf(bytes)).ok);const result=JSON.parse(bridge.render_page(1,1,0,compiled,compiled,compiled));assert(result.ok,result.error);bridge.close_pdf();return result;}
 let checks=0;
 for(const kind of ['type1','cff'])for(const mode of [0,1,2,3,4,5,6,7])for(const prefix of ['', '/GS gs', '/Mask gs', '/Pattern cs /P scn']){
  const bytes=fixture(kind,`q .8 .3 -.2 1 30 40 cm 0 .2 .8 rg ${prefix} 20 30 160 120 re W n BT /F1 35 Tf ${mode} Tr 25 40 Td (AA) Tj /F2 29 Tf (AA) Tj ET Q 1 0 0 rg 80 70 15 15 re f`),old=prepare(bytes,false),next=prepare(bytes,true);
- assert.equal(next.canvas.version,mode===0?2:1,kind+' mode '+mode);
+ assert.equal(next.canvas.version,mode===0?3:1,kind+' mode '+mode);
  if(mode===0){assert.equal(next.canvas.glyph_resources.length,2,'Distinct PDF encodings of the same program');assert(next.canvas.glyph_resources.every(r=>r.kind==='outline'));}
  for(const key of ['layer','editor','annotations','accessibility'])assert.deepEqual(next[key],old[key],kind+' '+key);
  const expanded=expandPdfCanvasProgram(next.canvas);

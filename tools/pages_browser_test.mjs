@@ -306,7 +306,7 @@ try{
         ink:first.some((v,i)=>i%4!==3&&v<128),legacy:legacy.canvas.version,svg:svg.svg,
         selection:selection.selection.text,cache:JSON.parse(await pdfViewerHost.pdf.call('cache_info'))};
     });
-    assert.equal(result.paints[0].version,2);assert.equal(result.paints[0].expanded,1);
+    assert.equal(result.paints[0].version,3);assert.equal(result.paints[0].expanded,1);
     assert.ok(result.paints.every(p=>p.native===true),'The masked image glyph must keep this whole page on native Canvas');
     assert.equal(result.identity,true);assert.equal(result.same,true);assert.equal(result.ink,true);
     assert.equal(result.legacy,1);assert.match(result.svg,/<svg/);assert.match(result.selection,/AAA/);

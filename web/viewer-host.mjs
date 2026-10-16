@@ -43,7 +43,7 @@ export const viewerHost={
     const assets=renderAssets,tiles=patternTiles,loadImage=loadRenderImage;
     // RPC snapshots belong to this viewer. Expand each wire program once and
     // release its resource table before repeated viewport paints.
-    if(result.canvas?.version===2&&isCurrent?.()!==false)result.canvas=expandPdfCanvasProgram(result.canvas);
+    if((result.canvas?.version===2||result.canvas?.version===3)&&isCurrent?.()!==false)result.canvas=expandPdfCanvasProgram(result.canvas);
     return renderPdfPage(canvas,result.canvas,{
       unsupported:'warn',returnPixels:false,outputScale,isCurrent,
       yieldToHost:()=>new Promise(resolve=>setTimeout(resolve,0)),

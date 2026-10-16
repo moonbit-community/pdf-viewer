@@ -267,6 +267,7 @@ pub fn render_page(
   rotation : Int,
   omit_svg? : Bool = false,
   compiled_canvas? : Bool = false,
+  text_runs? : Bool = false,
 ) -> String {
   browser_render_page(
     number,
@@ -275,6 +276,7 @@ pub fn render_page(
     false,
     omit_svg,
     compiled_canvas~,
+    text_runs~,
   )
 }
 
@@ -286,6 +288,7 @@ fn browser_render_page(
   printing : Bool,
   omit_svg : Bool,
   compiled_canvas? : Bool = false,
+  text_runs? : Bool = false,
 ) -> String {
   if scale <= 0.0 || scale.is_nan() || scale.is_inf() {
     return browser_error_with_code(
@@ -320,7 +323,7 @@ fn browser_render_page(
       "page": number,
       "svg": svg,
       "canvas": match program {
-        Some(program) => program.canvas_plan(page, scale, rotation)
+        Some(program) => program.canvas_plan(page, scale, rotation, text_runs~)
         None => page.canvas_plan(scale~, rotation~)
       },
       "layer": match program {
