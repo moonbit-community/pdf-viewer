@@ -4,6 +4,7 @@ import { renderPdfCanvas } from '../../web/pdf-canvas.mjs';
 import {createPatternPainter} from '../../web/pdf-patterns.mjs';
 import {renderPdfPage} from '../../web/pdf-runtime.mjs';
 import {prepareNativeCanvasItems} from '../../web/pdf-canvas-native.mjs';
+import {pdfPathPixelRegion} from '../../web/pdf-path-region.mjs';
 const require=createRequire(process.env.PDF_CANVAS_PACKAGE || import.meta.url);
 const {createCanvas,Path2D,loadImage}=require('@napi-rs/canvas');
 const options={createCanvas,Path2D,loadImage};
@@ -15,6 +16,59 @@ const pixel=(result,x,y)=>Array.from(result.data.slice((y*20+x)*4,(y*20+x)*4+4))
 const near=(value,expected,tolerance=2)=>value.forEach((v,i)=>assert.ok(Math.abs(v-expected[i])<=tolerance,`${value} != ${expected}`));
 let count=0;
 async function test(name,fn){await fn();count++;console.log(`ok ${name}`);}
+await test('path readback bounds retain absolute Bezier hulls and reject unknown geometry',()=>{
+ assert.deepEqual(pdfPathPixelRegion('M10 20 Q-5 50 30 40 C40 10 60 70 80 30 Z',[1,0,0,1,0,0],100,100),{x:0,y:7,width:83,height:66});
+ assert.deepEqual(pdfPathPixelRegion('M10 20 L30 40 Z',[0,2,-2,0,100,5],100,100),{x:17,y:22,width:46,height:46});
+ for(const svg of ['M0 0H20V20Z','m0 0l20 20z','M0 0A2 2 0 0 0 2 2','M0','M0 0 Q1 2','M0 0 L1e400 2','M0 0 X1 2',''])assert.equal(pdfPathPixelRegion(svg,[1,0,0,1,0,0],100,100),null,svg);
+ assert.deepEqual(pdfPathPixelRegion('M200 200 L220 220 Z',[1,0,0,1,0,0],100,100),{x:100,y:100,width:0,height:0});
+});
+await test('render-owned path bounds share glyph budgets and follow source strings',async()=>{
+ const cache={entries:new Map(),bytes:0,limit:1024},svg='M10 20 L30 40 Z';
+ const first=pdfPathPixelRegion(svg,[1,0,0,1,0,0],100,100,cache),bytes=cache.bytes;
+ assert.deepEqual(pdfPathPixelRegion(svg,[0,2,-2,0,100,5],100,100,cache),{x:17,y:22,width:46,height:46});assert.equal(cache.entries.size,1);assert.equal(cache.bytes,bytes);
+ assert.notDeepEqual(pdfPathPixelRegion('M40 20 L60 40 Z',[1,0,0,1,0,0],100,100,cache),first);
+ const full={entries:new Map(),bytes:0,limit:8*1024*1024};for(let i=0;i<4097;i++)pdfPathPixelRegion(`M${i} 0 L${i+1} 1 Z`,[1,0,0,1,0,0],100,100,full);assert.equal(full.entries.size,4096);
+ const denied={entries:new Map(),bytes:0,limit:1};assert.deepEqual(pdfPathPixelRegion(svg,[1,0,0,1,0,0],100,100,denied),first);assert.equal(denied.bytes,0);
+ const glyphCache={entries:new Map(),bytes:0,limit:8192},configured={...options,nativeCanvas:false,_glyphCache:glyphCache};
+ await renderPdfCanvas(createCanvas(1,1),plan([path('M2 2 L5 2 L5 5 L2 5 Z'+' '.repeat(1800),'#000')]),configured);
+ assert(glyphCache.pathBounds.bytes>3500&&glyphCache.pathBounds.bytes<=4096);
+ let released=0;const fallback={kind:'text',paint:{rendering_mode:0,fill_alpha:1,fill_color:'#000',blend_mode:'normal',glyph_transform:[10,0,0,10,0,0],bounds:{min_x:6,min_y:6,max_x:16,max_y:16}},text_fill_svg:'<svg xmlns="http://www.w3.org/2000/svg"><path d="M6 6H16V16H6Z" fill="#000"/>'+' '.repeat(800)+'</svg>'};
+ await renderPdfCanvas(createCanvas(1,1),plan([fallback]),{...configured,releaseImage:value=>{released++;value.close?.();}});
+ assert.equal(glyphCache.entries.size,0,'A bitmap that exceeds the remaining shared budget is not retained');assert.equal(released,2,'Uncached colour and shape images are both released');assert(glyphCache.bytes+glyphCache.pathBounds.bytes<=glyphCache.limit);
+});
+await test('retained outline readback keeps exact colour shape and Float32 composition',async()=>{
+ const geometry='M41.25 36.5 Q34 23 54 29 C70 17 78 60 57 53 L41.25 36.5 Z';
+ const largePage={...page,width:160,height:128};
+ const input=items=>({version:1,page:largePage,viewport:{width:160,height:128,matrix:[1,0,0,-1,0,128]},items});
+ const outline=(color,extra={})=>path(geometry,color,{bounds:{min_x:0,min_y:0,max_x:160,max_y:128},glyph_transform:[80,0,0,-80,0,0],...extra});
+ const render=async(plan,extra={})=>{
+  const metrics={reads:0,pixels:0},seen=new WeakSet();
+  const make=(w,h)=>{const canvas=createCanvas(w,h),ctx=canvas.getContext('2d');if(!seen.has(ctx)){seen.add(ctx);const read=ctx.getImageData;ctx.getImageData=function(...args){metrics.reads++;metrics.pixels+=args[2]*args[3];return read.apply(this,args);};}return canvas;};
+  const result=await renderPdfCanvas(make(1,1),plan,{...options,createCanvas:make,nativeCanvas:false,...extra});return {result,metrics};
+ };
+ for(const matrix of [[1,0,0,1,0,0],[0,1,-1,0,128,0],[.8,.2,.1,.8,10,1]])for(const transparent of [false,true]){
+  const group={id:'outline-knockout',isolated:true,knockout:true,alpha:.6,blend_mode:'normal'};
+  const cases=[
+   input([outline('#d04090')]),
+   input([outline('#307050'),outline('#d04090',{fill_alpha:.43})]),
+   input([outline('#123456',{clips:[{svg_path:'M40 28L63 28L63 50L40 50Z'}]})]),
+   input([outline('#d04090',{group_path:[group]}),outline('#307050',{group_path:[group],fill_alpha:.7})]),
+   input([outline('#d04090'),path('M90 90L110 90L110 110L90 110Z','#307050',{bounds:{min_x:0,min_y:0,max_x:160,max_y:128}})]),
+  ];
+  for(const plan of cases){
+   const fast=await render(plan,{matrix,transparent}),control=await render(plan,{matrix,transparent,fullSurfaceReplay:true,fullShapeReplay:true});
+   for(const field of ['data','shape','premultiplied'])assert.deepEqual(fast.result[field],control.result[field],field);
+   assert(fast.metrics.pixels<control.metrics.pixels/3,'Actual paths bound source transfers independently of text selection padding');
+  }
+ }
+ const opaque=await render(input([outline('#d04090')])),translucent=await render(input([outline('#d04090',{fill_alpha:.4})]));
+ assert.equal(opaque.metrics.reads,1,'Opaque vector colour alpha supplies its shape');
+ assert.equal(translucent.metrics.reads,2,'Translucent colour never replaces shape');
+ const external=async(context,_resource,_paint,_operation,env)=>{context.setTransform(1,0,0,1,0,0);context.fillStyle=env.shapeOnly?'#000':'rgba(200,40,90,.4)';context.fillRect(0,0,160,128);};
+ const patterned=input([outline('#d04090',{pattern:{}})]),custom=await render(patterned,{paintPattern:external}),customControl=await render(patterned,{paintPattern:external,fullSurfaceReplay:true,fullShapeReplay:true});
+ for(const field of ['data','shape','premultiplied'])assert.deepEqual(custom.result[field],customControl.result[field]);
+ assert.equal(custom.metrics.reads,2);assert.equal(custom.metrics.pixels,customControl.metrics.pixels,'External painters retain the original source bounds');
+});
 await test('single Type3 images use ordinary native image semantics including opacity masks',async()=>{
  const bitmap=createCanvas(4,4),ctx=bitmap.getContext('2d'),data=ctx.createImageData(4,4);
  for(let p=0;p<16;p++){data.data.set([40+p*10,90,200,[0,80,160,255][p%4]],p*4);}ctx.putImageData(data,0,0);
@@ -149,8 +203,10 @@ await test('ordinary display paints and opaque Type3 text avoid pixel readback',
   return c;
  };
  const canvas=instrument(1,1);
- const result=await renderPdfCanvas(canvas,input,{...options,createCanvas:instrument,returnPixels:false,width:40,height:40,matrix:[2,0,0,2,0,0]});
+ const glyphCache={entries:new Map(),bytes:0,limit:16777216};
+ const result=await renderPdfCanvas(canvas,input,{...options,createCanvas:instrument,_glyphCache:glyphCache,returnPixels:false,width:40,height:40,matrix:[2,0,0,2,0,0]});
  assert.equal(result.native,true);assert.equal(reads,0,'Painting does not read pixels back from Canvas');
+ assert.equal(glyphCache.pathBounds,undefined,'Native vector display does not parse or retain software readback regions');
  assert(allocatedPixels<40*40,'There are no full-page scratch surfaces');
  assert.deepEqual(canvas.getContext('2d').getImageData(0,0,40,40).data,control.getContext('2d').getImageData(0,0,40,40).data);
 });

@@ -5,6 +5,7 @@ import { pdfDashedHairlinePath,pdfStrokeGeometry } from './pdf-hairline.mjs';
 import { createColourPlaneSurface, paintColourPlaneSurface, resolveColourPlaneSurface, invalidateColourPlaneSurface } from './pdf-colour-planes.mjs';
 import { PdfCompositor, rgba8ToPremultiplied, premultipliedToRgba8, softMaskSamples } from './pdf-compositor.mjs';
 import { pdfPixelRegion } from './pdf-pixel-region.mjs';
+import {pdfPathPixelRegion} from './pdf-path-region.mjs';
 import {prepareNativeCanvasItems,singleType3Path,independentPattern} from './pdf-canvas-native.mjs';
 import {expandPdfCanvasProgram} from './pdf-canvas-program.mjs';
 
@@ -96,7 +97,7 @@ export async function renderPdfCanvas(canvas, plan, options = {}) {
   try{return await renderPdfCanvasScoped(canvas,plan,{...options,_profileScope:scope,_glyphCache:glyphCache,_imageCache:imageCache});}
   finally{
     owned?.dispose();
-    if(ownedGlyphCache){for(const entry of glyphCache.entries.values()){if(options.releaseImage)options.releaseImage(entry.value);else entry.value.close?.();}glyphCache.entries.clear();glyphCache.bytes=0;}
+    if(ownedGlyphCache){for(const entry of glyphCache.entries.values()){if(options.releaseImage)options.releaseImage(entry.value);else entry.value.close?.();}glyphCache.entries.clear();glyphCache.bytes=0;glyphCache.pathBounds?.entries.clear();if(glyphCache.pathBounds)glyphCache.pathBounds.bytes=0;}
     if(ownedImageCache){for(const entry of imageCache.entries.values()){if(options.releaseImage)options.releaseImage(entry.value);else entry.value.close?.();}imageCache.entries.clear();imageCache.bytes=0;}
   }
 }
@@ -175,8 +176,9 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
     const pixels=Math.ceil(w)*Math.ceil(h);
     if(!Number.isSafeInteger(pixels)||pixels<=0||pixels>(options.maxPixels||16777216))throw new RangeError('PDF fallback glyph raster exceeds the configured size limit');
     const value=await loadImage(svgUri(svg)),bytes=Number(value.width)*Number(value.height)*4+svg.length*2;
-    while(glyphCache.entries.size&&(glyphCache.bytes+bytes>glyphCache.limit||glyphCache.entries.size>=64)){const oldest=glyphCache.entries.keys().next().value,entry=glyphCache.entries.get(oldest);glyphCache.entries.delete(oldest);glyphCache.bytes-=entry.bytes;releaseImage(entry.value);}
-    if(bytes<=glyphCache.limit){glyphCache.entries.set(key,{value,bytes});glyphCache.bytes+=bytes;return {value,cached:true};}
+    const limit=glyphCache.limit-(glyphCache.pathBounds?.bytes||0);
+    while(glyphCache.entries.size&&(glyphCache.bytes+bytes>limit||glyphCache.entries.size>=64)){const oldest=glyphCache.entries.keys().next().value,entry=glyphCache.entries.get(oldest);glyphCache.entries.delete(oldest);glyphCache.bytes-=entry.bytes;releaseImage(entry.value);}
+    if(bytes<=limit){glyphCache.entries.set(key,{value,bytes});glyphCache.bytes+=bytes;return {value,cached:true};}
     return {value,cached:false};
   };
   const image=async uri => {
@@ -390,6 +392,19 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
       x=Math.max(0,Math.floor(Math.min(...points.map(p=>p[0]))-pad));y=Math.max(0,Math.floor(Math.min(...points.map(p=>p[1]))-pad));
       w=Math.max(0,Math.min(width,Math.ceil(Math.max(...points.map(p=>p[0]))+pad))-x);h=Math.max(0,Math.min(height,Math.ceil(Math.max(...points.map(p=>p[1]))+pad))-y);
     }
+    if(!nativeItems&&!options.fullSurfaceReplay&&item.kind==='path'&&item.paint.filled&&!item.paint.stroked&&!item.paint.fill_transform&&
+      !item.pattern&&!item.paint.pattern&&!item.paint.shading_pattern){
+      const cache=glyphCache.pathBounds||={entries:new Map(),bytes:0,limit:0};
+      cache.limit=Math.min(8388608,glyphCache.limit/2,glyphCache.limit-glyphCache.bytes);
+      const r=pdfPathPixelRegion(item.paint.svg_path,matrix,width,height,cache);
+      if(r){
+        // Text selection bounds include an em-sized fallback margin. Once an
+        // actual outline is available, only its covered pixels need readback
+        // and Float32 compositing. Keep the existing culling limit as well.
+        const right=Math.min(x+w,r.x+r.width),bottom=Math.min(y+h,r.y+r.height);
+        x=Math.max(x,r.x);y=Math.max(y,r.y);w=Math.max(0,right-x);h=Math.max(0,bottom-y);
+      }
+    }
     return {x,y,width:w,height:h};
   };
   const raster=async(item,bounds,component=undefined,paintKey={})=>{
@@ -405,20 +420,23 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
     environments.calibration=compositor.colour.calibration;environments.iccProfileId=compositor.colour.profileId;environments.convertToGroup=compositor.colour.convert;environments.profileScope=options._profileScope;
     environments.convertFromGroup=compositor.colour.toRgb;
     const p=item.paint,directShading=p.shading_pattern||p.pattern?.shading,pattern=directShading||item.pattern||p.pattern;
-    // The built-in shading sampler writes alpha 255 for every covered sample.
-    // At unit paint opacity its clipped colour alpha is exactly its shape.
+    // Opaque vector colours and built-in shading samples have alpha == shape.
+    // Their colour pass already contains the complete antialias coverage.
     // A single independent shading pattern has the same property only against
     // transparency; an existing backdrop can contribute alpha outside it.
-    const opaqueCoverage=!options.fullShapeReplay&&options._builtinShading&&!options._maskBackdrop&&component===undefined&&!inkMode&&
+    const opaquePath=item.kind==='path'&&!pattern&&!item.stroke_pattern&&!p.stroke_pattern&&
+      (!p.filled||p.fill_alpha===1&&/^#[\da-f]{3}(?:[\da-f]{3})?$/i.test(p.fill_color))&&
+      (!p.stroked||p.stroke_alpha===1&&/^#[\da-f]{3}(?:[\da-f]{3})?$/i.test(p.stroke_color));
+    const opaqueCoverage=!options.fullShapeReplay&&!options._maskBackdrop&&component===undefined&&!inkMode&&
       compositor.colour.space==='DeviceRGB'&&!compositor.colour.profileId&&!compositor.colour.calibration&&
-      p.fill_alpha===1&&!p.alpha_is_shape&&!item.mask&&!p.soft_mask&&(
+      !p.alpha_is_shape&&!item.mask&&!p.soft_mask&&(opaquePath||options._builtinShading&&p.fill_alpha===1&&(
         item.kind==='shading'&&!p.shading?.pattern_plan||
         item.kind==='path'&&p.filled&&!p.stroked&&!p.fill_transform&&(
           directShading&&!directShading.pattern_plan||
           (directShading||options._builtinPattern)&&!options.backdrop&&plan.items.length===1&&pattern?.pattern_plan&&
           !pattern.pattern_plan.annotation_svg&&!pattern.pattern_plan.annotation_fragments?.length&&independentPattern(pattern)
         )
-      );
+      ));
     // Shape first gives per-paint pattern/scene caches a bound that includes
     // low-opacity antialias fringes which may round to zero in the colour pass.
     for(const [context,shapeOnly] of opaqueCoverage?[[ctx,false]]:[[shapeCtx,true],[ctx,false]]) {
@@ -649,7 +667,7 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
         }
         compositor.beginGroup({...group,color_space:space},separate?null:(parent.knockout?parent.initial:parent.pixels));
         await walk(items.slice(i,end),depth+1,group.bounds?[...bounds,group.bounds]:bounds);
-        const result=compositor.endGroup({recycle:!separate});
+        const result=compositor.endGroup({recycle:!separate,regionOnly:!separate&&!inkMode});
         if(separate){
           if((inkMode&&compositor.channels!==4)||(parentInkMode&&parentEngine.channels!==4))throw new Error('Cross-space spot proof groups require a complete colorant-vector transform');
           result.pixels=convertGroupSurface(result.pixels,compositor.colour,parentEngine.colour,group.rendering_intent);
@@ -668,7 +686,7 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
           const parent=compositor.frames.at(-1);
           compositor.beginGroup({isolated:false,knockout:true,color_space:parent.color_space},parent.knockout?parent.initial:parent.pixels);
           await walk(items.slice(i,end),depth,bounds,textId);
-          const result=compositor.endGroup({recycle:true});
+          const result=compositor.endGroup({recycle:true,regionOnly:!inkMode});
           compositor.paint(result.pixels,result.shape,{dirty:result.dirty});compositor.releaseGroup(result);
           i=end;continue;
         }
@@ -697,7 +715,7 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
           const inner=equalOverprint?{...p,fill_alpha:1,stroke_alpha:1,blend_mode:'normal',alpha_is_shape:false}:p;
           await paintSource({...item,paint:{...inner,stroked:false}},bounds,depth+1,equalOverprint?null:undefined);
           await paintSource({...item,paint:{...inner,filled:false}},bounds,depth+1,equalOverprint?null:undefined);
-          const joined=compositor.endGroup({recycle:true});
+          const joined=compositor.endGroup({recycle:true,regionOnly:!inkMode});
           compositor.paint(joined.pixels,joined.shape,{alpha:equalOverprint?p.fill_alpha:1,blend_mode:equalOverprint?p.blend_mode:'normal',mask:equalOverprint?await maskSamples(item.mask || p.soft_mask):null,alpha_is_shape:equalOverprint?p.alpha_is_shape:false,dirty:joined.dirty});compositor.releaseGroup(joined);
         }else await paintSource(item,bounds,depth);
       }

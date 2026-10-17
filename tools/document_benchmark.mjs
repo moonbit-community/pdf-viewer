@@ -20,8 +20,8 @@ const bytes=await readFile(filename),hash=b=>createHash('sha256').update(b).dige
 const report={scope:'Three variants in alternating fresh contexts, documents and Workers. First sequential full-document sweep at CSS width 1216 / DPR 2. Preparation, painting and full RGBA readback are timed; startup/opening, hashes, DOM and teardown are excluded. Ours includes selection/accessibility preparation; PDF.js is a render-only lower bound. Require exact baseline/candidate pixels and complete semantics per page; PDF.js hashes are reported separately.',complete:false,engine,samples,capturePage,fixtureSha256:hash(bytes),pdfjsRevision:revision,workerSha256:{},hostSha256:{},rows:[]};
 for(const [variant,root] of Object.entries(roots))report.workerSha256[variant]=hash(await readFile(resolve(root,variant==='reference'?'build/pdf.worker.mjs':'pdf-worker.js')));
 for(const variant of ['baseline','candidate']){
- const modules=['viewer-host.mjs','pdf-canvas.mjs','pdf-canvas-program.mjs','pdf-runtime.mjs','pdf-shading.mjs'];
- try{await access(resolve(roots[variant],'pdf-canvas-text-runs.mjs'));modules.push('pdf-canvas-text-runs.mjs');}catch(error){if(error.code!=='ENOENT')throw error;}
+ const modules=['viewer-host.mjs','pdf-canvas.mjs','pdf-canvas-native.mjs','pdf-canvas-program.mjs','pdf-compositor.mjs','pdf-runtime.mjs','pdf-shading.mjs'];
+ for(const file of ['pdf-canvas-text-runs.mjs','pdf-path-region.mjs'])try{await access(resolve(roots[variant],file));modules.push(file);}catch(error){if(error.code!=='ENOENT')throw error;}
  report.hostSha256[variant]=Object.fromEntries(await Promise.all(modules.map(async file=>[file,hash(await readFile(resolve(roots[variant],file)))])));
 }
 const mime={'.js':'text/javascript','.mjs':'text/javascript','.wasm':'application/wasm'},server=createServer(async(req,res)=>{

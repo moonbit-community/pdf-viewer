@@ -11,6 +11,43 @@ const near = (actual, expected, label, tolerance=0.005) => {
 };
 let count = 0;
 function test(name, fn) { fn(); count++; console.log(`ok ${name}`); }
+test('nested owned backdrops retain exact snapshot semantics through frame reuse',()=>{
+ const render=copy=>{
+  const c=new PdfCompositor(1,1,createCanvas);c.beginGroup({isolated:true});c.paint(pixel(.8,.3,.6,.7),shape(.9));
+  const backdrop=initial=>{const parent=c.frames.at(-1),data=initial?parent.initial:parent.pixels;return copy?new Float32Array(data):data;};
+  for(const colour of [[1,.2,.4],[.1,.7,.9],[.6,.8,.3]]){
+   const parent=c.frames.at(-1);c.beginGroup({knockout:true},backdrop(false));
+   if(!copy)assert.equal(c.frames.at(-1).initial,parent.pixels,'An open parent owns a stable backdrop until child extraction');
+   c.paint(pixel(...colour,.43),shape(.8));
+   c.beginGroup({knockout:true},backdrop(true));c.paint(pixel(.2,.5,.9,.6),shape(.7));
+   const inner=c.endGroup({recycle:true});c.paint(inner.pixels,inner.shape,{alpha:.55,dirty:inner.dirty});c.releaseGroup(inner);
+   c.paint(pixel(.9,.4,.1,.3),shape(.6));
+   const group=c.endGroup({recycle:true});c.paint(group.pixels,group.shape,{alpha:.75,dirty:group.dirty});c.releaseGroup(group);
+  }
+  const bytes=c.workingBytes(),result=c.endGroup();return {pixels:result.pixels,shape:result.shape,result:result.result,bytes};
+ };
+ assert.deepEqual(render(false),render(true),'Borrowed owned surfaces preserve every Float32 value and the conservative budget charge');
+});
+test('caller backdrops stay snapshots and recycled isolated frames clear owned storage',()=>{
+ const c=new PdfCompositor(1,1,createCanvas),input=pixel(.2,.6,.9,.7),expected=new Float32Array(input);
+ c.beginGroup({},input);input.fill(0);assert.deepEqual(c.frames.at(-1).initial,expected);assert.deepEqual(c.frames.at(-1).pixels,expected);
+ const group=c.endGroup({recycle:true});c.releaseGroup(group);c.beginGroup({isolated:true});
+ assert.deepEqual(c.frames.at(-1).initial,new Float32Array(4));assert.deepEqual(c.frames.at(-1).pixels,new Float32Array(4));c.endGroup();
+});
+test('bounded internal group leases preserve full results across disjoint reuse',()=>{
+ const render=regionOnly=>{
+  const c=new PdfCompositor(4,3,createCanvas),solid=new Float32Array(48),coverage=new Float32Array(12).fill(1);
+  for(let p=0;p<12;p++)solid.set(pixel(.3,.6,.8,.7),p*4);
+  c.beginGroup({isolated:true});c.paint(solid,coverage);
+  for(const p of [0,11,5]){
+   const source=new Float32Array(48),shape=new Float32Array(12),dirty={x:p%4,y:Math.floor(p/4),width:1,height:1};source.set(pixel(.8,.2,.4,.6),p*4);shape[p]=.8;
+   c.beginGroup({knockout:true},c.frames.at(-1).pixels);c.paint(source,shape,{dirty});
+   const group=c.endGroup({recycle:true,regionOnly});c.paint(group.pixels,group.shape,{alpha:.65,dirty:group.dirty});c.releaseGroup(group);
+  }
+  const result=c.endGroup();return {pixels:result.pixels,shape:result.shape,result:result.result};
+ };
+ assert.deepEqual(render(true),render(false),'Only the leased dirty region is consumed; stale backing pixels never escape');
+});
 test('RGBA public contract preserves transparent and half-alpha pixels', () => {
   const bytes = new Uint8ClampedArray([255,0,0,128,0,0,0,0]);
   assert.deepEqual(premultipliedToRgba8(rgba8ToPremultiplied(bytes)),bytes);

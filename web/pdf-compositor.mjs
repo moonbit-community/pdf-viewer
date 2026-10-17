@@ -67,7 +67,16 @@ export class PdfCompositor {
       throw new RangeError('PDF transparency groups exceed the configured memory limit');
     }
     const frame=this.freeFrames.pop()||{initial:new Float32Array(this.length*4),pixels:new Float32Array(this.length*4),alpha:new Float32Array(this.length),shape:new Float32Array(this.length)};
-    frame.initial.fill(0);if(!isolated&&backdrop)frame.initial.set(backdrop);
+    frame.initialStorage ||= frame.initial;
+    // An open parent's surfaces cannot change until its child is extracted.
+    // Borrow that owned backdrop instead of clearing and copying a full tile
+    // for every nonisolated text/group scope. Caller-owned input stays a copy.
+    const borrowed=!isolated&&backdrop&&this.frames.some(parent=>parent.pixels===backdrop||parent.initial===backdrop);
+    frame.initial=borrowed?backdrop:frame.initialStorage;
+    if(!borrowed){
+      if(isolated||!backdrop||backdrop.length!==frame.initial.length)frame.initial.fill(0);
+      if(!isolated&&backdrop)frame.initial.set(backdrop);
+    }
     frame.pixels.set(frame.initial);frame.alpha.fill(0);frame.shape.fill(0);
     Object.assign(frame,{isolated,knockout,color_space,dirty:{x:0,y:0,width:0,height:0}});
     this.frames.push(frame);
@@ -128,7 +137,7 @@ export class PdfCompositor {
       frame.shape[p] = fs + frame.shape[p] * (1 - fs);
     }
   }
-  endGroup({recycle=false}={}) {
+  endGroup({recycle=false,regionOnly=false}={}) {
     const frame = this.frames.pop();
     if (!frame) throw new Error('PDF transparency group stack underflow');
     const source = recycle?frame.pixels:new Float32Array(frame.pixels.length);
@@ -146,7 +155,9 @@ export class PdfCompositor {
         source[i] = source[i + 1] = source[i + 2] = gray;
       }
     }
-    if(recycle){clearOutsideRegion(source,4,this.width,this.height,r);this.recyclingFrames.add(frame);}
+    // Internal leases consumed with `dirty` need no full-tile zero upload.
+    // Public/full-surface results still clear every pixel outside that region.
+    if(recycle){if(!regionOnly)clearOutsideRegion(source,4,this.width,this.height,r);this.recyclingFrames.add(frame);}
     return { pixels: source, shape: frame.shape, result: frame.pixels,dirty:frame.dirty,_recycleFrame:recycle?frame:null };
   }
   releaseGroup(result){

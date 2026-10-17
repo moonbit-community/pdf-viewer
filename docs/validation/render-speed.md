@@ -2380,3 +2380,182 @@ render-only median. Its shading/retained composition path remains a concrete
 architectural target. Full semantic-model construction, complete-response JSON
 and host positioned-glyph expansion also remain in place. Document-owned font
 resources remove repeated work; they do not resolve those other pipeline gaps.
+
+## Retained outline regions and group backdrop ownership (2026-10-17)
+
+Baseline is pushed `0663ec8089ab2c81eebe256d39d90600494eb4a1`, packaged
+independently before editing. Public `tracemonkey.pdf` page 11 expands to
+3,561 paints: 36 paths, 78 images, 81 shadings and 3,366 text items. Exactly
+the 81 ungrouped, opaque, normal axial shadings prevent native page eligibility.
+The resulting software route uses twelve 1024-pixel tiles at CSS 1216 / DPR 2.
+A direct native promotion changes pixel results, including rasterization and
+partition boundaries, and is not included in this implementation. The retained
+route, original tiles, paint order and Float32 compositing arithmetic remain.
+
+Three retained data-flow costs are removed:
+
+- `pdf-path-region.mjs` computes conservative device control-point hulls for
+  absolute M/L/Q/C/Z fill outlines, including an antialias fringe. The hull
+  intersects the original model culling region. Selection rectangles and their
+  fallback em margin no longer dictate actual outline readback and Float32
+  dirty work. Strokes, transformed fills, patterns and unknown host syntax keep
+  existing bounds. `fullSurfaceReplay` disables narrowing for differential checks.
+  Local hulls are parsed once per immutable path string across tiles and nested
+  scenes. Their 4096-entry/8 MiB maximum shares the existing glyph reservation
+  and uses at most half of it; bitmap admission accounts for that charge.
+  Full budgets retain uncached behavior, and the owner expires after rendering.
+- Opaque solid RGB vectors reuse colour alpha as shape, avoiding the second
+  rasterization/readback. Transparent colours, masks, patterns, calibrated/ICC
+  groups and component-space routes preserve independent passes.
+  `fullShapeReplay` retains the explicit shape-pass control.
+- An open compositor ancestor owns a stable backdrop until child extraction,
+  so nonisolated children borrow that surface. Frames keep owned initial
+  storage for external snapshots and isolated reuse. Internal recycled RGB
+  leases consumed with their dirty rectangle also skip clearing source pixels
+  outside that rectangle. Public full-surface results and cross-space extraction
+  preserve full clearing. The existing 40-byte-per-pixel frame charge and all
+  working-memory/cache limits are unchanged.
+
+An instrumented packaged-Worker diagnostic renders page 11 independently in
+both engines. Its counters are identical across engines; instrumented wall
+times are deliberately not used as performance measurements:
+
+| Page 11 diagnostic work | Baseline | Candidate |
+| --- | ---: | ---: |
+| Canvas source readbacks | 8,448 | 3,835 |
+| Pixels in source readbacks | 95,913,765 | 12,487,052 |
+| Float32 `fill` calls | 972,273 | 256,154 |
+| Values written by Float32 `fill` | 423,204,151 | 129,375,300 |
+| Float32 `set` calls | 46 | 29 |
+| Values copied by Float32 `set` | 157,501,440 | 94,062,592 |
+
+Readback pixels decrease 87.0%; combined counted Float32 fill/set values decrease
+61.5%. These are logical operations, not a measurement of physical memory-bus
+traffic. The diagnostic excludes Worker-side arrays and allocation zeroing.
+Both variants retain twelve tiles, complete semantics and exact page 11 RGBA:
+
+| Engine | Baseline and candidate RGBA SHA-256 |
+| --- | --- |
+| WebKit | `22843d380f4bc9ecd77eeab4c7475a98746e3cbf2a5ad829aee8c19b4909f39d` |
+| Chromium | `897acf9f98b8750085f3487abe54593f7a31c2cb029dc3658cb5313322697cca` |
+
+Authored Canvas regressions compare complete RGBA, shape and Float32 surfaces
+against full source/shape replay across affine curves, clipping, transparency,
+knockout, disjoint sources and external painters. Parser regressions retain
+unknown/malformed SVG fallback. Compositor regressions compare owned borrowing
+with explicit backdrop copies through nested knockout groups and frame reuse,
+retain caller snapshot isolation, and compare bounded dirty leases against full
+extraction across disjoint reuse. Hull cache regressions cover changed paths,
+placement, byte/entry caps and combined bitmap admission/release. The 15
+compositor checks now run in CI in addition to the 55 Canvas checks.
+
+Region parsing is restricted to software replay: native display does not need
+source readback bounds and must not pay for their parsing or retain their hulls.
+The ordinary-native regression explicitly checks that no hull cache is created.
+An uncached hull prototype and the version before this native-only guard remain
+under ignored `before-cache/` and `before-native-guard/`; neither supplies the
+final timing conclusion below.
+
+All timings run serially after a 45-second quiet interval following validation.
+The final packaged sites use five alternating fresh-context/document/Worker
+pairs at CSS width 1216 / DPR 2. Preparation, painting and complete RGBA readback
+are timed; startup/opening, hashing, DOM layers and teardown are excluded. Our
+request still includes complete selection/editor/annotation/accessibility
+preparation. PDF.js is the same pinned render-only lower bound.
+
+The final WebKit block completes with exact RGBA and complete semantic hashes
+on every page in all five 14-page sweeps:
+
+| Final full sweep, ms | Baseline | Candidate |
+| --- | ---: | ---: |
+| Total samples | 14,393 / 8,105 / 6,859 / 6,407 / 6,279 | 6,146 / 6,778 / 6,762 / 6,278 / 6,203 |
+| Preparation samples | 6,832 / 3,732 / 3,300 / 3,147 / 2,962 | 3,296 / 3,595 / 3,252 / 3,389 / 3,223 |
+| Median total | 6,859 | 6,278 |
+| Median preparation | 3,300 | 3,296 |
+| Median host paint + readback | 3,559 | 2,980 |
+| Page 11 paint + readback samples | 5,370 / 3,086 / 2,491 / 2,154 / 2,129 | 1,685 / 1,945 / 2,044 / 1,749 / 1,861 |
+
+The ratio of total medians is 8.5% lower, but the median **paired** total
+reduction is only **2.0%**: paired reductions are 57.3%, 16.4%, 1.4%, 2.0% and
+1.2%. Host paint/readback has an 11.4% median paired reduction; page 11 paint
+reductions are 68.6%, 37.0%, 17.9%, 18.8% and 12.6%, median **18.8%**.
+The first pair shows substantial environmental/warmup drift in preparation
+despite identical Worker bytes. It is retained, not removed as an outlier, and
+must not be attributed to these host changes. No preparation or startup
+improvement is claimed. This is a retained-hotspot improvement, not evidence of
+a substantial overall first-load breakthrough.
+
+PDF.js totals are 659 / 715 / 945 / 891 / 675 ms, median 715 ms. The candidate
+total is still about 8.8 times that render-only lower bound. Absolute seconds
+from this loaded session must not be compared with the preceding session's
+5,236 ms result; even the byte-identical baseline varies widely here.
+
+The final Chromium report remains `complete:false`, stopping at page 13 with
+the already recorded hashes
+`367bb5030a71c8b76bf45e5ff70f03da0b3cb37d55530c67977d1eb4129ed88e`
+and `4b1bb1ecf5ae302714783b1e7b876cdf799e5fc0f317c887fffd933b4ae28e39`.
+The earlier pre-guard run also exposed a page 6 pair differing by 12 grayscale
+pixels, maximum channel delta 4, total absolute channel delta 48. Both exact
+page 6 hashes are subsequently reproduced using only the independently packaged
+pushed baseline: a cold paint and a replay after one untimed host paint produce
+`e77be01e29bb1c0229f5a544dad5ae835220890d7fabb2e3f02c217d586c96a3`
+and `60ada7a74e9819adfee732b7a807d1c8ef55e6412f3dd71e26cb98f5aae33c79`.
+The renderer modules in that control are all baseline bytes. Failed strict
+reports, both baseline controls and PNGs are retained. No pixel tolerance or
+whitelist is added, and incomplete Chromium timing is not accepted as a speedup.
+
+The private 13-page image fixture retains SHA-256
+`fea1ef069944d3479425ebf076a9b34118f7ba9e3df8cefb54e557ca16f90817`.
+Five initial pairs plus five audit pairs use the exact same frozen candidate;
+all 260 page outputs per engine match independent historical RGBA and complete
+semantic hashes. No sample is discarded or replaced:
+
+| Private total samples, ms | Baseline | Candidate |
+| --- | ---: | ---: |
+| Chromium, first block | 1,536.6 / 1,360.0 / 1,430.1 / 1,898.6 / 2,195.4 | 1,612.5 / 1,275.5 / 2,484.4 / 2,271.9 / 2,200.0 |
+| Chromium, audit | 1,481.4 / 1,250.4 / 1,264.9 / 1,275.3 / 1,256.5 | 1,336.8 / 1,201.5 / 1,238.9 / 1,339.0 / 1,259.6 |
+| WebKit, first block | 2,452 / 2,082 / 2,178 / 2,480 / 1,681 | 2,290 / 2,160 / 2,388 / 2,425 / 2,851 |
+| WebKit, audit | 1,356 / 1,449 / 1,276 / 1,500 / 1,527 | 1,574 / 1,620 / 1,308 / 1,319 / 2,127 |
+
+Across all ten pairs, Chromium's median paired change is **0.2% slower** and
+WebKit's is **6.7% slower**. Large outliers occur in unchanged preparation as
+well as painting. A separate five-pair control serving the *same baseline
+modules on both routes* also produces widely different times:
+
+| Identical-code private control, ms | First route | Second route |
+| --- | ---: | ---: |
+| Chromium | 1,218.4 / 1,899.6 / 1,565.0 / 1,539.2 / 1,711.0 | 1,690.0 / 1,772.1 / 1,300.9 / 1,202.1 / 1,418.7 |
+| WebKit | 3,109 / 3,083 / 1,450 / 1,355 / 1,342 | 2,340 / 3,699 / 1,341 / 1,299 / 1,315 |
+
+These controls prevent attributing the private results to a general improvement
+or declaring a latency-regression bound from this session. The image-heavy
+workload has **no demonstrated speedup**. Pixel/semantic correctness and raster
+counts/budgets remain exact; the timing uncertainty is preserved explicitly.
+
+Validation passes JS 790/790, Wasm 774/774, Wasm GC 774/774 and native 782/782,
+with no public interface changes. Final focused Canvas/compositor, compiled
+glyph/outline/text, shading, image/worker/Range and XFA tests pass. The final
+packaged sites pass Chromium and WebKit smoke checks; browser, editor (25),
+layers, Chromium/WebKit text interaction, reader corpus and all 12 visual cases
+also pass. Visual differences against PDF.js remain recorded.
+
+The frozen Worker remains 5,264,078 bytes with SHA-256
+`f86264350344e77b17e6db004d2f710a9c308b5db36d8039a369e1039252fb47`.
+`document_benchmark.mjs` now records the compositor, native selector and optional
+path-region module in addition to the existing host graph. Frozen artifact
+metadata, all timing blocks, identical-code controls and strict failures remain
+under ignored `_build/composition-scope-next/`.
+
+| Changed frozen host module | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `pdf-canvas.mjs` | 60,636 | `cdd28eedf2353de89b41919b29c182fc56e5f8c63e4243a63a8532d9d86a2d0d` |
+| `pdf-compositor.mjs` | 10,416 | `6a3e559464ed6ac5d0ce184d357b9de3ff58e051cfd644abdc1df29fd12e076f` |
+| `pdf-path-region.mjs` | 2,282 | `6d625c9c73b5c2ed4347633e2020d4cf29bf9709d8b5d846d99428a6e8ae2d3b` |
+| `pdf-runtime.mjs` | 6,441 | `9befdf13c748adc30524e878efcb6578ae12607f27012e266eb09b8f8a7d6297` |
+
+The whole-scope shading fallback remains. Preparation still builds a complete
+semantic model and monolithic JSON response. In particular, TrueType outlines
+still become positioned per-glyph path strings; `canvas_outlines.mbt` only
+compiles CFF/Type1 fills into shared outline resources. Shared TrueType render
+resources and independent render/semantic projections remain concrete
+architectural work beyond the retained pixel/buffer waste removed here.

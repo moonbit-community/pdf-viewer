@@ -569,6 +569,37 @@ replay. Explicit backdrop and luminosity-mask extraction also keep full bounds
 to preserve their floating-point working values and quantization boundary.
 `fullShadingReplay` remains a differential control for the complete path.
 
+Retained fill outlines use `web/pdf-path-region.mjs` to bound actual source
+readback and Float32 work by absolute M/L/Q/C/Z control-point hulls. These
+device bounds, including an antialias margin, intersect the existing model
+culling bounds; text selection rectangles and their fallback em padding no
+longer determine the full transfer size when a path is available. Rasterization
+still uses the original Canvas, matrix, tile boundaries and global pixel
+centers. Strokes, transformed fills, patterns and unknown host SVG syntax keep
+their existing bounds. `fullSurfaceReplay` disables outline narrowing for
+differential checks. Opaque solid RGB vectors can reuse their colour alpha as
+shape; translucent sources, masks, patterns and non-RGB blend domains retain
+separate passes. `fullShapeReplay` keeps the explicit shape-pass control.
+One render owns local path hulls across tiles and nested scenes, keyed by the
+immutable path string rather than its mutable containing plan. At most 4096
+entries and 8 MiB of conservative charges share the existing glyph-cache
+reservation; hulls use at most half that reservation. Bitmap admission respects
+the retained hull charge, and full caches keep uncached parsing. The owner is
+released after the render, so changed host paths and later renders re-evaluate
+their geometry.
+
+Nonisolated RGB compositor frames borrow an open ancestor's owned initial or
+pixel surface as their stable initial backdrop. That ancestor cannot change
+until its child is extracted. Each frame retains separate owned initial storage
+for isolated groups and caller-supplied backdrop snapshots, and rebinds it on
+reuse. The existing 40-byte-per-pixel frame charge remains conservative;
+borrowing removes redundant clearing/copying rather than increasing the budget
+or changing source-over, knockout or extraction arithmetic.
+Internal recycled RGB group leases consumed with their explicit dirty rectangle
+also skip clearing source pixels outside that rectangle. Full public group
+results and cross-space conversions keep complete zero-filled extraction;
+isolated/group reuse still initializes its complete working destination.
+
 The native public route writes `.canvas.json` through `cmd/main`, then replays
 it with `tools/render_canvas.mjs` in a Canvas host. `.svg` selects compatibility
 output. It uses the same plan/runtime, not a separate MoonBit software rasterizer;
