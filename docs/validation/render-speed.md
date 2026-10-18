@@ -2791,3 +2791,129 @@ Ignored evidence is under `_build/paint-pipeline-next/`: immutable baseline,
 exploratory profiles and rejected numeric prototype, complete final timing
 reports, strict Chromium failure/captures, summary, validation logs and frozen
 artifact manifest. Private bytes and pixels remain local in ignored paths.
+
+## Indexed text partitioning and shared separators (2026-10-18)
+
+Baseline is pushed `a065d3a965e4178ce49f32a0d5d11d394a4b46ce`, copied as
+an independent packaged site before editing. A fresh full-document packet
+CPU sample identifies reading-order construction as a material preparation
+cost after the earlier transport and paint changes. This readable Node sample
+is diagnostic, not browser latency: content/resource lowering, gradients,
+text layout, cache accounting and garbage collection all remain visible.
+Metadata JSON writing is no longer the principal cost.
+
+The recursive column/gutter algorithm previously rebuilt and sorted glyph
+height and horizontal/vertical interval arrays at every region. Its table
+test also repeated the same vertical projection sort used for gutter splitting.
+The new block index sorts glyph projections and heights once at the tree root.
+Each accepted split partitions those ordered views without sorting its glyphs
+again. Blank classification, direction and line keys are computed once per
+entry. Source order within each region, median height, gap tie-breaking, table
+checks, direction handling and the existing depth limit retain their original
+rules. Nonfinite or reversed public geometry retains the previous algorithm.
+No page-space geometry or paint order is rewritten.
+
+The prepared browser projection also computes each glyph's inferred separator
+once. The joined page text, selection layer and accessibility source ranges
+consume that same immutable page-owned separator array. Existing public page
+models and text-content structures keep their interfaces and fallback paths.
+The sidecar conservatively charges its additional retained array against the
+existing page-cache budget; no new unbounded cache or deferred semantic work
+is introduced.
+
+Page-cache admission also uses the typed geometry owners already available
+from MoonBit. It seeds the same ownership WeakSet with each text quad, bounds
+and four points, charging exactly the original per-record/per-slot amounts.
+The generic walker then handles the remaining graph without reflecting
+through those six fixed records for every glyph. Shared points and repeated
+items still deduplicate. This inspects neither compiler enum tags nor private
+field layouts. A diagnostic control disables typed seeding and retains the
+original complete graph traversal. Tests require exact charges and admission
+at budget-minus-one, exact-budget and budget-plus-one boundaries, including
+shared points, repeated items, Type3, empty models and large strings.
+
+New differential regressions compare block membership, complete ordered items
+and joined text against the original algorithm over 120 deterministic mixed
+column/table/heading/footer layouts, including whitespace, RTL, CJK, controls
+and supplementary Unicode. Separate cases cover degenerate, reversed and
+nonfinite bounds and the depth limit. Prepared-text regressions compare source
+ranges, separators, paragraphs, all four selection rotations, tagged ActualText
+and artifact behavior against the ordinary public projection.
+
+Counterfactual replay uses the identical captured fourteen-page geometry and
+ownership graphs in one warmed Node process, five alternating pairs. The
+layout block repeats each sweep ten times; admission repeats it three times.
+Block partitions and every cache byte charge match their original controls.
+Layout medians are 132.4 to 56.3 ms (56.4% median paired reduction); cache
+admission is 143.0 to 129.9 ms (9.1%). These isolated substage percentages do
+not describe browser latency and are not added together.
+
+The preliminary index-only browser block had widely varying paint times even
+though paint code was unchanged. Its total samples are baseline
+`[5293,4980,5541]`, candidate `[4170,4543,4631]`; complete preparation is
+`[2711,2485,2547]` versus `[2033,2225,2479]`. Keep that exploratory block
+separate from the final five-pair results.
+
+Final acceptance runs serially after full validation and a 45-second quiet
+interval. Independent packaged baseline/candidate sites use fresh contexts,
+documents and Workers in alternating order, all fourteen pages at CSS width
+1216 / DPR 2. Complete preparation, semantic restoration, painting and full
+RGBA readback are timed. Startup, opening, hashes, DOM and teardown are
+excluded; PDF.js remains the pinned render-only lower bound. A separate deep
+comparison confirms every Canvas and semantic field, including signed zero,
+against the baseline on all fourteen pages.
+
+All five WebKit pairs retain exact per-page pixels and complete semantics:
+
+| Public fourteen-page sweep, ms | Baseline median | Candidate median | Median paired reduction |
+| --- | ---: | ---: | ---: |
+| Complete preparation, painting and readback | 4,285 | 4,270 | 4.6% |
+| Complete preparation and host decoding | 2,128 | 2,002 | 6.3% |
+| Painting and full readback | 2,207 | 2,229 | 1.7% |
+
+Raw totals are baseline `[4507,4158,4273,4429,4285]`, candidate
+`[4277,4372,4075,4270,4071]`; preparation is baseline
+`[2193,2128,2066,2256,2037]`, candidate `[2002,1994,2000,2041,2029]`.
+Percentages first compare each alternating pair and then take the median;
+they are not ratios of the independent column medians. All five preparation
+pairs improve. Total pairs vary from -5.1% to +5.1%, and the independent
+total medians differ by only 15 ms. This supports a modest preparation gain;
+paint remains variable and no paint improvement is claimed. PDF.js render-only
+median is 657 ms, leaving the candidate about 6.5 times that lower bound.
+Absolute times from previous blocks have different background load.
+
+The Chromium strict sweep stops at candidate page 13 in the first pair:
+baseline `4b1bb1ecf5ae302714783b1e7b876cdf799e5fc0f317c887fffd933b4ae28e39`
+and candidate `9657065c732a4ac28f2ae3cfba44144314ab25bc07babf5f3a39047a1ebb1dc4`
+are independently established older-baseline antialias variants. The complete
+captures and incomplete report remain available. No tolerance is added and
+this run is not accepted as a complete Chromium performance result.
+
+The private thirteen-page image fixture
+`fea1ef069944d3479425ebf076a9b34118f7ba9e3df8cefb54e557ca16f90817`
+completes five pairs per engine with historical RGBA and full semantic hashes
+on all 130 pages per engine. Chromium medians are 1,221.6 to 1,220.3 ms
+(-0.7% paired reduction); WebKit medians are 1,328 to 1,311 ms (+1.3%).
+This image-oriented document has no material performance change.
+
+Five ordinary file-input reader pairs retain exact first-page pixels in both
+engines. Chromium Canvas-visible medians are 451.5 to 437.6 ms and reader-ready
+388 to 386.1 ms; paired reductions are 2.8% and 0.3%. WebKit medians are
+777 to 774 ms and 437 to 417 ms; paired reductions are 1.9% and 5.0%.
+These small first-screen changes are measured after the shell loads; negative
+Worker timestamps still record untouched Worker startup shifted before file
+selection. They are not cold navigation-to-open measurements.
+
+Validation passes JS 795, Wasm 776, Wasm GC 776 and native 784 tests, all Node
+Canvas/Worker/raster/Range/XFA regressions, both packaged browsers, browser/
+editor/layer/text interaction, the readonly corpus and all twelve visual cases.
+Existing PDF.js reference differences remain recorded. The final admission
+change is confined to the JS-only browser package and is covered by another
+full JS, Node and browser/corpus/visual run. `moon info && moon fmt` leaves all
+generated interfaces unchanged.
+
+Ignored evidence: `_build/page-preparation-next/`, including the independently
+verified baseline, raw CPU sample and summaries, matched-input counterfactuals,
+every-field comparison, complete timings, strict Chromium failure/captures,
+validation logs and frozen artifact manifest. Private PDF bytes and pixels
+remain in ignored local paths.

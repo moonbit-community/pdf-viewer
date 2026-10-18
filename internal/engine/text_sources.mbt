@@ -14,11 +14,16 @@ pub(all) struct PdfTextSourceRange {
 ///|
 fn pdf_text_source_ranges(
   items : ArrayView[PdfTextItem],
+  separators? : ArrayView[String]? = None,
 ) -> Array[PdfTextSourceRange] {
   let output : Array[PdfTextSourceRange] = []
   let mut offset = 0
   for index, item in items {
-    offset += pdf_text_separator_at(items, index).length()
+    let separator = match separators {
+      Some(values) if values.length() == items.length() => values[index]
+      _ => pdf_text_separator_at(items, index)
+    }
+    offset += separator.length()
     output.push({
       item_index: item.index,
       start: offset,

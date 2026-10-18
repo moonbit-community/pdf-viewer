@@ -131,8 +131,11 @@ pub fn PdfPageModel::text_structure(self : PdfPageModel) -> PdfTextStructure {
 }
 
 ///|
-fn pdf_text_structure_of_content(content : PdfTextContent) -> PdfTextStructure {
-  let sources = pdf_text_source_ranges(content.items[:])
+fn pdf_text_structure_of_content(
+  content : PdfTextContent,
+  separators? : ArrayView[String]? = None,
+) -> PdfTextStructure {
+  let sources = pdf_text_source_ranges(content.items[:], separators~)
   let paragraphs : Array[PdfTextParagraph] = []
   let mut runs : Array[PdfTextRun] = []
   let mut paragraph_bounds : PdfBounds? = None

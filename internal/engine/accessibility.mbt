@@ -476,6 +476,7 @@ fn pdf_accessibility_page_json(
   number : Int,
   page_model? : PdfPageModel? = None,
   text_content? : PdfTextContent? = None,
+  text_separators? : ArrayView[String]? = None,
 ) -> Json? raise @core.PdfError {
   guard number >= 1 && number <= view.pages.length() else { return None }
   let page = match page_model {
@@ -624,7 +625,11 @@ fn pdf_accessibility_page_json(
       for item in content.items => (item.index, item)
     ],
   )
-  for paragraph in pdf_text_structure_of_content(content).paragraphs {
+  for
+    paragraph in pdf_text_structure_of_content(
+      content,
+      separators=text_separators,
+    ).paragraphs {
     let remaining : Array[PdfTextItem] = []
     for run in paragraph.runs {
       for source in run.sources {

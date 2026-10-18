@@ -65,6 +65,7 @@ fn pdf_text_layer_of_items(
   text_items : ArrayView[PdfTextItem],
   scale : Double,
   rotation : Int,
+  separators? : ArrayView[String]? = None,
 ) -> PdfTextLayer {
   let viewport = page.viewport(scale~, rotation~)
   let output : Array[PdfTextLayerItem] = []
@@ -77,7 +78,10 @@ fn pdf_text_layer_of_items(
     output.push({
       item_index: text.index,
       text: text.text,
-      separator: pdf_text_separator_at(text_items, index),
+      separator: match separators {
+        Some(values) if values.length() == text_items.length() => values[index]
+        _ => pdf_text_separator_at(text_items, index)
+      },
       quad: text.quad,
       matrix: [
         top_right.x - top_left.x,

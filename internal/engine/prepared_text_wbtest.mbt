@@ -4,6 +4,27 @@ fn prepared_text_test_projections(document : PdfViewerDocument) -> Unit raise {
   let content = program.text_content.unwrap()
   assert_eq(content, page.text_content())
   assert_eq(content.text, page.text)
+  let separators = program.text_separators.unwrap()
+  assert_eq(
+    separators,
+    [
+      for index in 0..<content.items.length() => {
+        pdf_text_separator_at(content.items[:], index)
+      }
+    ],
+  )
+  assert_eq(
+    pdf_join_text_items(content.items[:], separators=Some(separators[:])),
+    content.text,
+  )
+  assert_eq(
+    pdf_text_structure_of_content(content, separators=Some(separators[:])),
+    page.text_structure(),
+  )
+  assert_eq(
+    pdf_text_source_ranges(content.items[:], separators=Some(separators[:])),
+    page.text_sources(),
+  )
   assert_eq(pdf_text_structure_of_content(content), page.text_structure())
   let prepared = program.accessibility_page_json(document, 1, page)
   assert_eq(

@@ -77,7 +77,7 @@ fn pdf_text_has_multiple_lines(
 }
 
 ///|
-fn pdf_text_reading_blocks(
+fn pdf_text_reading_blocks_legacy(
   items : ArrayView[PdfTextItem],
   depth : Int,
 ) -> Array[Array[PdfTextItem]] {
@@ -108,8 +108,8 @@ fn pdf_text_reading_blocks(
           }) >
           0
         let (first, second) = if rtl { (right, left) } else { (left, right) }
-        let blocks = pdf_text_reading_blocks(first[:], depth + 1)
-        blocks.append(pdf_text_reading_blocks(second[:], depth + 1))
+        let blocks = pdf_text_reading_blocks_legacy(first[:], depth + 1)
+        blocks.append(pdf_text_reading_blocks_legacy(second[:], depth + 1))
         return blocks
       }
     }
@@ -127,8 +127,8 @@ fn pdf_text_reading_blocks(
         }
       }
       if !top.is_empty() && !bottom.is_empty() {
-        let blocks = pdf_text_reading_blocks(top[:], depth + 1)
-        blocks.append(pdf_text_reading_blocks(bottom[:], depth + 1))
+        let blocks = pdf_text_reading_blocks_legacy(top[:], depth + 1)
+        blocks.append(pdf_text_reading_blocks_legacy(bottom[:], depth + 1))
         return blocks
       }
     }

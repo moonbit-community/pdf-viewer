@@ -3,13 +3,73 @@
 /// retained values directly, without constructing a second complete model.
 /// Conservative slot/string charges cover both V8 and JSC; each page accounts
 /// for shared owners independently. Unknown closures bypass this cache.
-extern "js" fn browser_model_cache_size(
+fn browser_model_cache_size(
   page : @pdf.PdfPageModel,
   budget : Int,
+  geometry? : Bool = true,
+) -> Int {
+  let counter = browser_cache_counter(budget)
+  if geometry {
+    for item in page.items {
+      if item is @pdf.PdfPageItem::Text(text) {
+        let quad = text.quad
+        if !browser_cache_geometry(
+            counter,
+            quad,
+            text.bounds,
+            quad.p0,
+            quad.p1,
+            quad.p2,
+            quad.p3,
+          ) {
+          break
+        }
+      }
+    }
+  }
+  browser_model_cache_walk(counter, page)
+}
+
+///|
+#external
+priv type BrowserCacheCounter
+
+///|
+/// These fixed records contain only numbers or the explicitly supplied point
+/// owners. Charge their ordinary graph slots once, without reflecting through
+/// the same six records for every glyph. Shared points/bounds still deduplicate.
+extern "js" fn browser_cache_counter(budget : Int) -> BrowserCacheCounter =
+  #| budget => {
+  #|   const counter={seen:new WeakSet(),bytes:0,budget};
+  #|   const charge=(value,bytes)=>{if(!counter.seen.has(value)){counter.seen.add(value);counter.bytes+=bytes;}};
+  #|   counter.geometry=(quad,bounds,p0,p1,p2,p3)=>{
+  #|     charge(quad,256);charge(bounds,320);
+  #|     charge(p0,224);charge(p1,224);charge(p2,224);charge(p3,224);
+  #|     return counter.bytes<=budget;
+  #|   };
+  #|   return counter;
+  #| }
+
+///|
+extern "js" fn browser_cache_geometry(
+  counter : BrowserCacheCounter,
+  quad : @pdf.PdfQuad,
+  bounds : @pdf.PdfBounds,
+  p0 : @pdf.PdfPoint,
+  p1 : @pdf.PdfPoint,
+  p2 : @pdf.PdfPoint,
+  p3 : @pdf.PdfPoint,
+) -> Bool =
+  #| (counter,quad,bounds,p0,p1,p2,p3)=>counter.geometry(quad,bounds,p0,p1,p2,p3)
+
+///|
+extern "js" fn browser_model_cache_walk(
+  counter : BrowserCacheCounter,
+  page : @pdf.PdfPageModel,
 ) -> Int =
-  #| (page, budget) => {
-  #|   const seen = new WeakSet(), pending = [page];
-  #|   let bytes = 0;
+  #| (counter, page) => {
+  #|   const seen = counter.seen, pending = [page], budget = counter.budget;
+  #|   let bytes = counter.bytes;
   #|   const add = value => {
   #|     if (typeof value === 'string') bytes += 64 + value.length * 4;
   #|     else if (value !== null && typeof value === 'object') pending.push(value);

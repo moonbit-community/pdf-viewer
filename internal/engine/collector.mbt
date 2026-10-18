@@ -44,9 +44,23 @@ fn pdf_page_model(
     text_sources~,
     canvas_build~,
   )
-  let content = pdf_text_content_of_items(items[:])
-  if canvas_build is Some(build) {
-    build.program.text_content = Some(content)
+  let content = match canvas_build {
+    Some(build) => {
+      let ordered = pdf_text_reading_order_of_page_items(items[:])
+      let separators = [
+        for index in 0..<ordered.length() => {
+          pdf_text_separator_at(ordered[:], index)
+        }
+      ]
+      let content : PdfTextContent = {
+        items: ordered,
+        text: pdf_join_text_items(ordered[:], separators=Some(separators[:])),
+      }
+      build.program.text_content = Some(content)
+      build.program.text_separators = Some(separators)
+      content
+    }
+    None => pdf_text_content_of_items(items[:])
   }
   let text = content.text
   let fonts = page_fonts.fonts

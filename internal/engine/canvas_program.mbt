@@ -8,6 +8,7 @@ pub struct PdfCanvasProgram {
   priv shading_resources : Array[PdfCanvasShadingResource]
   priv mut shading_bytes : Int
   priv mut text_content : PdfTextContent?
+  priv mut text_separators : Array[String]?
 }
 
 ///|
@@ -19,6 +20,7 @@ fn pdf_canvas_program() -> PdfCanvasProgram {
     shading_resources: [],
     shading_bytes: 0,
     text_content: None,
+    text_separators: None,
   }
 }
 
@@ -133,7 +135,13 @@ pub fn PdfCanvasProgram::text_layer(
   rotation : Int,
 ) -> PdfTextLayer {
   let content = self.text_content.unwrap_or_else(() => page.text_content())
-  pdf_text_layer_of_items(page, content.items[:], scale, rotation)
+  pdf_text_layer_of_items(
+    page,
+    content.items[:],
+    scale,
+    rotation,
+    separators=self.text_separators.map(values => values[:]),
+  )
 }
 
 ///|
@@ -150,6 +158,7 @@ pub fn PdfCanvasProgram::accessibility_page_json(
     number,
     page_model=Some(page),
     text_content=self.text_content,
+    text_separators=self.text_separators.map(values => values[:]),
   )
 }
 
@@ -166,6 +175,9 @@ pub fn PdfCanvasProgram::estimated_bytes(self : PdfCanvasProgram) -> Int {
     // Items and the joined string share their immutable page owners; charge
     // references and the string conservatively at every retaining sidecar.
     bytes += 128 + content.items.length() * 8 + content.text.length() * 2
+  }
+  if self.text_separators is Some(values) {
+    bytes += 128 + values.length() * 80
   }
   bytes
 }

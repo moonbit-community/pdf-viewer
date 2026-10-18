@@ -164,10 +164,18 @@ fn pdf_text_reading_order_of_page_items(
 ///|
 /// Join positioned text using the same line and word boundaries as the text
 /// layer. This keeps copy, search and selection source text consistent.
-fn pdf_join_text_items(items : ArrayView[PdfTextItem]) -> String {
+fn pdf_join_text_items(
+  items : ArrayView[PdfTextItem],
+  separators? : ArrayView[String]? = None,
+) -> String {
   let output = StringBuilder()
   for index, item in items {
-    output.write_string(pdf_text_separator_at(items, index))
+    output.write_string(
+      match separators {
+        Some(values) if values.length() == items.length() => values[index]
+        _ => pdf_text_separator_at(items, index)
+      },
+    )
     output.write_string(item.text)
   }
   output.to_string()
