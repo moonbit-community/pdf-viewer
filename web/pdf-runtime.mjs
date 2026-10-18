@@ -37,6 +37,10 @@ export async function renderPdfPage(canvas,plan,options={}) {
   try {
     const width=configured.width||Math.ceil(plan.viewport.width),height=configured.height||Math.ceil(plan.viewport.height);
     const budget=options.maxWorkingBytes||536870912;
+    // Eligibility and lowered native items depend on the immutable render plan,
+    // not on a tile's device matrix. Nested or outline-resolved plans miss this
+    // identity check and prepare their own backend. Never retain it across calls.
+    configured._nativePrepared={plan,items:nativeItems};
     const tileSize=options.tileSize ?? (width*height>(options.maxPixels||16777216)||width*height*(nativeItems?4:256)>budget?1024:0);
     if(tileSize&& !options.returnInks&&!options.returnGroupComponents&&!options.outputGroupComponents&&!options.backdrop){
       return await renderTiledPage(canvas,plan,configured,width,height,tileSize);
@@ -92,7 +96,7 @@ async function renderTiledPage(canvas,plan,options,width,height,tileSize){
   }finally{
     target.width=target.height=1;
     if(scope&&scope!==options._profileScope)scope.dispose();
-    for(const entry of glyphCache.entries.values()){if(options.releaseImage)options.releaseImage(entry.value);else entry.value.close?.();}glyphCache.entries.clear();glyphCache.bytes=0;glyphCache.pathBounds?.entries.clear();if(glyphCache.pathBounds)glyphCache.pathBounds.bytes=0;
+    for(const entry of glyphCache.entries.values()){if(options.releaseImage)options.releaseImage(entry.value);else entry.value.close?.();}glyphCache.entries.clear();glyphCache.bytes=0;glyphCache.pathBounds?.entries.clear();if(glyphCache.pathBounds){glyphCache.pathBounds.bytes=0;glyphCache.pathBounds.owners=new WeakMap();glyphCache.pathBounds.ownerCount=0;}
     for(const entry of imageCache.entries.values()){if(options.releaseImage)options.releaseImage(entry.value);else entry.value.close?.();}imageCache.entries.clear();imageCache.bytes=0;
   }
 }

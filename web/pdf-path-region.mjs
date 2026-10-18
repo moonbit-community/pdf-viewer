@@ -22,14 +22,25 @@ function pathBounds(path){
   return {left,top,right,bottom};
 }
 
-export function pdfPathPixelRegion(path,matrix,width,height,cache=null){
+export function pdfPathPixelRegion(path,matrix,width,height,cache=null,owner=null){
   if(typeof path!=='string')return null;
   let bounds;
-  if(cache?.entries.has(path))bounds=cache.entries.get(path);
+  // A weak paint key cannot keep an otherwise released path alive. Its source
+  // string already belongs to that paint, so only new bounds storage is charged.
+  // Keep the string-keyed policy for callers without that ownership guarantee.
+  const owned=cache&&owner&&typeof owner==='object'&&(owner.svg_path===path||owner.fill_path===path);
+  const previous=owned?cache.owners?.get(owner):null;
+  if(previous?.path===path)bounds=previous.bounds;
+  else if(!owned&&cache?.entries.has(path))bounds=cache.entries.get(path);
   else{
     bounds=pathBounds(path);
-    const bytes=128+path.length*2;
-    if(cache&&cache.entries.size<4096&&bytes<=cache.limit-cache.bytes){cache.entries.set(path,bounds);cache.bytes+=bytes;}
+    const bytes=owned?256:128+path.length*2;
+    if(previous){cache.owners.set(owner,{path,bounds});}
+    else if(cache&&cache.entries.size+(cache.ownerCount||0)<4096&&bytes<=cache.limit-cache.bytes){
+      if(owned){cache.owners||=new WeakMap();cache.owners.set(owner,{path,bounds});cache.ownerCount=(cache.ownerCount||0)+1;}
+      else cache.entries.set(path,bounds);
+      cache.bytes+=bytes;
+    }
   }
   if(!bounds)return null;
   let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;

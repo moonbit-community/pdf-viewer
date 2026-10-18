@@ -10,6 +10,9 @@ import {pdfPathPixelRegion} from './pdf-path-region.mjs';
 import {prepareNativeCanvasItems,singleType3Path,independentPattern} from './pdf-canvas-native.mjs';
 import {expandPdfCanvasProgram} from './pdf-canvas-program.mjs';
 
+// Lowered fill/stroke copies keep the original paint's weak geometry owner.
+const sourcePaint=Symbol('PDF source paint');
+
 export const multiplyMatrix = (a,b) => [
   a[0]*b[0]+a[2]*b[1], a[1]*b[0]+a[3]*b[1],
   a[0]*b[2]+a[2]*b[3], a[1]*b[2]+a[3]*b[3],
@@ -99,7 +102,7 @@ export async function renderPdfCanvas(canvas, plan, options = {}) {
   try{return await renderPdfCanvasScoped(canvas,plan,{...options,_profileScope:scope,_glyphCache:glyphCache,_imageCache:imageCache});}
   finally{
     owned?.dispose();
-    if(ownedGlyphCache){for(const entry of glyphCache.entries.values()){if(options.releaseImage)options.releaseImage(entry.value);else entry.value.close?.();}glyphCache.entries.clear();glyphCache.bytes=0;glyphCache.pathBounds?.entries.clear();if(glyphCache.pathBounds)glyphCache.pathBounds.bytes=0;}
+    if(ownedGlyphCache){for(const entry of glyphCache.entries.values()){if(options.releaseImage)options.releaseImage(entry.value);else entry.value.close?.();}glyphCache.entries.clear();glyphCache.bytes=0;glyphCache.pathBounds?.entries.clear();if(glyphCache.pathBounds){glyphCache.pathBounds.bytes=0;glyphCache.pathBounds.owners=new WeakMap();glyphCache.pathBounds.ownerCount=0;}}
     if(ownedImageCache){for(const entry of imageCache.entries.values()){if(options.releaseImage)options.releaseImage(entry.value);else entry.value.close?.();}imageCache.entries.clear();imageCache.bytes=0;}
   }
 }
@@ -130,7 +133,8 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
 
   const width=options.width || Math.ceil(plan.viewport.width), height=options.height || Math.ceil(plan.viewport.height);
   const matrix=options.matrix || multiplyMatrix(plan.viewport.matrix,pageFlip(plan.page));
-  const nativeItems=_samplesOnly?null:prepareNativeCanvasItems(plan,options);
+  const nativeItems=_samplesOnly?null:options._nativePrepared?.plan===plan
+    ?options._nativePrepared.items:prepareNativeCanvasItems(plan,options);
   const resourceDepth=options._resourceDepth || 0;
   if(resourceDepth>16) throw new RangeError('PDF raster resource recursion limit exceeded');
   const inheritedWorkingBytes=options._inheritedWorkingBytes || 0;
@@ -398,7 +402,7 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
       !item.pattern&&!item.paint.pattern&&!item.paint.shading_pattern){
       const cache=glyphCache.pathBounds||={entries:new Map(),bytes:0,limit:0};
       cache.limit=Math.min(8388608,glyphCache.limit/2,glyphCache.limit-glyphCache.bytes);
-      const r=pdfPathPixelRegion(item.paint.svg_path,matrix,width,height,cache);
+      const r=pdfPathPixelRegion(item.paint.svg_path,matrix,width,height,cache,item[sourcePaint]||item.paint);
       if(r){
         // Text selection bounds include an em-sized fallback margin. Once an
         // actual outline is available, only its covered pixels need readback
@@ -468,7 +472,9 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
       for(const value of uncachedImages)releaseImage(value);uncachedImages.clear();
     }
     const {x,y,width:w,height:h}=region;
-    if(previousSourceRegion){const r=previousSourceRegion;for(let y=r.y;y<r.y+r.height;y++){const a=y*width+r.x,b=a+r.width;sourcePixels.fill(0,a*4,b*4);sourceShape.fill(0,a,b);}}
+    // Bounded consumers read only the region overwritten below. Proof plates
+    // and full-surface replay still require zeroes throughout the whole plane.
+    if(previousSourceRegion&&(plates||options.fullSurfaceReplay||options.fullSourceReset)){const r=previousSourceRegion;for(let y=r.y;y<r.y+r.height;y++){const a=y*width+r.x,b=a+r.width;sourcePixels.fill(0,a*4,b*4);sourceShape.fill(0,a,b);}}
     previousSourceRegion={x,y,width:w,height:h};
     if(w&&h){
       const color=ctx.getImageData(x,y,w,h).data,shape=opaqueCoverage?color:shapeCtx.getImageData(x,y,w,h).data;
@@ -700,7 +706,7 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
           i=end;continue;
         }
         const raw=items[i++];
-        let item={...raw,paint:{...raw.paint,pattern:raw.pattern || raw.paint.pattern,stroke_pattern:raw.stroke_pattern || raw.paint.stroke_pattern}};
+        let item={...raw,[sourcePaint]:raw[sourcePaint]||raw.paint,paint:{...raw.paint,pattern:raw.pattern || raw.paint.pattern,stroke_pattern:raw.stroke_pattern || raw.paint.stroke_pattern}};
         // A retained Type3 charproc inherits the complete graphics state;
         // internal gs operators replace it, so it must not be applied again
         // as an outer glyph opacity/blend/mask after extracting the scene.

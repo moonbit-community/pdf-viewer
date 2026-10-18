@@ -2917,3 +2917,143 @@ verified baseline, raw CPU sample and summaries, matched-input counterfactuals,
 every-field comparison, complete timings, strict Chromium failure/captures,
 validation logs and frozen artifact manifest. Private PDF bytes and pixels
 remain in ignored local paths.
+
+### Render-owned analysis and bounded source-plane reuse (2026-10-18)
+
+The immutable baseline is pushed `a206555baf1a760beecd21f00ada9a4428271e67`.
+All sixteen baseline files were independently checked against the accepted
+release manifest before copying. Both Workers remain exactly 5,277,015 bytes,
+SHA-256 `e3516b6b404552cb3a7dd32946da7cc7a00a370553eb1b04acd48e44759c8310`;
+this change is confined to host rendering.
+
+Three repeated operations are removed without changing positioned SVG path
+arithmetic, PDF transparency equations, sampling precision or public models:
+
+- A render prepares native eligibility and lowered native items once. Tiles
+  reuse that result only for the identical immutable plan. Nested and
+  outline-resolved plans prepare their own backend; a new render never
+  inherits a prior decision. Mutable-host and resolved-outline tests cover
+  invalidation.
+- Filled-path bounds use a weak paint owner shared by lowering copies and
+  tiles. A source-string match invalidates changed geometry. Newly retained
+  metadata is charged at 256 bytes per owner, within the shared glyph budget
+  and the existing 4,096-entry limit. Callers without paint ownership retain
+  the original string-keyed policy. This avoids cache saturation repeatedly
+  reparsing paths already retained by the active render.
+- Internal raster consumers overwrite and read a bounded region. They no
+  longer clear the previous Float32 colour/shape region before every paint.
+  Proof plates and full-surface replay retain whole-plane zero semantics;
+  `fullSourceReset` is an exact-output diagnostic control. RGB/CMYK changes,
+  disjoint sources, masks and complete Float32 outputs remain covered.
+
+An instrumented replay of the same real page 11 establishes the work counts
+below. These are operation counts, not product latency measurements. Pixel
+and semantic hashes remain exact.
+
+| Operation | Baseline | Candidate |
+| --- | ---: | ---: |
+| Native eligibility calls | 13 | 1 |
+| Path parses | 12,377 | 3,394 |
+| Parsed path characters | 20,001,575 | 6,342,022 |
+| Float32 `fill` calls | 256,154 | 70 |
+| Float32 values cleared | 129,375,300 | 77,655,040 |
+| Canvas source readbacks | 3,835 | 3,835 |
+
+Two other prototypes were explicitly rejected. Packing disjoint source paints
+reduced readback calls to 372 but increased read pixels from 12,487,052 to
+23,708,872 and did not establish a latency improvement. Sparse group regions
+left all 29 real group extractions at the same 8,425,769 pixels; their added
+complexity was removed. Repeated sampled-function parsing was also confirmed
+(81 shading functions decoded three times), but its instrumented Node parsing cost was only
+about 55 ms and was not treated as the large overall gap. No shading changes
+or prototype-only rendering paths are shipped.
+
+The ordinary independent-context benchmark keeps CSS width 1216, DPR 2,
+fresh documents and Workers, first sequential fourteen-page sweeps, and
+alternating whole-document variant order. Preparation, painting and complete
+RGBA flush are timed. Startup/opening, hashes, DOM and teardown are excluded.
+Every page requires exact baseline RGBA and complete semantic hashes. The
+first five-pair block showed severe variation, so another five-pair block
+was declared before running it. All ten pairs are retained and pooled; no
+slow sample is discarded. Positive percentages below mean reduced elapsed
+time, calculated as the median of individual paired reductions.
+
+| Block | Baseline total median | Candidate total median | Paired total reduction | Paired paint/flush reduction |
+| --- | ---: | ---: | ---: | ---: |
+| Initial five pairs | 8,260 ms | 8,328 ms | 0.8% | 7.5% |
+| Confirmation five pairs | 4,786 ms | 4,729 ms | 1.0% | 4.5% |
+| All ten pairs | 6,351.5 ms | 6,229.5 ms | 0.9% | 5.3% |
+
+Across all ten independent pairs, paint/flush falls 5.3% and page-11
+paint/flush 10.9%, while total elapsed time changes only 0.9%. This does not
+establish a large overall improvement or explain the several-fold PDF.js gap.
+The unchanged release baseline moves from an initial 8,260 ms total median to
+4,786 ms in confirmation; PDF.js render-only medians also move from 1,651 to
+798 ms. Absolute timings across these load strata must not be read as a code
+regression or improvement.
+
+All raw independent-sweep samples (milliseconds):
+
+Initial block:
+
+- `totalMs`: baseline `[8260, 12577, 10262, 7734, 7907]`; candidate `[11341, 8328, 9364, 7690, 7841]`.
+- `prepareMs`: baseline `[3439, 5347, 4397, 3442, 3415]`; candidate `[4866, 3815, 4468, 3400, 3688]`.
+- `paintMs`: baseline `[4821, 7230, 5865, 4292, 4492]`; candidate `[6475, 4513, 4896, 4290, 4153]`.
+- `page11PaintMs`: baseline `[1877, 3818, 2689, 1963, 2111]`; candidate `[3490, 2128, 2174, 1833, 1842]`.
+
+Confirmation block:
+
+- `totalMs`: baseline `[4969, 4731, 4819, 4786, 4759]`; candidate `[4725, 4729, 4769, 4666, 4750]`.
+- `prepareMs`: baseline `[2384, 2286, 2225, 2281, 2247]`; candidate `[2300, 2198, 2290, 2273, 2396]`.
+- `paintMs`: baseline `[2585, 2445, 2594, 2505, 2512]`; candidate `[2425, 2531, 2479, 2393, 2354]`.
+- `page11PaintMs`: baseline `[1294, 1196, 1320, 1230, 1238]`; candidate `[1156, 1217, 1144, 1141, 1101]`.
+
+The load-control probe keeps three fresh contexts/documents/Workers resident
+at once, opens them baseline/candidate/PDF.js, and alternates adjacent variant
+order on each page. Operations are serial and each document still performs
+its first sequential sweep, but concurrent residency and fixed setup order
+differ from the primary experiment. This diagnostic cannot replace the
+independent sweep or prove an unchanged preparation cost. Its five paired
+reductions are 6.0% total, 3.2% paint/flush and 8.6% page-11 paint/flush.
+
+The private thirteen-page image fixture
+`fea1ef069944d3479425ebf076a9b34118f7ba9e3df8cefb54e557ca16f90817`
+retains all historical RGBA and full semantic hashes in both engines. The
+ordinary five-pair sweep has Chromium total medians 1,749.5 to 1,768.5 ms
+(-1.0% paired reduction) and WebKit 2,770 to 2,921 ms (-8.5%). A subsequent
+five-pair adjacent-page WebKit control alternates both document setup and
+page order; its totals are listed below. These differing load strata do not
+establish an image speedup or a systematic image regression.
+
+Image control: baseline `[1784, 1532, 1539, 1523, 1621]`; candidate `[1654, 1568, 1526, 1545, 1530]`; paired reduction 0.8%.
+
+Five ordinary file-input pairs retain exact first-page pixels in each
+engine. Chromium visible medians are 655.7 to 627.6 ms (+2.9% paired
+reduction), WebKit 1,176 to 1,183 ms (-0.2%). Ready medians are 550.2 to
+525.5 ms and 695 to 662 ms (+3.3% and +6.6%). The shell is already loaded;
+untouched Worker pre-start can precede file selection. These are not cold
+navigation timings or evidence of a Worker startup improvement.
+
+The strict Chromium public sweep stops at the independently established
+page-13 antialias pair (`4b1bb1ec…` / `9657065c…`). Its partial output and
+PNGs are retained without tolerance or an accepted Chromium timing claim.
+WebKit public sweeps and both private engines remain strict. PDF.js timings
+are a render-only lower bound; ours also prepares selection/accessibility
+and editor data. Large variation and different feature sets remain material
+limits on any claim about the remaining overall gap.
+
+Validation includes JS 795, Wasm 776, Wasm GC 776 and native 784 tests,
+`moon info && moon fmt` with unchanged interfaces, the complete Node suite,
+browser/editor/layer/text interaction, the readonly corpus and all twelve
+visual cases (existing reference differences retained, zero failed). The
+final host-only scope additionally passes the Node suite with 59 Canvas and
+15 compositor cases, plus both complete packaged browser suites. Every
+Canvas/semantic packet field, including signed zero, matches on all fourteen
+public pages.
+
+Ignored evidence: `_build/shading-structure-next/`, including verified
+baseline/frozen artifacts, operation counts, rejected prototypes and the
+explicitly aborted sparse-prototype timing block, all independent and
+adjacent-page raw samples, strict failure captures and validation logs.
+Private bytes and pixels remain ignored. Release acceptance checks all eight
+CI jobs and sixteen deployed files at both plain and revision URLs.

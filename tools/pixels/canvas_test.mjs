@@ -31,10 +31,28 @@ await test('render-owned path bounds share glyph budgets and follow source strin
  const denied={entries:new Map(),bytes:0,limit:1};assert.deepEqual(pdfPathPixelRegion(svg,[1,0,0,1,0,0],100,100,denied),first);assert.equal(denied.bytes,0);
  const glyphCache={entries:new Map(),bytes:0,limit:8192},configured={...options,nativeCanvas:false,_glyphCache:glyphCache};
  await renderPdfCanvas(createCanvas(1,1),plan([path('M2 2 L5 2 L5 5 L2 5 Z'+' '.repeat(1800),'#000')]),configured);
- assert(glyphCache.pathBounds.bytes>3500&&glyphCache.pathBounds.bytes<=4096);
- let released=0;const fallback={kind:'text',paint:{rendering_mode:0,fill_alpha:1,fill_color:'#000',blend_mode:'normal',glyph_transform:[10,0,0,10,0,0],bounds:{min_x:6,min_y:6,max_x:16,max_y:16}},text_fill_svg:'<svg xmlns="http://www.w3.org/2000/svg"><path d="M6 6H16V16H6Z" fill="#000"/>'+' '.repeat(800)+'</svg>'};
+ assert(glyphCache.pathBounds.bytes===256&&glyphCache.pathBounds.ownerCount===1);
+ let released=0;const fallback={kind:'text',paint:{rendering_mode:0,fill_alpha:1,fill_color:'#000',blend_mode:'normal',glyph_transform:[10,0,0,10,0,0],bounds:{min_x:6,min_y:6,max_x:16,max_y:16}},text_fill_svg:'<svg xmlns="http://www.w3.org/2000/svg"><path d="M6 6H16V16H6Z" fill="#000"/>'+' '.repeat(8000)+'</svg>'};
  await renderPdfCanvas(createCanvas(1,1),plan([fallback]),{...configured,releaseImage:value=>{released++;value.close?.();}});
  assert.equal(glyphCache.entries.size,0,'A bitmap that exceeds the remaining shared budget is not retained');assert.equal(released,2,'Uncached colour and shape images are both released');assert(glyphCache.bytes+glyphCache.pathBounds.bytes<=glyphCache.limit);
+});
+await test('paint-owned path bounds share source storage and reject stale geometry',()=>{
+ const cache={entries:new Map(),bytes:0,limit:2*1024*1024},owners=[];
+ const geometry='M10 20 L30 40 Z'+' '.repeat(6000),identity=[1,0,0,1,0,0];
+ for(let i=0;i<4097;i++){
+  const owner={svg_path:geometry};owners.push(owner);
+  assert.deepEqual(pdfPathPixelRegion(geometry,identity,100,100,cache,owner),{x:7,y:17,width:26,height:26});
+ }
+ assert.equal(cache.ownerCount,4096);assert.equal(cache.bytes,4096*256);assert.equal(cache.entries.size,0);
+ assert(!cache.owners.has(owners.at(-1)),'Weak entries share the existing entry-count bound');
+ const owner=owners[0],first=cache.owners.get(owner);
+ assert.deepEqual(pdfPathPixelRegion(geometry,[2,0,0,2,0,0],100,100,cache,owner),{x:17,y:37,width:46,height:46});
+ assert.equal(cache.owners.get(owner),first,'Another tile reuses the same logical bounds without reparsing');
+ owner.svg_path='M60 60 L70 70 Z';
+ assert.deepEqual(pdfPathPixelRegion(owner.svg_path,identity,100,100,cache,owner),{x:57,y:57,width:16,height:16});
+ assert.notEqual(cache.owners.get(owner),first);assert.equal(cache.bytes,4096*256);
+ const denied={entries:new Map(),bytes:0,limit:255};
+ pdfPathPixelRegion(geometry,identity,100,100,denied,owner);assert.equal(denied.bytes,0);assert.equal(denied.owners,undefined);
 });
 await test('retained outline readback keeps exact colour shape and Float32 composition',async()=>{
  const geometry='M41.25 36.5 Q34 23 54 29 C70 17 78 60 57 53 L41.25 36.5 Z';
@@ -546,6 +564,9 @@ await test('optional host text outlines resolve only successful ordinary glyph d
  const resolveTextOutline=async(svg,{paint,page:targetPage})=>{calls++;assert.equal(svg,text.text_svg);assert.equal(paint,text.paint);assert.equal(targetPage,page);return {fill_path:'M5 5H15V15H5Z',stroke_path:'M0 0H10V10H0Z'};};
  const result=await renderPdfCanvas(createCanvas(20,20),input,{...options,resolveTextOutline});
  near(pixel(result,5,10),[0,0,255,255]);near(pixel(result,10,10),[255,255,255,255]);assert.equal(calls,1);assert.deepEqual(result.diagnostics,[]);assert.equal(text.paint.stroke.svg_path,null,'resolving does not mutate the input plan');assert.equal(input.diagnostics.length,1);
+ const display=createCanvas(1,1);
+ await renderPdfPage(display,input,{...options,returnPixels:false,resolveTextOutline});
+ assert.deepEqual(display.getContext('2d').getImageData(0,0,20,20).data,result.data,'Resolved outlines replace the plan used for native preparation');
  await assert.rejects(()=>renderPdfCanvas(createCanvas(20,20),input,{...options,resolveTextOutline:()=>null}),/PDF_TEXT_STROKE_GEOMETRY/);
  await assert.rejects(()=>renderPdfCanvas(createCanvas(20,20),{...input,diagnostics:[diagnostic,{code:'OTHER',item:7,message:'still unsupported'}]},{...options,resolveTextOutline}),/OTHER/);
  await assert.rejects(()=>renderPdfCanvas(createCanvas(20,20),input,{...options,resolveTextOutline:()=>({fill_path:'M0 0'})}),/pen-local stroke_path/);
@@ -595,6 +616,38 @@ await test('source scratch clears only the current read region without retaining
  await renderPdfCanvas(createCanvas(1,1),{...input,items:[input.items[0],{...input.items[1],pattern:{}}]},
   {...options,nativeCanvas:false,paintPattern});
  assert.equal(callbacks,2,'Colour and shape callbacks retain the host contract');
+});
+await test('bounded source planes retain exact pixels through disjoint reuse and blend-space changes',async()=>{
+ const size=128,group={id:'source-cmyk',isolated:true,knockout:false,alpha:.7,blend_mode:'normal',color_space:'DeviceCMYK'};
+ const input={version:1,page:{...page,width:size,height:size},viewport:{width:size,height:size,matrix:[1,0,0,-1,0,size]},items:[
+  path('M2 3 L28 3 L28 29 L2 29 Z','#f02080'),
+  path('M90 90 L117 90 L117 119 L90 119 Z','#2080f0',{fill_alpha:.4}),
+  path('M12 12 L30 12 L30 35 L12 35 Z','#40c060',{fill_alpha:.6,blend_mode:'multiply'}),
+  path('M65 63 L82 63 L82 86 L65 86 Z','#00ffff',{fill_source:cmyk([1,0,0,0]),fill_alpha:.5,group_path:[group]}),
+  path('M96 9 L120 9 L120 30 L96 30 Z','#ff00ff',{fill_source:cmyk([0,1,0,0]),fill_alpha:.5,fill_overprint:true,overprint_mode:1,group_path:[group]}),
+  path('M15 13 L22 13 L22 28 L15 28 Z','#f08020'),
+ ]};
+ for(const transparent of [false,true])for(const fullSurfaceReplay of [false,true]){
+  const render=fullSourceReset=>renderPdfCanvas(createCanvas(1,1),input,{...options,nativeCanvas:false,convertProcess,transparent,fullSurfaceReplay,fullSourceReset});
+  const actual=await render(false),control=await render(true);
+  for(const key of ['data','shape','premultiplied'])assert.deepEqual(actual[key],control[key],key);
+ }
+});
+await test('native preparation stays within one render and follows replaced plans',async()=>{
+ const input=plan([path(rect,'#ff0000')]);
+ const render=async(extra={})=>{
+  const canvas=createCanvas(1,1);
+  await renderPdfPage(canvas,input,{...options,returnPixels:false,tileSize:8,...extra});
+  return canvas.getContext('2d').getImageData(0,0,20,20).data;
+ };
+ const red=await render();assert.deepEqual([...red.slice(0,4)],[255,0,0,255]);
+ input.items[0].paint.fill_color='#0000ff';
+ const blue=await render();assert.deepEqual([...blue.slice(0,4)],[0,0,255,255]);
+ input.items[0].paint.blend_mode='multiply';
+ const retained=await render();assert.deepEqual(retained,await render({tileSize:0}));
+ const foreign=plan([]),canvas=createCanvas(1,1);
+ await renderPdfCanvas(canvas,input,{...options,returnPixels:false,_nativePrepared:{plan:foreign,items:[]}});
+ assert.deepEqual(canvas.getContext('2d').getImageData(0,0,20,20).data,retained,'Foreign plan identities never reuse lowered items');
 });
 patternOptions.paintPattern.dispose();
 console.log(`${count} Canvas replay tests passed`);
