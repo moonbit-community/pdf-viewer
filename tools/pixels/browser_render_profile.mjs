@@ -7,12 +7,26 @@ export function instrumentCanvasModule(source){
   const profile=globalThis.pdfRenderProfile;
   if(!profile?.active)return renderPdfCanvasProfiled(canvas,plan,options);
   const frame=profile.enter(plan,options);
+  const task=options._renderTask;
+  if(task&&!task._profileYield&&!task.yieldToHost._profileYield){
+    const yieldToHost=task.yieldToHost;task._profileYield=true;
+    task.yieldToHost=async()=>{
+      if(!profile.active)return yieldToHost();
+      const start=performance.now();
+      try{return await yieldToHost();}
+      finally{profile.yields.calls++;profile.yields.ms+=performance.now()-start;}
+    };
+  }
   let configured=options;
-  if(options.yieldToHost&&!options._profileYield)configured={...options,_profileYield:true,yieldToHost:async()=>{
-    const start=performance.now();
-    try{return await options.yieldToHost();}
-    finally{profile.yields.calls++;profile.yields.ms+=performance.now()-start;}
-  }};
+  if(options.yieldToHost&&!options._profileYield&&!task){
+    const yieldToHost=async()=>{
+      const start=performance.now();
+      try{return await options.yieldToHost();}
+      finally{profile.yields.calls++;profile.yields.ms+=performance.now()-start;}
+    };
+    yieldToHost._profileYield=true;
+    configured={...options,_profileYield:true,yieldToHost};
+  }
   try{return await renderPdfCanvasProfiled(canvas,plan,configured);}
   finally{profile.leave(frame);}
 }
@@ -55,14 +69,14 @@ export function installBrowserRenderProfile(){
     finally{profile.record('Path2D',performance.now()-start);}
   }});
   const prototypes=new Set([globalThis.CanvasRenderingContext2D?.prototype,globalThis.OffscreenCanvasRenderingContext2D?.prototype].filter(Boolean));
-  for(const proto of prototypes)for(const name of ['getImageData','putImageData','drawImage','createImageData','fill','stroke','clip']){
+  for(const proto of prototypes)for(const name of ['getImageData','putImageData','clearRect','drawImage','createImageData','fill','stroke','clip']){
     const original=proto[name];if(typeof original!=='function')continue;
     proto[name]=function(...args){
       if(!profile.active)return original.apply(this,args);
       const start=performance.now();
       try{return original.apply(this,args);}
       finally{
-        const pixels=name==='getImageData'?Math.abs(args[2]*args[3]):name==='putImageData'?(args.length>=7?args[5]*args[6]:args[0].width*args[0].height):0;
+        const pixels=name==='getImageData'||name==='clearRect'?Math.abs(args[2]*args[3]):name==='putImageData'?(args.length>=7?args[5]*args[6]:args[0].width*args[0].height):0;
         const ms=performance.now()-start;
         const site=['getImageData','putImageData'].includes(name)?new Error().stack?.split('\n').find(line=>/pdf-(?:canvas|shading|pattern|compositor)/.test(line))?.trim():null;
         profile.record(name,ms,pixels,undefined,site);

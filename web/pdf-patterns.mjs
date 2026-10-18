@@ -1,3 +1,4 @@
+import {PdfRenderTask} from './pdf-render-task.mjs';
 import { renderPdfCanvas, multiplyMatrix, checkPdfRender } from './pdf-canvas.mjs';
 import { PdfCompositor, premultipliedToRgba8 } from './pdf-compositor.mjs';
 import { PdfInkCompositor } from './pdf-ink-compositor.mjs';
@@ -32,6 +33,7 @@ export function createPatternTileCache({maxBytes=16777216,maxEntries=32}={}){
  * The lattice is anchored in its content stream's base coordinate system,
  * independent from the CTM used to construct/stroke the selected path. */
 export function createPatternPainter(options={}) {
+  if(options.yieldToHost&&!options._renderTask)options={...options,_renderTask:new PdfRenderTask(options.yieldToHost)};
   const cache=new WeakMap(), fields=new WeakMap(), cacheOrder=new Map();
   const cacheLimit=Math.max(0,Math.min(options.maxPatternCacheBytes??67108864,(options.maxWorkingBytes??536870912)/4));
   let cacheBytes=0;
@@ -96,11 +98,11 @@ export function createPatternPainter(options={}) {
     const ny0=Math.floor((Math.min(...corners.map(p=>p[1]))-b.max_y)/stepY)+1,ny1=Math.ceil((Math.max(...corners.map(p=>p[1]))-b.min_y)/stepY)-1;
     if((nx1-nx0+1)*(ny1-ny0+1)>4096)throw new RangeError('PDF pattern cell budget exceeded');
     const surface=env.createCanvas(right-left,bottom-top),output=surface.getContext('2d');
-    let yieldDeadline=performance.now()+12;
+    const renderTask=env.renderTask||options._renderTask;
     try{
       for(let ny=ny0;ny<=ny1;ny++)for(let nx=nx0;nx<=nx1;nx++){
         checkPdfRender(options);
-        if(options.yieldToHost&&performance.now()>=yieldDeadline){await options.yieldToHost();checkPdfRender(options);yieldDeadline=performance.now()+12;}
+        if(renderTask?.due()){await renderTask.yield();checkPdfRender(options);}
         const matrix=multiplyMatrix(patternToDevice,[1,0,0,-1,b.min_x+nx*stepX,b.max_y+ny*stepY]);
         const points=[[0,0],[b.max_x-b.min_x,0],[0,b.max_y-b.min_y],[b.max_x-b.min_x,b.max_y-b.min_y]].map(([x,y])=>point(matrix,x,y));
         const x0=Math.max(left,Math.floor(Math.min(...points.map(p=>p[0])))),x1=Math.min(right,Math.ceil(Math.max(...points.map(p=>p[0]))));
@@ -108,7 +110,7 @@ export function createPatternPainter(options={}) {
         if(x1<=x0||y1<=y0)continue;
         const tile=env.createCanvas(x1-x0,y1-y0),localMatrix=[...matrix];localMatrix[4]-=x0;localMatrix[5]-=y0;
         try{
-          const rendered=await renderPdfCanvas(tile,resource.tile_plan,{...options,createCanvas:env.createCanvas,loadImage:env.loadImage,Path2D:env.Path2D,width:x1-x0,height:y1-y0,matrix:localMatrix,transparent:true,returnPixels:false,outputGroupComponents:false,_profileScope:env.profileScope,_glyphCache:env.glyphCache,_glyphCacheReserved:!!env.glyphCache,_imageCache:env.imageCache,_imageCacheReserved:!!env.imageCache,paintPattern,_resourceDepth:(env.resourceDepth||0)+1,_inheritedWorkingBytes:inherited});
+          const rendered=await renderPdfCanvas(tile,resource.tile_plan,{...options,_renderTask:env.renderTask||options._renderTask,createCanvas:env.createCanvas,loadImage:env.loadImage,Path2D:env.Path2D,width:x1-x0,height:y1-y0,matrix:localMatrix,transparent:true,returnPixels:false,outputGroupComponents:false,_profileScope:env.profileScope,_glyphCache:env.glyphCache,_glyphCacheReserved:!!env.glyphCache,_imageCache:env.imageCache,_imageCacheReserved:!!env.imageCache,paintPattern,_resourceDepth:(env.resourceDepth||0)+1,_inheritedWorkingBytes:inherited});
           env.diagnostics?.push(...rendered.diagnostics);checkPdfRender(options);
           output.drawImage(tile,x0-left,y0-top);
         }finally{tile.width=tile.height=1;}
@@ -143,7 +145,10 @@ export function createPatternPainter(options={}) {
     const ny0=Math.floor((minY-b.max_y)/stepY)+1,ny1=Math.ceil((maxY-b.min_y)/stepY)-1;
     if((nx1-nx0+1)*(ny1-ny0+1)>4096)throw new RangeError('PDF backdrop-dependent pattern cell budget exceeded');
     const plan={...resource.tile_plan,blend_profile_id:env.iccProfileId||null,blend_calibration:env.calibration||null,page:{...resource.tile_plan.page,blend_space:ink?'DeviceCMYK':env.blendSpace||'DeviceRGB'}};
+    const renderTask=env.renderTask||options._renderTask;
     for(let ny=ny0;ny<=ny1;ny++)for(let nx=nx0;nx<=nx1;nx++){
+      checkPdfRender(options);
+      if(renderTask?.due()){await renderTask.yield();checkPdfRender(options);}
       const matrix=multiplyMatrix(patternToDevice,[1,0,0,-1,b.min_x+nx*stepX,b.max_y+ny*stepY]);
       const corners=[[0,0],[b.max_x-b.min_x,0],[0,b.max_y-b.min_y],[b.max_x-b.min_x,b.max_y-b.min_y]].map(([x,y])=>point(matrix,x,y));
       const x0=Math.max(left,Math.floor(Math.min(...corners.map(p=>p[0])))),x1=Math.min(right,Math.ceil(Math.max(...corners.map(p=>p[0]))));
@@ -152,7 +157,7 @@ export function createPatternPainter(options={}) {
       const backdrop=new Float32Array(cw*ch*stride),frame=compositor.frames.at(-1);
       for(let y=0;y<ch;y++)backdrop.set(frame.pixels.subarray(((y+y0)*width+x0)*stride,((y+y0)*width+x1)*stride),y*cw*stride);
       const tile=env.createCanvas(cw,ch),localMatrix=[...matrix];localMatrix[4]-=x0;localMatrix[5]-=y0;
-      const rendered=await renderPdfCanvas(tile,plan,{...options,_samplesOnly:true,createCanvas:env.createCanvas,loadImage:env.loadImage,Path2D:env.Path2D,width:cw,height:ch,matrix:localMatrix,transparent:true,backdrop,returnInks:ink,outputGroupComponents:true,_profileScope:env.profileScope,_glyphCache:env.glyphCache,_glyphCacheReserved:!!env.glyphCache,_imageCache:env.imageCache,_imageCacheReserved:!!env.imageCache,paintPattern,_resourceDepth:(env.resourceDepth||0)+1,_inheritedWorkingBytes:(env.inheritedWorkingBytes||0)+width*height*(stride*12+24)});
+      const rendered=await renderPdfCanvas(tile,plan,{...options,_samplesOnly:true,_renderTask:env.renderTask||options._renderTask,createCanvas:env.createCanvas,loadImage:env.loadImage,Path2D:env.Path2D,width:cw,height:ch,matrix:localMatrix,transparent:true,backdrop,returnInks:ink,outputGroupComponents:true,_profileScope:env.profileScope,_glyphCache:env.glyphCache,_glyphCacheReserved:!!env.glyphCache,_imageCache:env.imageCache,_imageCacheReserved:!!env.imageCache,paintPattern,_resourceDepth:(env.resourceDepth||0)+1,_inheritedWorkingBytes:(env.inheritedWorkingBytes||0)+width*height*(stride*12+24)});
       env.diagnostics?.push(...rendered.diagnostics);
       const samples=ink?rendered.inkProof?.premultiplied:rendered.premultiplied;
       if(!samples||samples.length!==cw*ch*stride)throw new Error('Pattern cell did not retain its blend-space samples');
@@ -216,7 +221,7 @@ export function createPatternPainter(options={}) {
       const build=async()=>{
         const tile=env.createCanvas(tileWidth,tileHeight);let tileShape,value;
         try{
-          const rendered=await renderPdfCanvas(tile,resource.tile_plan,{...options,createCanvas:env.createCanvas,loadImage:env.loadImage,Path2D:env.Path2D,width:tileWidth,height:tileHeight,matrix:[tileWidth/(b.max_x-b.min_x),0,0,tileHeight/(b.max_y-b.min_y),0,0],transparent:true,outputGroupComponents:true,_profileScope:env.profileScope,_glyphCache:env.glyphCache,_glyphCacheReserved:!!env.glyphCache,_imageCache:env.imageCache,_imageCacheReserved:!!env.imageCache,paintPattern,_resourceDepth:(env.resourceDepth||0)+1,_inheritedWorkingBytes:env.inheritedWorkingBytes||0});
+          const rendered=await renderPdfCanvas(tile,resource.tile_plan,{...options,_renderTask:env.renderTask||options._renderTask,createCanvas:env.createCanvas,loadImage:env.loadImage,Path2D:env.Path2D,width:tileWidth,height:tileHeight,matrix:[tileWidth/(b.max_x-b.min_x),0,0,tileHeight/(b.max_y-b.min_y),0,0],transparent:true,outputGroupComponents:true,_profileScope:env.profileScope,_glyphCache:env.glyphCache,_glyphCacheReserved:!!env.glyphCache,_imageCache:env.imageCache,_imageCacheReserved:!!env.imageCache,paintPattern,_resourceDepth:(env.resourceDepth||0)+1,_inheritedWorkingBytes:env.inheritedWorkingBytes||0});
           const nx0=Math.floor(-b.max_x/stepX)+1,nx1=Math.ceil((stepX-b.min_x)/stepX)-1;
           const ny0=Math.floor(-b.max_y/stepY)+1,ny1=Math.ceil((stepY-b.min_y)/stepY)-1;
           if((nx1-nx0+1)*(ny1-ny0+1)>4096)throw new RangeError('PDF overlapping pattern cell budget exceeded');
@@ -229,7 +234,10 @@ export function createPatternPainter(options={}) {
           tileShape=shapeCanvas(rendered.shape,tileWidth,tileHeight,env);
           value.color=env.createCanvas(width,height);value.shape=env.createCanvas(width,height);value.bytes+=width*height*8;
           const target=value.color.getContext('2d'),shapeTarget=value.shape.getContext('2d');target.imageSmoothingEnabled=true;
+          const renderTask=env.renderTask||options._renderTask;
           for(let ny=ny0;ny<=ny1;ny++)for(let nx=nx0;nx<=nx1;nx++){
+            checkPdfRender(options);
+            if(renderTask?.due()){await renderTask.yield();checkPdfRender(options);}
             const args=[(b.min_x+nx*stepX)*rx,(stepY-b.max_y-ny*stepY)*ry,(b.max_x-b.min_x)*rx,(b.max_y-b.min_y)*ry];
             target.drawImage(tile,...args);shapeTarget.drawImage(tileShape,...args);
           }

@@ -1,3 +1,4 @@
+import {PdfRenderTask,yieldPdfTask} from './pdf-render-task.mjs';
 // Browser APIs and existing PDF rendering engines exposed to the MoonBit UI.
 import {pdf,open_pdf,open_pdf_url,open_pdf_with_password} from './pdf-client.js';
 import {PageScheduler} from './page-scheduler.js';
@@ -12,6 +13,7 @@ import {expandPdfCanvasProgram} from './pdf-canvas-program.mjs';
 import {loadPdfRaster} from './pdf-canvas.mjs';
 
 let initialization,measure;
+let renderTask=new PdfRenderTask(yieldPdfTask);
 const loadRaster=async uri=>{
   if(!uri.startsWith('pdf-raster:'))return loadPdfRaster(uri);
   const value=await pdf.loadRaster(uri);
@@ -20,7 +22,7 @@ const loadRaster=async uri=>{
 let renderAssets=new PdfRenderAssets({loadImage:loadRaster});
 let patternTiles=createPatternTileCache();
 let loadRenderImage=renderAssets.acquire.bind(renderAssets);
-function clearRenderAssets(){renderAssets.dispose();patternTiles.dispose();renderAssets=new PdfRenderAssets({loadImage:loadRaster});patternTiles=createPatternTileCache();loadRenderImage=renderAssets.acquire.bind(renderAssets);}
+function clearRenderAssets(){renderTask=new PdfRenderTask(yieldPdfTask);renderAssets.dispose();patternTiles.dispose();renderAssets=new PdfRenderAssets({loadImage:loadRaster});patternTiles=createPatternTileCache();loadRenderImage=renderAssets.acquire.bind(renderAssets);}
 // Keep the established module singleton: consumer bridge functions and the
 // reader must address the same document and Worker.
 Object.assign(pdf,{rasterImages:true,onRaster:(uri,bitmap)=>renderAssets.supply(uri,bitmap),
@@ -49,7 +51,7 @@ export const viewerHost={
     if((result.canvas?.version===2||result.canvas?.version===3)&&isCurrent?.()!==false)result.canvas=expandPdfCanvasProgram(result.canvas);
     return renderPdfPage(canvas,result.canvas,{
       unsupported:'warn',returnPixels:false,outputScale,isCurrent,
-      yieldToHost:()=>new Promise(resolve=>setTimeout(resolve,0)),
+      yieldToHost:yieldPdfTask,_renderTask:renderTask,
       convertProcess:values=>convertProcess(...values),
       loadImage,releaseImage:image=>assets.release(image),
       patternTileCache:tiles,

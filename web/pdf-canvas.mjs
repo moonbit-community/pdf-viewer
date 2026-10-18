@@ -1,3 +1,4 @@
+import {PdfRenderTask} from './pdf-render-task.mjs';
 import {pdfApplyImageSampling,pdfDrawImage} from './pdf-image-sampling.mjs';
 import {pdfGroupColour,convertGroupSurface,groupSurfaceToRgb} from './pdf-group-colour.mjs';
 import { PdfInkCompositor } from './pdf-ink-compositor.mjs';
@@ -81,6 +82,7 @@ export function checkPdfRender(options) {
  * replayed independently. A Canvas2D host is required on every target. */
 export async function renderPdfCanvas(canvas, plan, options = {}) {
   checkPdfRender(options);
+  if(options.yieldToHost&&!options._renderTask)options={...options,_renderTask:new PdfRenderTask(options.yieldToHost)};
   plan=expandPdfCanvasProgram(plan);
   let scope=options._profileScope,owned=null;
   const ownedGlyphCache=!options._glyphCache;
@@ -195,7 +197,7 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
   const ctx=layer?.getContext('2d',{willReadFrequently:true}), shapeCtx=shapeLayer?.getContext('2d',{willReadFrequently:true});
   const sourcePixels=nativeItems?null:new Float32Array(width*height*4),sourceShape=nativeItems?null:new Float32Array(width*height);
   let previousSourceRegion=null;
-  const environments={createCanvas,loadImage,Path2D:Path,image,width,height,matrix,page:plan.page,diagnostics,resourceDepth,glyphCache,imageCache,nativeCanvas:!!nativeItems};
+  const environments={createCanvas,loadImage,Path2D:Path,image,width,height,matrix,page:plan.page,diagnostics,resourceDepth,glyphCache,imageCache,nativeCanvas:!!nativeItems,renderTask:options._renderTask};
   const retainedWorkingBytes=()=>inheritedWorkingBytes+glyphReservation+imageReservation+proofBytes+maskCacheBytes+(options._imageCache?0:imageCache.bytes)+(inkImageCache?inkImageCache.data.byteLength+inkImageCache.alpha.byteLength+inkImageCache.canvas.width*inkImageCache.canvas.height*4:0)+availableBytes-(inkMode?compositor.maxBytes:compositor.maxWorkingBytes)+compositor.workingBytes()+rasterBytes;
   const imageComponent=(resource,component)=>{
     const samples=resource.ink_samples;
@@ -440,7 +442,14 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
     // Shape first gives per-paint pattern/scene caches a bound that includes
     // low-opacity antialias fringes which may round to zero in the colour pass.
     for(const [context,shapeOnly] of opaqueCoverage?[[ctx,false]]:[[shapeCtx,true],[ctx,false]]) {
-      context.setTransform(1,0,0,1,0,0); context.clearRect(0,0,width,height); context.save();
+      // Only this region is read and composited below. Clear it before every
+      // source, so unrelated scratch pixels never require a page-sized clear.
+      // Source drawing outside it is ignored and cleared before any later read.
+      context.setTransform(1,0,0,1,0,0);
+      // External source painters retain their completely blank scratch surface.
+      if(options.fullSourceClear||item.kind==='shading'&&!options._builtinShading||(pattern||item.stroke_pattern||p.stroke_pattern)&&!options._builtinPattern)context.clearRect(0,0,width,height);
+      else context.clearRect(region.x,region.y,region.width,region.height);
+      context.save();
       clips(context,item.paint,bounds);
       if(item.kind==='path') await drawPath(context,item.paint,shapeOnly);
       else if(item.kind==='image') await drawImage(context,item.paint,shapeOnly);
@@ -644,12 +653,12 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
       finally{if(!options._imageCache||images.get(uri)?.value!==raster){uncachedImages.delete(raster);releaseImage(raster);}output.restore();}
     }
   };
-  let yieldDeadline=performance.now()+12;
+  const renderTask=options._renderTask;
   const walk=async(items,depth,bounds=[],textScope=null)=>{
     for(let i=0;i<items.length;){
       checkPdfRender(options);
-      if(options.yieldToHost&&performance.now()>=yieldDeadline){
-        await options.yieldToHost();checkPdfRender(options);yieldDeadline=performance.now()+12;
+      if(renderTask?.due()){
+        await renderTask.yield();checkPdfRender(options);
       }
       const group=groupAt(items[i],depth);
       if(group){
@@ -730,7 +739,7 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
     if(!options.transparent){output.fillStyle='#fff';output.fillRect(0,0,width,height);}
     for(const item of nativeItems){
       checkPdfRender(options);
-      if(options.yieldToHost&&performance.now()>=yieldDeadline){await options.yieldToHost();checkPdfRender(options);yieldDeadline=performance.now()+12;}
+      if(renderTask?.due()){await renderTask.yield();checkPdfRender(options);}
       output.save();
       try{
         if(item.kind==='retained'){

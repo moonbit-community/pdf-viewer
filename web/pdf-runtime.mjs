@@ -1,3 +1,4 @@
+import {PdfRenderTask} from './pdf-render-task.mjs';
 import {createShadingPainter} from './pdf-shading.mjs';
 import { renderPdfCanvas, multiplyMatrix, checkPdfRender } from './pdf-canvas.mjs';
 import { createPatternPainter } from './pdf-patterns.mjs';
@@ -10,6 +11,7 @@ export async function renderPdfPage(canvas,plan,options={}) {
   checkPdfRender(options);
   plan=expandPdfCanvasProgram(plan);
   const configured={...options};
+  if(options.yieldToHost&&!configured._renderTask)configured._renderTask=new PdfRenderTask(options.yieldToHost);
   const scale=options.outputScale ?? 1;
   if(!Number.isFinite(scale)||scale<=0)throw new RangeError('PDF output scale must be finite and positive');
   if(scale!==1){
@@ -68,7 +70,7 @@ async function renderTiledPage(canvas,plan,options,width,height,tileSize){
   try{
     for(let y=0;y<height;y+=tileSize)for(let x=0;x<width;x+=tileSize){
       checkPdfRender(options);
-      if(options.yieldToHost){await options.yieldToHost();checkPdfRender(options);}
+      if(options._renderTask){await options._renderTask.yield();checkPdfRender(options);}
       const w=Math.min(tileSize,width-x),h=Math.min(tileSize,height-y);
       const tile=await renderPdfCanvas(target,plan,{...options,width:w,height:h,
         matrix:multiplyMatrix([1,0,0,1,-x,-y],matrix),_profileScope:scope,

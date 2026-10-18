@@ -2675,3 +2675,119 @@ Ignored evidence: `_build/global-render-next/`, including immutable `baseline/`,
 `packet-exact.json`, `summary.json`, complete raw timing reports, strict Chromium
 failure/captures, validation logs and the frozen artifact manifest. Private PDF
 bytes and pixels remain local under ignored build paths.
+
+## Cooperative continuations and source scratch lifetime (2026-10-18)
+
+Baseline is pushed `fa2759854396a434e9a0172ccd93c9f024b6a0b0`, copied as
+an independent packaged site before editing. The retained renderer already
+restricted source readback and Float32 composition to the source region, but
+still cleared the complete temporary Canvas before every colour/shape paint.
+The complex public page performs 3,835 such clears: 3,804,364,800 requested
+clear pixels for just 12,487,052 readback pixels. Colour and shape scratch now
+clear the current read region before drawing each source. Pixels outside it
+are ignored and cleared before any subsequent read; neither the path, Canvas
+coordinate system, clip, sample positions nor composition arithmetic changes.
+External shading/pattern painters retain completely blank scratch surfaces.
+A `fullSourceClear` diagnostic control retains the old clearing behavior.
+
+The same public page now requests 12,487,052 clear pixels, a 99.67% reduction
+in logical clear area. Both engines retain identical RGBA and semantics in
+the diagnostic replay, with exactly the same 3,835 readbacks and 12,487,052
+readback pixels. Clear area is an API-argument count, not a measurement of
+physical memory writes: browsers can optimize complete clears lazily.
+
+The reader also shares one twelve-millisecond cooperative compute budget
+across its pages, tiles, nested scenes and pattern cells. A completed child
+continuation resets the shared budget, so a parent does not immediately yield
+again against an obsolete deadline. Pending continuations coalesce, while
+tile boundaries retain their existing yield/cancellation contract. The reader
+uses `scheduler.yield()` where available and an explicitly closed MessageChannel
+otherwise, with the existing timer fallback for hosts without either API.
+This removes nested zero-delay timers from the normal browser rendering path;
+the [HTML timer rules](https://html.spec.whatwg.org/multipage/timers-and-user-prompts.html#timers)
+apply a minimum delay after sufficiently nested timer continuations.
+The [Scheduler API](https://developer.mozilla.org/en-US/docs/Web/API/Scheduler/yield)
+and [MessageChannel](https://developer.mozilla.org/en-US/docs/Web/API/MessageChannel)
+provide host tasks without replacing cancellation checks with microtasks.
+
+Scheduling alone completed an initial three-pair WebKit full-document block
+with exact pixels/semantics: total samples were baseline `[5001,4701,4848]`
+and candidate `[4873,4737,4680]`, only a 2.6% paired median total reduction.
+That result did not justify a large performance claim. The combined scratch
+and scheduling implementation then completed a separate preliminary block,
+baseline `[4480,5217,4798]` and candidate `[4048,4447,4209]`, a 12.3% paired
+total reduction and 20.9% paint/readback reduction. Keep these exploratory
+blocks separate from the final five-pair acceptance block below.
+
+A separate numeric Path2D prototype attempted to eliminate positioned SVG
+glyph strings. Although authored native/retained tests passed, real page 11
+differed at six grayscale pixels in WebKit (maximum channel delta one) and
+five in Chromium (maximum delta three). Removing explicit Float32 rounding
+did not restore parity. That prototype is excluded; no pixel tolerance or
+font-rendering change is introduced by this patch.
+
+The final block runs serially after complete validation and a 45-second quiet
+interval. Five alternating fresh-context/document/Worker pairs render all
+fourteen public pages at CSS width 1216 / DPR 2. Preparation includes complete
+selection/accessibility recovery; painting and full RGBA readback are timed.
+Opening, startup, hashing, DOM layers and teardown are excluded. Independent
+baseline and candidate sites use the same unchanged Worker. Every candidate
+host-module hash matches the frozen deployment manifest.
+
+All five WebKit pairs complete with exact per-page RGBA and semantic hashes:
+
+| Public fourteen-page sweep, ms | Baseline median | Candidate median | Median paired reduction |
+| --- | ---: | ---: | ---: |
+| Complete preparation, painting and readback | 4,105 | 3,650 | 9.4% |
+| Complete preparation and host decoding | 1,860 | 1,853 | 0.5% |
+| Painting and full readback | 2,252 | 1,786 | 17.2% |
+
+Raw total samples are baseline `[3989,4105,4114,4126,4052]`, candidate
+`[3613,3746,3784,3650,3620]`; paint/readback samples are baseline
+`[2126,2252,2254,2263,2195]`, candidate `[1760,1872,1937,1774,1786]`.
+Percentages are calculated within each alternating pair and then take the
+median, rather than dividing the column medians. The unchanged preparation
+cost is expected from this host-only patch. PDF.js render-only median is
+526 ms, leaving the candidate about 6.9 times that lower bound. Absolute
+times from earlier blocks reflect different background load; compare paired
+variants within a block, not the previous section's slower absolute samples.
+
+The Chromium strict sweep stops on the second baseline run, page 13:
+the first baseline hash is
+`367bb5030a71c8b76bf45e5ff70f03da0b3cb37d55530c67977d1eb4129ed88e`,
+the repeated baseline is
+`9657065c732a4ac28f2ae3cfba44144314ab25bc07babf5f3a39047a1ebb1dc4`.
+Both hashes were independently reproduced from older baseline PNGs in the
+prepare-pipeline controls. Keep the incomplete report and both captures; no
+tolerance is added and no complete Chromium performance result is accepted.
+
+The private thirteen-page image fixture
+`fea1ef069944d3479425ebf076a9b34118f7ba9e3df8cefb54e557ca16f90817`
+completes five pairs in each engine. All 130 pages per engine retain historical
+RGBA and full semantic hashes. Chromium medians are 1,137.8 to 1,142.1 ms
+(-0.1% paired reduction); WebKit medians are 1,124 to 1,131 ms (-0.3%).
+This image-oriented document has no material performance change.
+
+The ordinary file-input reader test also completes five pairs per engine with
+exact first-page pixels. Chromium Canvas-visible medians are 424 to 417.2 ms,
+reader-ready 363.9 to 365.3 ms; paired reductions are 1.6% and -1.0%.
+WebKit medians are 690 to 698 ms and 396 to 396 ms; paired reductions are
+-1.5% and 0%. No reliable first-screen improvement is claimed. As before,
+the empty shell loads before timing and may initialize its untouched Worker
+before file selection; negative Worker timestamps record that shifted work.
+These are not cold navigation measurements.
+
+Validation passes JS 792, Wasm 774, Wasm GC 774 and native 782 tests,
+56 Canvas and 15 compositor regressions, compiled glyph/text programs, actual
+Workers, raster caches, Range and XFA, both packaged browsers, browser/editor/
+layer/text interaction, the readonly corpus and all twelve visual cases.
+Reference rendering differences remain recorded. New regressions cover stale
+source colour/shape across changing read regions, full-clear Float32 parity,
+external painter surfaces, shared pending yields, error recovery, host task
+fallbacks, nested scenes/patterns, tiles and cancellation. The task regression
+runs in readonly CI. `moon info && moon fmt` leaves all interfaces unchanged.
+
+Ignored evidence is under `_build/paint-pipeline-next/`: immutable baseline,
+exploratory profiles and rejected numeric prototype, complete final timing
+reports, strict Chromium failure/captures, summary, validation logs and frozen
+artifact manifest. Private bytes and pixels remain local in ignored paths.

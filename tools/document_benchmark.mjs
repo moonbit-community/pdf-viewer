@@ -21,7 +21,7 @@ const report={scope:'Three variants in alternating fresh contexts, documents and
 for(const [variant,root] of Object.entries(roots))report.workerSha256[variant]=hash(await readFile(resolve(root,variant==='reference'?'build/pdf.worker.mjs':'pdf-worker.js')));
 for(const variant of ['baseline','candidate']){
  const modules=['viewer-host.mjs','pdf-canvas.mjs','pdf-canvas-native.mjs','pdf-canvas-program.mjs','pdf-compositor.mjs','pdf-runtime.mjs','pdf-shading.mjs'];
- for(const file of ['pdf-canvas-text-runs.mjs','pdf-path-region.mjs','pdf-page-data.mjs','pdf-client.js'])try{await access(resolve(roots[variant],file));modules.push(file);}catch(error){if(error.code!=='ENOENT')throw error;}
+ for(const file of ['pdf-canvas-text-runs.mjs','pdf-path-region.mjs','pdf-page-data.mjs','pdf-client.js','pdf-patterns.mjs','pdf-render-task.mjs'])try{await access(resolve(roots[variant],file));modules.push(file);}catch(error){if(error.code!=='ENOENT')throw error;}
  report.hostSha256[variant]=Object.fromEntries(await Promise.all(modules.map(async file=>[file,hash(await readFile(resolve(roots[variant],file)))])));
 }
 const mime={'.js':'text/javascript','.mjs':'text/javascript','.wasm':'application/wasm'},server=createServer(async(req,res)=>{

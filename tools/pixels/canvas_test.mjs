@@ -569,5 +569,32 @@ await test('opaque multi-path Type3 glyphs remain vector paints outside knockout
  const actual=createCanvas(20,20);await renderPdfCanvas(actual,knockout,{...options,returnPixels:false});
  assert.deepEqual(actual.getContext('2d').getImageData(0,0,20,20).data,expected.data);
 });
+await test('source scratch clears only the current read region without retaining earlier colour or shape',async()=>{
+ const size=128,input={version:1,page:{...page,width:size,height:size},viewport:{width:size,height:size,matrix:[1,0,0,-1,0,size]},items:[
+  path('M5 5 L120 5 L120 120 L5 120 Z','#f02080',{bounds:{min_x:5,min_y:105,max_x:23,max_y:123}}),
+  path('M90 90 L110 90 L110 110 L90 110 Z','#2080f0',{fill_alpha:.4,bounds:{min_x:90,min_y:18,max_x:110,max_y:38}}),
+  path('M10 90 L30 90 L30 110 L10 110 Z','#40c060',{fill_alpha:.6,bounds:{min_x:10,min_y:18,max_x:30,max_y:38}}),
+  path('M18 8 L35 8 L35 25 L18 25 Z','#f08020',{bounds:{min_x:18,min_y:103,max_x:35,max_y:120}}),
+ ]};
+ const render=async(fullSourceClear,transparent)=>{
+  let clearPixels=0;const seen=new WeakSet();
+  const make=(w,h)=>{const canvas=createCanvas(w,h),context=canvas.getContext('2d');if(!seen.has(context)){seen.add(context);const clear=context.clearRect;context.clearRect=function(x,y,w,h){clearPixels+=w*h;return clear.call(this,x,y,w,h);};}return canvas;};
+  const result=await renderPdfCanvas(make(1,1),input,{...options,createCanvas:make,nativeCanvas:false,fullSourceClear,transparent});
+  return {result,clearPixels};
+ };
+ for(const transparent of [false,true]){
+  const fast=await render(false,transparent),control=await render(true,transparent);
+  for(const key of ['data','shape','premultiplied'])assert.deepEqual(fast.result[key],control.result[key],key);
+  assert(fast.clearPixels<control.clearPixels/10,'Read-region clears replace repeated full-surface clears');
+ }
+ let callbacks=0;
+ const paintPattern=async(context,_resource,_paint,_operation,env)=>{
+  assert(context.getImageData(0,0,size,size).data.every(v=>v===0),'External painters receive a completely blank surface');callbacks++;
+  context.fillStyle=env.shapeOnly?'#000':'#008000';context.fillRect(90,90,20,20);
+ };
+ await renderPdfCanvas(createCanvas(1,1),{...input,items:[input.items[0],{...input.items[1],pattern:{}}]},
+  {...options,nativeCanvas:false,paintPattern});
+ assert.equal(callbacks,2,'Colour and shape callbacks retain the host contract');
+});
 patternOptions.paintPattern.dispose();
 console.log(`${count} Canvas replay tests passed`);
