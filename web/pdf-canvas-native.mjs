@@ -1,3 +1,4 @@
+import {nativePdfGlyphRun} from './pdf-canvas-program.mjs';
 // Plain source-over pages can use Canvas directly. PDF groups, masks and
 // component-space compositing still need the retained transparency renderer.
 const opaqueColour=colour=>/^#[\da-f]{3}(?:[\da-f]{3})?$/i.test(colour);
@@ -64,12 +65,18 @@ export function prepareNativeCanvasItems(plan,options={}){
     if(!paint.text_object_id||paint.text_knockout===false)return true;
     if(!textObjects){
       textObjects=new Map();
-      for(const item of plan.items)if(item.kind==='text'&&item.paint.text_object_id){const id=item.paint.text_object_id;textObjects.set(id,(textObjects.get(id)||0)+1);}
+      for(const item of plan.items)if((item.kind==='text'||nativePdfGlyphRun(item))&&item.paint.text_object_id){const id=item.paint.text_object_id;textObjects.set(id,(textObjects.get(id)||0)+(nativePdfGlyphRun(item)?.glyphs??1));}
     }
     return textObjects.get(paint.text_object_id)===1;
   };
   for(let i=0;i<plan.items.length;i++){
     const raw=plan.items[i],groups=raw.groups||raw.paint.group_path||[],group=groups[0];
+    if(nativePdfGlyphRun(raw)){
+      const p=raw.paint;
+      if(groups.length||raw.type3_plan||p.rendering_mode!==0||raw.mask||p.soft_mask||p.pattern||raw.pattern||p.shading_pattern||p.stroke_pattern||raw.stroke_pattern||p.fill_overprint||p.stroke_overprint||p.alpha_is_shape||p.fill_transform||p.fill_source?.paints===false||p.fill_alpha!==1||!opaqueColour(p.fill_color)||!['normal','compatible'].includes(p.blend_mode)||
+        p.clips&&!Array.isArray(p.clips)||options._nativeClipBounds&&!Array.isArray(options._nativeClipBounds)||(p.clips?.length||0)+(options._nativeClipBounds?.length||0)>256)return null;
+      items.push(raw);continue;
+    }
     if(group){
       // Independent unit-opacity groups can stay on the page. Other isolated
       // source-over groups render against transparency before placement.
@@ -136,4 +143,51 @@ export function prepareNativeCanvasItems(plan,options={}){
     items.push(item);
   }
   return items;
+}
+
+// Only native solid fills use this scope. A snapshot, rather than array/object
+// identity, also detects host mutations before a later paint or continuation.
+export function createNativeFillScope(context,Path,page,matrix,options,applyClips){
+  const empty=[];
+  let active=null;
+  const close=()=>{if(active){context.restore();active=null;}};
+  const sameBounds=(current,saved)=>{
+    if(current.length!==saved.length)return false;
+    for(let i=0;i<current.length;i++){
+      const b=current[i],s=saved[i];
+      if(b.min_x!==s[0]||b.min_y!==s[1]||b.max_x!==s[2]||b.max_y!==s[3])return false;
+    }
+    return true;
+  };
+  const same=(p,bounds)=>{
+    if(!active)return false;
+    if(page.width!==active.width||page.height!==active.height||page.origin_x!==active.originX||page.origin_y!==active.originY)return false;
+    for(let i=0;i<6;i++)if(matrix[i]!==active.matrix[i])return false;
+    const clips=p.clips||empty;
+    if(clips.length!==active.clips.length)return false;
+    for(let i=0;i<clips.length;i++)if(clips[i].svg_path!==active.clips[i][0]||!!clips[i].even_odd!==active.clips[i][1])return false;
+    return sameBounds(options._nativeClipBounds||empty,active.outer)&&sameBounds(bounds,active.bounds);
+  };
+  const paint=(p,bounds,path)=>{
+    if(!same(p,bounds)){
+      close();context.save();
+      try{
+        applyClips(context,p,bounds);
+        const snapshot=b=>[b.min_x,b.min_y,b.max_x,b.max_y];
+        active={width:page.width,height:page.height,originX:page.origin_x,originY:page.origin_y,matrix:matrix.slice(),
+          clips:(p.clips||empty).map(c=>[c.svg_path,!!c.even_odd]),outer:(options._nativeClipBounds||empty).map(snapshot),bounds:bounds.map(snapshot),alpha:null,colour:null};
+      }catch(error){context.restore();throw error;}
+    }
+    if(active.alpha!==p.fill_alpha){context.globalAlpha=p.fill_alpha;active.alpha=p.fill_alpha;}
+    if(active.colour!==p.fill_color){context.fillStyle=p.fill_color;active.colour=p.fill_color;}
+    context.fill(new Path(path),p.fill_even_odd?'evenodd':'nonzero');
+  };
+  const tryPaint=item=>{
+    const p=item.paint,bounds=item.nativeClipBounds||empty;
+    if(options.nativeFillRuns===false||item.kind!=='path'||!p.filled||p.stroked||p.fill_transform||p.pattern||p.shading_pattern||p.fill_source?.paints===false||!opaqueColour(p.fill_color)||!Number.isFinite(p.fill_alpha)||p.fill_alpha<0||p.fill_alpha>1||
+      p.clips&&!Array.isArray(p.clips)||!Array.isArray(bounds)||options._nativeClipBounds&&!Array.isArray(options._nativeClipBounds)||
+      (p.clips?.length||0)+(options._nativeClipBounds?.length||0)+bounds.length>256)return false;
+    paint(p,bounds,p.svg_path);return true;
+  };
+  return {paint,tryPaint,close};
 }

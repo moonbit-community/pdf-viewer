@@ -7,8 +7,8 @@ import { createColourPlaneSurface, paintColourPlaneSurface, resolveColourPlaneSu
 import { PdfCompositor, rgba8ToPremultiplied, premultipliedToRgba8, softMaskSamples } from './pdf-compositor.mjs';
 import { pdfPixelRegion } from './pdf-pixel-region.mjs';
 import {pdfPathPixelRegion} from './pdf-path-region.mjs';
-import {prepareNativeCanvasItems,singleType3Path,independentPattern} from './pdf-canvas-native.mjs';
-import {expandPdfCanvasProgram} from './pdf-canvas-program.mjs';
+import {prepareNativeCanvasItems,singleType3Path,independentPattern,createNativeFillScope} from './pdf-canvas-native.mjs';
+import {expandPdfCanvasProgram,prepareNativePdfProgram,nativePdfGlyphRun,nativePdfGlyphPath} from './pdf-canvas-program.mjs';
 
 // Lowered fill/stroke copies keep the original paint's weak geometry owner.
 const sourcePaint=Symbol('PDF source paint');
@@ -86,7 +86,9 @@ export function checkPdfRender(options) {
 export async function renderPdfCanvas(canvas, plan, options = {}) {
   checkPdfRender(options);
   if(options.yieldToHost&&!options._renderTask)options={...options,_renderTask:new PdfRenderTask(options.yieldToHost)};
-  plan=expandPdfCanvasProgram(plan);
+  const compiled=prepareNativePdfProgram(plan,options,prepareNativeCanvasItems);
+  if(compiled){plan=compiled.plan;options={...options,_nativePrepared:{plan,items:compiled.items},_inheritedWorkingBytes:(options._inheritedWorkingBytes||0)+compiled.bytes};}
+  else plan=expandPdfCanvasProgram(plan);
   let scope=options._profileScope,owned=null;
   const ownedGlyphCache=!options._glyphCache;
   const glyphCache=options._glyphCache||{entries:new Map(),bytes:0,limit:Math.max(0,Math.min(options.maxGlyphCacheBytes??16777216,(options.maxWorkingBytes||536870912)/32))};
@@ -743,9 +745,23 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
     canvas.width=width;canvas.height=height;
     const output=canvas.getContext('2d');
     if(!options.transparent){output.fillStyle='#fff';output.fillRect(0,0,width,height);}
+    const fillScope=createNativeFillScope(output,Path,plan.page,matrix,options,clips),noBounds=[];
+    try{
     for(const item of nativeItems){
       checkPdfRender(options);
-      if(renderTask?.due()){await renderTask.yield();checkPdfRender(options);}
+      if(renderTask?.due()){fillScope.close();await renderTask.yield();checkPdfRender(options);}
+      const run=nativePdfGlyphRun(item);
+      if(run){
+        for(let p=0;p<run.draws.length;p+=7){
+          checkPdfRender(options);
+          if(renderTask?.due()){fillScope.close();await renderTask.yield();checkPdfRender(options);}
+          if(item.paint.fill_source?.paints===false)continue;
+          fillScope.paint(item.paint,item.nativeClipBounds||noBounds,nativePdfGlyphPath(run,p));
+        }
+        continue;
+      }
+      if(fillScope.tryPaint(item))continue;
+      fillScope.close();
       output.save();
       try{
         if(item.kind==='retained'){
@@ -772,6 +788,7 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
       }finally{output.restore();}
       for(const value of uncachedImages)releaseImage(value);uncachedImages.clear();
     }
+    }finally{fillScope.close();}
     checkPdfRender(options);await drawAnnotations(output);checkPdfRender(options);
     return {width,height,diagnostics,native:true,blendCapabilities:compositor.capabilities};
   }

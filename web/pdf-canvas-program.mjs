@@ -1,9 +1,8 @@
 // Compiled glyph resources stay in font coordinates. Reproduce the existing
 // positioned path arithmetic at the host boundary, including its bounds map.
 // Only the browser compiler emits versions 2/3; public model plans remain 1.
-import {expandPdfTextRuns} from './pdf-canvas-text-runs.mjs';
-export function expandPdfCanvasProgram(plan) {
-  if(plan?.version!==2&&plan?.version!==3)return plan;
+import {expandPdfTextRuns,pdfTextRunStates,pdfTextRunOperands} from './pdf-canvas-text-runs.mjs';
+function programResources(plan){
   if(!Array.isArray(plan.glyph_resources)||plan.glyph_resources.length>16384)throw new Error('Invalid PDF glyph resource table');
   const resources=new Map();
   for(const resource of plan.glyph_resources){
@@ -18,6 +17,11 @@ export function expandPdfCanvasProgram(plan) {
       shadings.set(resource.id,resource.raster);
     }
   }
+  return {resources,shadings};
+}
+export function expandPdfCanvasProgram(plan) {
+  if(plan?.version!==2&&plan?.version!==3)return plan;
+  const {resources,shadings}=programResources(plan);
   const items=expandPdfTextRuns(plan).map(item=>{
     const shading=item.paint?.shading;
     if(shading?.raster_resource!==undefined){
@@ -80,4 +84,84 @@ export function expandPdfCanvasProgram(plan) {
   });
   const {glyph_resources,shading_resources,text_states,...expanded}=plan;
   return {...expanded,version:1,items};
+}
+
+// Native consumers retain the operation/state boundary. Only invoked outline
+// coordinates and seven numeric operands per glyph need a render-owned copy.
+// Ordinary expansion remains the public, fully materialized version-1 API.
+const nativeGlyphRuns=new WeakMap();
+export const nativePdfGlyphRun=item=>nativeGlyphRuns.get(item);
+export function prepareNativePdfProgram(source,options,selectNative){
+  if(source?.version!==3||options.fullGlyphExpansion||options.nativeFillRuns===false||typeof options.resolveTextOutline==='function')return null;
+  const {resources}=programResources(source),states=pdfTextRunStates(source),items=[],pending=[];
+  for(const item of source.items){
+    if(item.kind!=='text_run'){
+      if(item.glyph||item.paint?.shading?.raster_resource!==undefined)return null;
+      items.push(item);continue;
+    }
+    const operands=pdfTextRunOperands(item,states),{state,text}=operands;
+    const next={...state,kind:'outline_run',paint:{...state.paint}};
+    nativeGlyphRuns.set(next,{glyphs:text.length});
+    pending.push({item:next,...operands});items.push(next);
+  }
+  if(!pending.length)return null;
+  const {glyph_resources,shading_resources,text_states,...base}=source,plan={...base,version:1,items};
+  const native=selectNative(plan,options);if(!native)return null;
+  const budget=options.maxWorkingBytes||536870912;
+  const width=options.width||Math.ceil(source.viewport.width),height=options.height||Math.ceil(source.viewport.height);
+  const glyphBytes=options._glyphCacheReserved?0:options._glyphCache?.limit??Math.max(0,Math.min(options.maxGlyphCacheBytes??16777216,budget/32));
+  const imageBytes=options._imageCacheReserved?0:options._imageCache?.limit??Math.max(0,Math.min(options.maxImageCacheBytes??67108864,budget/8));
+  const limit=Math.min(8388608,budget/16,budget-(options._inheritedWorkingBytes||0)-glyphBytes-imageBytes-width*height*4),outlines=[],indices=new Map();
+  if(!Number.isFinite(limit)||limit<=0)return null;
+  let bytes=0;
+  for(const {item,data,text}of pending){
+    bytes+=1024+text.length*7*8+((item.paint.clips?.length||0)+(options._nativeClipBounds?.length||0))*64;if(bytes>limit)return null;
+    const draws=new Float64Array(text.length*7);
+    for(let p=0,g=0;p<data.length;p+=29,g+=7){
+      const id=data[p+22],resource=resources.get(id);
+      if(!resource)throw new Error('Invalid PDF glyph invocation');
+      if(resource.kind!=='outline')return null;
+      let index=indices.get(id);
+      if(index===undefined){
+        const commands=resource.commands;
+        bytes+=128+commands.length*8;if(bytes>limit)return null;
+        const snapshot=new Float64Array(commands.length);
+        for(let i=0;i<commands.length;){
+          const op=commands[i++],count=op===0||op===1?2:op===2?6:op===3?0:-1;
+          if(count<0||i+count>commands.length)throw new Error('Invalid PDF glyph path');
+          snapshot[i-1]=op;
+          for(let end=i+count;i<end;i++){
+            const value=commands[i];
+            if(!Number.isFinite(value)||Math.abs(value)>1e12)throw new Error('Invalid PDF glyph coordinate');
+            snapshot[i]=value;
+          }
+        }
+        index=outlines.length;indices.set(id,index);outlines.push(snapshot);
+      }
+      draws[g]=index;
+      for(let m=0;m<6;m++){
+        const value=data[p+23+m];
+        if(!Number.isFinite(value)||Math.abs(value)>1e12)throw new Error('Invalid PDF glyph invocation');
+        draws[g+1+m]=value;
+      }
+    }
+    nativeGlyphRuns.set(item,{glyphs:text.length,draws,outlines,originX:source.page.origin_x,flipY:source.page.origin_y+source.page.height});
+  }
+  return {plan,items:native,bytes};
+}
+
+// Keep the legacy positioned-path arithmetic and decimal conversion exactly.
+// Paths are consumed one at a time rather than retained for the entire page.
+export function nativePdfGlyphPath(run,offset){
+  const data=run.draws,commands=run.outlines[data[offset]],parts=[];
+  const a=data[offset+1],b=data[offset+2],c=data[offset+3],d=data[offset+4],e=data[offset+5],f=data[offset+6];
+  for(let i=0;i<commands.length;){
+    const op=commands[i++],count=op===0||op===1?2:op===2?6:0;
+    parts.push(['M','L','C','Z'][op]);
+    for(let end=i+count;i<end;i+=2){
+      const x=commands[i],y=commands[i+1];
+      parts.push(String(x*a+y*c+e-run.originX),String(run.flipY-(x*b+y*d+f)));
+    }
+  }
+  return parts.join(' ');
 }

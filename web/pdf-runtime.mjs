@@ -3,13 +3,12 @@ import {createShadingPainter} from './pdf-shading.mjs';
 import { renderPdfCanvas, multiplyMatrix, checkPdfRender } from './pdf-canvas.mjs';
 import { createPatternPainter } from './pdf-patterns.mjs';
 import {prepareNativeCanvasItems} from './pdf-canvas-native.mjs';
-import {expandPdfCanvasProgram} from './pdf-canvas-program.mjs';
+import {expandPdfCanvasProgram,prepareNativePdfProgram} from './pdf-canvas-program.mjs';
 
 export {initializePdfGraphics} from './pdf-graphics.mjs';
 
 export async function renderPdfPage(canvas,plan,options={}) {
   checkPdfRender(options);
-  plan=expandPdfCanvasProgram(plan);
   const configured={...options};
   if(options.yieldToHost&&!configured._renderTask)configured._renderTask=new PdfRenderTask(options.yieldToHost);
   const scale=options.outputScale ?? 1;
@@ -21,11 +20,18 @@ export async function renderPdfPage(canvas,plan,options={}) {
     configured.height=options.height ?? Math.ceil(plan.viewport.height*scale);
     configured.matrix=multiplyMatrix([scale,0,0,scale,0,0],logical);
   }
+  const compiled=prepareNativePdfProgram(plan,configured,prepareNativeCanvasItems);
+  if(compiled){plan=compiled.plan;configured._inheritedWorkingBytes=(options._inheritedWorkingBytes||0)+compiled.bytes;}
+  else{
+    const wire=plan?.version===2||plan?.version===3;
+    plan=expandPdfCanvasProgram(plan);
+    if(wire)options._onExpandedPlan?.(plan);
+  }
   // One render owns decoded lookup tables across placements and tiles. An
   // independently reused painter retains its mutable host-plan semantics.
   const samplerBytes=!options.paintShading&&plan.items.some(item=>item.kind==='shading')
     ?Math.min(8388608,Math.floor((options.maxWorkingBytes||536870912)/16)):0;
-  if(samplerBytes)configured._inheritedWorkingBytes=(options._inheritedWorkingBytes||0)+samplerBytes;
+  if(samplerBytes)configured._inheritedWorkingBytes=(configured._inheritedWorkingBytes||0)+samplerBytes;
   configured.paintShading=options.paintShading || createShadingPainter({...configured,
     _samplerCache:samplerBytes?{entries:new WeakMap(),bytes:0,limit:samplerBytes}:null});
   // Only the built-in adapters guarantee opaque sample coverage. External
@@ -33,7 +39,7 @@ export async function renderPdfPage(canvas,plan,options={}) {
   configured._builtinShading=!options.paintShading;
   configured._builtinPattern=!options.paintPattern;
   configured.paintPattern=options.paintPattern || createPatternPainter(configured);
-  const nativeItems=prepareNativeCanvasItems(plan,configured);
+  const nativeItems=compiled?.items||prepareNativeCanvasItems(plan,configured);
   try {
     const width=configured.width||Math.ceil(plan.viewport.width),height=configured.height||Math.ceil(plan.viewport.height);
     const budget=options.maxWorkingBytes||536870912;

@@ -3309,3 +3309,166 @@ replays, separate exploratory/final/follow-up timing reports, frozen artifact
 manifest and validation logs. Private inputs and pixels remain ignored.
 Release acceptance additionally requires all eight CI jobs and all sixteen
 deployed artifact hashes at both plain and revision URLs.
+
+
+## Direct consumption of compiled glyph runs (2026-10-18)
+
+Baseline is pushed `d17171f8e461983a852c3f4e8ad625a273ee6b68`. All sixteen
+accepted artifacts were checked before copying an independent packaged site.
+This change addresses a producer/consumer representation mismatch in the
+browser renderer. MoonBit already produces shared glyph resources and text
+operation states, but the host expanded every numeric glyph operand into a
+complete paint object, quad, bounds, matrix arrays and positioned SVG path
+before choosing a renderer. Native solid fills then computed unused paint
+regions, rebuilt identical clips and awaited per-glyph dispatch.
+
+The native renderer now consumes eligible numeric text runs directly. It
+validates all original 29-number rows and text/state/resource constraints,
+snapshots the seven rendering operands per glyph, and validates/copies invoked
+outline coordinates once. It generates one positioned path when that glyph
+is about to draw. Path arithmetic and decimal strings match the established
+expander byte for byte; individual fills retain their order and coverage.
+Rendering never combines glyph paths into one fill. Ordinary public expansion
+still returns the complete version-1 plan.
+
+Solid native fills also share one saved clip scope while its actual clip,
+page, matrix and bounds values match. They issue synchronous fills without
+computing an unused readback region. Snapshots detect mutations inside shared
+clip lists; source paint suppression remains visible between glyphs. Yields,
+retained/image operations, cancellation and errors close the scope. Later
+renders create fresh scopes. Complex, grouped, masked, translucent, profiled,
+proof and unsupported text programs retain their existing materialized path.
+The byte-identical Worker still prepares complete selection/accessibility,
+annotations and editor data before painting.
+
+This is browser-protocol and Canvas adapter code. It inspects neither MoonBit
+compiler enum tags nor private collection layouts. The render-owned snapshots
+are capped at the smaller of 8 MiB, one sixteenth of the working budget and
+the space remaining after native surfaces and existing reservations. Their
+operands, resources and conservative metadata charges enter inherited working
+memory, including tiled/nested rendering. Insufficient budget selects ordinary
+expansion. Clip snapshots have a fixed eligibility bound. No persistent glyph
+or page cache limit increases.
+
+A packaged diagnostic prepares and paints all fourteen public pages. Complete
+payload hashes match after canonicalizing only the per-Worker raster UUID;
+epoch/resource IDs remain exact. Every RGBA and semantic hash also matches.
+The measured source operation counts are:
+
+| First fourteen paints | Baseline | Candidate |
+| --- | ---: | ---: |
+| Glyphs materialized by full program expansion | 67,230 | 3,335 |
+| Glyphs consumed as compact native operands | 0 | 63,895 |
+| Compact native text operations | 0 | 1,823 |
+| Paint-region computations | 117,703 | 51,621 |
+| Canvas clip calls | 75,290 | 6,353 |
+| Canvas save calls | 140,588 | 8,759 |
+| Canvas restore calls | 140,588 | 8,759 |
+
+Snapshot accounting sums to 7,088,624 bytes across fourteen renders. This is
+an explicit budget charge, not peak/retained heap or a latency measurement.
+The remaining fully expanded glyphs belong to complex page 11. A preceding
+instrumented diagnostic also identified about 0.55 seconds in host expansion;
+its timings are not pooled with the uninstrumented acceptance results.
+
+Two atlas experiments remain excluded. Relocating source drawing reduced
+readback calls but changed 1,142 real WebKit pixels, maximum channel delta six.
+Keeping original drawing coordinates and copying each source into an atlas
+retained exact pixels and reduced reads from 3,835 to 352, but requested
+14,642,628 pixels instead of 12,487,052 and showed no meaningful paint benefit
+in the diagnostic replay. The product uses neither atlas. An earlier clip-only
+prototype and a three-pair compact prototype are retained separately; final
+acceptance does not pool those different-code samples. The compact prototype's
+paired totals improved 9.1%, 9.5% and 4.2%, preceding the budget/snapshot repairs
+and final tests.
+
+Final measurements run serially after all validation and a 45-second quiet
+interval. Five alternating public pairs use fresh contexts/documents/Workers,
+first sequential fourteen-page sweeps, CSS width 1216 / DPR 2, complete
+preparation, painting and full RGBA readback. Startup, opening, hashes, DOM and
+teardown are excluded. Selection/accessibility preparation remains included;
+PDF.js is the pinned render-only lower bound. Every WebKit page in all five
+pairs has exact pixels and complete semantic hashes.
+
+| Public fourteen-page scope | Baseline median ms | Candidate median ms | Median paired reduction |
+| --- | ---: | ---: | ---: |
+| Total preparation, paint and readback | 4,366.0 | 4,141.0 | 5.2% |
+| Preparation and host decoding | 1,996.0 | 2,059.0 | -2.4% |
+| Paint and readback | 2,350.0 | 2,109.0 | 11.6% |
+| Paint/readback excluding complex page 11 | 1,286.0 | 1,054.0 | 17.0% |
+
+Percentages compare each alternating pair before taking the median; they are
+not ratios of the independent column medians. All five total and paint pairs
+improve. Worker preparation's point estimate is 2.4% slower and offsets some
+of the paint gain; no Worker-preparation or startup gain is claimed. The
+producer, decoder and Worker bytes are unchanged. Page 11 paint/readback
+medians remain about 1,065/1,043 ms; no complex-compositor improvement is
+attributed to this native path. It accounts for roughly half of candidate
+paint time and remains a material remaining bottleneck.
+
+PDF.js render-only median is 778.0 ms. The candidate remains about 5.3 times that feature-limited
+lower bound, so this does not close the whole architectural gap.
+
+- Full total: baseline `[4366.0, 4394.0, 4443.0, 4291.0, 4280.0]`; candidate `[4141.0, 4194.0, 4168.0, 4078.0, 3987.0]`.
+- Full preparation: baseline `[2016.0, 1994.0, 2010.0, 1941.0, 1996.0]`; candidate `[2064.0, 2074.0, 2059.0, 1963.0, 1941.0]`.
+- Full paint/readback: baseline `[2350.0, 2400.0, 2433.0, 2350.0, 2284.0]`; candidate `[2077.0, 2120.0, 2109.0, 2115.0, 2046.0]`.
+- Paint/readback outside page 11: baseline `[1303.0, 1335.0, 1286.0, 1247.0, 1243.0]`; candidate `[1034.0, 1056.0, 1069.0, 1054.0, 1032.0]`.
+
+The strict Chromium full-document sweep stops at candidate page 13 with the
+already recorded baseline hashes
+`367bb5030a71c8b76bf45e5ff70f03da0b3cb37d55530c67977d1eb4129ed88e`
+and `4b1bb1ecf5ae302714783b1e7b876cdf799e5fc0f317c887fffd933b4ae28e39`.
+The incomplete report/captures remain local. No tolerance or new pixel
+exception is added and no full Chromium latency result is accepted.
+
+The private thirteen-page image fixture retains SHA-256
+`fea1ef069944d3479425ebf076a9b34118f7ba9e3df8cefb54e557ca16f90817`.
+Three alternating independent pairs per engine retain every historical RGBA
+and semantic hash, with unchanged raster/response cache counts and budgets.
+Chromium's paired total estimate is 1.7% faster; WebKit's is 1.4% slower.
+Their paint/readback estimates are 0.1% and 1.6% slower. WebKit preparation
+also varies by +5.0%. This block establishes no stable image-load speedup or
+universal latency-regression bound; all raw pairs remain available.
+
+Five additional reader pairs per engine use the ordinary file-input path,
+with identical first-page pixels across all variants and samples:
+
+| First-page UI scope | Baseline median ms | Candidate median ms | Median paired reduction |
+| --- | ---: | ---: | ---: |
+| chromium Canvas visible | 445.5 | 424.7 | 4.3% |
+| chromium Reader ready | 384.8 | 363.3 | 4.7% |
+| webkit Canvas visible | 779.0 | 760.0 | 3.1% |
+| webkit Reader ready | 433.0 | 417.0 | 4.1% |
+
+Canvas-visible includes a pixel flush and two animation frames; reader-ready
+includes mounted text, annotations and fonts. The empty shell is loaded before
+file selection and may pre-start its untouched Worker; negative Worker
+timestamps record that shifted work. These are fresh document/Worker samples,
+not cold navigation. All five Chromium visible/ready pairs and WebKit ready
+pairs improve; four WebKit visible pairs improve. Preserve these scopes
+separately from the document sweep. Raw samples are:
+
+- chromium visible: baseline `[479.3, 441.6, 446.9, 445.5, 441.0]`; candidate `[424.7, 435.3, 420.2, 433.3, 421.9]`.
+- chromium ready: baseline `[414.2, 380.7, 385.9, 384.8, 375.8]`; candidate `[363.3, 368.5, 360.6, 366.9, 361.3]`.
+- webkit visible: baseline `[811.0, 784.0, 779.0, 770.0, 764.0]`; candidate `[751.0, 760.0, 744.0, 767.0, 773.0]`.
+- webkit ready: baseline `[458.0, 437.0, 433.0, 427.0, 429.0]`; candidate `[417.0, 419.0, 409.0, 415.0, 423.0]`.
+
+Validation passes 800 Moon JS tests, all 26 focused Node commands, both
+packaged browser suites and the complete fourteen-page operation/payload/pixel
+probe. Canvas replay now has 60 tests. Ordinary glyph coverage includes 128
+native/retained comparisons and sixteen additional compact replay comparisons
+for affine transforms, rotations, tiles and transparency. New checks cover
+byte-identical paths, resource/matrix/origin snapshots, shared clip and source
+mutations, malformed rows/resources, constrained-budget fallback, cancellation
+and graphics-state restoration after failure. Public interfaces are unchanged
+after moon info and moon fmt. No MoonBit engine source changes are included.
+
+The published Worker remains 5,280,198 bytes, SHA-256
+`a1082a04ef86f309dfa28c53a010ee4d7685c64389ad2f7d05c76fd99310069c`.
+The standalone PDF and viewer bundles are also byte-identical to baseline.
+Ignored evidence is under `_build/compiled-replay-next/`: verified baseline,
+rejected atlas/clip prototypes, initial compact site and timings, final counts,
+all final raw latency blocks, Chromium captures, validation logs and the
+frozen sixteen-artifact manifest. Private bytes and pixels remain ignored.
+Release acceptance additionally requires all eight CI jobs and sixteen
+published artifacts at both plain and revision URLs.

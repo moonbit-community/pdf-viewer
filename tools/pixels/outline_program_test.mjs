@@ -3,7 +3,8 @@ import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import * as bridge from '../../web/_generated/pdf.js';
 import {initializePdfGraphics,renderPdfPage} from '../../web/pdf-runtime.mjs';
-import {expandPdfCanvasProgram} from '../../web/pdf-canvas-program.mjs';
+import {expandPdfCanvasProgram,prepareNativePdfProgram,nativePdfGlyphRun,nativePdfGlyphPath} from '../../web/pdf-canvas-program.mjs';
+import {prepareNativeCanvasItems} from '../../web/pdf-canvas-native.mjs';
 const require=createRequire(process.env.PDF_CANVAS_PACKAGE||import.meta.url);
 const {createCanvas,Path2D,loadImage}=require('@napi-rs/canvas');
 await initializePdfGraphics({jbig2:{wasmBytes:readFileSync('vendor/jbig2/jbig2.wasm')}});
@@ -57,3 +58,49 @@ const malformed={version:2,page:{origin_x:0,origin_y:0,height:100},items:[{kind:
 for(const commands of [[9],[0,1],[0,Infinity,0]])assert.throws(()=>expandPdfCanvasProgram({...malformed,glyph_resources:[{id:-1,kind:'outline',commands}]}));
 assert.throws(()=>expandPdfCanvasProgram({...malformed,glyph_resources:[{id:-1,kind:'unknown',commands:[]}]}));
 console.log(`PASS ${checks} ordinary glyph native/retained pixel comparisons; exact paths, encodings, clipping, masks, patterns, alpha, blend and semantics`);
+
+const compact=prepare(fixture('type1','0 .2 .8 rg BT /F1 24 Tf 24 40 Td (AAA) Tj /F2 24 Tf (AA) Tj ET'),true).canvas;
+const displayOptions={...options,returnPixels:false};
+const compiled=prepareNativePdfProgram(compact,displayOptions,prepareNativeCanvasItems);
+assert(compiled,'Ordinary outline runs must use the compact native representation');
+assert.equal(compiled.items.length,2,'Retain text-operation granularity');
+const paths=compiled.items.flatMap(item=>{const run=nativePdfGlyphRun(item);assert(run.draws instanceof Float64Array);return Array.from({length:run.glyphs},(_,i)=>nativePdfGlyphPath(run,i*7));});
+assert.deepEqual(paths,expandPdfCanvasProgram(compact).items.map(item=>item.paint.fill_path),'Every positioned path byte, including affine arithmetic');
+assert(compiled.bytes>=5*7*8&&compiled.bytes<=8388608,'Charge numeric snapshots and metadata within the existing working budget');
+let compactChecks=0;
+const original=structuredClone(compact);
+for(const matrix of [[1.6,.2,-.1,1.4,6,4],[0,1.5,-1.5,0,220,0],[-1.5,0,0,-1.5,320,240],[0,-1.5,1.5,0,0,320]])for(const tileSize of [0,64])for(const transparent of [false,true]){
+ const a=createCanvas(1,1),b=createCanvas(1,1),opts={...displayOptions,width:400,height:400,matrix,tileSize,transparent};
+ await renderPdfPage(a,compact,{...opts,nativeFillRuns:false});await renderPdfPage(b,compact,opts);
+ assert.deepEqual(b.getContext('2d').getImageData(0,0,400,400).data,a.getContext('2d').getImageData(0,0,400,400).data,'Compact rotated/sheared/tiled/transparent native replay');compactChecks++;
+}
+assert.deepEqual(compact,original,'No geometry or state is attached to the wire program');
+const mutable=structuredClone(compact),owned=prepareNativePdfProgram(mutable,displayOptions,prepareNativeCanvasItems);
+mutable.glyph_resources.forEach(resource=>resource.commands.fill(999));mutable.items.forEach(item=>item.draws.fill(888));mutable.page.origin_x+=100;mutable.page.height+=100;
+assert.deepEqual(owned.items.flatMap(item=>{const run=nativePdfGlyphRun(item);return Array.from({length:run.glyphs},(_,i)=>nativePdfGlyphPath(run,i*7));}),paths,'Coordinate and placement owners survive source mutation before a continuation');
+for(const extra of [{nativeCanvas:false},{returnPixels:true},{proof:true},{fullGlyphExpansion:true},{nativeFillRuns:false},{maxWorkingBytes:256}])assert.equal(prepareNativePdfProgram(compact,{...displayOptions,...extra},prepareNativeCanvasItems),null,'Unsupported modes retain full expansion');
+for(const change of [
+ p=>p.items[0].draws[0]=-1,p=>p.items[0].draws[1]=.5,p=>p.items[0].draws[22]=999999,p=>p.items[0].draws[23]=Infinity,p=>p.items[0].draws[23]=1e13,
+ p=>p.glyph_resources[0].commands[0]=9,p=>p.glyph_resources[0].commands[1]=Infinity,
+]){const bad=structuredClone(compact);change(bad);assert.throws(()=>expandPdfCanvasProgram(bad));assert.throws(()=>prepareNativePdfProgram(bad,displayOptions,prepareNativeCanvasItems));}
+
+// The clip list stays shared with host plans, as in full expansion. Mutating
+// its contents after the first fill must invalidate the saved clip scope.
+async function mutatedClip(nativeFillRuns){
+ const input=structuredClone(compact),canvas=createCanvas(1,1);input.text_states.forEach(state=>state.paint.clips=[{svg_path:'M0 0H200V160H0Z',even_odd:false}]);
+ const context=canvas.getContext('2d'),fill=context.fill.bind(context);let calls=0;
+ context.fill=(...args)=>{fill(...args);if(++calls===1)input.text_states[0].paint.clips[0].svg_path='M0 0H3V3H0Z';};
+ await renderPdfPage(canvas,input,{...displayOptions,nativeFillRuns});return context.getImageData(0,0,canvas.width,canvas.height).data;
+}
+assert.deepEqual(await mutatedClip(true),await mutatedClip(false),'Shared clip mutation changes subsequent glyphs identically');
+async function mutatedSource(nativeFillRuns){
+ const input=structuredClone(compact),canvas=createCanvas(1,1),source={paints:true};input.text_states.forEach(state=>state.paint.fill_source=source);
+ const context=canvas.getContext('2d'),fill=context.fill.bind(context);let calls=0;
+ context.fill=(...args)=>{fill(...args);if(++calls===1)source.paints=false;};
+ await renderPdfPage(canvas,input,{...displayOptions,nativeFillRuns});return context.getImageData(0,0,canvas.width,canvas.height).data;
+}
+assert.deepEqual(await mutatedSource(true),await mutatedSource(false),'Shared source paint suppression applies to subsequent glyphs');
+const controller=new AbortController(),cancelled=createCanvas(1,1),before=structuredClone(compact);
+await assert.rejects(renderPdfPage(cancelled,compact,{...displayOptions,signal:controller.signal,_renderTask:{due:()=>true,yield:async()=>controller.abort()}}),{name:'AbortError'});
+assert.equal(cancelled.width,1);assert.equal(cancelled.height,1);assert.deepEqual(compact,before);
+console.log(`PASS ${compactChecks} compact native glyph comparisons; exact path bytes, source snapshots, clipping mutation, cancellation, budgets and malformed operands`);

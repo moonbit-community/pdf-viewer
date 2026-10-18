@@ -649,5 +649,19 @@ await test('native preparation stays within one render and follows replaced plan
  await renderPdfCanvas(canvas,input,{...options,returnPixels:false,_nativePrepared:{plan:foreign,items:[]}});
  assert.deepEqual(canvas.getContext('2d').getImageData(0,0,20,20).data,retained,'Foreign plan identities never reuse lowered items');
 });
+
+await test('native solid fills restore their clip and graphics state after a path failure',async()=>{
+ const clip={svg_path:'M5 5H15V15H5Z',even_odd:false};
+ const canvas=createCanvas(1,1),input=plan([path(rect,'#ff0000',{fill_alpha:.25,clips:[clip]}),path('fail','#0000ff',{fill_alpha:.75,clips:[clip]})]);
+ function CheckedPath(value){if(value==='fail')throw new Error('Authored path failure');return new Path2D(value);}
+ await assert.rejects(renderPdfCanvas(canvas,input,{...options,Path2D:CheckedPath,returnPixels:false}),/Authored path failure/);
+ const context=canvas.getContext('2d'),matrix=context.getTransform();
+ assert.deepEqual([matrix.a,matrix.b,matrix.c,matrix.d,matrix.e,matrix.f],[1,0,0,1,0,0]);
+ // This host caches style getters across restore(), so inspect painted pixels.
+ context.fillRect(0,0,20,20);
+ assert.deepEqual(Array.from(context.getImageData(10,10,1,1).data),[255,255,255,255]);
+ context.fillStyle='#00ff00';context.fillRect(0,0,20,20);
+ assert.deepEqual(Array.from(context.getImageData(0,0,1,1).data),[0,255,0,255]);
+});
 patternOptions.paintPattern.dispose();
 console.log(`${count} Canvas replay tests passed`);
