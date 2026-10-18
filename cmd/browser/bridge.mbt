@@ -290,13 +290,35 @@ fn browser_render_page(
   compiled_canvas? : Bool = false,
   text_runs? : Bool = false,
 ) -> String {
+  browser_render_page_json(
+    number,
+    scale,
+    rotation,
+    printing,
+    omit_svg,
+    compiled_canvas~,
+    text_runs~,
+  ).stringify()
+}
+
+///|
+fn browser_render_page_json(
+  number : Int,
+  scale : Double,
+  rotation : Int,
+  printing : Bool,
+  omit_svg : Bool,
+  compiled_canvas? : Bool = false,
+  text_runs? : Bool = false,
+  packet? : BrowserPageBuffers? = None,
+) -> Json {
   if scale <= 0.0 || scale.is_nan() || scale.is_inf() {
-    return browser_error_with_code(
+    return browser_error_json(
       "invalid-scale", "Scale must be finite and positive",
     )
   }
   if rotation % 90 != 0 {
-    return browser_error_with_code(
+    return browser_error_json(
       "invalid-rotation", "Rotation must be a multiple of 90",
     )
   }
@@ -311,7 +333,7 @@ fn browser_render_page(
       browser_page(number).map(page => (page, None))
     }
     guard prepared is Some((page, program)) else {
-      return browser_error_with_code(
+      return browser_error_json(
         "page-missing", "No document or page does not exist",
       )
     }
@@ -323,13 +345,22 @@ fn browser_render_page(
       "page": number,
       "svg": svg,
       "canvas": match program {
-        Some(program) => program.canvas_plan(page, scale, rotation, text_runs~)
+        Some(program) =>
+          program.canvas_plan(page, scale, rotation, text_runs~, number_data=values => {
+            match packet {
+              Some(buffers) => browser_page_numbers(buffers, values)
+              None => values.to_json()
+            }
+          })
         None => page.canvas_plan(scale~, rotation~)
       },
-      "layer": match program {
-        Some(program) => program.text_layer(page, scale, rotation)
-        None => page.text_layer(scale~, rotation~)
-      },
+      "layer": browser_page_layer(
+        match program {
+          Some(program) => program.text_layer(page, scale, rotation)
+          None => page.text_layer(scale~, rotation~)
+        },
+        packet,
+      ),
       "editor": if printing {
         Json::array([])
       } else {
@@ -357,9 +388,9 @@ fn browser_render_page(
         "display"
       },
     }
-    result.stringify()
+    result
   } catch {
-    error => browser_error_with_code("render-error", @debug.to_string(error))
+    error => browser_error_json("render-error", @debug.to_string(error))
   }
 }
 

@@ -75,7 +75,10 @@ fn pdf_canvas_text_state(command : Json) -> Json {
 }
 
 ///|
-fn pdf_canvas_commands_json(commands : Array[PdfCanvasCommand]) -> Json {
+fn pdf_canvas_commands_json(
+  commands : Array[PdfCanvasCommand],
+  number_data? : (Array[Double]) -> Json = values => values.to_json(),
+) -> Json {
   let result : Array[Json] = commands.map(command => {
     match command {
       Paint(value) => value
@@ -83,7 +86,7 @@ fn pdf_canvas_commands_json(commands : Array[PdfCanvasCommand]) -> Json {
         {
           "kind": "text_run".to_json(),
           "state": run.state.to_json(),
-          "draws": run.draws.to_json(),
+          "draws": number_data(run.draws),
           "text": run.text.to_json(),
         }
     }

@@ -73,7 +73,7 @@ try{
           worker.addEventListener('message',event=>{
             if(event.data?.type==='ready')state.workers.push({created,ready:performance.now(),ms:performance.now()-created});
             const request=pending.get(event.data?.id);
-            if(request){pending.delete(event.data.id);state.requests.push({...request,end:performance.now(),ms:performance.now()-request.start,chars:typeof event.data.result==='string'?event.data.result.length:0});}
+            if(request){pending.delete(event.data.id);state.requests.push({...request,end:performance.now(),ms:performance.now()-request.start,chars:typeof event.data.result==='string'?event.data.result.length:event.data.result?.json?.length||0,numericBytes:event.data.result?.buffers?.reduce((sum,buffer)=>sum+buffer.byteLength,0)||0});}
           });
           return worker;
         }});

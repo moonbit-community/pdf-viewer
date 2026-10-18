@@ -67,18 +67,8 @@ fn start_thumbnails() -> Unit {
       ignore(
         @js_async.Promise::from_async(() => {
           try {
-            let result = call(
-              "render_page",
-              args=[
-                @js.Value::cast_from(number),
-                @js.Value::cast_from(0.12),
-                @js.Value::cast_from(0),
-                @js.Value::cast_from(true),
-                @js.Value::cast_from(true),
-                @js.Value::cast_from(true),
-              ],
-              controller=task,
-              priority=-5,
+            let result = checked_value(
+              render_thumbnail(number, task.signal()).wait(),
             )
             if controller_aborted(task) || controller_aborted(controller) {
               return
@@ -344,3 +334,10 @@ async fn download_metadata() -> Unit {
     error => if generation == state.document_generation { show_error(error) }
   }
 }
+
+///|
+extern "js" fn render_thumbnail(
+  number : Int,
+  signal : @js_async.AbortSignal,
+) -> @js_async.Promise[@js.Value] =
+  #| (number,signal) => globalThis.pdfViewerHost.preparePage(number,.12,0,{signal,priority:-5})

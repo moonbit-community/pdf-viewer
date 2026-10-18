@@ -109,6 +109,7 @@ jobs:
           node tools/pixels/compositor_test.mjs
           node tools/pixels/canvas_program_test.mjs
           node tools/pixels/text_program_test.mjs
+          node tools/pixels/page_data_test.mjs
           node tools/pixels/outline_program_test.mjs
           node tools/pixels/image_flate_test.mjs
           node tools/pixels/pako_deflate_test.mjs

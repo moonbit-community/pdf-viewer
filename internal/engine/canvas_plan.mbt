@@ -22,6 +22,7 @@ fn pdf_canvas_plan(
   inherited_profiles : Array[PdfIccProfile],
   program? : PdfCanvasProgram? = None,
   text_runs? : Bool = true,
+  number_data? : (Array[Double]) -> Json = values => values.to_json(),
 ) -> Json raise @core.PdfError {
   let profiles = page.icc_profiles.filter(profile => {
     !inherited_profiles.contains(profile)
@@ -375,7 +376,7 @@ fn pdf_canvas_plan(
       "rotation": self.rotation.to_json(),
     },
     "viewport": viewport.to_json(),
-    "items": pdf_canvas_commands_json(items),
+    "items": pdf_canvas_commands_json(items, number_data~),
   }
   let result = if text_states.is_empty() {
     result

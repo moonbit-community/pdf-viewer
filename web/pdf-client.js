@@ -1,5 +1,6 @@
 // Browser-native Worker and AbortSignal are the transport. Only task ordering,
 // document ownership and stale-result handling belong to this adapter.
+import {decodePdfPageData} from './pdf-page-data.mjs';
 function aborted() {
   return new DOMException("PDF task cancelled", "AbortError");
 }
@@ -84,7 +85,7 @@ export class PdfWorkerClient {
               if (this.onRaster) this.onRaster(image.uri, image.bitmap);
               else image.bitmap.close?.();
             }
-            this.settle(task, null, message.result);
+            this.settle(task, null, task.pageData ? decodePdfPageData(message.result) : message.result);
           } catch (error) {
             for (const image of images.slice(received)) image.bitmap.close?.();
             this.settle(task, error);
@@ -123,14 +124,16 @@ export class PdfWorkerClient {
     else task.resolve(result);
   }
 
-  call(method, args = [], { signal, priority = 0, transfer = [] } = {}) {
+  callPage(args, options = {}) { return this.call('render_page', args, {...options,pageData:true}); }
+
+  call(method, args = [], { signal, priority = 0, transfer = [], pageData = false } = {}) {
     if (signal?.aborted) return Promise.reject(aborted());
     if (!this.worker) return Promise.reject(Object.assign(new Error("No document open"), {
       code: "document-closed",
     }));
     this.prepared = false;
     return new Promise((resolve, reject) => {
-      const task = { id: ++this.nextId, method, args, signal, priority, transfer, resolve, reject };
+      const task = { id: ++this.nextId, method, args, signal, priority, transfer, pageData, resolve, reject };
       task.abort = () => {
         if (task.settled) return;
         this.stats.cancelled++;
@@ -153,6 +156,7 @@ export class PdfWorkerClient {
     try {
       const rasterImages = this.rasterImages && this.rasterSupported;
       this.worker.postMessage({ id: task.id, method: task.method, args: task.args,
+        ...(task.pageData ? {pageData:true} : {}),
         ...(rasterImages ? {rasterImages:true, rasterKeys:this.rasterKeys().slice(0,256)} : {}) }, task.transfer);
     } catch (error) {
       this.active = null;

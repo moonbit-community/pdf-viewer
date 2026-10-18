@@ -43,8 +43,10 @@ function clearRenders(clearImages = false) {
   if (clearImages) rasters.reset();
 }
 
-function render(method, args, rasterImages) {
-  const key = `${method}:${args.join(":")}:${rasterImages}`;
+function renderText(result) { return result?.version === 1 && Array.isArray(result.buffers) ? result.json : result; }
+
+function render(method, args, rasterImages, pageData = false) {
+  const key = `${method}:${args.join(":")}:${rasterImages}:${pageData}`;
   if (renders.has(key)) {
     const entry = renders.get(key);
     renders.delete(key);
@@ -57,10 +59,11 @@ function render(method, args, rasterImages) {
   // SVG and print exports stay self-contained. The hook is synchronous and
   // cannot remain enabled across an asynchronous operation or a failed render.
   rasters.enabled = rasterImages && method === "render_page" && args[3] === true && args[4] === true;
-  try { result = bridge[method](...args); }
+  try { result = pageData ? bridge.render_page_data(...args.slice(0, 3)) : bridge[method](...args); }
   finally { rasters.enabled = false; }
-  const size = result.length * 2;
-  if (size <= budget && JSON.parse(result).ok) {
+  const size = typeof result === "string" ? result.length * 2 :
+    result.json.length * 2 + result.buffers.reduce((sum, buffer) => sum + buffer.byteLength * 2 + 256, 256) + result.ranges.length * 128;
+  if (size <= budget && JSON.parse(renderText(result)).ok) {
     while (renders.size >= maxEntries || bytes + size > budget) {
       const oldest = renders.keys().next().value;
       bytes -= renders.get(oldest).size;
@@ -128,7 +131,7 @@ async function handleMessage(event) {
       ? JSON.stringify({ok:true,layouts:xfa.layouts}) : xfa && method === "select_page_text"
       ? xfa.select(...args) : xfa && method === "search_pdf"
       ? xfa.search(...args) : ["render_page", "render_print_page"].includes(method)
-      ? render(method, args, rasterImages === true && rasters.supported) : method === "open_pdf_url" ? await openURL(...args) : bridge[method](...args);
+      ? render(method, args, rasterImages === true && rasters.supported, event.data.pageData === true && method === "render_page") : method === "open_pdf_url" ? await openURL(...args) : bridge[method](...args);
     if(xfa&&method==='editor_info'){
       const permissions=JSON.parse(result);
       result=JSON.stringify({...permissions,annotations:false,editable:permissions.forms===true});
@@ -153,7 +156,7 @@ async function handleMessage(event) {
     }
     if (method === "close_pdf") {xfa?.dispose();xfa = null;}
     if (["apply_edits", "apply_xfa_packets", "set_font_fallbacks", "set_optional_content_visibility", "set_optional_content_config"].includes(method) && JSON.parse(result).ok) clearRenders(true);
-    if (["render_page", "render_print_page"].includes(method) && rangeSource && rangeSource.stats.first_page_bytes === null && JSON.parse(result).ok) {
+    if (["render_page", "render_print_page"].includes(method) && rangeSource && rangeSource.stats.first_page_bytes === null && JSON.parse(renderText(result)).ok) {
       rangeSource.stats.first_page_bytes = rangeSource.stats.received_bytes;
     }
     if (method === "cache_info") {
@@ -169,20 +172,30 @@ async function handleMessage(event) {
 }
 
 function postResult(id, result, useRasters, known, requestedURI = null) {
+  const text = renderText(result);
+  const packet = result?.version === 1 && Array.isArray(result.buffers);
+  const post = (json, images = []) => {
+    // Cached packets retain their owners. Transfer only fresh copies, including
+    // on cache hits and after bitmap-transfer fallback.
+    const buffers = packet ? result.buffers.map(buffer => buffer.slice(0)) : [];
+    self.postMessage({id, result:requestedURI || !packet ? json : {...result,json,buffers},
+      ...(useRasters ? {rasterImages:images} : {}), rasterEpoch:rasters.epoch}, [...buffers, ...images.map(image=>image.bitmap)]);
+  };
   let images = [];
   if (useRasters) {
     try {
-      images = requestedURI ? [rasters.bitmap(requestedURI)] : rasters.prepare(result, known);
-      self.postMessage({id, result:requestedURI ? null : result, rasterImages:images, rasterEpoch:rasters.epoch}, images.map(image=>image.bitmap));
+      images = requestedURI ? [rasters.bitmap(requestedURI)] : rasters.prepare(text, known);
+      post(requestedURI ? null : text, images);
       return;
     } catch {
       for (const image of images) image.bitmap.close?.();
       // Some hosts expose Canvas but cannot transfer a bitmap. Existing IDs
       // remain backed by rows, so both cached plans and future calls recover.
       rasters.supported = false;
+      useRasters = false;
     }
   }
-  self.postMessage({id, result:requestedURI ? rasters.embed(requestedURI) : rasters.selfContained(result), rasterEpoch:rasters.epoch});
+  post(requestedURI ? rasters.embed(requestedURI) : rasters.selfContained(text));
 }
 
 async function start() {

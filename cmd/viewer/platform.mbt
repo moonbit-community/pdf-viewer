@@ -54,7 +54,11 @@ suberror ViewerError {
 
 ///|
 fn checked(raw : String) -> @js.Value raise ViewerError {
-  let value = parse_value(raw)
+  checked_value(parse_value(raw))
+}
+
+///|
+fn checked_value(value : @js.Value) -> @js.Value raise ViewerError {
   if !value_bool(value, "ok") {
     raise ViewerError(value_string(value, "code"), value_string(value, "error"))
   }

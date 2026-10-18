@@ -27,6 +27,9 @@ Object.assign(pdf,{rasterImages:true,onRaster:(uri,bitmap)=>renderAssets.supply(
   onRasterReset:clearRenderAssets,rasterKeys:()=>renderAssets.rasterKeys()});
 export const viewerHost={
   pdf,makeAccessibilityLayer,makeXfaLayer,clearXfaFonts,
+  preparePage(number,scale,rotation,options){
+    return pdf.callPage([number,scale,rotation,true,true,true],options);
+  },
   clearRenderAssets,
   renderAssetsDiagnostics(){return {...renderAssets.diagnostics(),patterns:patternTiles.diagnostics()};},
   initializeGraphics(){

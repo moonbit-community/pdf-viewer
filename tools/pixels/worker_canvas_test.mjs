@@ -28,7 +28,7 @@ const wrapper = `
     addEventListener(type, callback) {
       if (type === 'message') parentPort.on('message', data => callback({ data }));
     },
-    postMessage(data) { parentPort.postMessage(data); },
+    postMessage(data, transfer) { parentPort.postMessage(data, transfer); },
   };
   await import(workerData.moduleURL);
 `;
@@ -283,6 +283,23 @@ try {
   assert.equal(compact.canvas.version, 2);
   assert.equal(compact.canvas.glyph_resources.length, 1);
   assert.equal(compact.canvas.items.filter(item => item.glyph).length, 3);
+  const packetArgs=[1,1,0,true,true,true];
+  const packetExpected=checked(await client.call('render_page',packetArgs));
+  const packetFirst=await client.callPage(packetArgs);
+  assert.deepEqual(packetFirst,packetExpected,'Real transferred packet preserves every semantic and paint field');
+  packetFirst.canvas.items[0].draws[0]=999;
+  packetFirst.layer.items[0].quad.p0.x=999;
+  const packetAgain=await client.callPage(packetArgs);
+  assert.deepEqual(packetAgain,packetExpected,'Cache-hit transfers retain independent buffers and metadata');
+  assert.equal((await client.callPage([1,0,0,true,true,true])).code,'invalid-scale');
+  const packetAbort=new AbortController();
+  const cancelledPacket=client.callPage([1,1.01,0,true,true,true],{signal:packetAbort.signal});
+  packetAbort.abort();await assert.rejects(cancelledPacket,{name:'AbortError'});
+  checked(await client.call('cache_info'));
+  assert.deepEqual(await client.callPage(packetArgs),packetExpected,'A discarded transferred packet cannot detach a cached owner');
+  const packetCache=checked(await client.call('cache_info')).render;
+  assert(packetCache.hits>0&&packetCache.bytes<=packetCache.budget_bytes);
+  report.tests.push('Float64 page packets transfer real buffers, preserve every field, survive repeated cache hits and cancellation, and keep cache owners attached');
   const selection = checked(await client.call('select_page_text', [1, -1, -1, -1, -1]));
   assert.equal(checked(await client.call('cache_info')).compiled_resources.entries, 1);
   const legacy = checked(await client.call('render_page', [1, 1, 0, true]));

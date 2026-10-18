@@ -25,6 +25,7 @@ options(
         "set_optional_content_visibility",
         "set_optional_content_config",
         "render_page",
+        "render_page_data",
         "render_print_page",
         "page_layouts",
         "cache_info",

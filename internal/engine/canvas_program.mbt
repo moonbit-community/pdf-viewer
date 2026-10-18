@@ -110,8 +110,17 @@ pub fn PdfCanvasProgram::canvas_plan(
   scale : Double,
   rotation : Int,
   text_runs? : Bool = true,
+  number_data? : (Array[Double]) -> Json = values => values.to_json(),
 ) -> Json raise @core.PdfError {
-  pdf_canvas_plan(page, scale, rotation, [], program=Some(self), text_runs~)
+  pdf_canvas_plan(
+    page,
+    scale,
+    rotation,
+    [],
+    program=Some(self),
+    text_runs~,
+    number_data~,
+  )
 }
 
 ///|

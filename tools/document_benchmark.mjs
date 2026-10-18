@@ -21,7 +21,7 @@ const report={scope:'Three variants in alternating fresh contexts, documents and
 for(const [variant,root] of Object.entries(roots))report.workerSha256[variant]=hash(await readFile(resolve(root,variant==='reference'?'build/pdf.worker.mjs':'pdf-worker.js')));
 for(const variant of ['baseline','candidate']){
  const modules=['viewer-host.mjs','pdf-canvas.mjs','pdf-canvas-native.mjs','pdf-canvas-program.mjs','pdf-compositor.mjs','pdf-runtime.mjs','pdf-shading.mjs'];
- for(const file of ['pdf-canvas-text-runs.mjs','pdf-path-region.mjs'])try{await access(resolve(roots[variant],file));modules.push(file);}catch(error){if(error.code!=='ENOENT')throw error;}
+ for(const file of ['pdf-canvas-text-runs.mjs','pdf-path-region.mjs','pdf-page-data.mjs','pdf-client.js'])try{await access(resolve(roots[variant],file));modules.push(file);}catch(error){if(error.code!=='ENOENT')throw error;}
  report.hostSha256[variant]=Object.fromEntries(await Promise.all(modules.map(async file=>[file,hash(await readFile(resolve(roots[variant],file)))])));
 }
 const mime={'.js':'text/javascript','.mjs':'text/javascript','.wasm':'application/wasm'},server=createServer(async(req,res)=>{
@@ -59,7 +59,7 @@ try{
       canvas.width=Math.ceil(viewport.width*2);canvas.height=Math.ceil(viewport.height*2);
       await page.render({canvasContext:canvas.getContext('2d'),viewport,transform:[2,0,0,2,0,0],background:'rgb(255,255,255)'}).promise;
      }else{
-      const layout=layouts[number-1];payload=check(await api.pdf.call('render_page',[number,1216/layout.width,0,true,true,true]));prepareMs=performance.now()-start;
+      const layout=layouts[number-1];payload=api.preparePage?await api.preparePage(number,1216/layout.width,0):check(await api.pdf.call('render_page',[number,1216/layout.width,0,true,true,true]));if(!payload.ok)throw Error(payload.error);prepareMs=performance.now()-start;
       const result=await api.paintCanvas(canvas,payload,2,()=>true,()=>{throw Error('Unexpected host CMM');});if(result.diagnostics.length)throw Error(JSON.stringify(result.diagnostics));
      }
      const painted=performance.now(),pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data,end=performance.now();

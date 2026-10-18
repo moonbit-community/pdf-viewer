@@ -2559,3 +2559,119 @@ still become positioned per-glyph path strings; `canvas_outlines.mbt` only
 compiles CFF/Type1 fills into shared outline resources. Shared TrueType render
 resources and independent render/semantic projections remain concrete
 architectural work beyond the retained pixel/buffer waste removed here.
+
+## Reader page packets and numeric transport (2026-10-18)
+
+Baseline is pushed `caf375cd30323cb385ccc1f012f00dc2758be4c3`, copied as an
+independent packaged site before editing. This change targets the complete
+page-preparation/transport boundary rather than a particular paint primitive.
+The fourteen public pages previously returned roughly 70.6 million JSON
+characters at scale 1: 40.5 million Canvas characters and 29.6 million selection
+characters. The selection layer repeated font style strings and object keys;
+large numeric text-run arrays were boxed into Json values, written as decimal
+text and parsed again after Worker transport.
+
+The reader and thumbnails now request page packets. Numeric Canvas operands
+bypass Json number construction. Selection uses a per-page style table and
+flat double-precision rows carrying source identity, the original quad and
+exact viewport matrix. Both projections share one page-owned Float64 arena
+with a range table. The Worker retains its cache owner and transfers a fresh
+arena copy per response. Cache admission still uses twelve entries/24 MiB and
+charges metadata, ranges and numeric buffers conservatively. Raster bitmap
+fallback, editing invalidation, Range hydration and cancellation retain their
+existing ownership boundaries.
+
+Metadata uses the host JSON writer through typed MoonBit Json matching; no
+compiler enum tags or Map representation are inspected. Explicit numeric
+lexemes, nonfinite scalars and deep metadata retain the core writer. Existing
+string calls, public page models, SVG and print remain available. The client
+restores every semantic field before resolving the request; there is no deferred
+selection/accessibility work outside the preparation timer. Canvas algorithms,
+tile partitioning and arithmetic precision are unchanged.
+
+Authored regressions compare every recovered field at all four rotations,
+including ligatures, supplementary Unicode, nonzero origins, affine font
+matrices, mixed compiled/fallback glyphs and nested Forms. Native, retained and
+tiled paint comparisons remain exact. The actual Worker test forwards real
+transfer lists, repeats cached packet requests after mutation/cancellation and
+checks that cache owners remain attached. Metadata tests cover control text,
+prototype-like keys, numeric lexemes and deep fallback. Malformed numeric
+ranges, style tables and operands are rejected. The standalone decoder check
+is included in readonly CI.
+
+A complete deep comparison (including signed zero, rather than only normalized
+JSON hashes) passes for all fourteen public pages at CSS width 1216. The final
+packet emits 16,796,115 metadata characters versus 70,605,838 ordinary JSON
+characters, a 76.2% reduction in JSON text, plus 24,465,712 binary numeric bytes.
+There are 1,945 numeric ranges and exactly fourteen transferred arenas, one per
+page. These are logical payload counts, not measured physical memory-bus or
+network traffic; JavaScript string representation and range-table overhead vary
+by host. The recovered complete Canvas and semantic structures are unchanged.
+
+All timings run serially after a 45-second quiet interval following validation.
+Five alternating fresh-context/document/Worker pairs use the independently
+packaged baseline and candidate at CSS width 1216 / DPR 2. Preparation includes
+packet decoding and restoration of the complete selection layer. Painting and
+full RGBA readback are included; opening/startup, hashes, DOM layers and teardown
+are excluded. PDF.js remains the pinned render-only lower bound.
+
+The WebKit full sweep completes with exact RGBA and complete semantic hashes
+on every page in all five pairs:
+
+| Public fourteen-page sweep, ms | Baseline median | Candidate median | Median paired reduction |
+| --- | ---: | ---: | ---: |
+| Preparation, painting and full readback | 7,451 | 6,476 | 13.9% |
+| Complete preparation and host decoding | 3,812 | 2,813 | 24.5% |
+| Painting and full readback | 3,646 | 3,714 | -1.4% |
+
+Raw total samples are baseline `[7736,7458,7298,7258,7451]` and candidate
+`[6591,6425,6937,6476,6321]`; preparation is baseline
+`[3812,3784,3828,3612,3826]` and candidate `[2877,2667,2901,2778,2813]`.
+Paired percentages are calculated within each alternating pair before taking
+the median, not from the ratio of the column medians. There is no claimed paint
+speedup. PDF.js render-only median is 907 ms, so the candidate is still about
+7.1 times that lower bound. Positioned host paths, retained composition and
+complete semantic preparation remain substantial architectural costs.
+
+The Chromium strict full sweep stops at page 13 in its first pair: baseline
+RGBA `4b1bb1ecf5ae302714783b1e7b876cdf799e5fc0f317c887fffd933b4ae28e39`
+versus candidate
+`367bb5030a71c8b76bf45e5ff70f03da0b3cb37d55530c67977d1eb4129ed88e`.
+Both are already independently reproduced variants from two older baseline
+PNGs in the prepare-pipeline controls. This exact variant changes five grayscale
+pixels by at most four channel values. The incomplete report and both current
+captures are retained; no tolerance is added and this run is not accepted as a
+complete Chromium performance result.
+
+The unchanged thirteen-page private image fixture
+`fea1ef069944d3479425ebf076a9b34118f7ba9e3df8cefb54e557ca16f90817`
+completes five pairs per engine. All 130 pages per engine match independently
+recorded historical RGBA and complete semantic hashes. Chromium total medians
+are 1,591.7 to 1,571.9 ms with a 2.7% paired median reduction; WebKit medians
+are 1,937 to 1,834 ms with a 5.3% paired median reduction. These small gains are
+not the evidence for the public text-heavy improvement.
+
+A separate ordinary reader file-input test measures first-page Canvas visibility
+and reader readiness, including DOM text/annotation/font mounting. Five pairs
+per engine retain exact first-page RGBA. The shell loads before timing and may
+prepare an untouched Worker before file selection; negative Worker timestamps
+record that shifted work. These are not cold navigation-to-open measurements.
+WebKit Canvas-visible medians are 1,005 to 993 ms and reader-ready 595 to 555 ms;
+Chromium medians are 556.9 to 547.7 ms and reader-ready 477.7 to 474 ms. Individual
+pairs vary substantially: paired visible reductions are -5.9% in WebKit and
+6.3% in Chromium; paired ready reductions are 2.1% and 7.7%, respectively.
+No reliable first-screen speedup is claimed from this block. Its request records
+now distinguish JSON metadata characters from binary bytes rather than reporting
+packet responses as zero-size strings.
+
+Validation passes JS 792, Wasm 774, Wasm GC 774 and native 782 tests, the Node
+Canvas/Worker/raster/Range/XFA regressions, both packaged browsers, editor,
+optional-content layers, both browsers' text interaction, the readonly corpus
+and all twelve visual cases. Existing reference rendering differences remain
+recorded. The root facade interface is unchanged; the internal Canvas sidecar
+adds only the optional numeric-transport callback.
+
+Ignored evidence: `_build/global-render-next/`, including immutable `baseline/`,
+`packet-exact.json`, `summary.json`, complete raw timing reports, strict Chromium
+failure/captures, validation logs and the frozen artifact manifest. Private PDF
+bytes and pixels remain local under ignored build paths.

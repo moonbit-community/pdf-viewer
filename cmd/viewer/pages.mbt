@@ -142,8 +142,8 @@ extern "js" fn render_scheduled(
   scale : Double,
   rotation : Int,
   options : @js.Value,
-) -> @js_async.Promise[String] =
-  #| (number,scale,rotation,options) => globalThis.pdfViewerHost.pdf.call("render_page",[number,scale,rotation,true,true,true],options)
+) -> @js_async.Promise[@js.Value] =
+  #| (number,scale,rotation,options) => globalThis.pdfViewerHost.preparePage(number,scale,rotation,options)
 
 ///|
 extern "js" fn scheduler_document(
@@ -216,7 +216,9 @@ fn initialize_pages() -> Unit {
     create_scheduler(
       (number, scale, rotation, options) => {
         @js_async.Promise::from_async(() => {
-          checked(render_scheduled(number, scale, rotation, options).wait())
+          checked_value(
+            render_scheduled(number, scale, rotation, options).wait(),
+          )
         })
       },
       (result, current) => {

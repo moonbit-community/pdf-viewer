@@ -516,7 +516,7 @@ and compatibility SVG copies for these calls. Host expansion still creates a
 positioned path per invocation, so this does not yet remove repeated Path2D
 construction on the host.
 
-The viewer additionally opts into version-3 text runs with the sixth
+String clients can additionally opt into version-3 text runs with the sixth
 `render_page` argument. Five-argument compiled clients retain version 2, and
 older Workers ignore the extra capability argument. Collection assigns a
 document-build-local identity to each content operation, including recursive
@@ -534,6 +534,31 @@ these operands at the existing renderer boundary, preserving every legacy paint
 field. A complete semantic page model and monolithic JSON response are still
 built; this change removes per-glyph state work and wire duplication rather
 than introducing streaming or independent semantic requests.
+
+The reader and thumbnails use `viewerHost.preparePage` / `PdfWorkerClient.callPage`.
+This opt-in transport calls `render_page_data` after the same complete page
+preparation. Numeric text-run operands bypass `Json::Number` construction and
+text encoding. Selection geometry uses flat 16-double rows containing its
+source index, style index, original quad and exact six-element viewport matrix;
+Unicode strings, separators and per-page font styles remain metadata. One
+page-owned Float64 arena and a range table carry both paint and selection data.
+No precision is reduced and no semantic request is deferred.
+
+Packet metadata uses a typed MoonBit `Json` conversion and the host JSON writer,
+without inspecting compiler enum tags or Map layouts. Parsed numeric lexemes,
+nonfinite scalars and deep metadata retain the core serializer. The existing
+`render_page`/print/SVG string contracts and public page-model projections stay
+available. `pdf-page-data.mjs` restores the complete selection layer and ordinary
+version-3 Canvas operands before the client resolves the request. XFA uses the
+existing string result through the same reader entry.
+
+The same twelve-entry/24 MiB render cache charges metadata, range records and
+numeric buffers conservatively. Each response transfers a fresh copy of its
+arena; cached owners remain attached, including cache hits, cancellation and
+bitmap-transfer fallback. Raster IDs and bitmap recovery use the packet's JSON
+metadata. Closing or editing invalidates both packet and string cache entries.
+This is a complete per-page response, not operator streaming; positioned host
+paths, semantic layout and retained compositing remain subsequent costs.
 
 Version-2 prepared plans also share complete source lookup rasters for direct
 axial, radial and function shadings. Each page owns at most 64 rasters and an

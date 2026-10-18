@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import * as bridge from '../../web/_generated/pdf.js';
 import {initializePdfGraphics,renderPdfPage} from '../../web/pdf-runtime.mjs';
+import {decodePdfPageData} from '../../web/pdf-page-data.mjs';
 import {expandPdfTextRuns} from '../../web/pdf-canvas-text-runs.mjs';
 import {expandPdfCanvasProgram} from '../../web/pdf-canvas-program.mjs';
 const {createCanvas,Path2D,loadImage}=createRequire(process.env.PDF_CANVAS_PACKAGE||import.meta.url)('@napi-rs/canvas');
@@ -29,6 +30,14 @@ for(const contents of [
  'q 1 0 0 1 10 10 cm /X Do Q q .8 .2 -.1 .9 20 5 cm /X Do Q',
 ]){
  const bytes=fixture(contents),old=prepare(bytes,false),next=prepare(bytes,true);assert.equal(next.canvas.version,3);
+ assert(JSON.parse(bridge.open_pdf(bytes)).ok);
+ for(const rotation of [0,90,180,270]){
+  const expected=JSON.parse(bridge.render_page(1,1.7,rotation,true,true,true)),packet=bridge.render_page_data(1,1.7,rotation);
+  const transferred=structuredClone(packet,{transfer:packet.buffers});
+  assert(packet.buffers.every(b=>b.byteLength===0),'Transfer detaches only packet-owned buffers');
+  assert.deepEqual(decodePdfPageData(transferred),expected,'Complete affine/Unicode/mixed-scene packet result');
+ }
+ bridge.close_pdf();
  const raw=expandPdfTextRuns(next.canvas);assert.equal(raw.length,old.canvas.items.length);
  for(let i=0;i<raw.length;i++)assert.deepEqual(raw[i].paint,old.canvas.items[i].paint,'Every source identity, transform and paint field');
  for(const key of ['layer','editor','annotations','accessibility'])assert.deepEqual(next[key],old[key],key);
