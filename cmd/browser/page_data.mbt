@@ -28,12 +28,18 @@ fn browser_page_numbers(
   buffers : BrowserPageBuffers,
   values : Array[Double],
 ) -> Json {
-  {
-    "__pdf_numbers": browser_page_add_numbers(
-      buffers,
-      FixedArray::makei(values.length(), i => values[i]),
-    ),
-  }
+  browser_page_fixed_numbers(
+    buffers,
+    FixedArray::makei(values.length(), i => values[i]),
+  )
+}
+
+///|
+fn browser_page_fixed_numbers(
+  buffers : BrowserPageBuffers,
+  values : FixedArray[Double],
+) -> Json {
+  { "__pdf_numbers": browser_page_add_numbers(buffers, values) }
 }
 
 ///|
@@ -55,6 +61,14 @@ extern "js" fn browser_page_stringify(value : BrowserPageValue) -> String =
 ///|
 extern "js" fn browser_page_null() -> BrowserPageValue =
   #| () => null
+
+///|
+extern "js" fn browser_page_unsupported() -> BrowserPageValue =
+  #| () => undefined
+
+///|
+extern "js" fn browser_page_is_unsupported(value : BrowserPageValue) -> Bool =
+  #| value => value === undefined
 
 ///|
 extern "js" fn browser_page_bool(value : Bool) -> BrowserPageValue =
@@ -92,37 +106,48 @@ extern "js" fn browser_page_set(
 /// numbers outside the host's finite range. Ordinary derived values use the
 /// host serializer without a character-by-character StringBuilder traversal.
 fn browser_page_value(value : Json, depth? : Int = 0) -> BrowserPageValue? {
-  guard depth < 128 else { return None }
+  let output = browser_page_copy_value(value, depth)
+  if browser_page_is_unsupported(output) {
+    None
+  } else {
+    Some(output)
+  }
+}
+
+///|
+/// Undefined cannot represent a JSON value, so it marks unsupported metadata
+/// only inside this conversion. Recursive values return directly, including
+/// JSON null; only the outer caller needs an Option wrapper for the fallback.
+fn browser_page_copy_value(value : Json, depth : Int) -> BrowserPageValue {
+  guard depth < 128 else { return browser_page_unsupported() }
   match value {
-    Null => Some(browser_page_null())
-    True => Some(browser_page_bool(true))
-    False => Some(browser_page_bool(false))
+    Null => browser_page_null()
+    True => browser_page_bool(true)
+    False => browser_page_bool(false)
     Number(number, repr~) =>
       if repr is Some(_) || number.is_nan() || number.is_inf() {
-        None
+        browser_page_unsupported()
       } else {
-        Some(browser_page_number(number))
+        browser_page_number(number)
       }
-    String(text) => Some(browser_page_string(text))
+    String(text) => browser_page_string(text)
     Array(values) => {
       let output = FixedArray::make(values.length(), browser_page_null())
       for index, value in values {
-        guard browser_page_value(value, depth=depth + 1) is Some(value) else {
-          return None
-        }
+        let value = browser_page_copy_value(value, depth + 1)
+        guard !browser_page_is_unsupported(value) else { return value }
         output[index] = value
       }
-      Some(browser_page_array(output))
+      browser_page_array(output)
     }
     Object(fields) => {
       let output = browser_page_object()
       for key, value in fields {
-        guard browser_page_value(value, depth=depth + 1) is Some(value) else {
-          return None
-        }
+        let value = browser_page_copy_value(value, depth + 1)
+        guard !browser_page_is_unsupported(value) else { return value }
         browser_page_set(output, key, value)
       }
-      Some(output)
+      output
     }
   }
 }
@@ -140,12 +165,15 @@ fn browser_page_layer(
   packet : BrowserPageBuffers?,
 ) -> Json {
   guard packet is Some(buffers) else { return ToJson::to_json(layer) }
-  let draws : Array[Double] = []
+  let draws : FixedArray[Double] = FixedArray::make(
+    layer.items.length() * 16,
+    0.0,
+  )
   let text : Array[String] = []
   let separators : Array[String] = []
   let styles : Array[Json] = []
   let ids : Map[(String, String, String, Bool), Int] = Map([])
-  for item in layer.items {
+  for index, item in layer.items {
     let key = (
       item.font_family,
       item.font_weight,
@@ -168,21 +196,20 @@ fn browser_page_layer(
     }
     let q = item.quad
     guard item.matrix.length() == 6 else { return ToJson::to_json(layer) }
-    draws.append(
-      [
-        item.item_index.to_double(),
-        style.to_double(),
-        q.p0.x,
-        q.p0.y,
-        q.p1.x,
-        q.p1.y,
-        q.p2.x,
-        q.p2.y,
-        q.p3.x,
-        q.p3.y,
-        ..item.matrix,
-      ],
-    )
+    let offset = index * 16
+    draws[offset] = item.item_index.to_double()
+    draws[offset + 1] = style.to_double()
+    draws[offset + 2] = q.p0.x
+    draws[offset + 3] = q.p0.y
+    draws[offset + 4] = q.p1.x
+    draws[offset + 5] = q.p1.y
+    draws[offset + 6] = q.p2.x
+    draws[offset + 7] = q.p2.y
+    draws[offset + 8] = q.p3.x
+    draws[offset + 9] = q.p3.y
+    for element in 0..<6 {
+      draws[offset + 10 + element] = item.matrix[element]
+    }
     text.push(item.text)
     separators.push(item.separator)
   }
@@ -193,7 +220,7 @@ fn browser_page_layer(
     "version": 2,
     "page": layer.page,
     "viewport": layer.viewport,
-    "draws": browser_page_numbers(buffers, draws),
+    "draws": browser_page_fixed_numbers(buffers, draws),
     "text": text,
     "separators": separators,
     "styles": styles,

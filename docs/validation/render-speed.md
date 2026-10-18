@@ -3057,3 +3057,108 @@ explicitly aborted sparse-prototype timing block, all independent and
 adjacent-page raw samples, strict failure captures and validation logs.
 Private bytes and pixels remain ignored. Release acceptance checks all eight
 CI jobs and sixteen deployed files at both plain and revision URLs.
+
+### Page-packet temporary allocation cleanup (2026-10-18)
+
+The immutable baseline is pushed `c1366f6e2017e4c9eea12668ac62efe7c3f5d9a3`.
+All sixteen packaged baseline artifacts were verified against its accepted
+release manifest before copying. The change stays in the MoonBit browser
+bridge; the transport format, native JSON serializer, full semantic work,
+number precision and fallback contracts remain compatible.
+
+The text-layer packet now writes its known sixteen-number rows directly into
+one fixed array. This removes each temporary row, the append traversal and
+the second whole-layer Array-to-FixedArray copy. Metadata conversion returns
+its native value directly on recursive calls. A private undefined sentinel
+distinguishes unsupported values from valid JSON null; only the outer result
+uses Option. Numeric spellings, non-finite values, nesting depth and special
+object keys keep the existing core-serializer fallback. No compiler enum or
+Map layout is inspected. The Json-to-native-object conversion itself remains.
+
+An instrumented first fourteen-page public packet sweep records these
+source-level operations; these counts do not measure JIT heap allocation or
+product latency:
+
+| Operation | Baseline | Candidate |
+| --- | ---: | ---: |
+| Temporary sixteen-number row arrays | 69,284 | 0 |
+| Numeric layer push calls | 1,108,544 | 0 |
+| Numeric elements copied into fixed arrays | 3,058,214 | 1,949,670 |
+| Metadata Option Some constructor calls | 960,253 | 14 |
+
+Every metadata string, numeric buffer byte, range and complete decoded
+Canvas/semantic field matches the baseline on all fourteen pages, including
+signed zero. Added tests cover Unicode, style reuse and row order, malformed
+and non-finite matrix fallback without orphan buffers, supported JSON null,
+the exact depth boundary and independent conversion failures.
+
+A separate V8 heap-sampling diagnostic uses the uninstrumented readable
+release in one fresh Node process per variant, at an 8,192-byte interval,
+including objects collected by minor and major GC. It starts after bridge
+import and document opening, then prepares all fourteen first page packets.
+Validation JSON.parse is included in the whole-process sampling window but
+lies outside both stage stacks below. These are sampled cumulative managed
+allocation estimates, not retained or peak memory, browser memory or latency.
+
+| Allocation stack | Baseline MiB | Candidate MiB |
+| --- | ---: | ---: |
+| Text-layer packing | 161.4 | 35.2 |
+| Metadata conversion | 72.5 | 43.0 |
+| Entire sampling window | 3723.3 | 3555.9 |
+
+The two disjoint packing stacks together fall 66.5%; the whole
+sampling window falls 4.5%. This does not establish a global speedup.
+
+All latency measurements use independent fresh contexts/documents/Workers,
+alternating variant order, five pairs, CSS width 1216 / DPR 2 and the first
+sequential fourteen-page sweep. Builds and tests stop before measurement,
+with a 45-second quiet period. The ordinary full sweep includes preparation,
+painting and complete RGBA flush, with exact baseline pixels and semantic
+hashes on every page. Separate preparation-only sweeps include the Worker
+request, complete preparation, transfer and restoration, with no painting.
+Their complete decoded payload checks canonicalize only each Worker's random
+UUID in raster resource data_uri fields; epoch/resource IDs and all other
+content remain exact. Startup, opening, DOM, hashes and teardown are excluded.
+Positive paired reductions below mean less elapsed time.
+
+| Scope | Baseline median ms | Candidate median ms | Median paired reduction |
+| --- | ---: | ---: | ---: |
+| WebKit full sweep | 3,746 | 3,658 | -0.4% |
+| WebKit preparation within full sweep | 1,873 | 1,868 | 0.3% |
+| Chromium preparation only | 1,977.6 | 1,952 | 1.3% |
+| WebKit preparation only | 1,846 | 1,848 | -0.1% |
+
+The final code has no stable full-document latency improvement in this
+experiment. Large source-allocation counts and lower sampled allocation must
+not be presented as a corresponding speedup. Different sweep scopes are not
+pooled. All five raw pairs for each final-code scope are retained:
+
+- WebKit full total: baseline `[3849, 3694, 3746, 3764, 3636]`; candidate `[3941, 3658, 3650, 3803, 3651]`.
+- WebKit full preparation: baseline `[1901, 1875, 1845, 1873, 1857]`; candidate `[1984, 1868, 1840, 1891, 1829]`.
+- Chromium preparation only: baseline `[2025.5, 1987.9, 1920.9, 1924.1, 1977.6]`; candidate `[1953.5, 1935.2, 1948.9, 1957.2, 1952]`.
+- WebKit preparation only: baseline `[1879, 1831, 1846, 1840, 1852]`; candidate `[1881, 1848, 1832, 1867, 1823]`.
+
+The thirteen-page private image fixture
+`fea1ef069944d3479425ebf076a9b34118f7ba9e3df8cefb54e557ca16f90817`
+retains every historical RGBA and full semantic hash in Chromium and WebKit
+across three alternating independent pairs. Their paired total point
+estimates are -0.5% and 0.8%; preparation is -0.7% and 0.0%. No image speedup is claimed.
+
+An earlier local version used a conversion failure Ref and an array
+initializer callback. Its image preparation regressed about 2–3%, so it was
+replaced before release; its different-code samples are retained separately
+and excluded from final results. The final recursive path has neither the
+callback nor the per-node mutable failure-state read.
+
+Validation passes JS 797, Wasm 776, Wasm GC 776 and native 784 tests, unchanged
+interfaces after moon info and moon fmt, the complete focused Node suite and
+both packaged browser suites. Final JavaScript tests and Node/browser checks
+are rerun after the last implementation change.
+
+The published Worker is 5,277,500 bytes (+485), SHA-256
+`ad9e670fd26253dbbcc6809f66553681f4b4542abaac8271dc91a48e0860ec78`.
+Ignored evidence is under `_build/packet-allocation-next/`: verified baseline
+and final manifests, exact packet/count checks, V8 heap profiles, all raw
+latency samples, rejected-version samples and validation logs. Private inputs
+and pixels stay ignored. Release acceptance additionally checks all eight CI
+jobs and sixteen deployed artifacts at both plain and revision URLs.
