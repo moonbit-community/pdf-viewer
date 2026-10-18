@@ -5,6 +5,7 @@
 priv struct PdfCanvasOutlineResource {
   resource : PdfCanvasGlyphResource
   font_matrix : @geometry.TransformMatrix
+  truetype : Bool
 }
 
 ///|
@@ -25,6 +26,19 @@ fn pdf_canvas_outline_call(
     collected.font_object is Some(@syntax.PdfIndirect(font_id)) else {
     return None
   }
+  let font = collected.state.text_state.current_font
+  if resource_context is Some(context) &&
+    !context.font_fallbacks.is_empty() &&
+    pdf_standard14_face_of_pdf_font(font) is Some(_) &&
+    pdf_standard14_uses_host_fallback(
+      document,
+      font,
+      collected.font_object,
+      collected.state.text_state.font,
+      context.font_fallbacks[:],
+    ) {
+    return None
+  }
   let key = (font_id, charcode)
   let cache = build.cache
   let program = build.program
@@ -41,38 +55,16 @@ fn pdf_canvas_outline_call(
           value
         }
         None => {
-          let font = collected.state.text_state.current_font
-          let geometry = match
-            pdf_cff_geometry_of_pdf_glyph(
+          guard pdf_canvas_outline_geometry(
               document,
-              font,
-              cff_fonts,
+              collected,
               charcode,
+              cff_fonts,
+              type1_fonts,
               resource_context~,
-            ) {
-            Some(value) => Some(value)
-            None =>
-              pdf_type1_geometry_of_pdf_glyph(
-                document,
-                font,
-                type1_fonts,
-                charcode,
-                resource_context~,
-              )
-          }
-          guard geometry is Some((commands, font_matrix)) else { return None }
-          let values : Array[Double] = []
-          for command in commands {
-            match command {
-              CffMove(x, y) => values.append([0.0, x, y])
-              CffLine(x, y) => values.append([1.0, x, y])
-              CffCurve(a, b, c, d, x, y) =>
-                values.append([2.0, a, b, c, d, x, y])
-              CffClose => values.push(3.0)
-            }
-            if values.length() > 32768 {
-              return None
-            }
+            )
+            is Some((values, font_matrix, truetype)) else {
+            return None
           }
           guard values.all(value => !value.is_nan() && value.abs() <= 1.0e12) else {
             return None
@@ -84,7 +76,7 @@ fn pdf_canvas_outline_call(
             bytes: values.length() * 32 + 384,
             json: { "id": id, "kind": "outline", "commands": values },
           }
-          let outline = { resource, font_matrix, }
+          let outline = { resource, font_matrix, truetype, }
           cache.misses += 1
           if cache.glyphs.length() + cache.outlines.length() < 512 &&
             cache.bytes + resource.bytes <= 8 * 1024 * 1024 {
@@ -98,10 +90,21 @@ fn pdf_canvas_outline_call(
       outline
     }
   }
-  let matrix = @geometry.transform_matrix_compose(
-    pdf_glyph_transform(collected.state, glyph),
-    outline.font_matrix,
-  )
+  let glyph_matrix = pdf_glyph_transform(collected.state, glyph)
+  // Retain the original TrueType division before placement. Composing with
+  // a .001 scale changes floating-point rounding for some affine matrices.
+  let matrix : @geometry.TransformMatrix = if outline.truetype {
+    {
+      a: glyph_matrix.a / 1000.0,
+      b: glyph_matrix.b / 1000.0,
+      c: glyph_matrix.c / 1000.0,
+      d: glyph_matrix.d / 1000.0,
+      e: glyph_matrix.e,
+      f: glyph_matrix.f,
+    }
+  } else {
+    @geometry.transform_matrix_compose(glyph_matrix, outline.font_matrix)
+  }
   let values = [matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f]
   guard values.all(value => !value.is_nan() && value.abs() <= 1.0e12) else {
     return None

@@ -67,16 +67,23 @@ fn pdf_font_unicode_for_viewer(font : @pdflite.PdfFont) -> @pdflite.PdfFont {
 /// The dependency falls back to the raw code for a hole in ToUnicode. PDF
 /// Encoding still supplies a usable glyph name here; reuse that extractor
 /// with only the Unicode override removed, keeping metrics and outlines.
-fn pdf_font_encoding_text(font : @pdflite.PdfFont, code : Int) -> String? {
-  guard code >= 0 && code <= 255 else { return None }
-  let base = match font {
-    @pdflite.PdfFontSimple({ fontdescriptor: Some(descriptor), .. } as simple) =>
+fn pdf_font_encoding_base(font : @pdflite.PdfFont) -> @pdflite.PdfFont {
+  match font {
+    @pdflite.PdfFontSimple(
+      { fontdescriptor: Some({ tounicode: Some(_), .. } as descriptor), .. } as simple
+    ) =>
       @pdflite.PdfFontSimple({
         ..simple,
         fontdescriptor: Some({ ..descriptor, tounicode: None, }),
       })
     _ => font
   }
+}
+
+///|
+fn pdf_font_encoding_text(font : @pdflite.PdfFont, code : Int) -> String? {
+  guard code >= 0 && code <= 255 else { return None }
+  let base = pdf_font_encoding_base(font)
   let points = base
     .text_extractor()
     .codepoints_of_text(Bytes::make(1, code.to_byte())) catch {

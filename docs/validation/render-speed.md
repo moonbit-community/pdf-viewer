@@ -3472,3 +3472,154 @@ all final raw latency blocks, Chromium captures, validation logs and the
 frozen sixteen-artifact manifest. Private bytes and pixels remain ignored.
 Release acceptance additionally requires all eight CI jobs and sixteen
 published artifacts at both plain and revision URLs.
+
+
+## Shared TrueType and Standard 14 outlines (2026-10-19)
+
+Baseline is pushed `4f1373412e603df8c0eff25938e885f7fae9be8c`, verified against all
+sixteen accepted artifacts and copied into an independent packaged site.
+Ordinary CFF/Type1 glyphs already used the shared numeric program, but embedded
+TrueType and bundled Standard 14 replacements still constructed positioned
+outlines for every occurrence. In particular, bundled Helvetica repeatedly
+rebuilt TrueType glyph offsets and contours instead of invoking one resource.
+This left a substantial font-class gap inside the otherwise compiled pipeline.
+
+The same bounded compiler now covers those outlines. TrueType commands retain
+quadratic curves, the original implied-midpoint/contour traversal, normalization
+before placement and division of the text matrix by 1000. That division is
+kept explicitly: composing with a .001 matrix changes floating-point rounding.
+Standard CFF replacements use the existing glyph-name/Encoding selection and
+font matrix. Indirect font identity and character code still distinguish
+encodings of the same program. Host replacement policy is checked before cache
+reuse, including policy views sharing a document's resource cache. Stroke,
+text-clip, invisible, unsupported and ink-retaining paths keep their existing
+lowering. Resource admission stays at 512 entries / 8 MiB, and native snapshots
+retain their existing working-memory charge and limit.
+
+The source text path also constructed dependency-extracted text before replacing
+it with the viewer's recovered Unicode/Encoding result. It now constructs the
+final object directly and decodes each distinct one-byte code once per content
+operation. The operation-local index retains only immutable code/text values;
+positioned bounds remain independent. Empty mappings, replacement characters,
+ligatures, surrogate pairs and malformed/odd Unicode recovery retain their
+existing meaning. No persistent cache limit increases. The CID Unicode reader's
+linear descriptor lookup remains separate work; this change does not claim to
+fix it.
+
+All engine changes are MoonBit source. The Canvas adapter adds validation and
+replay of quadratic outline commands; no compiler enum or private collection
+representation is inspected. Public page/model APIs remain unchanged. Expanded
+plans preserve every command and decimal coordinate. A1 omits optional whitespace
+between closed contours (`ZM`), while the program expander writes `Z M`; the
+coordinate comparison normalizes only that spelling. Pixel comparisons remain
+byte exact with no tolerance or new exception.
+
+A state-sharing collector prototype was excluded because its timing evidence
+was inconclusive. An instrumented readable Worker also found only about 11 ms
+in path-string serialization in that diagnostic; the 1.5-million-character
+path count on page 11 was not treated as proof of a large latency opportunity.
+Instrumented and abandoned-prototype times are excluded below.
+
+### Measurements
+
+Both packaged sites are frozen before measurement. Samples use fresh contexts,
+documents and Workers, first sequential sweeps at CSS width 1216 / DPR 2, complete
+preparation, painting and full RGBA readback. Startup, document opening, DOM,
+hashes and teardown remain excluded. The new optional
+`PDF_BENCH_REFERENCE_SEMANTICS=1` also prepares PDF.js's operator list, text
+content, display annotations and structure tree before painting. Its content-order
+text and annotation data differ from ours, so this still is not exact feature
+parity. The pinned PDF.js implementation is unchanged; WebKit consumes its public
+text stream through getReader because that host lacks ReadableStream's async
+iterator.
+
+The public fourteen-page result combines five final pairs and five additional
+same-code pairs declared before the follow-up ran. All ten pairs are included;
+Worker/host hashes match between blocks. The machine experienced substantial
+load variation, including one candidate total above ten seconds.
+
+| Public fourteen pages / WebKit | Baseline median ms | Candidate median ms | Median paired reduction |
+| --- | ---: | ---: | ---: |
+| Total preparation, painting and readback | 4838.5 | 3932.0 | 9.0% |
+| Preparation and host decoding | 2502.5 | 2021.5 | 13.5% |
+| Painting and readback | 2229.0 | 1920.0 | 3.5% |
+
+Total improves in 8/10 pairs; preparation in
+9/10. These are point estimates under varying host
+load, not a universal regression bound. Paired reductions are not ratios of the
+independent column medians. PDF.js's median with the additional semantic work is
+1020.5 ms; our candidate remains about
+3.85 times that scope.
+The remaining full page model and page 11 software-compositor fallback are not
+removed by this change.
+
+- Public baseline totals ms: `[4218, 5133, 6200, 5566.0, 4906, 5375, 3927.0, 4771.0, 3557, 3693.0]`.
+- Public candidate totals ms: `[3875, 6112.0, 10551.0, 4380, 3668.0, 3989, 3503.0, 4622.0, 3548.0, 3326]`.
+- Public reference totals ms: `[1020.0, 971.0, 3064.0, 1475.0, 1329, 1021.0, 1214.0, 1008.0, 833.0, 916.0]`.
+
+`tools/text_benchmark.mjs` creates an authored one-page font diagnostic with
+8192 positioned Helvetica glyphs and 256 valid one-byte ToUnicode mappings. It is a
+font scaling probe, not a corpus result. Five alternating pairs per browser have
+identical pixels and complete semantic hashes. All ten total/preparation pairs
+improve. The baseline creates no compiled glyph resources; the candidate uses
+45 resources, 45 misses and 8147 hits, within the unchanged resource limits.
+
+| Authored 8192-glyph scope | Baseline median ms | Candidate median ms | Median paired reduction |
+| --- | ---: | ---: | ---: |
+| webkit total | 776.0 | 398.0 | 48.4% |
+| webkit preparation | 711.0 | 297.0 | 57.6% |
+| webkit painting/readback | 65.0 | 101.0 | -57.8% |
+| chromium total | 833.1 | 456.0 | 47.3% |
+| chromium preparation | 751.4 | 336.1 | 56.8% |
+| chromium painting/readback | 81.2 | 119.9 | -44.5% |
+
+Painting alone is slower: compact native replay now positions and serializes
+those paths on the host, instead of consuming paths built earlier in the Worker.
+That cost is included in total latency. This is a preparation/global improvement,
+not a claimed paint-only improvement. Even this candidate remains well behind
+PDF.js; its corresponding text-inclusive medians are 75.0 ms (WebKit) and 48.9 ms
+(Chromium).
+
+Reproduce the authored scope after building an independent baseline:
+
+```bash
+PDF_BROWSER=webkit PDF_BENCH_SAMPLES=5 \
+PDF_BENCH_REFERENCE_SEMANTICS=1 PDF_BENCH_BASELINE_ROOT=<baseline-site> \
+node tools/text_benchmark.mjs _build/text-benchmark/report.json
+```
+
+The private thirteen-page image fixture retains SHA-256
+`fea1ef069944d3479425ebf076a9b34118f7ba9e3df8cefb54e557ca16f90817`.
+Three independent pairs per engine retain every historical RGBA/semantic hash.
+Chromium's paired total estimate is 7.0% faster; WebKit's is unchanged. WebKit
+preparation varies by +1.7%. No image-load speedup or universal latency bound is
+attributed to these font changes.
+
+The strict Chromium public sweep again stops on an already recorded baseline
+pixel instability. Its incomplete timing is not accepted. The existing pixel
+hash set and all tolerances remain unchanged. Both packaged browser smoke suites
+and both complete authored font sweeps pass.
+
+### Validation and release gate
+
+- 803 JavaScript-target MoonBit tests pass; native, Wasm and Wasm-GC checks pass.
+- Thirty final Node/browser checks pass, including 144 Standard 14 / embedded
+  TrueType native/retained pixel comparisons, exact curve commands/coordinates,
+  malformed quadratic operands and snapshot ownership. The new comparison is
+  included in the readonly CI workflow.
+- All fourteen complete expanded public payloads match after key ordering,
+  per-Worker raster UUID and optional closed-contour whitespace canonicalization;
+  every field, command and coordinate remains included. Every public WebKit
+  RGBA and semantic hash matches in all ten pairs.
+- `moon info` and `moon fmt` leave public `.mbti` files unchanged. No new public
+  engine API, precision reduction, renderer capability removal or pixel tolerance.
+- Release acceptance additionally requires all eight CI jobs and all sixteen
+  deployed artifact hashes at both plain and revision URLs.
+
+Worker: 5,285,917 bytes, SHA-256
+`7d4ccf62c3cbe22ed7b395d9d667a7ce448e34e4a5fc25778c0195ed84a9a320`.
+The 5719-byte increase is not a startup optimization. Published `_generated/pdf.js`:
+5,204,199 bytes, SHA-256
+`73977be2a09171632bd4ec43c68fc30ae4b0e620037aca2cbf7676c0745bd6a8`.
+`pdf-canvas-program.mjs`: SHA-256
+`6df42c8d77181f52bc19a8f0111ca74c14795578f23f7ea494f5e99d17d9eaa0`.

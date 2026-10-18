@@ -11,6 +11,8 @@ const filename=process.argv[2],baseline=process.env.PDF_BENCH_BASELINE_ROOT;
 assert(filename&&baseline,'Usage: PDF_BENCH_BASELINE_ROOT=<packaged site> node tools/document_benchmark.mjs <PDF> [report.json]');
 const output=resolve(process.argv[3]||'_build/document-benchmark/report.json'),engine=process.env.PDF_BROWSER||'chromium',samples=Number(process.env.PDF_BENCH_SAMPLES||3);
 assert(['chromium','webkit'].includes(engine));assert(Number.isInteger(samples)&&samples>=3&&samples<=15);
+const referenceSemantics=process.env.PDF_BENCH_REFERENCE_SEMANTICS==='1';
+assert([undefined,'0','1'].includes(process.env.PDF_BENCH_REFERENCE_SEMANTICS));
 const roots={baseline:resolve(baseline),candidate:resolve(process.env.PDF_BENCH_VIEWER_ROOT||'_build/pages'),reference:resolve('reference/pdf.js/build/generic')};
 const pins=JSON.parse(await readFile('tools/ci/toolchain.json')),revision=execFileSync('git',['-C','reference/pdf.js','rev-parse','HEAD'],{encoding:'utf8'}).trim();
 assert.equal(revision,pins.pdfjs_reference);assert(revision.startsWith(JSON.parse(await readFile('reference/pdf.js/build/version.json')).commit));
@@ -18,6 +20,8 @@ assert.equal(execFileSync('git',['-C','reference/pdf.js','diff','--name-only','H
 const capturePage=Number(process.env.PDF_BENCH_CAPTURE_PAGE||0);assert(Number.isInteger(capturePage)&&capturePage>=0);
 const bytes=await readFile(filename),hash=b=>createHash('sha256').update(b).digest('hex');
 const report={scope:'Three variants in alternating fresh contexts, documents and Workers. First sequential full-document sweep at CSS width 1216 / DPR 2. Preparation, painting and full RGBA readback are timed; startup/opening, hashes, DOM and teardown are excluded. Ours includes selection/accessibility preparation; PDF.js is a render-only lower bound. Require exact baseline/candidate pixels and complete semantics per page; PDF.js hashes are reported separately.',complete:false,engine,samples,capturePage,fixtureSha256:hash(bytes),pdfjsRevision:revision,workerSha256:{},hostSha256:{},rows:[]};
+report.referenceSemantics=referenceSemantics;
+if(referenceSemantics)report.scope=report.scope.replace('PDF.js is a render-only lower bound.','PDF.js also prepares its operator list, text content, annotations and structure tree before painting. Its content-order text and annotation model differ from ours; this is not exact feature parity.');
 for(const [variant,root] of Object.entries(roots))report.workerSha256[variant]=hash(await readFile(resolve(root,variant==='reference'?'build/pdf.worker.mjs':'pdf-worker.js')));
 for(const variant of ['baseline','candidate']){
  const modules=['viewer-host.mjs','pdf-canvas.mjs','pdf-canvas-native.mjs','pdf-canvas-program.mjs','pdf-compositor.mjs','pdf-runtime.mjs','pdf-shading.mjs'];
@@ -39,7 +43,7 @@ try{
   const context=await browser.newContext({deviceScaleFactor:2});
   try{
    const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(String(e)));await page.goto('http://127.0.0.1:'+server.address().port+'/probe.html');
-   const result=await page.evaluate(async({variant,capturePage})=>{
+   const result=await page.evaluate(async({variant,capturePage,referenceSemantics})=>{
     const bytes=new Uint8Array(await(await fetch('/fixture.pdf')).arrayBuffer()),check=raw=>{const p=JSON.parse(raw);if(!p.ok)throw Error(p.error);return p;};
     const digest=async b=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',b))].map(x=>x.toString(16).padStart(2,'0')).join('');
     let api,task,documentHandle,count,layouts;
@@ -53,9 +57,16 @@ try{
     }
     const pages=[];
     for(let number=1;number<=count;number++){
-     const canvas=document.createElement('canvas'),start=performance.now();let payload,prepareMs=null;
+     const canvas=document.createElement('canvas'),start=performance.now();let payload,prepareMs=null,referenceContent=null;
      if(variant==='reference'){
       const page=await documentHandle.getPage(number),unit=page.getViewport({scale:1,rotation:0}),viewport=page.getViewport({scale:1216/unit.width,rotation:0});
+      if(referenceSemantics){
+       // Assemble getTextContent's result through its public stream API: this
+       // WebKit lacks ReadableStream's async iterator used by getTextContent.
+       const text=async()=>{const result={items:[],styles:Object.create(null),lang:null},reader=page.streamTextContent({includeMarkedContent:true}).getReader();try{for(;;){const {value,done}=await reader.read();if(done)break;result.lang??=value.lang;Object.assign(result.styles,value.styles);result.items.push(...value.items);}}finally{reader.releaseLock();}return result;};
+       const [,content,annotations,structure]=await Promise.all([page.getOperatorList(),text(),page.getAnnotations({intent:'display'}),page.getStructTree()]);
+       referenceContent={content,annotations,structure};prepareMs=performance.now()-start;
+      }
       canvas.width=Math.ceil(viewport.width*2);canvas.height=Math.ceil(viewport.height*2);
       await page.render({canvasContext:canvas.getContext('2d'),viewport,transform:[2,0,0,2,0,0],background:'rgb(255,255,255)'}).promise;
      }else{
@@ -63,13 +74,14 @@ try{
       const result=await api.paintCanvas(canvas,payload,2,()=>true,()=>{throw Error('Unexpected host CMM');});if(result.diagnostics.length)throw Error(JSON.stringify(result.diagnostics));
      }
      const painted=performance.now(),pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data,end=performance.now();
-     const semanticSha256=payload?await digest(new TextEncoder().encode(JSON.stringify(Object.fromEntries(['ok','page','svg','layer','editor','annotations','accessibility','intent'].map(k=>[k,payload[k]]))))):null;
+     const semanticValue=payload?Object.fromEntries(['ok','page','svg','layer','editor','annotations','accessibility','intent'].map(k=>[k,payload[k]])):referenceContent;
+     const semanticSha256=semanticValue?await digest(new TextEncoder().encode(JSON.stringify(semanticValue))):null;
      pages.push({page:number,prepareMs,totalMs:end-start,paintAndPrepareMs:painted-start,flushMs:end-painted,rgbaSha256:await digest(pixels),semanticSha256,capturePNG:number===capturePage?canvas.toDataURL():null});canvas.width=canvas.height=0;
     }
     const cache=variant==='reference'?null:check(await api.pdf.call('cache_info'));
     if(variant==='reference')await task.destroy();else{api.pdf.close();api.clearRenderAssets();}
-    return{pages,totalMs:pages.reduce((s,p)=>s+p.totalMs,0),prepareMs:variant==='reference'?null:pages.reduce((s,p)=>s+p.prepareMs,0),cache};
-   },{variant,capturePage});
+    return{pages,totalMs:pages.reduce((s,p)=>s+p.totalMs,0),prepareMs:variant==='reference'&&!referenceSemantics?null:pages.reduce((s,p)=>s+p.prepareMs,0),cache};
+   },{variant,capturePage,referenceSemantics});
    for(const row of result.pages){if(row.capturePNG)await writeFile(resolve(dirname(output),`pixels-${pair}-${variant}-${row.page}.png`),Buffer.from(row.capturePNG.split(',')[1],'base64'));delete row.capturePNG;}
    report.rows.push({pair,variant,...result});await writeFile(output,JSON.stringify(report,null,2)+'\n');
    assert.deepEqual(errors,[]);

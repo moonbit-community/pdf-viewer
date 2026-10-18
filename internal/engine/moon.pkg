@@ -4,6 +4,7 @@ import {
   "moonbit-community/pdf-viewer/codecs/jbig2",
   "moonbit-community/pdf-viewer/codecs/jpx",
   "moonbitlang/core/encoding/base64",
+  "moonbitlang/core/encoding/ascii",
   "moonbitlang/core/debug",
   "moonbitlang/core/string",
   "moonbitlang/core/encoding/utf8",

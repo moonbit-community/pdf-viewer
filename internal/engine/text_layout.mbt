@@ -93,26 +93,12 @@ fn pdf_apply_op_for_viewer(
       } else {
         None
       }
-      let entries = [
-        for glyph in layout.glyphs => {
-          let entry = next_state.content_text_glyph_entry(original_font, glyph)
-          let mapped = unicode.bind(map => {
-            pdf_viewer_unicode_text_with_recovery(map, glyph.charcode)
-          })
-          let text = match mapped {
-            Some(_) => mapped
-            None => pdf_font_encoding_text(original_font, glyph.charcode)
-          }
-          match (entry.object, text) {
-            (@pdflite.PdfContentGlyphObject(name, code, _), Some(text)) =>
-              {
-                ..entry,
-                object: @pdflite.PdfContentGlyphObject(name, code, text),
-              }
-            _ => entry
-          }
-        }
-      ]
+      let entries = pdf_simple_text_entries(
+        next_state,
+        original_font,
+        layout.glyphs[:],
+        unicode,
+      )
       ({ state: next_state, entries, }, layout.glyphs)
     }
     _ => (document.content_apply_resource_op(state, resources, op), [])

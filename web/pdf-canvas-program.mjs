@@ -33,13 +33,13 @@ export function expandPdfCanvasProgram(plan) {
     const resource=resources.get(item.glyph.resource),m=item.glyph.matrix;
     if(item.kind!=='text'||!resource||!Array.isArray(m)||m.length!==6||!m.every(v=>Number.isFinite(v)&&Math.abs(v)<=1e12))throw new Error('Invalid PDF glyph invocation');
     if(resource.kind==='outline'){
-      // Ordinary CFF/Type1 paths use the font transform directly. Type3's
+      // Ordinary CFF/Type1/TrueType paths use the font transform directly. Type3's
       // elementary scene applies an additional bounds map below.
       const parts=[],commands=resource.commands;
       for(let i=0;i<commands.length;){
-        const op=commands[i++],count=op===0||op===1?2:op===2?6:op===3?0:-1;
+        const op=commands[i++],count=op===0||op===1?2:op===2?6:op===4?4:op===3?0:-1;
         if(count<0||i+count>commands.length)throw new Error('Invalid PDF glyph path');
-        parts.push(['M','L','C','Z'][op]);
+        parts.push(['M','L','C','Z','Q'][op]);
         for(let end=i+count;i<end;i+=2){
           const x=commands[i],y=commands[i+1];
           if(!Number.isFinite(x)||!Number.isFinite(y)||Math.abs(x)>1e12||Math.abs(y)>1e12)throw new Error('Invalid PDF glyph coordinate');
@@ -127,7 +127,7 @@ export function prepareNativePdfProgram(source,options,selectNative){
         bytes+=128+commands.length*8;if(bytes>limit)return null;
         const snapshot=new Float64Array(commands.length);
         for(let i=0;i<commands.length;){
-          const op=commands[i++],count=op===0||op===1?2:op===2?6:op===3?0:-1;
+          const op=commands[i++],count=op===0||op===1?2:op===2?6:op===4?4:op===3?0:-1;
           if(count<0||i+count>commands.length)throw new Error('Invalid PDF glyph path');
           snapshot[i-1]=op;
           for(let end=i+count;i<end;i++){
@@ -156,8 +156,8 @@ export function nativePdfGlyphPath(run,offset){
   const data=run.draws,commands=run.outlines[data[offset]],parts=[];
   const a=data[offset+1],b=data[offset+2],c=data[offset+3],d=data[offset+4],e=data[offset+5],f=data[offset+6];
   for(let i=0;i<commands.length;){
-    const op=commands[i++],count=op===0||op===1?2:op===2?6:0;
-    parts.push(['M','L','C','Z'][op]);
+    const op=commands[i++],count=op===0||op===1?2:op===2?6:op===4?4:0;
+    parts.push(['M','L','C','Z','Q'][op]);
     for(let end=i+count;i<end;i+=2){
       const x=commands[i],y=commands[i+1];
       parts.push(String(x*a+y*c+e-run.originX),String(run.flipY-(x*b+y*d+f)));
