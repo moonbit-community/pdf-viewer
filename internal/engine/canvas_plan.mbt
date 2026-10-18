@@ -60,7 +60,18 @@ fn pdf_canvas_plan(
         (
           text_states.length() < 16384 ||
           text_state_ids.contains(call.paint_run)
-        ) => pdf_canvas_text_row(value, call)
+        ) => {
+        let draws = match active_text_run {
+          Some(run) if run.scope == call.paint_run && run.text.length() < 4096 =>
+            run.draws
+          _ => []
+        }
+        if pdf_canvas_append_text_row(draws, value, call) {
+          Some(draws)
+        } else {
+          None
+        }
+      }
       _ => None
     }
     if item is Text(value) &&
@@ -71,13 +82,12 @@ fn pdf_canvas_plan(
         Some(run) if run.scope == call.paint_run && run.text.length() < 4096 =>
           run
         _ => {
-          let run = { scope: call.paint_run, state, draws: [], text: [], }
+          let run = { scope: call.paint_run, state, draws: row, text: [], }
           items.push(TextRun(run))
           active_text_run = Some(run)
           run
         }
       }
-      run.draws.append(row)
       run.text.push(value.text)
       continue
     }

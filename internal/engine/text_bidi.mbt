@@ -10,7 +10,7 @@ fn pdf_text_bidi_permutation(
   let owners : Array[Int] = []
   for index, item in items {
     text.write_string(item.text)
-    for _ in item.text.iter() {
+    for _ in item.text {
       owners.push(index)
     }
   }
@@ -106,7 +106,25 @@ fn pdf_text_bidi_order(visual : ArrayView[PdfTextItem]) -> Array[PdfTextItem] {
 
 ///|
 fn pdf_text_control_only(text : String) -> Bool {
-  !text.is_empty() && text.iter().all(pdf_text_control_char)
+  guard !text.is_empty() else { return false }
+  for char in text {
+    if !pdf_text_control_char(char) {
+      break false
+    }
+  } nobreak {
+    true
+  }
+}
+
+///|
+fn pdf_text_has_control(text : String) -> Bool {
+  for char in text {
+    if pdf_text_control_char(char) {
+      break true
+    }
+  } nobreak {
+    false
+  }
 }
 
 ///|

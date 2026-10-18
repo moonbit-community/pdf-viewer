@@ -3162,3 +3162,150 @@ and final manifests, exact packet/count checks, V8 heap profiles, all raw
 latency samples, rejected-version samples and validation logs. Private inputs
 and pixels stay ignored. Release acceptance additionally checks all eight CI
 jobs and sixteen deployed artifacts at both plain and revision URLs.
+
+
+## Native iteration and direct Canvas row writing (2026-10-18)
+
+Baseline is pushed `6d5f480064720686e8ef9ba758540cec1249cf6e`, verified and
+copied into an independent packaged site before editing. The earlier packet
+cleanup reduced sampled allocation but did not establish a latency gain.
+This follow-up checks generated code, source operation counts and elapsed time
+separately, using the same pinned optimized release compiler.
+
+A minimal compiler probe demonstrates a relevant optimization boundary:
+`for char in text.iter()` retains String.iter, a mutable index owner, a closure
+and Iter.next calls; `for char in text` lowers directly to a UTF-16 loop with
+surrogate-pair decoding. Char option results are already unboxed; no added
+Option allocation is attributed to those character results. String.fold and
+an arbitrary iterator filter/map/fold chain also do not automatically become
+one native loop in this pinned compiler. The older MoonBit JS article's
+iteration-fusion example does not establish fusion for every call shape.
+
+Direction scoring, bidi/control checks, XML character filtering, normalization
+and CID token traversal now use direct string iteration. The horizontal-array
+predicate uses the collection's all operation. Differential tests compare the
+old traversal with all 65,536 individual UTF-16 units, surrogate boundaries,
+valid supplementary characters, RTL controls and combining text. Lone
+surrogates keep the original compiler/core behavior.
+
+Canvas text packing previously created a separate 29-number row for each
+glyph. Two array spreads retained numeric-array iterators; existing runs then
+appended that row into their destination. The writer now validates transforms
+and every floating-point value before appending directly into the selected
+run buffer. New runs adopt their destination once. Invalid rows cannot mutate
+previous rows, and retain their individual-paint fallback; following text
+gets an independent run. Existing 4,096-glyph splitting and exact double
+precision remain unchanged.
+
+| Source calls, first fourteen packets | Baseline | Candidate |
+| --- | ---: | ---: |
+| String.iter factories | 1,490,284 | 19 |
+| Double-array iterator factories | 134,460 | 0 |
+| Direction-score calls | 897,544 | 897,544 |
+| Glyph-row writer calls | 67,230 | 67,230 |
+
+These instrumented readable-release counts exclude opening. They are not
+measured heap bytes or latency. The candidate writer has no per-glyph row
+array literal, while destination run arrays still exist. Direction
+classification is still repeated; eliminating iterator factories does not
+eliminate that semantic work. Every metadata string, numeric buffer byte,
+range and complete decoded Canvas/semantic field matches the baseline on
+all fourteen pages, including signed zero.
+
+A diagnostic V8 CPU sample after the iteration/row changes still identifies
+cache-accounting reflection as a material cost. Native own-key traversal now
+uses Object.keys instead of for-in plus a separate Object.hasOwn call per
+property. The ownership WeakSet, slot/string charges, limits and rejection
+rules retain their existing behavior. A whitebox oracle keeps the prior
+walker and checks exact charges and admission at budget-minus-one, exact
+budget and budget-plus-one, including shared items, Type3 and large strings.
+This change allocates key arrays; it is selected for measured traversal time,
+not a claim of fewer allocations.
+
+Warmed Node replay uses the same fourteen captured ownership graphs, five
+alternating blocks and three sweeps per block. Exact charges match in every
+block. Old/new traversal medians are 455.3/326.4 ms; the median paired reduction
+is 27.3%. An enqueue-deduplication alternative is inconsistent and
+is excluded from the product. A separate WebKit replay has mixed public
+results, and the image fixture takes about 17 ms for three sweeps under either
+traversal. The Node percentage is not a browser or global speedup.
+
+The iteration/row-only exploratory code precedes the cache change. Its five
+WebKit pairs have median paired total change +3.5% and preparation change
+-4.0%, with large variance. Those different-code samples and their artifact
+manifest are retained separately and are excluded from final results below.
+
+Final acceptance uses independent fresh contexts, documents and Workers,
+alternating order, the first sequential sweep at CSS width 1216 / DPR 2, and
+five public pairs. Builds and tests stop before measurement, followed by a
+45-second quiet interval. Full sweeps time preparation, painting and complete
+RGBA readback. Preparation-only sweeps include Worker work, transfer and host
+restoration. Startup, opening, hashing, DOM and teardown are excluded. Every
+WebKit full-sweep page has exact pixels and semantic hashes. Every complete
+preparation-only payload matches after canonicalizing only the per-Worker
+UUID in raster data_uri values; epochs and resource IDs remain exact.
+Public Chromium pixel nondeterminism described in earlier sections remains
+outside this acceptance claim.
+
+| Public fourteen-page scope | Baseline median ms | Candidate median ms | Median paired reduction |
+| --- | ---: | ---: | ---: |
+| WebKit full sweep | 6,322.0 | 6,154.0 | 2.3% |
+| WebKit preparation within full sweep | 3,031.0 | 3,020.0 | 3.6% |
+| Chromium preparation only | 3,023.4 | 2,792.9 | 3.6% |
+| WebKit preparation only | 3,149.0 | 3,063.0 | 4.4% |
+
+Percentages compare each pair before taking the median, rather than dividing
+the independent column medians. Chromium preparation improves in all five
+pairs; WebKit preparation-only improves in four. Complete WebKit preparation
+has three improving pairs, one flat pair and one 13.4% regression. Full totals
+improve in three pairs and regress in two. The evidence supports a modest
+preparation improvement, not a stable large global speedup. PDF.js render-only
+median is 1,057 ms; the candidate remains about 5.8 times that lower bound.
+It still prepares selection/accessibility in addition to rendering.
+
+All final public samples are retained separately by scope:
+
+- WebKit full total: baseline `[6490.0, 6184.0, 6167.0, 6322.0, 6391.0]`; candidate `[6721.0, 6039.0, 5868.0, 6154.0, 6764.0]`.
+- WebKit full preparation: baseline `[3133.0, 3031.0, 3002.0, 3110.0, 2858.0]`; candidate `[3020.0, 3031.0, 2787.0, 2909.0, 3240.0]`.
+- Chromium preparation only: baseline `[3023.4, 2880.4, 2959.9, 3096.0, 3067.1]`; candidate `[2718.5, 2775.9, 2854.8, 2792.9, 3038.6]`.
+- WebKit preparation only: baseline `[3143.0, 2992.0, 3472.0, 3149.0, 3173.0]`; candidate `[3063.0, 3138.0, 3210.0, 2904.0, 3033.0]`.
+
+The same thirteen-page private fixture
+`fea1ef069944d3479425ebf076a9b34118f7ba9e3df8cefb54e557ca16f90817`
+retains every historical RGBA and semantic hash in both engines. The initial
+three-pair image block has these point estimates:
+
+| Private thirteen-page scope | Baseline median ms | Candidate median ms | Median paired reduction |
+| --- | ---: | ---: | ---: |
+| Chromium full | 1,676.3 | 1,605.6 | 6.8% |
+| Chromium preparation | 1,113.7 | 1,096.8 | 6.0% |
+| WebKit full | 2,095.0 | 2,028.0 | 3.1% |
+| WebKit preparation | 1,418.0 | 1,452.0 | -2.4% |
+
+Because all three initial WebKit image-preparation pairs regress, a separate
+five-pair follow-up checks that concern after another quiet interval. All
+pixels and semantic hashes match again. Its preparation point estimate is
++0.7% (two improving pairs); total is +2.4% (one improving pair). No image
+speedup or universal absence of regression is claimed. Its raw samples are:
+
+- WebKit image preparation: baseline `[1155.0, 1033.0, 1014.0, 987.0, 964.0]`; candidate `[1134.0, 1148.0, 1045.0, 973.0, 971.0]`.
+- WebKit image total: baseline `[1665.0, 1432.0, 1492.0, 1366.0, 1384.0]`; candidate `[1626.0, 1599.0, 1498.0, 1399.0, 1418.0]`.
+
+These blocks are not pooled or compared in absolute time with earlier runs;
+background application load varies materially. The complete raw initial
+image block remains in the ignored report directory.
+
+Validation passes JS 800, Wasm 778, Wasm GC 778 and native 786 tests, unchanged
+interfaces after moon info and moon fmt, all 26 focused Node commands, both
+packaged browser suites and the exact packet/count probe. The final JS suite
+and all Node/browser commands run after the cache traversal change; the other
+targets are unaffected by that JS-only package.
+
+The published Worker is 5,280,198 bytes (+2,698), SHA-256
+`a1082a04ef86f309dfa28c53a010ee4d7685c64389ad2f7d05c76fd99310069c`.
+Ignored evidence is under `_build/iteration-data-next/`: immutable baseline,
+compiler probe, exact operation/packet checks, diagnostic CPU and ownership
+replays, separate exploratory/final/follow-up timing reports, frozen artifact
+manifest and validation logs. Private inputs and pixels remain ignored.
+Release acceptance additionally requires all eight CI jobs and all sixteen
+deployed artifact hashes at both plain and revision URLs.

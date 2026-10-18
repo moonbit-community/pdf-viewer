@@ -82,7 +82,7 @@ fn pdf_svg_display_text(page : PdfPageModel, item : PdfTextItem) -> String {
 /// serialize. The extraction/source model still contains those characters.
 fn pdf_svg_xml_text(text : String) -> String {
   let output = StringBuilder()
-  for char in text.iter() {
+  for char in text {
     let code = char.to_int()
     if code == 9 ||
       code == 10 ||

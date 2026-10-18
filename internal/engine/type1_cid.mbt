@@ -70,7 +70,7 @@ fn pdf_type1_cid_start_data_header(
         (previous[1] != "Binary" && previous[1] != "Hex") {
         return None
       }
-      for char in previous[3].iter() {
+      for char in previous[3] {
         if char < '0' || char > '9' {
           return None
         }

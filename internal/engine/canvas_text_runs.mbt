@@ -15,41 +15,71 @@ priv enum PdfCanvasCommand {
 }
 
 ///|
-fn pdf_canvas_text_row(
+fn pdf_canvas_append_text_row(
+  draws : Array[Double],
   value : PdfTextItem,
   call : PdfCanvasGlyphCall,
-) -> Array[Double]? {
-  guard value.glyph_transform is Some(transform) && transform.length() == 6 else {
-    return None
+) -> Bool {
+  guard value.glyph_transform is Some(transform) &&
+    transform.length() == 6 &&
+    call.matrix.length() == 6 else {
+    return false
   }
   let b = value.bounds
   let q = value.quad
-  let row = [
-    value.index.to_double(),
-    value.charcode.to_double(),
-    value.advance_x,
-    value.advance_y,
-    b.min_x,
-    b.min_y,
-    b.max_x,
-    b.max_y,
-    q.p0.x,
-    q.p0.y,
-    q.p1.x,
-    q.p1.y,
-    q.p2.x,
-    q.p2.y,
-    q.p3.x,
-    q.p3.y,
-    ..transform,
-    call.resource.id.to_double(),
-    ..call.matrix,
-  ]
-  if row.length() == 29 && row.all(v => !v.is_nan() && !v.is_inf()) {
-    Some(row)
-  } else {
-    None
+  // Validate before touching an existing run. A malformed public model must
+  // keep its individual-paint fallback without changing earlier glyph rows.
+  guard pdf_canvas_text_number(value.advance_x) &&
+    pdf_canvas_text_number(value.advance_y) &&
+    pdf_canvas_text_number(b.min_x) &&
+    pdf_canvas_text_number(b.min_y) &&
+    pdf_canvas_text_number(b.max_x) &&
+    pdf_canvas_text_number(b.max_y) &&
+    pdf_canvas_text_number(q.p0.x) &&
+    pdf_canvas_text_number(q.p0.y) &&
+    pdf_canvas_text_number(q.p1.x) &&
+    pdf_canvas_text_number(q.p1.y) &&
+    pdf_canvas_text_number(q.p2.x) &&
+    pdf_canvas_text_number(q.p2.y) &&
+    pdf_canvas_text_number(q.p3.x) &&
+    pdf_canvas_text_number(q.p3.y) else {
+    return false
   }
+  for number in transform {
+    guard pdf_canvas_text_number(number) else { return false }
+  }
+  for number in call.matrix {
+    guard pdf_canvas_text_number(number) else { return false }
+  }
+  draws.push(value.index.to_double())
+  draws.push(value.charcode.to_double())
+  draws.push(value.advance_x)
+  draws.push(value.advance_y)
+  draws.push(b.min_x)
+  draws.push(b.min_y)
+  draws.push(b.max_x)
+  draws.push(b.max_y)
+  draws.push(q.p0.x)
+  draws.push(q.p0.y)
+  draws.push(q.p1.x)
+  draws.push(q.p1.y)
+  draws.push(q.p2.x)
+  draws.push(q.p2.y)
+  draws.push(q.p3.x)
+  draws.push(q.p3.y)
+  for number in transform {
+    draws.push(number)
+  }
+  draws.push(call.resource.id.to_double())
+  for number in call.matrix {
+    draws.push(number)
+  }
+  true
+}
+
+///|
+fn pdf_canvas_text_number(value : Double) -> Bool {
+  !value.is_nan() && !value.is_inf()
 }
 
 ///|

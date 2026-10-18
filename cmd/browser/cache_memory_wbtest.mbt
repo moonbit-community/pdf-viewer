@@ -63,3 +63,76 @@ test "typed geometry cache charges exactly match the complete ownership walk" {
     ignore(close_pdf())
   }
 }
+
+///|
+// Keep the previous ownership walker as an independent byte-charge oracle.
+extern "js" fn browser_model_cache_legacy_walk(
+  counter : BrowserCacheCounter,
+  page : @pdf.PdfPageModel,
+) -> Int =
+  #| (counter, page) => {
+  #|   const seen = counter.seen, pending = [page], budget = counter.budget;
+  #|   let bytes = counter.bytes;
+  #|   const add = value => {
+  #|     if (typeof value === 'string') bytes += 64 + value.length * 4;
+  #|     else if (value !== null && typeof value === 'object') pending.push(value);
+  #|     else if (typeof value === 'function') bytes = budget + 1;
+  #|     else bytes += 16;
+  #|   };
+  #|   while (pending.length && bytes <= budget) {
+  #|     const value = pending.pop();
+  #|     if (seen.has(value)) continue;
+  #|     seen.add(value);
+  #|     bytes += 128;
+  #|     if (ArrayBuffer.isView(value)) bytes += value.byteLength * 2;
+  #|     else if (value instanceof ArrayBuffer) bytes += value.byteLength * 2;
+  #|     else if (Array.isArray(value)) {
+  #|       bytes += value.length * 16;
+  #|       if (bytes > budget) break;
+  #|       for (let i = 0; i < value.length && bytes <= budget; i++) add(value[i]);
+  #|     } else if (value instanceof WeakMap || value instanceof WeakSet) {
+  #|       return budget + 1;
+  #|     } else if (value instanceof Map || value instanceof Set) {
+  #|       bytes += value.size * 64;
+  #|       if (bytes > budget) break;
+  #|       if (value instanceof Map) for (const [key, item] of value) { add(key); add(item); }
+  #|       else for (const item of value) add(item);
+  #|     } else {
+  #|       for (const key in value) if (Object.hasOwn(value, key)) {
+  #|         bytes += 32;
+  #|         add(value[key]);
+  #|         if (bytes > budget) break;
+  #|       }
+  #|     }
+  #|     if (pending.length > 131072) return budget + 1;
+  #|   }
+  #|   return Math.min(bytes, budget + 1);
+  #| }
+
+///|
+test "own-key cache traversal preserves complete ownership charges" {
+  for type3 in [false, true] {
+    ignore(open_pdf(cache_test_pdf(type3~)))
+    let page = current_document.val.unwrap().page(1).unwrap()
+    let models = [
+      page,
+      { ..page, items: [..page.items, ..page.items], },
+      { ..page, items: [], },
+      { ..page, text: "A".repeat(100000), },
+    ]
+    for model in models {
+      let budget = 32 * 1024 * 1024
+      let size = browser_model_cache_legacy_walk(
+        browser_cache_counter(budget),
+        model,
+      )
+      for limit in [0, 1, 128, 1024, size - 1, size, size + 1, budget] {
+        assert_eq(
+          browser_model_cache_size(model, limit),
+          browser_model_cache_legacy_walk(browser_cache_counter(limit), model),
+        )
+      }
+    }
+    ignore(close_pdf())
+  }
+}

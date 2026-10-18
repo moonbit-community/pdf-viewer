@@ -50,16 +50,16 @@ fn pdf_search_normalized(
 ) -> PdfSearchNormalized {
   let scalars : Array[PdfSearchScalar] = []
   let mut source_offset = 0
-  for char in text.iter() {
+  for char in text {
     let source_end = source_offset + char.utf16_len()
     // Compatibility forms such as mathematical script capitals may have no
     // lowercase mapping until decomposed to their ordinary letter.
     let folded = StringBuilder()
-    for scalar in @normalization.nfkd(char.to_string()).iter() {
+    for scalar in @normalization.nfkd(char.to_string()) {
       folded.write_string(pdf_search_fold_scalar(scalar, options))
     }
     let decomposed = @normalization.nfkd(folded.to_string())
-    for scalar in decomposed.iter() {
+    for scalar in decomposed {
       if !options.diacritic_sensitive && pdf_search_mark(scalar) {
         // A separately encoded accent belongs to the preceding source scalar.
         // Include it in the returned original range even when search ignores it.
@@ -87,7 +87,7 @@ fn pdf_search_normalized(
   let consumed : Map[Char, Int] = Map([])
   let source_starts : Array[Int] = []
   let source_ends : Array[Int] = []
-  for char in normalized.iter() {
+  for char in normalized {
     let index = consumed.get(char).unwrap_or(0)
     let scalar = origins.get(char).unwrap()[index]
     consumed[char] = index + 1

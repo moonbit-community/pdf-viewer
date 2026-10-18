@@ -200,7 +200,7 @@ fn pdf_text_reading_order_geometry(
   if items.is_empty() {
     return []
   }
-  if !items.iter().all(pdf_text_is_horizontal) {
+  if !items.all(pdf_text_is_horizontal) {
     return pdf_text_oriented_reading_order(items)
   }
   let output : Array[PdfTextItem] = []

@@ -95,7 +95,7 @@ extern "js" fn browser_model_cache_walk(
   #|       if (value instanceof Map) for (const [key, item] of value) { add(key); add(item); }
   #|       else for (const item of value) add(item);
   #|     } else {
-  #|       for (const key in value) if (Object.hasOwn(value, key)) {
+  #|       for (const key of Object.keys(value)) {
   #|         bytes += 32;
   #|         add(value[key]);
   #|         if (bytes > budget) break;

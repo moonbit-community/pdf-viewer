@@ -69,3 +69,44 @@ test "Text command packets split large operations without splitting their state"
   assert_eq(a.length(), 4096 * 29)
   assert_eq(b.length(), 4 * 29)
 }
+
+///|
+test "Invalid text rows preserve earlier and subsequent run ownership" {
+  let document = type1_test_clip_document("BT /F1 20 Tf (AAA) Tj ET")
+  let (page, program) = prepare_canvas_page(document, 1).unwrap()
+  guard page.items[0] is Text(value) else { fail("Expected text") }
+  let call = program.glyphs[value.index]
+  let draws = [42.0]
+  assert_true(pdf_canvas_append_text_row(draws, value, call))
+  assert_eq(draws.length(), 30)
+  assert_eq(draws[0], 42.0)
+  let original = draws.copy()
+  for matrix in [[], [1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 1.0, 0.0, 1.0 / 0.0]] {
+    assert_false(pdf_canvas_append_text_row(draws, value, { ..call, matrix, }))
+    assert_eq(draws, original)
+  }
+  for
+    invalid in [
+      { ..value, glyph_transform: None, },
+      { ..value, advance_x: 0.0 / 0.0, },
+      { ..value, quad: { ..value.quad, p3: { x: 1.0, y: 1.0 / 0.0, }, }, },
+    ] {
+    assert_false(pdf_canvas_append_text_row(draws, invalid, call))
+    assert_eq(draws, original)
+  }
+  guard page.items[1] is Text(middle) else { fail("Expected middle glyph") }
+  program.glyphs[middle.index] = { ..program.glyphs[middle.index], matrix: [], }
+  guard program.canvas_plan(page, 1.0, 0)
+    is {
+      "items": [
+        { "kind": String("text_run"), "draws": Array(first), .. },
+        { "kind": String("text"), .. },
+        { "kind": String("text_run"), "draws": Array(last), .. },
+      ],
+      ..
+    } else {
+    fail("Expected a fallback paint between independent text runs")
+  }
+  assert_eq(first.length(), 29)
+  assert_eq(last.length(), 29)
+}

@@ -12,7 +12,7 @@ priv struct PdfTextLine {
 ///|
 fn pdf_text_direction_score(text : String) -> Int {
   let mut score = 0
-  for char in text.iter() {
+  for char in text {
     match @bidi.bidi_class(char) {
       R | AL => score += 1
       L => score -= 1
@@ -226,8 +226,8 @@ fn pdf_text_separator_at(items : ArrayView[PdfTextItem], index : Int) -> String 
   if ordinary == " " &&
     (
       crossed_control ||
-      previous.text.iter().any(pdf_text_control_char) ||
-      current.text.iter().any(pdf_text_control_char)
+      pdf_text_has_control(previous.text) ||
+      pdf_text_has_control(current.text)
     ) {
     let a = interval(previous)
     let b = interval(current)
