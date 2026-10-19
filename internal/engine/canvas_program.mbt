@@ -75,6 +75,8 @@ fn pdf_canvas_resource_cache() -> PdfCanvasResourceCache {
 ///|
 /// Internal browser entry point: the returned page is a selection/annotation
 /// projection whose compiled paints must be consumed with its program.
+/// Keep the prepared body items and annotations together: annotation appearances
+/// contain their own scoped fonts and do not depend on the body font catalog.
 pub fn prepare_canvas_page(
   document : PdfViewerDocument,
   number : Int,

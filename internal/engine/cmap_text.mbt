@@ -88,28 +88,34 @@ fn pdf_cmap_unicode_of_code(
   code : PdfDecodedCMapCode,
   recovery : PdfViewerCMapRecovery?,
   unicode_recovery : PdfViewerCMapRecovery?,
+  reader_index? : Map[Int, (Bool, String?)]? = None,
 ) -> String {
   if !code.valid {
     return "\uFFFD"
   }
-  let reader_unicode = match font.composite.cid_fontdescriptor.tounicode {
-    Some(entries) =>
-      for (charcode, bytes) in entries {
-        if charcode == code.charcode {
-          break pdf_viewer_tounicode_text(bytes[:])
-        }
-      } nobreak {
-        None
+  let reader_unicode = match
+    reader_index.bind(index => index.get(code.charcode)) {
+    Some((_, text)) => text
+    None =>
+      match font.composite.cid_fontdescriptor.tounicode {
+        Some(entries) =>
+          for (charcode, bytes) in entries {
+            if charcode == code.charcode {
+              break pdf_viewer_tounicode_text(bytes[:])
+            }
+          } nobreak {
+            None
+          }
+        None => None
       }
-    None => None
-  }
-  let recovered_unicode = match unicode_recovery {
-    Some(cmap) => pdf_viewer_unicode_text_with_recovery(cmap, code.charcode)
-    None => None
   }
   match reader_unicode {
     Some(text) => return text
     None => ()
+  }
+  let recovered_unicode = match unicode_recovery {
+    Some(cmap) => pdf_viewer_unicode_text_with_recovery(cmap, code.charcode)
+    None => None
   }
   match recovered_unicode {
     Some(text) => return text
@@ -326,17 +332,13 @@ fn pdf_apply_cid_text_op(
     }
   }
   let next_state = { ..state, text_state: { ..text_state, text_matrix, }, }
-  let entries = [
-    for index, glyph in glyphs => {
-      pdf_cmap_glyph_entry(
-        next_state,
-        font,
-        codes[index],
-        glyph,
-        recovery,
-        unicode_recovery,
-      )
-    }
-  ]
+  let entries = pdf_cid_text_entries(
+    next_state,
+    font,
+    codes[:],
+    glyphs[:],
+    recovery,
+    unicode_recovery,
+  )
   ({ state: next_state, entries, }, glyphs)
 }

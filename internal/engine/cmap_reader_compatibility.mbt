@@ -1,8 +1,11 @@
 ///|
 /// The recovery lexer pads odd hex strings. Reuse only ordinary even-length,
 /// contiguous hex tokens, whose source codes agree with the strict reader.
-fn pdf_cmap_reader_hex_compatible(bytes : BytesView) -> Bool {
-  guard bytes.length() <= 65536 else { return false }
+fn pdf_cmap_reader_hex_compatible(
+  bytes : BytesView,
+  max_bytes? : Int = 65536,
+) -> Bool {
+  guard bytes.length() <= max_bytes else { return false }
   let mut index = 0
   while index < bytes.length() {
     if bytes[index] == b'%' {

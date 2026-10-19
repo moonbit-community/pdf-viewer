@@ -3623,3 +3623,137 @@ The 5719-byte increase is not a startup optimization. Published `_generated/pdf.
 `73977be2a09171632bd4ec43c68fc30ae4b0e620037aca2cbf7676c0745bd6a8`.
 `pdf-canvas-program.mjs`: SHA-256
 `6df42c8d77181f52bc19a8f0111ca74c14795578f23f7ea494f5e99d17d9eaa0`.
+
+
+## Annotation font amplification and CID table work (2026-10-19)
+
+This change removes a large annotation-specific source of repeated work. It does
+not establish a general speedup on the original fourteen-page fixture.
+
+Each prepared annotation SVG previously embedded the complete page-body font
+catalog, even though generated appearance streams already carried their own
+scoped fonts. `issue6127.pdf` has 49 fragments on each of its first two pages.
+The repeated body-font CSS alone was 1,023,612 / 1,085,414 characters per fragment.
+The serializer now omits that outer catalog for the internal prepared page/program
+pair. Appearance SVG, its scoped fonts, placement, opacity, blend and viewport
+flags remain intact. Public host-built page models retain their original font
+environment; the public SVG/model API and package interfaces are unchanged.
+
+| Page | Fragment SVG text before | After | Aggregate annotation SVG before | After |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 50,203,499 | 46,511 | 1,062,960 | 39,348 |
+| 2 | 53,231,797 | 46,511 | 1,124,762 | 39,348 |
+| 3 | 0 | 0 | 0 | 0 |
+
+These are UTF-16 code-unit counts, not measured heap bytes or latency. The same
+unneeded font catalog entered serialized transport, SVG image parsing and host
+image-cache accounting repeatedly. Removing it reduces fragment text by more
+than 99.9%, while preserving every original pixel and complete semantic hash.
+
+The accompanying CID fix removes two other duplicate paths. A large reader
+ToUnicode array was scanned for every glyph, and recovery was evaluated even
+when its result would be discarded. The operation-local index scans once for
+requested codes and preserves the first reader mapping, including empty/invalid
+destinations. It retains at most 8192 requested codes. Operators shorter than
+sixteen glyphs, tables smaller than 256 entries, and capacity misses keep direct
+lookup. Glyph state is shared within the operation; raw codes and per-glyph
+placement remain unchanged. Accepted reader text returns before recovery.
+
+Type 0 font reading also reuses already parsed, checked ToUnicode entries instead
+of parsing the same stream a second time. Only complete, disjoint mappings with
+reader-compatible hex syntax and two-byte source codes qualify. Inherited,
+malformed, overlapping, overflowing or broader tables retain the existing path.
+Expansion is capped at 65536 entries and reuse eligibility scans at most 1 MiB.
+Type3 retains its 256-code/entry restriction. Persistent cache budgets are
+unchanged; not every CMap lookup is indexed by this change.
+
+### Measurements and controls
+
+Variants alternate fresh contexts, documents and Workers at CSS width 1216 / DPR
+2. Timed work includes complete preparation, painting and full RGBA readback;
+opening, startup, DOM, hashes and teardown are excluded. PDF.js also prepares its
+operator list, text content, annotations and structure tree. Its text order and
+annotation model still differ from ours, so this is not exact feature parity.
+
+The primary baseline is pushed `b0e7fbd32c7597f80c0e6c03d6ee55c810b9aeb7`.
+To isolate the annotation change, `issue6127.pdf` instead uses the independently
+frozen CID-only intermediate Worker, SHA-256
+`e591fb2458eaba8d77205e78dd5993f36c3046d0b2350bb32429c4bbd734075c`.
+That intermediate passed the complete local validation before the annotation fix.
+All sixteen hashes of both baselines remain verified and unchanged.
+
+| Case | Browser | Pairs | Paired total reduction | Paired preparation reduction | Total pairs improved |
+| --- | --- | ---: | ---: | ---: | ---: |
+| issue6127, 3 pages | WebKit | 3 | 43.40% | 39.78% | 3/3 |
+| issue6127, 3 pages | Chromium | 3 | 55.71% | 47.07% | 3/3 |
+| pdfjs_wikipedia, 1 page | WebKit | 3 | 60.19% | 1.89% | 3/3 |
+| pdfjs_wikipedia, 1 page | Chromium | 3 | 62.06% | 21.38% | 3/3 |
+| Authored CID scaling | WebKit | 5 | 57.44% | 63.34% | 5/5 |
+| Authored CID scaling | Chromium | 5 | 43.15% | 52.11% | 5/5 |
+
+The authored diagnostic has 8192 glyphs, 32768 two-byte ToUnicode mappings and
+64 requested codes across 128 operations, using an embedded TrueType font. It is
+not corpus latency. `tools/cid_text_benchmark.mjs` reproduces it; fixture SHA-256
+`9e0da1cca11b1bc752d58ba0feb2bd0a259e308cbb9144c743daf2263e12bfba`.
+
+External builds raised host load above 20 during the final batch; no agent build,
+test or profile overlapped timed sweeps. Absolute times must not be compared
+across batches. An earlier single exact WebKit pair on `issue6127.pdf` was
+24.43 → 10.85 seconds, including its unchanged third page. The later loaded-host
+medians were 43.43 → 25.75 seconds in WebKit and 34.36 → 15.22 seconds in
+Chromium. These illustrate the load sensitivity, rather than a runtime bound.
+The third page has no annotations and retains its expensive software paint path.
+
+The original `tracemonkey.pdf` final five-pair batch was **28.58% slower** by
+paired median (0/5 improve); no speedup is accepted from it. A subsequent
+three-pair diagnostic at lower load was 5.82% faster (3/3 improve), with total
+medians 3764 → 3644 ms versus PDF.js 972 ms, still about 3.75×. Both batches
+remain recorded separately and are not pooled or used to claim a general gain.
+Every expanded payload and all fourteen pages' pixels/semantics still match.
+
+The predeclared same-artifact A/A control used the identical pushed Worker and
+host artifacts on both sides. Its three total differences were −30.90%, +0.45%
+and −1.93%; the median was −1.93%. This confirms that a single large timing
+change can occur without a code change. It does not prove that all performance
+differences are noise. `issue6286.pdf` was also slower in the loaded-host batch
+(WebKit −12.75%, Chromium −47.65%); no improvement is accepted for that case.
+Five-pair WebKit isolation checks later measured −0.78% for CID-only versus pushed
+and +0.80% for annotation versus CID-only, with mixed pairs. Those checks do not
+establish a stable speed change on this fixture.
+
+`issue9949.pdf` was attempted during the CID investigation, but the baseline
+rejects its `PDFXOutputIntentUnavailable` blend space. It is excluded from timing
+acceptance. The first unguarded CID prototype increased short-operator work;
+the guarded implementation was rebuilt and all final measurements rerun.
+
+### Validation and artifact identities
+
+- `moon info && moon fmt`; no `.mbti` changes. Native, wasm and wasm-gc checks pass.
+- 808/808 JS tests and 794/794 native tests pass.
+- Differential tests cover complete 65536-code ranges, large explicit maps,
+  complete font metadata, duplicates, empty/invalid/odd UTF-16, emoji, ligatures,
+  replacement characters, invalid/high source codes and bounded-index misses.
+- The annotation test preserves the full appearance markup and scoped fonts,
+  removing only the exact body-font definitions; public models keep those fonts.
+- All thirty Node/browser checks pass, including packaged Chromium/WebKit smoke.
+- Every real CID fixture preserves exact pixels and complete semantics in all
+  three pairs per browser. The fourteen-page fixture passes eight final WebKit
+  pairs across both batches, plus exact expanded-payload comparison.
+- Three private image-document pairs per browser preserve all historical hashes.
+- The host renderer modules are unchanged. Full-public Chromium latency remains
+  unaccepted because of the previously recorded baseline pixel instability.
+  No pixel tolerance, precision reduction or whitelist entry was added.
+
+A direct numeric Path2D prototype passed Node checks but changed WebKit pixels
+on page 1, including after Float32 conversion. It was rejected and is not shipped.
+
+Evidence: `_build/annotation-font-next/`; the independently validated CID stage,
+source patch and discarded experiments remain in `_build/structural-next/`.
+Final published identities:
+
+- `pdf-worker.js`: 5290334 bytes; SHA-256 `e65a8e6fbc4b720d22f3673c1a6a0c49c0806f30be02ff2973979a5d242d6003`.
+- `_generated/pdf.js`: 5208750 bytes; SHA-256 `a262b5f133600bed7410681edf671bc023df75d21307c03889f5b16c0fe3a94b`.
+- `_generated/viewer.js`: 348155 bytes; SHA-256 `c44e9946bdb9e97dfa07eb68f0a35a0cc2901c8731e730a9df0db394f843fbcd`.
+
+No startup gain is claimed. The post-push gate requires all six Readonly jobs,
+both Pages jobs, and 32 matching deployed hashes (16 plain/revision URL pairs).

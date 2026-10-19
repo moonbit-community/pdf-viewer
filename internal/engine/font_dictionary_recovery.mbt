@@ -208,7 +208,7 @@ fn pdf_read_font_recovery_result(
   let first = try document.read_font(shadow) catch {
     _ => None
   } noraise {
-    font => Some(pdf_font_restore_type3_unicode(font, unicode))
+    font => Some(pdf_font_restore_reader_unicode(font, unicode))
   }
   if first is Some(font) {
     if font is @pdflite.PdfFontSimple({ fontmetrics: None, .. }) {
@@ -220,7 +220,7 @@ fn pdf_read_font_recovery_result(
       catch {
         _ => None
       } noraise {
-        font => Some(pdf_font_restore_type3_unicode(font, unicode))
+        font => Some(pdf_font_restore_reader_unicode(font, unicode))
       }
       if recovered is Some(font) {
         if !kinds.contains(FontMetricsRecovered) {
@@ -245,7 +245,7 @@ fn pdf_read_font_recovery_result(
   catch {
     _ => None
   } noraise {
-    font => Some(pdf_font_restore_type3_unicode(font, unicode))
+    font => Some(pdf_font_restore_reader_unicode(font, unicode))
   }
   if recovered is Some(font) {
     if !kinds.contains(FontMetricsRecovered) {
@@ -268,7 +268,7 @@ fn pdf_read_font_recovery_result(
     catch {
       _ => None
     } noraise {
-      font => Some(pdf_font_restore_type3_unicode(font, unicode))
+      font => Some(pdf_font_restore_reader_unicode(font, unicode))
     }
     if recovered is Some(font) {
       if !kinds.contains(FontMetricsRecovered) {

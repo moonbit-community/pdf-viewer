@@ -547,7 +547,7 @@ fn pdf_viewer_parse_cmap(data : BytesView) -> PdfViewerCMapRecovery {
   {
     ..output,
     reader_hex_compatible: !output.unicode_entries.is_empty() &&
-    pdf_cmap_reader_hex_compatible(data),
+    pdf_cmap_reader_hex_compatible(data, max_bytes=1048576),
   }
 }
 

@@ -50,14 +50,20 @@ fn pdf_font_cmap_reader_shadow(
     let recovery = pdf_viewer_cmap_recovery_for_resource(
       document, object, resource_context,
     )
+    let subtype = dictionary.lookup_immediate(pdf_name_key("/Subtype"))
+    let type3 = subtype == Some(@syntax.PdfNameObject(pdf_name_key("/Type3")))
+    let cid = subtype == Some(@syntax.PdfNameObject(pdf_name_key("/Type0")))
     if key == "/ToUnicode" &&
-      dictionary.lookup_immediate(pdf_name_key("/Subtype")) ==
-      Some(@syntax.PdfNameObject(pdf_name_key("/Type3"))) &&
+      (type3 || cid) &&
       pdf_direct_for_viewer(document, object)
       is Some(@syntax.PdfStreamObject(stream)) &&
       stream.dictionary.lookup_immediate(pdf_name_key("/UseCMap")) is None &&
       recovery is Some(cmap) {
-      unicode = pdf_type3_reader_unicode(cmap)
+      unicode = if type3 {
+        pdf_type3_reader_unicode(cmap)
+      } else {
+        pdf_font_reader_unicode(cmap)
+      }
       if unicode is Some(_) {
         shadow = shadow.remove_dict_entry(pdf_name_key(key))
         continue

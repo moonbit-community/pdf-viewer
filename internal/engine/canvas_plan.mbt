@@ -292,7 +292,12 @@ fn pdf_canvas_plan(
       self.height.to_string() +
       "\">",
     )
-    pdf_svg_fonts(output, self)
+    // Prepared annotations own their appearance fonts. Page-body font faces
+    // otherwise repeat once per fragment despite never being referenced here.
+    // Public host-built models retain their original page-font environment.
+    if program is None {
+      pdf_svg_fonts(output, self)
+    }
     pdf_svg_annotations(output, self, 1.0)
     output.write_string("</svg>")
     output.to_string().to_json()
@@ -318,7 +323,12 @@ fn pdf_canvas_plan(
     output.write_string(
       "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"\{width}\" height=\"\{height}\" viewBox=\"\{x - padding} \{y - padding} \{width} \{height}\">",
     )
-    pdf_svg_fonts(output, self)
+    // Prepared annotations own their appearance fonts. Page-body font faces
+    // otherwise repeat once per fragment despite never being referenced here.
+    // Public host-built models retain their original page-font environment.
+    if program is None {
+      pdf_svg_fonts(output, self)
+    }
     pdf_svg_annotations(
       output,
       {
