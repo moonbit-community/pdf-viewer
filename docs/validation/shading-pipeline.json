@@ -1,0 +1,308 @@
+{
+  "scope": "Three variants in alternating fresh contexts, documents and Workers. First sequential full-document sweep at CSS width 1216 / DPR 2. Preparation, painting and full RGBA readback are timed; startup/opening, hashes, DOM and teardown are excluded. Ours includes selection/accessibility preparation; PDF.js renders concurrently with text content, annotations and structure, without an extra OPLIST-intent request. Reference preparation and painting overlap and are not separately reported. Its content-order text and annotation model differ from ours; this is not exact feature parity. Require exact baseline/candidate pixels and complete semantics per page; PDF.js hashes are reported separately.",
+  "fixture": "reference/pdf.js/test/pdfs/tracemonkey.pdf",
+  "fixtureSha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+  "baselineCommit": "805930553e1091ee33afb61eff45466ee940fe6c",
+  "baselineRendererCommit": "7e7a98d8e300c597ba4012f983b4013ab787cf81",
+  "pdfjsRevision": "89b500f5e1d98ed89bb90211e45b28730b2d99ac",
+  "engine": "webkit",
+  "samples": 7,
+  "workerSha256": {
+    "baseline": "e65a8e6fbc4b720d22f3673c1a6a0c49c0806f30be02ff2973979a5d242d6003",
+    "candidate": "a61d7da998327faecca2583a31a33d0b10d2951bc4f88d1df46e3fb759b8c499",
+    "reference": "51eae7aa407bdb26f303ade5d518b52bde17dad59f433fdf766ba7e21f6a29ad"
+  },
+  "hostSha256": {
+    "baseline": {
+      "viewer-host.mjs": "89207441ffaa4f86ea9f0be0f7fafd4a8eb21679ce8cba825b64edc334e22323",
+      "pdf-canvas.mjs": "377c9edd5044e37ef50a71ed643e9263a79c79e7d7ed3e7b971fb2fe45878193",
+      "pdf-canvas-native.mjs": "3f4dec38e4186a5a7ac3a23e3edda87c4427e215ddda353babd013638e06d6e0",
+      "pdf-canvas-program.mjs": "6df42c8d77181f52bc19a8f0111ca74c14795578f23f7ea494f5e99d17d9eaa0",
+      "pdf-compositor.mjs": "6a3e559464ed6ac5d0ce184d357b9de3ff58e051cfd644abdc1df29fd12e076f",
+      "pdf-runtime.mjs": "465a76a04659af45578d76cae5319c8319a449e5ef0076a3e77030665861e4c8",
+      "pdf-shading.mjs": "ebafe8dff7a67db828dff21f9fd22d2041a3a6b4f4d14fd8abe1751eeb4dc215",
+      "pdf-canvas-text-runs.mjs": "9f74538c1e6a6b9986999f8f8add01a2559be493abd49ea0532ca285dd7f3e2c",
+      "pdf-path-region.mjs": "1a42e2704861cd46f348855a8c26f082eb4e5647a799876aae8aca49ccd4e234",
+      "pdf-page-data.mjs": "8fb2c83f2cd47f02f79c0352c5aeca5b99bbddcf6c6e774d4d289cfdac023e5a",
+      "pdf-client.js": "7fe11a14edf03977067c44106f5c826658e38294d9f4dc3db2f1efa046164d4e",
+      "pdf-patterns.mjs": "96979596d5155a6e4075d7c6af67654c744b46c4f12d38ed74b86d3b1de34232",
+      "pdf-render-task.mjs": "3775aad32254ffda1e8460a646a2c447420e7ff4ef8454ce4c7d5dbf9161e625",
+      "pdf-icc.mjs": "09cbf1db0ea1fb15db6348f614a708e8d4a2fd4c57e78b6f5d1747317e358b58"
+    },
+    "candidate": {
+      "viewer-host.mjs": "89207441ffaa4f86ea9f0be0f7fafd4a8eb21679ce8cba825b64edc334e22323",
+      "pdf-canvas.mjs": "0cfa360a0819c7008a4b7d65034a4120b5ae7049be729c120a32a4e36e323f39",
+      "pdf-canvas-native.mjs": "3f4dec38e4186a5a7ac3a23e3edda87c4427e215ddda353babd013638e06d6e0",
+      "pdf-canvas-program.mjs": "6df42c8d77181f52bc19a8f0111ca74c14795578f23f7ea494f5e99d17d9eaa0",
+      "pdf-compositor.mjs": "8312167d119ee510028edcc893d7d0f02745dbe053ae10e7ed605c94d563a435",
+      "pdf-runtime.mjs": "465a76a04659af45578d76cae5319c8319a449e5ef0076a3e77030665861e4c8",
+      "pdf-shading.mjs": "ebafe8dff7a67db828dff21f9fd22d2041a3a6b4f4d14fd8abe1751eeb4dc215",
+      "pdf-canvas-text-runs.mjs": "9f74538c1e6a6b9986999f8f8add01a2559be493abd49ea0532ca285dd7f3e2c",
+      "pdf-path-region.mjs": "1a42e2704861cd46f348855a8c26f082eb4e5647a799876aae8aca49ccd4e234",
+      "pdf-page-data.mjs": "8fb2c83f2cd47f02f79c0352c5aeca5b99bbddcf6c6e774d4d289cfdac023e5a",
+      "pdf-client.js": "7fe11a14edf03977067c44106f5c826658e38294d9f4dc3db2f1efa046164d4e",
+      "pdf-patterns.mjs": "96979596d5155a6e4075d7c6af67654c744b46c4f12d38ed74b86d3b1de34232",
+      "pdf-render-task.mjs": "3775aad32254ffda1e8460a646a2c447420e7ff4ef8454ce4c7d5dbf9161e625",
+      "pdf-icc.mjs": "4e1131440eb266b76cf9e4a815226abc2fd397c5f8e07482d0b76e9f3d9115c7"
+    }
+  },
+  "median": {
+    "baseline": {
+      "fullDocumentMs": 3385.9999999999995,
+      "preparationMs": 1697.9999999999995,
+      "page11Ms": 1459,
+      "page11PrepareMs": 587,
+      "page11PaintAndReadbackMs": 877.0000000000005
+    },
+    "candidate": {
+      "fullDocumentMs": 3216.000000000001,
+      "preparationMs": 1628.9999999999995,
+      "page11Ms": 1307,
+      "page11PrepareMs": 515,
+      "page11PaintAndReadbackMs": 790
+    },
+    "reference": {
+      "fullDocumentMs": 619,
+      "preparationMs": null,
+      "page11Ms": 180,
+      "page11PrepareMs": null,
+      "page11PaintAndReadbackMs": null
+    }
+  },
+  "pairs": [
+    {
+      "pair": 0,
+      "baselineMs": 3385.9999999999995,
+      "candidateMs": 3216.000000000001,
+      "referenceMs": 619,
+      "reductionPercent": 5.020673360897776,
+      "page11": {
+        "baselinePrepareMs": 587,
+        "candidatePrepareMs": 513,
+        "baselinePaintMs": 872,
+        "candidatePaintMs": 782
+      }
+    },
+    {
+      "pair": 1,
+      "baselineMs": 3317.0000000000005,
+      "candidateMs": 3188.9999999999995,
+      "referenceMs": 714.9999999999999,
+      "reductionPercent": 3.8589086523967753,
+      "page11": {
+        "baselinePrepareMs": 562.0000000000005,
+        "candidatePrepareMs": 525,
+        "baselinePaintMs": 867,
+        "candidatePaintMs": 782
+      }
+    },
+    {
+      "pair": 2,
+      "baselineMs": 3397.9999999999995,
+      "candidateMs": 3199.0000000000005,
+      "referenceMs": 597.9999999999999,
+      "reductionPercent": 5.856386109476142,
+      "page11": {
+        "baselinePrepareMs": 599,
+        "candidatePrepareMs": 523,
+        "baselinePaintMs": 890,
+        "candidatePaintMs": 774
+      }
+    },
+    {
+      "pair": 3,
+      "baselineMs": 3289.9999999999995,
+      "candidateMs": 3211.9999999999995,
+      "referenceMs": 636,
+      "reductionPercent": 2.370820668693008,
+      "page11": {
+        "baselinePrepareMs": 564,
+        "candidatePrepareMs": 515,
+        "baselinePaintMs": 877.0000000000005,
+        "candidatePaintMs": 794
+      }
+    },
+    {
+      "pair": 4,
+      "baselineMs": 3378.9999999999995,
+      "candidateMs": 3283.0000000000005,
+      "referenceMs": 593.9999999999999,
+      "reductionPercent": 2.841077241787482,
+      "page11": {
+        "baselinePrepareMs": 567,
+        "candidatePrepareMs": 507,
+        "baselinePaintMs": 860,
+        "candidatePaintMs": 802
+      }
+    },
+    {
+      "pair": 5,
+      "baselineMs": 3748.0000000000005,
+      "candidateMs": 3512.0000000000005,
+      "referenceMs": 617.0000000000001,
+      "reductionPercent": 6.29669156883671,
+      "page11": {
+        "baselinePrepareMs": 607.0000000000005,
+        "candidatePrepareMs": 550,
+        "baselinePaintMs": 1057.9999999999995,
+        "candidatePaintMs": 929
+      }
+    },
+    {
+      "pair": 6,
+      "baselineMs": 3482,
+      "candidateMs": 3221,
+      "referenceMs": 645.9999999999999,
+      "reductionPercent": 7.4956921309592195,
+      "page11": {
+        "baselinePrepareMs": 590,
+        "candidatePrepareMs": 514.9999999999998,
+        "baselinePaintMs": 922,
+        "candidatePaintMs": 790
+      }
+    }
+  ],
+  "medianPairedReductionPercent": 5.020673360897776,
+  "improvedPairs": 7,
+  "pixelsAndCompleteSemanticsExact": true,
+  "rgbaSha256": [
+    "a3ac0ab7e27b197b4548bc173d3bdf2f00b4b835d046a89bcac931343e553bea",
+    "fa12b38c3d337038848f56bbb4fafcd07595c3b50d80b67a02c281b5c2b5abd0",
+    "1d3dcf3b2f1ddefc05f55e51bf120e825ece7b80e497d22e8d610ce6e3eeb5c3",
+    "0a3c3d474c63df7cfbae782c78887ec8096070fcfdfd8feb8aa46ccaffb6b971",
+    "271770fe5ac06806ad6f659b39ecc9ab475c85958dc55e8f77db0fd5b0c3ab2f",
+    "f91ea4243e891efb1f1ce9373db6d660dfc9e177fa71a9e0cac86ef719653d3f",
+    "5509ee95d400dcee4a28e4fee2bb9610067a21a302fec23e8db4d6ec355ac204",
+    "f633220e05025e354079ae66807f864c9c2174e3d2d5acbd5391ea287c1c5c96",
+    "1ad7810704421074b00411114025ea3238890b990432295400877420d8d810d1",
+    "8840a8fd748e4f8735945d945225b47727fa06517e927d569c3d3f68aa6ee8d4",
+    "22843d380f4bc9ecd77eeab4c7475a98746e3cbf2a5ad829aee8c19b4909f39d",
+    "3b9065ce1061ebb783ae6f827eaeed7222797e0b3144fc6a7e8b736abe8c9b3c",
+    "d41eee4e694e2e31e42fefd37cb9644cee7d6d4e9e4c64c42de2d86cd430a032",
+    "bb7546e18814046a32f353ec1cf343998bf89a52282ff9724a79b207c826f5db"
+  ],
+  "semanticSha256": [
+    "ac235abd71d6a0f202597619c6af6b2abfe9f830bef65ed1059c086ca0bb7435",
+    "13facc369f91f0bd3cf9164b7b0c78a604d112bd2a3baede4134e565a296e51e",
+    "ce56bb7b92161f638ccea21d6ceddf051f83df4b3de8ad979c5d80190c14621a",
+    "0b22af9679db7ebe5bcd5d716f50a0ae14ab8bd01fb64ddcc3dc4fa40302040a",
+    "6619363eec1414a3d032125cc42bbdc5b56616efdd2f4913606f618f291aacf5",
+    "4269062a1730612c48100a1d24d1a925638a8e19de1b8b2d8e1510f8cc57403a",
+    "7cc0d099280abc7eba13aeb597657385bf1ef5b2ece2a560d1d7e49ab476f21d",
+    "91508ec82a564e83278e11d609741954e409e2b9415498ccd453dfca4ff28c1a",
+    "b674b60e6a13a48ea5a31fcd430d63c254e604fa61002627ce3e47b15e749f97",
+    "657686cff94bf700cad797a7f7e9e0f38371a16352d32b628866f7fa808aca2b",
+    "97e6ed40383c9dc72ccf440c4199f27b3c8e7a8c181f0cf3cae8d3a8f2b308e2",
+    "b962a008f3248bf24d3654cae4707ee36ad732ea8cae5d67e26cad73a6ab7d84",
+    "6c59aa3e08084a36d56c9f3e9b71918a3a1cf23adb966b78266a602b03f3893b",
+    "c3b1760ea048d5dc793983ae6c604d41f7a1eb5e78d9cec3ba660cfe7c170a5d"
+  ],
+  "limitations": [
+    "Local host load and browser timing vary; report paired distributions, not a cross-run best time.",
+    "PDF.js content-order semantics differ from our geometric selection/accessibility model.",
+    "Page-wide software fallback and positioned outline reconstruction remain.",
+    "No pixel tolerance or hash exception was added."
+  ],
+  "cpuProfile": {
+    "scope": "Three fresh Chromium profiled sweeps per engine; diagnostic active JS stacks, not paired wall-time acceptance or CPU cycles. Worker source map reproduces exact published bytes. Native browser work is charged to its JS caller. Inclusive rows are nested.",
+    "workerMap": {
+      "workerSha256": "a61d7da998327faecca2583a31a33d0b10d2951bc4f88d1df46e3fb759b8c499",
+      "mapSha256": "1779b593afc573b8b271c5271916928687f5aac9747609ef164f60cc5e526ff9",
+      "readableSha256": "79d2b954643ad56184731c843ac8ea5b3be4110b0e9e125469027e78289c8173",
+      "publishedBridgeSha256": "b5dc9823351358f9870649d21ed730771272d6944e96fce3f686d0420cb929a6",
+      "esbuild": "0.25.12"
+    },
+    "activeMsPerSweep": [
+      {
+        "variant": "ours",
+        "thread": "main",
+        "activeMs": 1364.8696666666726,
+        "categories": {
+          "GC": 43.953999999999986,
+          "Canvas / transport": 63.76933333333332,
+          "Other": 266.84233337402344,
+          "Software raster / composition": 401.78166666666766,
+          "Native Canvas replay": 153.24900000000005,
+          "Positioned outline replay": 194.68299999999996,
+          "Final RGBA readback": 135.4763332926432,
+          "Images": 8.293000000000001,
+          "Shading / patterns": 96.82100000000001
+        }
+      },
+      {
+        "variant": "ours",
+        "thread": "worker",
+        "activeMs": 1655.9746666259764,
+        "categories": {
+          "Content interpretation": 135.18266662597657,
+          "Flate decoding": 103.54800000000004,
+          "GC": 179.89500000000007,
+          "Fonts / glyph preparation": 216.563,
+          "Rich model construction": 76.05166666666666,
+          "Text semantics / layout": 212.12566666666672,
+          "Cache accounting": 85.53733333333334,
+          "Canvas / transport": 144.44533333333337,
+          "Other": 30.623666666666665,
+          "Images": 188.713,
+          "Shading / patterns": 283.28933333333333
+        }
+      },
+      {
+        "variant": "reference-streaming",
+        "thread": "main",
+        "activeMs": 244.01699991861972,
+        "categories": {
+          "Other": 65.9280000406901,
+          "Fonts / glyph preparation": 1.1226666666666667,
+          "Browser font text": 62.127333333333326,
+          "Final RGBA readback": 104.65333317057292,
+          "GC": 6.911000040690105,
+          "Shading / patterns": 3.274666666666667
+        }
+      },
+      {
+        "variant": "reference-streaming",
+        "thread": "worker",
+        "activeMs": 201.92033321126306,
+        "categories": {
+          "Other": 24.337999999999997,
+          "Fonts / glyph preparation": 40.960999959309895,
+          "GC": 11.638,
+          "Content interpretation": 64.92699995930988,
+          "Text semantics / layout": 35.449333333333335,
+          "Images": 6.5793333333333335,
+          "Final RGBA readback": 0.04499995930989584,
+          "Flate decoding": 6.067666666666667,
+          "Shading / patterns": 11.915
+        }
+      }
+    ]
+  },
+  "packedSourceCounts": {
+    "baseline": {
+      "sources": 0,
+      "pixels": 0
+    },
+    "candidate": {
+      "sources": 3669,
+      "pixels": 11321384
+    }
+  },
+  "shadingDiagnostic": {
+    "scope": "Separate instrumented preparation through page 11, not a latency measurement.",
+    "samplers": 3,
+    "adaptiveProbeInputs": 198945,
+    "iccBatchCalls": 22105,
+    "batchSize": 9,
+    "iccFailures": 0
+  },
+  "validation": {
+    "jsTests": 811,
+    "nativeTests": 797,
+    "allTargetChecks": true,
+    "publicMoonbitInterfacesChanged": false,
+    "nodeAndBrowserChecks": 31,
+    "packedCompositorFloat32Exact": true,
+    "iccExactScalarBatchCombinations": 180
+  }
+}

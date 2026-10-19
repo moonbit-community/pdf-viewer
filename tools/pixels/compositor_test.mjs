@@ -11,6 +11,33 @@ const near = (actual, expected, label, tolerance=0.005) => {
 };
 let count = 0;
 function test(name, fn) { fn(); count++; console.log(`ok ${name}`); }
+test('packed coverage preserves every Float32 sample through nested and recycled groups',()=>{
+ const render=packed=>{
+  const width=19,height=17,c=new PdfCompositor(width,height,createCanvas);
+  c.beginGroup({isolated:true});
+  for(let scope=0;scope<8;scope++){
+   const parent=c.frames.at(-1);
+   c.beginGroup({isolated:scope%3===0,knockout:scope%2===0},parent.knockout?parent.initial:parent.pixels);
+   for(let draw=0;draw<5;draw++){
+    const dirty={x:draw%3,y:draw%4,width:15,height:12},bytes=new Uint8ClampedArray(dirty.width*dirty.height*4);
+    for(let i=0;i<bytes.length;i++)bytes[i]=(i*37+draw*17+scope*73)%256;
+    if(packed)c.paintRgba8(bytes,dirty);
+    else{
+     const source=new Float32Array(width*height*4),coverage=new Float32Array(width*height);
+     for(let y=0;y<dirty.height;y++)for(let x=0;x<dirty.width;x++){
+      const j=(y*dirty.width+x)*4,p=(y+dirty.y)*width+x+dirty.x,i=p*4,a=bytes[j+3]/255;
+      for(let channel=0;channel<3;channel++)source[i+channel]=bytes[j+channel]/255*a;
+      source[i+3]=a;coverage[p]=a;
+     }
+     c.paint(source,coverage,{dirty});
+    }
+   }
+   const result=c.endGroup({recycle:true,regionOnly:true});c.paint(result.pixels,result.shape,{dirty:result.dirty});c.releaseGroup(result);
+  }
+  const result=c.endGroup();return {pixels:result.pixels,shape:result.shape,result:result.result};
+ };
+ assert.deepEqual(render(true),render(false));
+});
 test('nested owned backdrops retain exact snapshot semantics through frame reuse',()=>{
  const render=copy=>{
   const c=new PdfCompositor(1,1,createCanvas);c.beginGroup({isolated:true});c.paint(pixel(.8,.3,.6,.7),shape(.9));

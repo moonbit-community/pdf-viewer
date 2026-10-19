@@ -25,6 +25,19 @@ fn pdf_shading_sample_inputs(
   builder : PdfShadingSamplerBuilder,
   inputs : ArrayView[Double],
 ) -> Array[Double] raise @core.PdfError {
+  let values = pdf_shading_function_values(builder, inputs)
+  pdf_shading_sample_values(
+    builder,
+    values,
+    pdf_colour_rgb_of_transform(builder.transform, values),
+  )
+}
+
+///|
+fn pdf_shading_function_values(
+  builder : PdfShadingSamplerBuilder,
+  inputs : ArrayView[Double],
+) -> Array[Double] raise @core.PdfError {
   let values : Array[Double] = if builder.functions.is_empty() {
     inputs.to_owned()
   } else {
@@ -42,7 +55,16 @@ fn pdf_shading_sample_inputs(
   if values.length() != builder.components {
     raise @core.PdfError::BadFunctionEvaluation("shading function output arity")
   }
-  let (r, g, b) = pdf_colour_rgb_of_transform(builder.transform, values)
+  values
+}
+
+///|
+fn pdf_shading_sample_values(
+  builder : PdfShadingSamplerBuilder,
+  values : Array[Double],
+  rgb : (Double, Double, Double),
+) -> Array[Double] raise @core.PdfError {
+  let (r, g, b) = rgb
   let output = [
     pdf_colour_clamp_unit(r) * 255.0,
     pdf_colour_clamp_unit(g) * 255.0,
@@ -84,6 +106,45 @@ fn pdf_shading_sample_inputs(
     }
   }
   output
+}
+
+///|
+/// Evaluate a cell's probes through one bounded ICC call. Function arithmetic,
+/// input clipping, sample order and source-plane values stay on the scalar
+/// path's definitions; unavailable or failed batches use that path unchanged.
+fn pdf_shading_sample_many(
+  builder : PdfShadingSamplerBuilder,
+  inputs : Array[Array[Double]],
+) -> Array[Array[Double]] raise @core.PdfError {
+  guard builder.transform is Icc(Some(transform), alternate, ranges) &&
+    transform.convert_many is Some(convert) &&
+    !builder.process else {
+    return [ for input in inputs => pdf_shading_sample_inputs(builder, input) ]
+  }
+  let values = [
+    for input in inputs => pdf_shading_function_values(builder, input)
+  ]
+  let clipped = [ for value in values => pdf_icc_clip(value, ranges) ]
+  guard convert(clipped[:]) is Some(colors) &&
+    colors.length() == values.length() else {
+    return [ for input in inputs => pdf_shading_sample_inputs(builder, input) ]
+  }
+  [
+    for i in 0..<values.length() => {
+      let (r, g, b) = colors[i]
+      let rgb = if r.is_nan() ||
+        g.is_nan() ||
+        b.is_nan() ||
+        r.is_inf() ||
+        g.is_inf() ||
+        b.is_inf() {
+        pdf_colour_rgb_of_transform(alternate, clipped[i])
+      } else {
+        (r, g, b)
+      }
+      pdf_shading_sample_values(builder, values[i], rgb)
+    }
+  ]
 }
 
 ///|
@@ -189,6 +250,47 @@ fn pdf_shading_adaptive_cell(
   depth : Int,
 ) -> Unit raise @core.PdfError {
   let count = builder.dimensions
+  let probes = [
+    0.125, 0.25, 0.3819660112501051, 0.5, 0.6180339887498949, 0.75, 0.875,
+  ]
+  let mut probes_total = 1
+  for _ in 0..<count {
+    probes_total *= probes.length()
+  }
+  let batch = if !builder.process &&
+    builder.transform is Icc(Some({ convert_many: Some(_), .. }), _, _) {
+    let queries : Array[Array[Double]] = []
+    for corner in 0..<(1 << count) {
+      queries.push(
+        [
+          for axis in 0..<count => {
+            let lo = bounds[axis * 2]
+            let hi = bounds[axis * 2 + 1]
+            if ((corner >> axis) & 1) == 0 {
+              pdf_shading_inside(lo, hi)
+            } else {
+              pdf_shading_inside(hi, lo)
+            }
+          }
+        ],
+      )
+    }
+    for index in 0..<probes_total {
+      let mut rest = index
+      queries.push(
+        [
+          for axis in 0..<count => {
+            let f = probes[rest % probes.length()]
+            rest /= probes.length()
+            bounds[axis * 2] + f * (bounds[axis * 2 + 1] - bounds[axis * 2])
+          }
+        ],
+      )
+    }
+    Some(pdf_shading_sample_many(builder, queries))
+  } else {
+    None
+  }
   let colors : Array[Array[Double]] = []
   let inputs = Array::make(count, 0.0)
   for corner in 0..<(1 << count) {
@@ -201,16 +303,14 @@ fn pdf_shading_adaptive_cell(
         pdf_shading_inside(hi, lo)
       }
     }
-    colors.push(pdf_shading_sample_inputs(builder, inputs))
+    colors.push(
+      match batch {
+        Some(samples) => samples[corner]
+        None => pdf_shading_sample_inputs(builder, inputs)
+      },
+    )
   }
-  let probes = [
-    0.125, 0.25, 0.3819660112501051, 0.5, 0.6180339887498949, 0.75, 0.875,
-  ]
   let mut max_error = 0.0
-  let mut probes_total = 1
-  for _ in 0..<count {
-    probes_total *= probes.length()
-  }
   for index in 0..<probes_total {
     let fractions = Array::make(count, 0.0)
     let mut rest = index
@@ -221,7 +321,10 @@ fn pdf_shading_adaptive_cell(
       inputs[axis] = bounds[axis * 2] +
         f * (bounds[axis * 2 + 1] - bounds[axis * 2])
     }
-    let exact = pdf_shading_sample_inputs(builder, inputs)
+    let exact = match batch {
+      Some(samples) => samples[(1 << count) + index]
+      None => pdf_shading_sample_inputs(builder, inputs)
+    }
     let predicted = Array::make(
       (if builder.process { 7 } else { 3 }) + builder.source_ranges.length() / 2,
       0.0,

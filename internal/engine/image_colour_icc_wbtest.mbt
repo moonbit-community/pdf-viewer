@@ -68,6 +68,7 @@ test "ICC row tables preserve all byte samples and general Decode clipping" {
       }
       let observed : Array[Array[Double]] = []
       let icc : PdfIccTransform = {
+        convert_many: None,
         convert: values => {
           observed.push(values.to_owned())
           icc_row_test_rgb(values)
@@ -110,7 +111,10 @@ fn icc_row_test_invalid(
       row,
       [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
       [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
-      { convert: values => (values[0], values[1], values[2]), },
+      {
+        convert_many: None,
+        convert: values => (values[0], values[1], values[2]),
+      },
       Samples(PdfDeviceRGB),
       [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)],
     ),

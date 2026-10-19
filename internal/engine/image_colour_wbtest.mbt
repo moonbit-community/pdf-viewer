@@ -63,6 +63,7 @@ test "identity RGB row copies preserve row filters and exclude Decode changes" {
 test "opaque ICC rows reuse exact bytes and preserve source row padding" {
   let calls = Ref(0)
   let icc : PdfIccTransform = {
+    convert_many: None,
     convert: values => {
       calls.val += 1
       (values[0], values[1], values[2])
@@ -87,6 +88,7 @@ test "opaque ICC rows reuse exact bytes and preserve source row padding" {
 test "opaque ICC rows apply Decode then source and ICC ranges" {
   let observed : Ref[Array[Double]] = Ref([])
   let icc : PdfIccTransform = {
+    convert_many: None,
     convert: values => {
       observed.val = [ for value in values => value ]
       (values[0], values[1], values[2])
@@ -111,6 +113,7 @@ test "opaque ICC rows apply Decode then source and ICC ranges" {
 test "opaque ICC rows retry failed transforms and cache only successful colours" {
   let calls = Ref(0)
   let icc : PdfIccTransform = {
+    convert_many: None,
     convert: _ => {
       calls.val += 1
       if calls.val == 1 {
@@ -147,6 +150,7 @@ test "opaque ICC row palettes retain earlier successes and reuse later runs" {
   }
   let calls = Ref(0)
   let icc : PdfIccTransform = {
+    convert_many: None,
     convert: values => {
       calls.val += 1
       (values[0], values[1], values[2])
@@ -186,6 +190,7 @@ test "ICC row runs retry failed colours after the palette is full" {
   }
   let calls = Ref(0)
   let icc : PdfIccTransform = {
+    convert_many: None,
     convert: values => {
       calls.val += 1
       if calls.val == 4097 {
@@ -227,6 +232,7 @@ test "ICC row palettes reuse recent colours after more than 4096 distinct sample
   }
   let calls = Ref(0)
   let icc : PdfIccTransform = {
+    convert_many: None,
     convert: values => {
       calls.val += 1
       (values[0], values[1], values[2])
@@ -270,6 +276,7 @@ test "ICC palette collisions preserve exact colours and do not retain failed res
   }
   let calls = Ref(0)
   let icc : PdfIccTransform = {
+    convert_many: None,
     convert: values => {
       calls.val += 1
       if calls.val == 5 {
@@ -426,6 +433,7 @@ test "raw spot colour images evaluate their tint transform" {
 test "ICC image colour cache retries failed transforms and preserves Alternate recovery" {
   let calls = Ref(0)
   let icc : PdfIccTransform = {
+    convert_many: None,
     convert: values => {
       calls.val += 1
       if calls.val == 1 {

@@ -4,6 +4,7 @@ import { instantiate, TYPE_GRAY_DBL, TYPE_RGB_DBL, TYPE_CMYK_DBL, TYPE_Lab_DBL, 
 const MAX_PROFILE = 16 * 1024 * 1024;
 const MAX_HEAP = 64 * 1024 * 1024;
 const MAX_ACTIVE = 8;
+const MAX_BATCH = 64;
 const signatures = {1:'GRAY',3:'RGB',4:'CMYK'};
 const formats = {1:TYPE_GRAY_DBL,3:TYPE_RGB_DBL,4:TYPE_CMYK_DBL};
 export function pdfIccIntent(intent = 1) {
@@ -66,7 +67,7 @@ export async function createPdfIccEngine(options = {}) {
   const {maxActiveTransforms=MAX_ACTIVE,memoryLimitBytes=MAX_HEAP,...moduleOptions}=options;
   if(!Number.isInteger(maxActiveTransforms)||maxActiveTransforms<1||maxActiveTransforms>MAX_ACTIVE)throw new RangeError('ICC active transform limit must be 1..8');
   if(!Number.isInteger(memoryLimitBytes)||memoryLimitBytes<16*1024*1024||memoryLimitBytes>MAX_HEAP)throw new RangeError('ICC Wasm heap limit must be 16..64 MiB');
-  const statistics={profiles:0,transforms:0,samples:0,failures:0,activeTransforms:0,evictions:0,reopens:0,memoryLimitFailures:0,registeredProfileBytes:0};
+  const statistics={profiles:0,transforms:0,samples:0,batches:0,failures:0,activeTransforms:0,evictions:0,reopens:0,memoryLimitFailures:0,registeredProfileBytes:0};
   let binary=moduleOptions.wasmBinary;
   if(!binary){
     const location=moduleOptions.locateFile?.('lcms.wasm',new URL('./vendor/lcms-wasm/',import.meta.url).href) || new URL('./vendor/lcms-wasm/lcms.wasm',import.meta.url);
@@ -117,7 +118,7 @@ export async function createPdfIccEngine(options = {}) {
       const srcFormat=d.kind==='Lab'?TYPE_Lab_DBL:d.kind==='XYZ'?TYPE_XYZ_DBL:formats[d.components];
       transform=lcms.cmsCreateTransform(src,srcFormat,dst,d.outputKind==='XYZ'?TYPE_XYZ_DBL:formats[d.outputComponents],d.intent,0);
       if(!transform)return null;
-      input=lcms._malloc(32);output=lcms._malloc(32);
+      input=lcms._malloc(MAX_BATCH*32);output=lcms._malloc(MAX_BATCH*32);
       if(!input||!output)return null;
       const resource={transform,input,output};active.set(d,resource);statistics.activeTransforms=active.size;statistics.transforms++;
       if(d.opened)statistics.reopens++;d.opened=true;
@@ -142,6 +143,19 @@ export async function createPdfIccEngine(options = {}) {
         const q=r.output>>>3,scale=d.outputComponents===4?100:1;
         for(let i=0;i<d.outputComponents;i++)result[i]=lcms.HEAPF64[q+i]/scale;
         statistics.samples++;return true;
+      },
+      // Keep the scalar double formats and component scaling. Batching only
+      // changes the number of pixels submitted through the CMM boundary.
+      convertMany(values,count,result){
+        if(!Number.isInteger(count)||count<1||count>MAX_BATCH||values?.length!==count*4||result?.length!==count*d.outputComponents)return error();
+        const r=activate(d);
+        if(!r){for(let i=0;i<result.length;i++)result[i]=NaN;return error();}
+        const k=d.kind==='ICC'&&d.components===4?100:1,p=r.input>>>3;
+        for(let row=0;row<count;row++)for(let c=0;c<d.components;c++)lcms.HEAPF64[p+row*d.components+c]=values[row*4+c]*k;
+        try{lcms._cmsDoTransform(r.transform,r.input,r.output,count);}catch{release(d);for(let i=0;i<result.length;i++)result[i]=NaN;return error();}
+        const q=r.output>>>3,scale=d.outputComponents===4?100:1;
+        for(let i=0;i<result.length;i++)result[i]=lcms.HEAPF64[q+i]/scale;
+        statistics.samples+=count;statistics.batches++;return true;
       },
       close(){release(d);d.closed=true;d.source=null;d.destination=null;},
     };

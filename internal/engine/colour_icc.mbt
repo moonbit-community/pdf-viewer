@@ -4,6 +4,7 @@
 /// is straight sRGB. A failed/absent engine is represented by None.
 priv struct PdfIccTransform {
   convert : (ArrayView[Double]) -> (Double, Double, Double)
+  convert_many : ((ArrayView[Array[Double]]) -> Array[(Double, Double, Double)]?)?
 }
 
 ///|
@@ -171,6 +172,7 @@ fn pdf_icc_engine_transform(
   }
   let output : FixedArray[Double] = [0.0, 0.0, 0.0]
   Some({
+    convert_many: None,
     convert: values => {
       let converted = pdf_icc_native_convert(
         handle,
@@ -229,6 +231,21 @@ extern "js" fn pdf_icc_js_convert(
 
 ///|
 #cfg(target="js")
+extern "js" fn pdf_icc_js_supports_batch(handle : PdfIccHandle) -> Bool =
+  #| handle => typeof handle.convertMany === 'function'
+
+///|
+#cfg(target="js")
+extern "js" fn pdf_icc_js_convert_many(
+  handle : PdfIccHandle,
+  values : FixedArray[Double],
+  count : Int,
+  output : FixedArray[Double],
+) -> Bool =
+  #| (handle, values, count, output) => typeof handle.convertMany === 'function' && handle.convertMany(values, count, output)
+
+///|
+#cfg(target="js")
 fn pdf_icc_engine_transform(
   bytes : Bytes,
   components : Int,
@@ -239,7 +256,34 @@ fn pdf_icc_engine_transform(
     return None
   }
   let output : FixedArray[Double] = [0.0, 0.0, 0.0]
+  let convert_many = if pdf_icc_js_supports_batch(handle) {
+    Some((values : ArrayView[Array[Double]]) => {
+      let count = values.length()
+      guard count > 0 && count <= 64 else { return None }
+      let inputs = FixedArray::make(count * 4, 0.0)
+      let output = FixedArray::make(count * 3, 0.0)
+      for row in 0..<count {
+        for c in 0..<4 {
+          inputs[row * 4 + c] = values[row].get(c).unwrap_or(0.0)
+        }
+      }
+      if pdf_icc_js_convert_many(handle, inputs, count, output) {
+        Some(
+          [
+            for row in 0..<count => {
+              (output[row * 3], output[row * 3 + 1], output[row * 3 + 2])
+            }
+          ],
+        )
+      } else {
+        None
+      }
+    })
+  } else {
+    None
+  }
   Some({
+    convert_many,
     convert: values => {
       let converted = pdf_icc_js_convert(
         handle,

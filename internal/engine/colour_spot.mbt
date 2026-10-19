@@ -215,6 +215,11 @@ fn pdf_colour_eval_function(
   if function.domain.length() != count * 2 {
     raise @core.PdfError::BadFunctionEvaluation("colour function input arity")
   }
+  if count == 1 && function.func is @pdflite.PdfFunctionSampled(sampled) {
+    if pdf_colour_sampled_line(function, sampled, inputs[0]) is Some(output) {
+      return output
+    }
+  }
   let clamped = [
     for i in 0..<count => {
       inputs[i].max(function.domain[i * 2]).min(function.domain[i * 2 + 1])

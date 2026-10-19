@@ -157,6 +157,71 @@ The Worker also samples about 50 ms self time in Unicode bidi range lookup, reac
 3. **Build the browser program and semantic projections from a shared compact operation representation**, with lazy materialization of the public rich page model. This addresses model/geometry allocation, cache accounting, serialization and GC together. Preserve eager availability of the requested semantic features; moving them outside the timer is not an optimization. The earlier collector-pointer-sharing prototype did not establish a full-document gain and should not be treated as proof of this design.
 4. Treat bidi lookup, Flate and smaller packet work as measured secondary targets. Even perfect removal of one such bucket cannot close the observed total difference.
 
+## First implementation from these profiles
+
+The first accepted follow-up keeps the sampler representation, checked error,
+sample budget, source components and Float32 group equations intact. It removes
+three kinds of intermediate work:
+
+- Evaluate one-dimensional sampled functions with at most two vertices, using
+  the same unsigned sample decoding, operation order and clipping as the generic
+  multidimensional evaluator. Avoid its per-probe coordinate, stride, vertex and
+  weight arrays. Malformed/nonfinite coordinates retain the generic path.
+- Submit a cell's 9 or 53 ICC probes in one bounded LittleCMS call, retaining the
+  scalar double formats and component scaling. Missing capabilities, failed
+  batches or invalid rows retain the scalar/alternate policy. Native and older
+  custom engines keep their existing scalar path. The original document's three
+  one-dimensional samplers submit 198,945 probes in 22,105 batch calls; the complete
+  sampled trees, RGB/source tables and expanded page payloads remain exact.
+- Fuse the RGBA8 readback-to-Float32 conversion with normal unmasked RGB source
+  composition when opacity equals coverage. This avoids writing and rereading
+  intermediate full-surface colour/shape planes for 3,669 sources / 11,321,384
+  source pixels in the original document. Explicit `Math.fround` preserves the
+  old source-plane rounding; knockout, group extraction and final rounding use
+  the same equations. Profiles, masks, independent shape, ink proof and other
+  unsupported conditions retain the existing planes. Canvas readback count,
+  native path-string reconstruction and page-wide backend selection are unchanged.
+
+Seven alternating fresh-context WebKit pairs on the **original 14-page PDF** at
+CSS1216/DPR2 give these medians. Preparation, paint and full RGBA readback remain
+inside the timer; opening, hashes, DOM and teardown remain outside it.
+
+| Measurement | Baseline | Candidate |
+| --- | ---: | ---: |
+| Full document | 3386 ms | 3216 ms |
+| Page 11 preparation | 587 ms | 515 ms |
+| Page 11 paint plus final readback | 877 ms | 790 ms |
+| Page 11 total | 1459 ms | 1307 ms |
+
+All seven full-document pairs improve: **2.37–7.50%, paired median 5.02%**.
+PDF.js's normal streaming path with text/annotations/structure has a 619 ms
+full-document median in those same runs. Its semantic model still differs;
+the candidate remains approximately **5.2×** slower by these medians. The ICC-only
+pilot was mixed, and the sampler-only version's paired median gain was 1.61%.
+The accepted comparison includes the fused composition path; those pilots are
+not evidence of a large global speedup.
+
+Every original-document baseline/candidate pixel and complete semantic hash
+matches in all seven pairs. A separate instrumented run compares every expanded
+payload/resource field as well. Compositor tests compare every Float32 pixel and
+shape through nested/recycled groups; ICC tests compare scalar/batch Float64
+outputs for 180 source/target-profile, intent and batch-size combinations. Full
+validation passes 811 JS tests, 797 native tests, all target checks, the packaged
+build and 31 Node/browser checks. Generated MoonBit public interfaces are unchanged.
+
+The updated real Chromium samples (three sweeps per engine) still show 1365 ms
+main / 1656 ms Worker active time for ours versus 244 / 202 ms for PDF.js streaming.
+These are diagnostic samples, not a paired latency result. Our Worker still
+spends about 279 ms inclusive in shading resources and 206 ms in their sampler;
+GC remains about 180 ms. Removing these temporary arrays does not establish a
+measured GC-time reduction. Positioned outlines, whole-page fallback and rich
+model construction remain the major unresolved architectural work.
+
+The committed [measurement summary](shading-pipeline.json) records every pair,
+artifact hashes, exact-output checks and current CPU categories. Raw profiles,
+verified source map and interactive heatmap/flame graphs are retained under
+`_build/shading-pipeline-next/profile/`; those large generated files are ignored.
+
 ## Reproduction
 
 Build both sites first using the pinned project toolchain, then stop other heavy work. The following commands execute sequentially. A separately frozen site can be supplied through `PDF_PROFILE_ROOT`.

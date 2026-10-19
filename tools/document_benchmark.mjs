@@ -13,6 +13,9 @@ const output=resolve(process.argv[3]||'_build/document-benchmark/report.json'),e
 assert(['chromium','webkit'].includes(engine));assert(Number.isInteger(samples)&&samples>=3&&samples<=15);
 const referenceSemantics=process.env.PDF_BENCH_REFERENCE_SEMANTICS==='1';
 assert([undefined,'0','1'].includes(process.env.PDF_BENCH_REFERENCE_SEMANTICS));
+const referenceStreaming=process.env.PDF_BENCH_REFERENCE_STREAMING==='1';
+assert([undefined,'0','1'].includes(process.env.PDF_BENCH_REFERENCE_STREAMING));
+assert(!referenceStreaming||referenceSemantics,'Streaming comparison requires reference semantics');
 const roots={baseline:resolve(baseline),candidate:resolve(process.env.PDF_BENCH_VIEWER_ROOT||'_build/pages'),reference:resolve('reference/pdf.js/build/generic')};
 const pins=JSON.parse(await readFile('tools/ci/toolchain.json')),revision=execFileSync('git',['-C','reference/pdf.js','rev-parse','HEAD'],{encoding:'utf8'}).trim();
 assert.equal(revision,pins.pdfjs_reference);assert(revision.startsWith(JSON.parse(await readFile('reference/pdf.js/build/version.json')).commit));
@@ -21,11 +24,13 @@ const capturePage=Number(process.env.PDF_BENCH_CAPTURE_PAGE||0);assert(Number.is
 const bytes=await readFile(filename),hash=b=>createHash('sha256').update(b).digest('hex');
 const report={scope:'Three variants in alternating fresh contexts, documents and Workers. First sequential full-document sweep at CSS width 1216 / DPR 2. Preparation, painting and full RGBA readback are timed; startup/opening, hashes, DOM and teardown are excluded. Ours includes selection/accessibility preparation; PDF.js is a render-only lower bound. Require exact baseline/candidate pixels and complete semantics per page; PDF.js hashes are reported separately.',complete:false,engine,samples,capturePage,fixtureSha256:hash(bytes),pdfjsRevision:revision,workerSha256:{},hostSha256:{},rows:[]};
 report.referenceSemantics=referenceSemantics;
+report.referenceStreaming=referenceStreaming;
 if(referenceSemantics)report.scope=report.scope.replace('PDF.js is a render-only lower bound.','PDF.js also prepares its operator list, text content, annotations and structure tree before painting. Its content-order text and annotation model differ from ours; this is not exact feature parity.');
+if(referenceStreaming)report.scope=report.scope.replace('PDF.js also prepares its operator list, text content, annotations and structure tree before painting.','PDF.js renders concurrently with text content, annotations and structure, without an extra OPLIST-intent request. Reference preparation and painting overlap and are not separately reported.');
 for(const [variant,root] of Object.entries(roots))report.workerSha256[variant]=hash(await readFile(resolve(root,variant==='reference'?'build/pdf.worker.mjs':'pdf-worker.js')));
 for(const variant of ['baseline','candidate']){
  const modules=['viewer-host.mjs','pdf-canvas.mjs','pdf-canvas-native.mjs','pdf-canvas-program.mjs','pdf-compositor.mjs','pdf-runtime.mjs','pdf-shading.mjs'];
- for(const file of ['pdf-canvas-text-runs.mjs','pdf-path-region.mjs','pdf-page-data.mjs','pdf-client.js','pdf-patterns.mjs','pdf-render-task.mjs'])try{await access(resolve(roots[variant],file));modules.push(file);}catch(error){if(error.code!=='ENOENT')throw error;}
+  for(const file of ['pdf-canvas-text-runs.mjs','pdf-path-region.mjs','pdf-page-data.mjs','pdf-client.js','pdf-patterns.mjs','pdf-render-task.mjs','pdf-icc.mjs'])try{await access(resolve(roots[variant],file));modules.push(file);}catch(error){if(error.code!=='ENOENT')throw error;}
  report.hostSha256[variant]=Object.fromEntries(await Promise.all(modules.map(async file=>[file,hash(await readFile(resolve(roots[variant],file)))])));
 }
 const mime={'.js':'text/javascript','.mjs':'text/javascript','.wasm':'application/wasm'},server=createServer(async(req,res)=>{
@@ -43,7 +48,7 @@ try{
   const context=await browser.newContext({deviceScaleFactor:2});
   try{
    const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(String(e)));await page.goto('http://127.0.0.1:'+server.address().port+'/probe.html');
-   const result=await page.evaluate(async({variant,capturePage,referenceSemantics})=>{
+   const result=await page.evaluate(async({variant,capturePage,referenceSemantics,referenceStreaming})=>{
     const bytes=new Uint8Array(await(await fetch('/fixture.pdf')).arrayBuffer()),check=raw=>{const p=JSON.parse(raw);if(!p.ok)throw Error(p.error);return p;};
     const digest=async b=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',b))].map(x=>x.toString(16).padStart(2,'0')).join('');
     let api,task,documentHandle,count,layouts;
@@ -60,15 +65,19 @@ try{
      const canvas=document.createElement('canvas'),start=performance.now();let payload,prepareMs=null,referenceContent=null;
      if(variant==='reference'){
       const page=await documentHandle.getPage(number),unit=page.getViewport({scale:1,rotation:0}),viewport=page.getViewport({scale:1216/unit.width,rotation:0});
+      let semantics;
       if(referenceSemantics){
        // Assemble getTextContent's result through its public stream API: this
        // WebKit lacks ReadableStream's async iterator used by getTextContent.
        const text=async()=>{const result={items:[],styles:Object.create(null),lang:null},reader=page.streamTextContent({includeMarkedContent:true}).getReader();try{for(;;){const {value,done}=await reader.read();if(done)break;result.lang??=value.lang;Object.assign(result.styles,value.styles);result.items.push(...value.items);}}finally{reader.releaseLock();}return result;};
-       const [,content,annotations,structure]=await Promise.all([page.getOperatorList(),text(),page.getAnnotations({intent:'display'}),page.getStructTree()]);
-       referenceContent={content,annotations,structure};prepareMs=performance.now()-start;
+       semantics=async()=>{const [content,annotations,structure]=await Promise.all([text(),page.getAnnotations({intent:'display'}),page.getStructTree()]);return{content,annotations,structure};};
+       if(!referenceStreaming){
+        [,referenceContent]=await Promise.all([page.getOperatorList(),semantics()]);prepareMs=performance.now()-start;
+       }
       }
       canvas.width=Math.ceil(viewport.width*2);canvas.height=Math.ceil(viewport.height*2);
-      await page.render({canvasContext:canvas.getContext('2d'),viewport,transform:[2,0,0,2,0,0],background:'rgb(255,255,255)'}).promise;
+      const render=()=>page.render({canvasContext:canvas.getContext('2d'),viewport,transform:[2,0,0,2,0,0],background:'rgb(255,255,255)'}).promise;
+      if(referenceStreaming)[,referenceContent]=await Promise.all([render(),semantics()]);else await render();
      }else{
       const layout=layouts[number-1];payload=api.preparePage?await api.preparePage(number,1216/layout.width,0):check(await api.pdf.call('render_page',[number,1216/layout.width,0,true,true,true]));if(!payload.ok)throw Error(payload.error);prepareMs=performance.now()-start;
       const result=await api.paintCanvas(canvas,payload,2,()=>true,()=>{throw Error('Unexpected host CMM');});if(result.diagnostics.length)throw Error(JSON.stringify(result.diagnostics));
@@ -80,8 +89,8 @@ try{
     }
     const cache=variant==='reference'?null:check(await api.pdf.call('cache_info'));
     if(variant==='reference')await task.destroy();else{api.pdf.close();api.clearRenderAssets();}
-    return{pages,totalMs:pages.reduce((s,p)=>s+p.totalMs,0),prepareMs:variant==='reference'&&!referenceSemantics?null:pages.reduce((s,p)=>s+p.prepareMs,0),cache};
-   },{variant,capturePage,referenceSemantics});
+    return{pages,totalMs:pages.reduce((s,p)=>s+p.totalMs,0),prepareMs:variant==='reference'&&(!referenceSemantics||referenceStreaming)?null:pages.reduce((s,p)=>s+p.prepareMs,0),cache};
+   },{variant,capturePage,referenceSemantics,referenceStreaming});
    for(const row of result.pages){if(row.capturePNG)await writeFile(resolve(dirname(output),`pixels-${pair}-${variant}-${row.page}.png`),Buffer.from(row.capturePNG.split(',')[1],'base64'));delete row.capturePNG;}
    report.rows.push({pair,variant,...result});await writeFile(output,JSON.stringify(report,null,2)+'\n');
    assert.deepEqual(errors,[]);

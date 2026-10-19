@@ -415,7 +415,7 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
     }
     return {x,y,width:w,height:h};
   };
-  const raster=async(item,bounds,component=undefined,paintKey={})=>{
+  const raster=async(item,bounds,component=undefined,paintKey={},packed=false)=>{
     const region=paintRegion(item);environments.paintBounds=region;
     environments.shadingBounds=!options.fullShadingReplay&&item.kind==='shading'&&!item.paint.shading?.pattern_plan
       ?shadingClipRegion(item.paint.clips,matrix,width,height):null;
@@ -474,6 +474,7 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
       for(const value of uncachedImages)releaseImage(value);uncachedImages.clear();
     }
     const {x,y,width:w,height:h}=region;
+    if(packed&&opaqueCoverage&&w&&h)return {rgba8:ctx.getImageData(x,y,w,h).data,dirty:region};
     // Bounded consumers read only the region overwritten below. Proof plates
     // and full-surface replay still require zeroes throughout the whole plane.
     if(previousSourceRegion&&(plates||options.fullSurfaceReplay||options.fullSourceReset)){const r=previousSourceRegion;for(let y=r.y;y<r.y+r.height;y++){const a=y*width+r.x,b=a+r.width;sourcePixels.fill(0,a*4,b*4);sourceShape.fill(0,a,b);}}
@@ -592,7 +593,11 @@ async function renderPdfCanvasScoped(canvas, plan, {_samplesOnly=false,...option
     const sampled=inkMode&&(part.type3_plan||part.kind==='shading'||part.kind==='image'&&!p.resource?.mask_data_uri||patterned);
     const paintKey={};
     try {
-    const source=await raster(part,bounds,sampled?0:undefined,paintKey);
+    const packed=!inkMode&&!plates&&compositor.colour.components===3&&!compositor.colour.profileId&&!compositor.colour.calibration&&
+      !part.mask&&!p.soft_mask&&overrideMask==null&&!p.alpha_is_shape&&!p.fill_overprint&&!p.stroke_overprint&&
+      (p.blend_mode==='normal'||p.blend_mode==='compatible')&&!options.fullSurfaceReplay&&!options.fullSourceReset&&!options.fullShapeReplay;
+    const source=await raster(part,bounds,sampled?0:undefined,paintKey,packed);
+    if(source.rgba8){compositor.paintRgba8(source.rgba8,source.dirty);return;}
     // An image's own explicit/soft mask replaces the graphics-state SMask.
     const mask=part.kind==='image'&&part.paint.resource?.has_local_mask?null:overrideMask===undefined?await maskSamples(part.mask || part.paint.soft_mask):overrideMask;
     if(inkMode){

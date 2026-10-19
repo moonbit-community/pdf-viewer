@@ -137,6 +137,30 @@ export class PdfCompositor {
       frame.shape[p] = fs + frame.shape[p] * (1 - fs);
     }
   }
+  // A normal, unmasked source whose opacity equals coverage needs no temporary
+  // full-surface colour/shape planes. Retain the Float32 source rounding and
+  // the same group equations used by paint(), including knockout cancellation.
+  paintRgba8(bytes,dirty) {
+    const frame=this.frames.at(-1);
+    if(!frame)throw new Error('A PDF transparency group must be open before painting');
+    const r=pdfPixelRegion(this.width,this.height,dirty);
+    if(bytes.length!==r.width*r.height*4)throw new RangeError('PDF packed source dimensions do not match');
+    this.touch(r);
+    const base=frame.knockout?frame.initial:frame.pixels;
+    for(let y=r.y;y<r.y+r.height;y++)for(let x=r.x,p=y*this.width+x,i=p*4,j=((y-r.y)*r.width+x-r.x)*4;x<r.x+r.width;x++,p++,i+=4,j+=4){
+      const a=bytes[j+3]/255,as=clamp(Math.fround(a)),fs=as,ab=base[i+3];
+      if(fs===0&&as===0)continue;
+      const ar=as+ab*(1-as);
+      for(let c=0;c<3;c++){
+        const source=Math.fround(bytes[j+c]/255*a),cs=as>0?source/as:0;
+        const value=(1-as)*base[i+c]+as*((1-ab)*cs+ab*cs);
+        frame.pixels[i+c]=frame.knockout?frame.pixels[i+c]*(1-fs)+value-base[i+c]*(1-fs):value;
+      }
+      frame.pixels[i+3]=frame.knockout?frame.pixels[i+3]*(1-fs)+ar-ab*(1-fs):ar;
+      frame.alpha[p]=as+frame.alpha[p]*(1-(frame.knockout?fs:as));
+      frame.shape[p]=fs+frame.shape[p]*(1-fs);
+    }
+  }
   endGroup({recycle=false,regionOnly=false}={}) {
     const frame = this.frames.pop();
     if (!frame) throw new Error('PDF transparency group stack underflow');

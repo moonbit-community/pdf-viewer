@@ -204,7 +204,11 @@ test "shading sampler cache does not cross page profile catalogs or capabilities
   assert_true(
     pdf_shading_transform_capabilities(Icc(None, alternate, [])) !=
     pdf_shading_transform_capabilities(
-      Icc(Some({ convert: _ => (0.0, 0.0, 0.0), }), alternate, []),
+      Icc(
+        Some({ convert_many: None, convert: _ => (0.0, 0.0, 0.0), }),
+        alternate,
+        [],
+      ),
     ),
   )
 }
