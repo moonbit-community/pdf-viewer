@@ -96,15 +96,15 @@ Our normal native text path is `nativePdfGlyphPath -> positioned SVG path string
 | Internal Canvas work, whole original document | Ours | PDF.js normal rendering |
 | --- | ---: | ---: |
 | `fillText` calls | 0 | 69,298 |
-| `Path2D` constructions | 72,166 | 1,055 |
-| String `Path2D` constructions | 72,166 | 0 |
-| Cumulative input string length | 112,502,500 UTF-16 code units | 0 |
+| `Path2D` constructions | 72,166–72,169 | 1,055 |
+| String `Path2D` constructions | 72,166–72,169 | 0 |
+| Cumulative input string length | approximately 112.5 million UTF-16 code units | 0 |
 | Internal `getImageData` calls | 3,935 | 14 |
 | Internal `getImageData` pixels | 12,519,452 | 1,400 |
 | Internal `putImageData` calls | 144 | 0 |
 | Browser linear gradients | 0 | 81 |
 
-Counts exclude the harness's final 14 full-page readbacks. The reference's 14 internal readbacks are 10x10 subpixel-font capability probes. Counts are cumulative operation/input volume, not simultaneous memory retention.
+Counts exclude the harness's final 14 full-page readbacks. The reference's 14 internal readbacks are 10x10 subpixel-font capability probes. Counts are cumulative operation/input volume, not simultaneous memory retention. Two counting sweeps observed 112,502,500 and 112,502,835 path-string code units; minor operation-count variation is retained rather than treated as a deterministic fixture assertion. The first exploratory sweep is retained in `exploratory-counts.json`; its unverified `reference-outline` experiment is excluded from all comparisons. `final/counts.json` contains the repeated three-path count run.
 
 `nativePdfGlyphPath` alone has approximately **203 ms self time** per sweep. The native `paint` callback containing `new Path2D` and `fill` has approximately **155 ms self / 159 ms inclusive**. PDF.js `showText` has approximately **54–57 ms self / 55–58 ms inclusive**. Synchronous Canvas work is included in those caller samples. This is direct evidence for an expensive positioned-outline representation; it is not evidence that replacing the text loop with fewer JavaScript `for` statements will close the gap.
 
